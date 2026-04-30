@@ -78,7 +78,8 @@
       "mcp__streamable-mcp-server__chrome_screenshot",
       "mcp__streamable-mcp-server__chrome_javascript",
       "mcp__streamable-mcp-server__chrome_fill_or_select",
-      "mcp__streamable-mcp-server__chrome_computer"
+      "mcp__streamable-mcp-server__chrome_computer",
+      "WebFetch(domain:docs.anthropic.com)"
     ]
   }
 }
