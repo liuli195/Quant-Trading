@@ -1,12 +1,17 @@
 # -*- coding: utf-8 -*-
 # 市值最小策略（小市值效应）
 # 每天买入市值最小的前 stocksnum 只股票，卖出不再符合条件的持仓
+enable_profile()
 import datetime as dt
 import pandas as pd
 
 def initialize(context):
     # 设置要持有的股票数量
     g.stocksnum = 10
+    # 调仓间隔（交易日）：每多少天执行一次调仓，默认每7个交易日调仓一次
+    g.rebalance_interval = 7
+    # 记录上一次调仓日期，用于跳过未到间隔的交易日的调仓
+    g.last_rebalance_date = None
     # 止损阈值：当持仓亏损超过8%时卖出
     g.stop_loss_pct = -0.08
     # 止盈阈值：当持仓盈利超过15%时卖出
@@ -27,14 +32,15 @@ def initialize(context):
              (g.stocksnum, abs(g.stop_loss_pct) * 100, g.stop_profit_pct * 100))
 
 
-def get_valid_stocks(context):
-    """获取有效股票池：排除ST、上市不足60天的新股、科创板（结果按日期缓存）"""
-    # 获取当前回测日期
+def get_prefiltered_stocks(context):
+    """获取预过滤股票池（仅排除科创板、上市不足60天新股，不做ST检查；缓存30天）
+    性能优化：ST检查移至rebalance中市值排序之后，只对候选池（~200只）执行，
+    避免对全市场~5000只股票逐一查ST（get_extras原是最大性能瓶颈占81.5%耗时）"""
     current_dt = context.current_dt
-    # 缓存：日期未变则直接返回缓存结果
-    cache_date = getattr(g, '_valid_stocks_cache_date', None)
-    if cache_date is not None and cache_date == current_dt.date():
-        return g._valid_stocks_cache
+    # 缓存30天：证券列表（新股上市、代码变更）变化缓慢，30天刷新一次足够
+    cache_date = getattr(g, '_prefiltered_cache_date', None)
+    if cache_date is not None and (current_dt.date() - cache_date).days < 30:
+        return g._prefiltered_cache
 
     # 一次性获取全A股DataFrame（含display_name、start_date等列）
     all_stocks = get_all_securities(['stock'], date=current_dt)
@@ -44,33 +50,17 @@ def get_valid_stocks(context):
 
     # pandas向量化筛选：排除上市不足60天的新股
     cutoff_date = current_dt.date() - dt.timedelta(days=60)
-    # start_date转为datetime便于统一比较
     start_dates = pd.to_datetime(all_stocks['start_date'])
     old_enough = start_dates <= pd.to_datetime(cutoff_date)
 
-    # 先应用快速筛选（科创板、上市时间），缩小后续ST查询的数据量
+    # 应用快速筛选（科创板、上市时间），返回set便于O(1)成员检查
     pre_filtered = all_stocks[not_kcb & old_enough]
-    codes = pre_filtered.index.tolist()
+    codes = set(pre_filtered.index.tolist())
 
-    # 使用get_extras获取回测当日的准确ST状态：API文档明确说明display_name仅反映最新名称，
-    # 判断ST须使用get_extras('is_st', ...)
-    if len(codes) > 0:
-        df_st = get_extras('is_st', codes,
-                           start_date=current_dt.date(),
-                           end_date=current_dt.date())
-        # df_st行索引为日期（仅1行），列索引为股票代码，值为True/False
-        st_series = df_st.iloc[0]
-        # True表示是ST，False或NaN表示非ST
-        is_st = st_series.fillna(False).astype(bool)
-        valid = st_series[~is_st].index.tolist()
-    else:
-        valid = []
-
-    # 缓存结果，供后续同一交易日复用
-    g._valid_stocks_cache_date = current_dt.date()
-    g._valid_stocks_cache = valid
-    # 返回有效股票代码列表
-    return valid
+    # 缓存结果，30天内复用
+    g._prefiltered_cache_date = current_dt.date()
+    g._prefiltered_cache = codes
+    return codes
 
 
 def check_stop_loss(context):
@@ -113,34 +103,55 @@ def check_stop_loss(context):
 
 
 def rebalance(context):
-    # 获取配置的持仓数量
+    # ====== 调仓间隔控制：未到间隔时跳过本次调仓 ======
+    today = context.current_dt.date()
+    if g.last_rebalance_date is not None:
+        days_since = (today - g.last_rebalance_date).days
+        # 间隔不足时跳过调仓（止盈止损由 check_stop_loss 每分钟独立处理，不受影响）
+        if days_since < g.rebalance_interval:
+            return
+    # 记录本次调仓日期
+    g.last_rebalance_date = today
+
     stocksnum = g.stocksnum
-    # 获取过滤后的有效股票池（已排除ST、上市不足60天的新股、科创板）
-    stock_list = get_valid_stocks(context)
-    # 获取当前实时行情数据，用于判断停牌和涨跌停
+    current_dt = context.current_dt
     current_data = get_current_data()
+    # 获取预过滤股票池（科创板、新股；无ST检查；缓存30天）— 返回set
+    pre_filtered = get_prefiltered_stocks(context)
 
-    # ====== 第一步：按市值排序，先取候选池再检查行情 ======
-    # 核心优化：先用get_fundamentals按市值排序取前 stocksnum*5 只候选股，
-    # 然后只对这些候选股检查停牌/涨跌停，避免对全部 22,000+ 股票逐股访问current_data
-    candidate_count = stocksnum * 5
-    q = query(valuation.code).filter(
-        valuation.code.in_(stock_list)
-    ).order_by(valuation.market_cap.asc()).limit(candidate_count)
+    # ====== 第一步：全市场按市值排序取候选池，再做昂贵过滤 ======
+    # 性能优化：不再对全量股票做.in_()过滤和ST检查，而是先取市值最小的top N，
+    # 然后在Python中交叉过滤（pre_filtered、ST），将get_extras从~5000只降到~200只
+    candidate_count = stocksnum * 20
+    q = query(valuation.code).order_by(
+        valuation.market_cap.asc()
+    ).limit(candidate_count)
 
-    # 执行查询，获取市值最小的候选股票列表
     df = get_fundamentals(q)
-    # 如果查询结果为空，直接返回不操作
     if df is None or len(df) == 0:
         return
 
-    # 从候选池中过滤掉停牌、涨停、当日已止盈止损的股票
+    # 在Python中过滤：只保留预过滤池中的股票（科创板、新股已排除）
+    codes = [c for c in df['code'] if c in pre_filtered]
+
+    # ====== 第二步：对候选池查ST（性能关键：只查~200只，原为~5000只）======
+    if len(codes) > 0:
+        df_st = get_extras('is_st', codes,
+                           start_date=current_dt.date(),
+                           end_date=current_dt.date())
+        st_series = df_st.iloc[0]
+        is_st_map = st_series.fillna(False).astype(bool)
+    else:
+        is_st_map = pd.Series(dtype=bool)
+
+    # ====== 第三步：过滤ST、停牌、涨停、当日已止盈止损 ======
     tradeable = []
-    for code in df['code']:
-        # 排除当日已触发止盈止损的股票，避免卖出后立即买回
+    for code in codes:
         if code in g.stopped_today:
             continue
-        # 单次获取该股票的实时行情数据
+        # 排除ST股票（关键：此处而非全市场过滤，大幅减少get_extras开销）
+        if is_st_map.get(code, False):
+            continue
         cd = current_data[code]
         # 排除停牌股票
         if cd.paused:
@@ -148,31 +159,23 @@ def rebalance(context):
         # 排除已涨停的股票（当前价达到涨停价，无法买入）
         if cd.last_price >= cd.high_limit:
             continue
-        # 通过过滤，加入可交易股票列表
         tradeable.append(code)
 
     # 取市值最小的 stocksnum 只作为最终目标
     target = tradeable[:stocksnum]
 
-    # ====== 第二步：卖出不再符合条件的持仓 ======
-    # 遍历当前所有持仓
+    # ====== 第四步：卖出不再符合条件的持仓 ======
     for s in list(context.portfolio.positions.keys()):
-        # 跳过已在本轮止盈止损中卖出的股票
         if s in g.stopped_today:
             continue
-        # 如果持仓股票不在目标列表中，则全部卖出
         if s not in target:
             order_target(s, 0)
-            # 记录卖出日志
             log.info('卖出 %s' % s)
 
-    # ====== 第三步：等权买入目标股票 ======
-    # 如果目标列表不为空，等权买入
+    # ====== 第五步：等权买入目标股票 ======
     if len(target) > 0:
         # 计算每只股票分配的目标市值（总资产 / 目标股票数），使用total_value而非
         # available_cash，避免满仓时available_cash接近0导致错误卖出全部持仓
         target_value = context.portfolio.total_value / len(target)
-        # 遍历目标股票列表，逐一调整至目标市值
         for s in target:
-            # 将每只股票的持仓市值调整为目标金额，实现等权配置
             order_target_value(s, target_value)
