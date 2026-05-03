@@ -20,8 +20,9 @@
 - `strategies/`：策略主目录
 - `strategies/<strategy_name>/<strategy_name>.py`：策略代码文件
 - `strategies/<strategy_name>/tests/`：本地单元测试（pytest）
-- `strategies/<strategy_name>/*_Analysis.md`：策略分析文档
-- `strategies/<strategy_name>/*_performance.md`：性能记录文档
+- `strategies/<strategy_name>/Analysis_*.md`：策略分析文档
+- `strategies/<strategy_name>/performance_*.md`：性能分析文档
+- `strategies/<strategy_name>/test_*.md`：测试框架文档
 - `docs/`：聚宽文档镜像与研究资料
 - `scripts/`：文档转换、辅助脚本
 
@@ -43,10 +44,10 @@
 
 ```bash
 # 语法检查（按需替换为目标策略文件）
-python -m py_compile strategies/three_etf_dynamic_allocation/three_etf_dynamic_allocation.py
+python -m py_compile strategies/etf_dynamic_rebalance/etf_dynamic_rebalance.py
 
 # 单元测试（示例）
-pytest strategies/three_etf_dynamic_allocation/tests -q
+pytest strategies/etf_dynamic_rebalance/tests -q
 ```
 
 如果新增策略，建议同步补齐 `tests/` 目录并至少覆盖：
@@ -88,12 +89,12 @@ pytest strategies/three_etf_dynamic_allocation/tests -q
   - 模块头注释：策略思想、适用标的、核心公式与约束
   - 函数注释：输入、输出、关键副作用
   - 关键语句注释：复杂计算、风控裁剪、边界处理
-- 研究结论、参数变更理由应写入对应策略目录的分析文档，而不是只留在代码注释里。
+- 研究结论、参数变更理由应写入对应策略目录的分析文档，而不是留在代码注释里。
 
 ## 8. 提交前检查清单
 
 - 代码是否通过语法检查与相关单元测试？
 - 是否避免引入未来函数或隐式未来数据？
 - 参数、手续费、滑点、调仓频率是否与策略设计一致？
-- 新增/修改逻辑是否同步更新分析文档与性能记录？
+- 新增/修改逻辑是否同步更新分析文档与性能分析？
 - 是否可以被他人根据文档复现回测流程？

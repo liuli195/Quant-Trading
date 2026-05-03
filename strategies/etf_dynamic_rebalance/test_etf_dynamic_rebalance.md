@@ -1,6 +1,6 @@
-# three_etf_dynamic_allocation.py 测试文档
+# ETF 动态调仓策略 (etf_dynamic_rebalance) 测试文档
 
-> 评审对象：`strategies/three_etf_dynamic_allocation/three_etf_dynamic_allocation.py`  
+> 评审对象：`strategies/etf_dynamic_rebalance/etf_dynamic_rebalance.py`  
 > 文档日期：2026-05-03  
 > 参考目录：仓库中实际目录为 `docs`，对应用户提到的 `DOC` 文档。
 
@@ -24,8 +24,8 @@
 - `docs/Quant_Reports/黄金_AI_纳指100_配比方案.md`：三资产定位、核心公式、60 日波动率、周度调仓、10%~60% 权重约束。
 - `docs/joinquant-api.md`：`set_option('use_real_price', True)`、`set_option("avoid_future_data", True)`、`run_weekly`、`get_price`、`set_order_cost`、`set_slippage`、`order_target_value` 的平台语义。
 - `docs/joinquant-data/JQ_技术分析指标.md`：`BIAS`、`ROC` 的参数、返回字典结构、`check_date` 与未来数据注意事项。
-- `strategies/three_etf_dynamic_allocation_Analysis.md`：2021-01-01 至 2026-04-30 的回测指标基准。
-- `strategies/three_etf_dynamic_allocation_performance.md`：函数级耗时、重复 `BIAS/ROC` 调用、`get_price` 调用成本。
+- `strategies/etf_dynamic_rebalance/Analysis_etf_dynamic_rebalance.md`：2021-01-01 至 2026-04-30 的回测指标基准。
+- `strategies/etf_dynamic_rebalance/performance_etf_dynamic_rebalance.md`：函数级耗时、重复 `BIAS/ROC` 调用、`get_price` 调用成本。
 
 ## 3. 代码评审结论
 
@@ -77,7 +77,7 @@
 
 | 用例 ID | 测试点 | 输入/步骤 | 期望结果 |
 |---|---|---|---|
-| TC-STATIC-001 | Python 语法 | 执行 `python -m py_compile strategies/three_etf_dynamic_allocation/three_etf_dynamic_allocation.py` | 编译通过，无语法错误。当前已本地验证通过。 |
+| TC-STATIC-001 | Python 语法 | 执行 `python -m py_compile strategies/etf_dynamic_rebalance/etf_dynamic_rebalance.py` | 编译通过，无语法错误。当前已本地验证通过。 |
 | TC-STATIC-002 | 未使用导入 | 静态扫描 import | 仅导入 `BIAS, ROC`，无未使用导入。✅ R8 已修复。 |
 | TC-INIT-001 | 真实价格设置 | mock `set_option` 后调用 `initialize(context)` | 收到 `('use_real_price', True)`。 |
 | TC-INIT-002 | 防未来数据设置 | mock `set_option` 后调用 `initialize(context)` | 收到 `("avoid_future_data", True)`。 |
@@ -233,7 +233,7 @@
 
 ## 12. 性能回归标准
 
-参考 `three_etf_dynamic_allocation_performance.md`：
+参考 `performance_etf_dynamic_rebalance.md`：
 
 - 2026-04 单月实际回测总耗时约 4 秒。
 - 策略代码执行时间约 0.67 秒。
@@ -275,7 +275,7 @@ P2：补回测回归、滑点敏感性、性能预算和重复指标调用统计
 
 ```powershell
 # 静态编译检查
-python -m py_compile .\strategies\three_etf_dynamic_allocation.py
+python -m py_compile .\strategies\etf_dynamic_rebalance\etf_dynamic_rebalance.py
 ```
 
 结果：通过，无语法错误。
@@ -341,7 +341,7 @@ R4/R7/R8/R9 修复记录（2026-05-03）：
 
 ```powershell
 # 静态编译检查（R8 验证：MA 已移除）
-python -m py_compile .\strategies\three_etf_dynamic_allocation.py
+python -m py_compile .\strategies\etf_dynamic_rebalance\etf_dynamic_rebalance.py
 ```
 
 结果：通过，无语法错误，无未使用导入。✅ R8 修复确认。

@@ -1,6 +1,6 @@
-# 三 ETF 动态配比策略 — 回测分析报告
+# ETF 动态调仓策略 — 回测分析报告
 
-> 策略文件：`strategies/three_etf_dynamic_allocation/three_etf_dynamic_allocation.py`
+> 策略文件：`strategies/etf_dynamic_rebalance/etf_dynamic_rebalance.py`
 > 回测 ID：`748a78de112c69c333f00c08485b82b1`
 > 回测日期：2026-05-02
 > 分析日期：2026-05-03

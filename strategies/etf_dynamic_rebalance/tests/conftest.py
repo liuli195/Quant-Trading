@@ -84,9 +84,9 @@ def strategy():
     - get_price, order_target_value: MagicMock（可配置返回值）
     """
     import pathlib
-    strategy_file = pathlib.Path(__file__).resolve().parent.parent / "three_etf_dynamic_allocation.py"
+    strategy_file = pathlib.Path(__file__).resolve().parent.parent / "etf_dynamic_rebalance.py"
     spec = importlib.util.spec_from_file_location(
-        "three_etf_dynamic_allocation",
+        "etf_dynamic_rebalance",
         str(strategy_file),
     )
     module = importlib.util.module_from_spec(spec)

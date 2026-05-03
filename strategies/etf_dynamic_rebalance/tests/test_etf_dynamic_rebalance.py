@@ -8,7 +8,7 @@
   - 策略初始化测试（set_option, set_order_cost, run_weekly 等）
   - weekly_rebalance 集成测试（mock 完整调仓流程）
 
-参考文档：strategies/three_etf_dynamic_allocation_test.md
+参考文档：strategies/etf_dynamic_rebalance/test_etf_dynamic_rebalance.md
 """
 
 import sys
@@ -136,7 +136,7 @@ class TestStaticCheck:
     def test_no_unused_import(self, strategy):
         """TC-STATIC-002: 仅导入 BIAS, ROC，无未使用导入。"""
         import pathlib
-        strategy_file = pathlib.Path(__file__).resolve().parent.parent / "three_etf_dynamic_allocation.py"
+        strategy_file = pathlib.Path(__file__).resolve().parent.parent / "etf_dynamic_rebalance.py"
         source = open(str(strategy_file), encoding='utf-8').read()
 
         # 确认 source 中 import 行只包含 BIAS 和 ROC

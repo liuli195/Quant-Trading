@@ -31,7 +31,13 @@
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__wait_for",
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__evaluate_script",
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__fill",
-      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__press_key"
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__press_key",
+      "Bash(git mv *)",
+      "PowerShell(git checkout -- strategies/three_etf_dynamic_allocation/three_etf_dynamic_allocation_Analysis.md strategies/three_etf_dynamic_allocation/three_etf_dynamic_allocation_performance.md strategies/three_etf_dynamic_allocation/three_etf_dynamic_allocation_test.md)",
+      "PowerShell(git mv --verbose \"strategies/three_etf_dynamic_allocation/three_etf_dynamic_allocation.py\" \"strategies/etf_dynamic_rebalance/etf_dynamic_rebalance.py\")",
+      "PowerShell(git add -A strategies/etf_dynamic_rebalance/)",
+      "PowerShell(git add -A strategies/three_etf_dynamic_allocation/)",
+      "PowerShell(Get-ChildItem -Recurse \"strategies/etf_dynamic_rebalance\" | Where-Object { -not $_.PSIsContainer } | ForEach-Object { $_.FullName })"
     ]
   },
   "outputStyle": "Explanatory"
