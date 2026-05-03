@@ -21,13 +21,13 @@ enable_profile()
     风险厌恶 = 纳指近 20 日收益 < 0 → 1.0
 
   - AI ETF（高弹性进攻资产）：0.45×动量 + 0.25×趋势 - 0.20×波动率 - 0.10×回撤
-    动量 = 20 日累计对数收益 z-score
+    动量 = 20 日累计简单收益率（ROC）z-score
     趋势 = 价格相对 20 日均线偏离率 z-score
     波动率 = 短/长期波动率比 z-score（比率升高 → 扣分）
     回撤 = 当前价格相对 60 日最高价的回撤幅度 z-score（回撤越大 → 扣分越多）
 
   - 纳指100（核心成长资产）：0.40×动量 + 0.20×趋势 + 0.20×风险偏好 - 0.20×波动率
-    动量 = 60 日累计对数收益 z-score
+    动量 = 60 日累计简单收益率（ROC）z-score
     趋势 = 价格相对 20 日均线偏离率 z-score
     风险偏好 = 纳指 20 日收益 > 0 且 > 黄金同期收益 → 1.0
     波动率 = 同 AI ETF 的波动率惩罚逻辑
@@ -55,7 +55,7 @@ enable_profile()
 
 import numpy as np
 import pandas as pd
-from jqlib.technical_analysis import BIAS, ROC, MA
+from jqlib.technical_analysis import BIAS, ROC
 
 
 # ============================================================
@@ -235,17 +235,19 @@ def weekly_rebalance(context):
         return
 
     # 截取各 ETF 价格序列的最短长度，保证对齐
+    # 注意：取 [-min_len:] 尾部而非 [:min_len] 头部
+    # 各 ETF 上市时间不同会导致历史长度不同，但最新日期（end_date 相同）是对齐的
     valid_indices = [i for i, p in enumerate(prices_list) if p is not None]
     valid_prices = [prices_list[i] for i in valid_indices]
     min_len = min(len(p) for p in valid_prices)
     close_prices = pd.DataFrame({
-        g.etf_pool[i]: valid_prices[j][:min_len]
+        g.etf_pool[i]: valid_prices[j][-min_len:]
         for j, i in enumerate(valid_indices)
     })
     close_prices = close_prices.dropna()
 
-    if len(close_prices) < 21:
-        log.info("【警告】有效数据不足 21 日（MA20 最低要求），跳过本次调仓")
+    if len(close_prices) < 61:
+        log.info("【警告】有效数据不足 61 日（需覆盖 60 日波动率/动量/回撤），跳过本次调仓")
         return
 
     # ==================== 第二步：计算年化波动率 ====================
@@ -273,9 +275,12 @@ def weekly_rebalance(context):
     nasdaq_prices = prices_array[:, 2]
 
     check_date = context.previous_date  # 与 get_price 的 end_date 保持一致
-    s_G = compute_gold_factors(gold_prices, nasdaq_prices, check_date)
-    s_A = compute_ai_factors(ai_prices, check_date)
-    s_N = compute_nasdaq_factors(nasdaq_prices, gold_prices, check_date)
+    gold_code, ai_code, nasdaq_code = g.etf_pool  # 解包 ETF 代码用于因子函数
+    s_G = compute_gold_factors(gold_prices, nasdaq_prices, check_date,
+                                gold_code=gold_code, nasdaq_code=nasdaq_code)
+    s_A = compute_ai_factors(ai_prices, check_date, ai_code=ai_code)
+    s_N = compute_nasdaq_factors(nasdaq_prices, gold_prices, check_date,
+                                  nasdaq_code=nasdaq_code, gold_code=gold_code)
 
     # 最终裁剪到 [-1, 1]（防御性编程，各子函数已裁剪但仍加一层保护）
     factor_scores = np.clip(np.array([s_G, s_A, s_N]), -1.0, 1.0)
@@ -284,10 +289,18 @@ def weekly_rebalance(context):
         factor_scores[0], factor_scores[1], factor_scores[2]
     ))
 
-    # ==================== 第四步：计算原始目标权重 ====================
+    # ==================== 第四步：计算权重（纯风险平价 → 因子调整） ====================
+    # 纯风险平价权重（仅基于波动率倒数，不受因子影响，作为对比基准）
+    inv_vol = 1.0 / (volatilities + 1e-10)          # 波动率倒数
+    rp_weights = inv_vol / np.sum(inv_vol)           # 归一化 → 纯风险平价
+
+    # 因子调整权重（风险平价 × 因子调整项）
     raw_weights = compute_target_weights(volatilities, factor_scores, g.k)
 
-    log.info("原始权重: G=%.3f, A=%.3f, N=%.3f" % (
+    log.info("纯风险平价: G=%.3f, A=%.3f, N=%.3f" % (
+        rp_weights[0], rp_weights[1], rp_weights[2]
+    ))
+    log.info("因子调整后: G=%.3f, A=%.3f, N=%.3f" % (
         raw_weights[0], raw_weights[1], raw_weights[2]
     ))
 
@@ -317,10 +330,15 @@ def weekly_rebalance(context):
     # ==================== 第七步：执行调仓 ====================
     for i, etf in enumerate(g.etf_pool):
         target_value = total_value * final_weights[i]
-        order_target_value(etf, target_value)
-        log.info("调仓 %s(%s): 目标市值 %.0f, 目标权重 %.1f%%" % (
-            g.etf_names[i], etf, target_value, final_weights[i] * 100
-        ))
+        order = order_target_value(etf, target_value)
+        if order is None:
+            log.error("【调仓失败】%s(%s): 目标市值 %.0f 下单失败，请检查账户状态" % (
+                g.etf_names[i], etf, target_value
+            ))
+        else:
+            log.info("调仓 %s(%s): 目标市值 %.0f, 目标权重 %.1f%%" % (
+                g.etf_names[i], etf, target_value, final_weights[i] * 100
+            ))
 
 
 # ============================================================
@@ -358,9 +376,10 @@ def zscore_clip(current_value, historical_values, floor=-1.0, ceiling=1.0):
 # ============================================================
 # compute_gold_factors — 黄金 ETF 复合因子得分
 # ============================================================
-def compute_gold_factors(gold_prices, nasdaq_prices, check_date):
+def compute_gold_factors(gold_prices, nasdaq_prices, check_date,
+                          gold_code='518880.XSHG', nasdaq_code='513100.XSHG'):
     """
-    计算黄金 ETF (518880.XSHG) 的复合因子得分 s_G。
+    计算黄金 ETF 的复合因子得分 s_G。
 
     s_G = 0.5 × Trend_G + 0.3 × RS_G + 0.2 × RiskOff
 
@@ -373,6 +392,8 @@ def compute_gold_factors(gold_prices, nasdaq_prices, check_date):
         gold_prices: numpy array，黄金 ETF 收盘价序列
         nasdaq_prices: numpy array，纳指 ETF 收盘价序列
         check_date: datetime，当前调仓日期（用于内置指标查询）
+        gold_code: str，黄金 ETF 代码（默认 '518880.XSHG'）
+        nasdaq_code: str，纳指 ETF 代码（默认 '513100.XSHG'）
     """
 
     min_len = g.trend_ma_window
@@ -381,8 +402,8 @@ def compute_gold_factors(gold_prices, nasdaq_prices, check_date):
 
     # ---------- 子因子 1：趋势（Trend_G） ----------
     # 当前乖离率 → 内置 BIAS 指标（BIAS20 = (close-MA20)/MA20 * 100）
-    bias_result = BIAS(['518880.XSHG'], check_date=check_date, N1=20)
-    trend_current = bias_result[0].get('518880.XSHG', 0.0) / 100.0
+    bias_result = BIAS([gold_code], check_date=check_date, N1=20)
+    trend_current = bias_result[0].get(gold_code, 0.0) / 100.0
 
     # 历史乖离率序列 → 从价格计算（用于 z-score 标准化）
     gold_ma20 = np.convolve(gold_prices, np.ones(min_len)/min_len, mode='valid')
@@ -395,9 +416,9 @@ def compute_gold_factors(gold_prices, nasdaq_prices, check_date):
         rs_score = 0.0
     else:
         # 当前 20 日收益率 → 内置 ROC 指标
-        roc_g = ROC(['518880.XSHG'], check_date=check_date, timeperiod=20)
-        roc_n = ROC(['513100.XSHG'], check_date=check_date, timeperiod=20)
-        rs_current = (roc_g.get('518880.XSHG', 0.0) - roc_n.get('513100.XSHG', 0.0)) / 100.0
+        roc_g = ROC([gold_code], check_date=check_date, timeperiod=20)
+        roc_n = ROC([nasdaq_code], check_date=check_date, timeperiod=20)
+        rs_current = (roc_g.get(gold_code, 0.0) - roc_n.get(nasdaq_code, 0.0)) / 100.0
 
         # 历史超额收益序列（用于 z-score）
         gold_20d_ret = gold_prices[min_len:] / gold_prices[:-min_len] - 1.0
@@ -407,8 +428,8 @@ def compute_gold_factors(gold_prices, nasdaq_prices, check_date):
 
     # ---------- 子因子 3：风险厌恶（RiskOff） ----------
     if len(nasdaq_prices) > min_len:
-        roc_n = ROC(['513100.XSHG'], check_date=check_date, timeperiod=20)
-        riskoff_score = 1.0 if roc_n.get('513100.XSHG', 0.0) < 0 else 0.0
+        roc_n = ROC([nasdaq_code], check_date=check_date, timeperiod=20)
+        riskoff_score = 1.0 if roc_n.get(nasdaq_code, 0.0) < 0 else 0.0
     else:
         riskoff_score = 0.0
 
@@ -423,9 +444,9 @@ def compute_gold_factors(gold_prices, nasdaq_prices, check_date):
 # ============================================================
 # compute_ai_factors — AI ETF 复合因子得分
 # ============================================================
-def compute_ai_factors(ai_prices, check_date):
+def compute_ai_factors(ai_prices, check_date, ai_code='159819.XSHE'):
     """
-    计算 AI ETF (159819.XSHE) 的复合因子得分 s_A。
+    计算 AI ETF 的复合因子得分 s_A。
 
     s_A = 0.45 × Momentum_A + 0.25 × Trend_A - 0.20 × Vol_A - 0.10 × Drawdown_A
 
@@ -438,6 +459,7 @@ def compute_ai_factors(ai_prices, check_date):
     参数:
         ai_prices: numpy array，AI ETF 收盘价序列
         check_date: datetime，当前调仓日期（用于内置指标查询）
+        ai_code: str，AI ETF 代码（默认 '159819.XSHE'）
     """
 
     if len(ai_prices) < g.trend_ma_window + 1:
@@ -449,8 +471,8 @@ def compute_ai_factors(ai_prices, check_date):
     mom_w = g.momentum_window_short
     if len(ai_prices) > mom_w:
         # 当前 20 日收益率 → 内置 ROC 指标（=(close-close_20d)/close_20d）
-        roc_result = ROC(['159819.XSHE'], check_date=check_date, timeperiod=20)
-        roc20_current = roc_result.get('159819.XSHE', 0.0) / 100.0
+        roc_result = ROC([ai_code], check_date=check_date, timeperiod=20)
+        roc20_current = roc_result.get(ai_code, 0.0) / 100.0
 
         # 历史 20 日简单收益率序列（与 ROC 公式一致，用于 z-score）
         roc20_series = ai_prices[mom_w:] / ai_prices[:-mom_w] - 1.0
@@ -461,8 +483,8 @@ def compute_ai_factors(ai_prices, check_date):
     # ---------- 子因子 2：趋势（Trend_A） ----------
     min_len = g.trend_ma_window
     # 当前乖离率 → 内置 BIAS 指标
-    bias_result = BIAS(['159819.XSHE'], check_date=check_date, N1=20)
-    trend_current = bias_result[0].get('159819.XSHE', 0.0) / 100.0
+    bias_result = BIAS([ai_code], check_date=check_date, N1=20)
+    trend_current = bias_result[0].get(ai_code, 0.0) / 100.0
 
     # 历史乖离率序列（用于 z-score）
     ai_ma20 = np.convolve(ai_prices, np.ones(min_len)/min_len, mode='valid')
@@ -519,9 +541,10 @@ def compute_ai_factors(ai_prices, check_date):
 # ============================================================
 # compute_nasdaq_factors — 纳指100 ETF 复合因子得分
 # ============================================================
-def compute_nasdaq_factors(nasdaq_prices, gold_prices, check_date):
+def compute_nasdaq_factors(nasdaq_prices, gold_prices, check_date,
+                            nasdaq_code='513100.XSHG', gold_code='518880.XSHG'):
     """
-    计算纳指100 ETF (513100.XSHG) 的复合因子得分 s_N。
+    计算纳指100 ETF 的复合因子得分 s_N。
 
     s_N = 0.40 × Momentum_N + 0.20 × Trend_N + 0.20 × RiskOn - 0.20 × Vol_N
 
@@ -535,6 +558,8 @@ def compute_nasdaq_factors(nasdaq_prices, gold_prices, check_date):
         nasdaq_prices: numpy array，纳指 ETF 收盘价序列
         gold_prices: numpy array，黄金 ETF 收盘价序列
         check_date: datetime，当前调仓日期（用于内置指标查询）
+        nasdaq_code: str，纳指 ETF 代码（默认 '513100.XSHG'）
+        gold_code: str，黄金 ETF 代码（默认 '518880.XSHG'）
     """
 
     if len(nasdaq_prices) < g.trend_ma_window + 1:
@@ -546,8 +571,8 @@ def compute_nasdaq_factors(nasdaq_prices, gold_prices, check_date):
     mom_long_w = g.momentum_window_long
     if len(nasdaq_prices) > mom_long_w:
         # 当前 60 日收益率 → 内置 ROC 指标（=(close-close_60d)/close_60d）
-        roc_result = ROC(['513100.XSHG'], check_date=check_date, timeperiod=60)
-        roc60_current = roc_result.get('513100.XSHG', 0.0) / 100.0
+        roc_result = ROC([nasdaq_code], check_date=check_date, timeperiod=60)
+        roc60_current = roc_result.get(nasdaq_code, 0.0) / 100.0
 
         # 历史 60 日简单收益率序列（与 ROC 公式一致，用于 z-score）
         roc60_series = nasdaq_prices[mom_long_w:] / nasdaq_prices[:-mom_long_w] - 1.0
@@ -558,8 +583,8 @@ def compute_nasdaq_factors(nasdaq_prices, gold_prices, check_date):
     # ---------- 子因子 2：趋势（Trend_N） ----------
     min_len = g.trend_ma_window
     # 当前乖离率 → 内置 BIAS 指标
-    bias_result = BIAS(['513100.XSHG'], check_date=check_date, N1=20)
-    trend_current = bias_result[0].get('513100.XSHG', 0.0) / 100.0
+    bias_result = BIAS([nasdaq_code], check_date=check_date, N1=20)
+    trend_current = bias_result[0].get(nasdaq_code, 0.0) / 100.0
 
     # 历史乖离率序列（用于 z-score）
     n_ma20 = np.convolve(nasdaq_prices, np.ones(min_len)/min_len, mode='valid')
@@ -592,10 +617,10 @@ def compute_nasdaq_factors(nasdaq_prices, gold_prices, check_date):
 
     # ---------- 子因子 4：风险偏好（RiskOn） ----------
     if len(nasdaq_prices) > min_len and len(gold_prices) > min_len:
-        roc_n = ROC(['513100.XSHG'], check_date=check_date, timeperiod=20)
-        roc_g = ROC(['518880.XSHG'], check_date=check_date, timeperiod=20)
-        n_20d_ret = roc_n.get('513100.XSHG', 0.0) / 100.0
-        g_20d_ret = roc_g.get('518880.XSHG', 0.0) / 100.0
+        roc_n = ROC([nasdaq_code], check_date=check_date, timeperiod=20)
+        roc_g = ROC([gold_code], check_date=check_date, timeperiod=20)
+        n_20d_ret = roc_n.get(nasdaq_code, 0.0) / 100.0
+        g_20d_ret = roc_g.get(gold_code, 0.0) / 100.0
         riskon_score = 1.0 if (n_20d_ret > 0 and n_20d_ret > g_20d_ret) else 0.0
     else:
         riskon_score = 0.0
@@ -658,12 +683,22 @@ def compute_target_weights(volatilities, factor_scores, k):
 # ============================================================
 def apply_weight_constraints(target_weights, current_weights, bounds, max_change):
     """
-    对目标权重逐级施加硬约束，确保组合合规且可执行。
+    对目标权重施加硬约束，通过 Duchi 有界单纯形投影确保全部条件同时满足。
 
-    三级约束（按优先级顺序）：
-    1. 单资产上下限：裁剪到 [lower_i, upper_i]，防止单一资产过度集中
-    2. 调仓幅度限制：单次权重变化不超过 ±max_change，控制换手率
-    3. 重新归一化：约束可能破坏权重之和为 1，需重新归一化
+    约束条件（必须全部满足）：
+    1. 单资产上下限：w_i ∈ [lower_i, upper_i]
+    2. 调仓幅度限制：|w_i - current_i| ≤ max_change（首日无持仓时跳过）
+    3. 权重和为 1：Σ w_i = 1
+
+    优先级：
+        hard bounds（约束1）为最高优先级的安全约束，必须满足；
+        max_change（约束2）为换手率控制，当与 hard bounds 冲突时被放宽。
+        典型冲突场景：当前持仓已违反 hard bounds，需多周逐步修复。
+
+    实现方式：
+        将 max_change 与 bounds 合并为有效边界（effective bounds），
+        然后通过 Duchi 二分查找投影到有界单纯形。
+        算法保证一次收敛到满足所有约束的精确解，无需迭代。
 
     参数:
         target_weights: numpy array [3]，未施加约束的原始目标权重
@@ -672,26 +707,72 @@ def apply_weight_constraints(target_weights, current_weights, bounds, max_change
         max_change: float，单次调仓最大变化幅度（绝对值）
 
     返回:
-        numpy array [3]，施加全部约束后的最终目标权重（和为 1）
+        numpy array [3]，同时满足全部约束的最终目标权重
     """
 
     lower_bounds = np.array([b[0] for b in bounds])
     upper_bounds = np.array([b[1] for b in bounds])
+    has_position = np.sum(current_weights) > 1e-10
 
-    # 第一级：单资产上下限裁剪
-    constrained = np.clip(target_weights, lower_bounds, upper_bounds)
-
-    # 第二级：调仓幅度限制
-    change = constrained - current_weights
-    change_clipped = np.clip(change, -max_change, max_change)
-    constrained = current_weights + change_clipped
-
-    # 第三级：重新归一化
-    total = np.sum(constrained)
-    if total > 1e-10:
-        constrained = constrained / total
+    # 合并 max_change 与 bounds → 有效边界
+    if has_position:
+        effective_lower = np.maximum(lower_bounds, current_weights - max_change)
+        effective_upper = np.minimum(upper_bounds, current_weights + max_change)
     else:
-        # 极端退化为等权分配
-        constrained = np.ones(3) / 3.0
+        effective_lower = lower_bounds
+        effective_upper = upper_bounds
 
-    return constrained
+    # 解决 max_change 与 hard bounds 的矛盾（当前持仓已违反 hard bounds 的场景）
+    # hard bounds 优先级高于 max_change，放宽矛盾资产的有效边界
+    for i in range(3):
+        if effective_lower[i] > effective_upper[i]:
+            effective_lower[i] = lower_bounds[i]
+            effective_upper[i] = upper_bounds[i]
+
+    # 防御：有效下界之和 > 1 或有效上界之和 < 1 时无可行解
+    # 此时放宽 max_change，仅使用 hard bounds 再次尝试
+    if np.sum(effective_lower) > 1.0 + 1e-10 or np.sum(effective_upper) < 1.0 - 1e-10:
+        log.warning("【权重约束】含 max_change 无可行解（下界和=%.4f, 上界和=%.4f），"
+                    "放宽至 hard bounds 重试" % (np.sum(effective_lower), np.sum(effective_upper)))
+        effective_lower = lower_bounds
+        effective_upper = upper_bounds
+
+        # hard bounds 本身仍不可行则回退到等权分配
+        if np.sum(effective_lower) > 1.0 + 1e-10 or np.sum(effective_upper) < 1.0 - 1e-10:
+            log.warning("【权重约束】hard bounds 亦不可行，回退到等权分配")
+            w_fallback = np.clip(np.ones(3) / 3.0, effective_lower, effective_upper)
+            return w_fallback / np.sum(w_fallback)
+
+    # 初始裁剪到有效边界内
+    w = np.clip(target_weights, effective_lower, effective_upper)
+    total = np.sum(w)
+
+    # 已在单纯形上，直接返回
+    if abs(total - 1.0) < 1e-12:
+        return w
+
+    # 防御：全零或接近零的退化情况
+    if total < 1e-12:
+        w = np.clip(np.ones(3) / 3.0, effective_lower, effective_upper)
+        return w / np.sum(w)
+
+    # Duchi 有界单纯形投影：二分查找阈值 θ
+    # 使 Σ clip(w_i - θ, l_i, u_i) = 1
+    theta_low = np.min(w) - np.max(upper_bounds)
+    theta_high = np.max(w) - np.min(effective_lower)
+
+    for _ in range(50):
+        theta = (theta_low + theta_high) / 2.0
+        w_proj = np.clip(w - theta, effective_lower, effective_upper)
+        total_proj = np.sum(w_proj)
+
+        if abs(total_proj - 1.0) < 1e-12:
+            return w_proj
+
+        if total_proj < 1.0:
+            theta_high = theta
+        else:
+            theta_low = theta
+
+    # 最终收敛值（50 次迭代后取最后一次投影结果）
+    return np.clip(w - theta, effective_lower, effective_upper)

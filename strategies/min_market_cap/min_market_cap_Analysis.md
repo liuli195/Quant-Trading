@@ -4,7 +4,7 @@
 
 | 项目 | 值 |
 |------|-----|
-| 策略文件 | strategies/min_market_cap.py |
+| 策略文件 | strategies/min_market_cap/min_market_cap.py |
 | 回测区间 | 2025-04-30 至 2026-04-30（约1年） |
 | 初始资金 | ¥500,000 |
 | 频率 | 每天 |
