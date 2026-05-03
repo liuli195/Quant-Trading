@@ -1,35 +1,99 @@
 # CLAUDE.md
 
-## 项目概述
+## 1. 项目定位与边界
 
-基于 Python 的 A 股/场内基金量化交易项目。所有策略开发、回测、模拟交易均在**聚宽 (JoinQuant)** 云平台运行，本地无法执行策略。
+本项目是基于 Python 的 A 股/场内基金量化交易策略仓库，交易与回测环境为 **聚宽 (JoinQuant)**。
 
-- 聚宽 API 文档：
-  - 线上文档：<https://www.joinquant.com/help/api/help#name:api>
-  - 离线文档（Markdown）：docs/joinquant-api.md（由 HTML 转换，查阅 API 时优先读取此文件）
-- 策略回测：<https://www.joinquant.com/algorithm/index/list>
-- 模拟交易：<https://www.joinquant.com/algorithm/trade/list>
-- 策略文件：`strategies/` 目录
+- 策略运行边界：策略代码仅在聚宽云端可运行，本地不能直接执行完整策略。
+- 本地职责边界：本地用于编写代码、静态检查、单元测试、文档维护、回测结果分析。
+- 目标：以可复用、可测试、可审计的方式持续迭代策略。
 
-## 开发工作流
+## 2. 核心文档与入口
 
-**本地编写 → 浏览器自动化上传 → 聚宽云端回测**
+- 聚宽 API 在线文档：<https://www.joinquant.com/help/api/help#name:api>
+- 聚宽 API 离线文档：`docs/joinquant-api.md`（优先查阅）
+- 聚宽回测入口：<https://www.joinquant.com/algorithm/index/list>
+- 聚宽模拟交易入口：<https://www.joinquant.com/algorithm/trade/list>
 
-本地可用 Python 做静态检查，但不能运行策略。通过 mcp-chrome 操控 Chrome 完成上传和回测操作（需在 Chrome 中手动登录聚宽）。
+## 3. 仓库结构约定
 
-## 编码规范
+- `strategies/`：策略主目录
+- `strategies/<strategy_name>/<strategy_name>.py`：策略代码文件
+- `strategies/<strategy_name>/tests/`：本地单元测试（pytest）
+- `strategies/<strategy_name>/*_Analysis.md`：策略分析文档
+- `strategies/<strategy_name>/*_performance.md`：性能记录文档
+- `docs/`：聚宽文档镜像与研究资料
+- `scripts/`：文档转换、辅助脚本
 
-### 策略生命周期
+## 4. 开发与验证流程
 
-- `initialize(context)` — 初始化参数、股票池、定时任务
-- `handle_data(context, data)` — 按日/分钟调用的主逻辑，或自定义 `run_daily` 等定时函数
+推荐流程：
 
-### 性能优化
+1. 在本地修改策略与测试代码。
+2. 执行本地校验（语法/单测）。
+3. 通过浏览器上传到聚宽，执行云端回测。
+4. 分析回测结果，记录在策略目录文档中。
+5. 必要时进入模拟交易观察，再进行下一轮迭代。
 
-- 先过滤再查询 — 批量筛选缩小候选范围后，再对少量标的逐项操作，避免在全量数据上执行昂贵查询
-- 缓存查询结果 — 同一数据只获取一次，存入局部变量复用，避免循环中反复调用 API
-- 批量操作优于逐行循环 — 优先使用向量化或批量接口，减少逐条遍历
+说明：上传与回测环节依赖浏览器登录态，请先在 Chrome 中手动登录聚宽。
 
-### 代码注释
+## 5. 本地检查命令
 
-- 每行代码均需详细中文注释（模块、函数、变量用途）
+示例命令（在仓库根目录执行）：
+
+```bash
+# 语法检查（按需替换为目标策略文件）
+python -m py_compile strategies/three_etf_dynamic_allocation/three_etf_dynamic_allocation.py
+
+# 单元测试（示例）
+pytest strategies/three_etf_dynamic_allocation/tests -q
+```
+
+如果新增策略，建议同步补齐 `tests/` 目录并至少覆盖：
+
+- 参数初始化正确性
+- 核心权重/信号函数
+- 调仓流程关键分支
+
+## 6. 策略代码规范
+
+### 6.1 生命周期函数
+
+- `initialize(context)`：集中完成环境选项、参数初始化、费用/滑点设置、定时任务注册。
+- `handle_data(context, data)` 或 `run_daily/run_weekly`：实现调仓主逻辑。
+
+### 6.2 参数管理
+
+- 策略参数统一在初始化阶段集中定义（如 `set_parameter`）。
+- 避免魔法数字散落在交易逻辑中。
+- 参数命名需要体现含义与单位（如窗口长度、阈值、权重上限）。
+
+### 6.3 数据与性能
+
+- 先筛选后计算，避免全市场全量重复查询。
+- 同一周期内可复用的数据应缓存到局部变量。
+- 优先批量接口、向量化计算，减少逐条循环调用 API。
+- 明确处理缺失值、停牌、上市时长不足等边界情况。
+
+### 6.4 风险与执行约束
+
+- 明确仓位上下限与调仓步长限制。
+- 对关键风控参数（最大回撤、单次换手、仓位漂移）保留日志。
+- 下单前后记录目标权重、当前权重、实际成交偏差。
+
+## 7. 注释与文档规范
+
+- 注释目标是解释“为什么”，而不是逐行翻译“做了什么”。
+- 推荐三层注释结构：
+  - 模块头注释：策略思想、适用标的、核心公式与约束
+  - 函数注释：输入、输出、关键副作用
+  - 关键语句注释：复杂计算、风控裁剪、边界处理
+- 研究结论、参数变更理由应写入对应策略目录的分析文档，而不是只留在代码注释里。
+
+## 8. 提交前检查清单
+
+- 代码是否通过语法检查与相关单元测试？
+- 是否避免引入未来函数或隐式未来数据？
+- 参数、手续费、滑点、调仓频率是否与策略设计一致？
+- 新增/修改逻辑是否同步更新分析文档与性能记录？
+- 是否可以被他人根据文档复现回测流程？

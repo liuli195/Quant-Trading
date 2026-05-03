@@ -1,0 +1,135 @@
+# ========================
+# Python
+# ========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# ========================
+# 虚拟环境
+# ========================
+venv/
+.venv/
+env/
+.env/
+*.venv
+
+# ========================
+# 测试与覆盖率
+# ========================
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+*.cover
+
+# ========================
+# 图片
+# ========================
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.svg
+*.ico
+*.webp
+*.tiff
+*.tif
+*.raw
+*.heic
+*.heif
+
+# ========================
+# 音频
+# ========================
+*.mp3
+*.wav
+*.ogg
+*.flac
+*.aac
+*.wma
+*.m4a
+*.opus
+*.weba
+
+# ========================
+# 视频
+# ========================
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+*.wmv
+*.flv
+*.m4v
+*.3gp
+
+# ========================
+# 临时与缓存文件
+# ========================
+*.tmp
+*.temp
+*.cache
+*.bak
+*.swp
+*.swo
+*~
+\#*\#
+.#*
+
+# ========================
+# 操作系统
+# ========================
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ========================
+# IDE / 编辑器
+# ========================
+.idea/
+*.sublime-project
+*.sublime-workspace
+.vscode/settings.json
+.vscode/tasks.json
+.vscode/launch.json
+.vscode/extensions.json
+*.code-workspace
+
+# ========================
+# 日志
+# ========================
+*.log
+logs/
+
+# ========================
+# 环境变量与密钥
+# ========================
+.env
+.env.local
+*.pem
+*.key
+secrets/
+
+# ========================
+# Jupyter
+# ========================
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ========================
+# 数据文件 → 由 Git LFS 管理（规则见 .gitattributes）
+# ========================
