@@ -19,12 +19,42 @@
 
 - `strategies/`：策略主目录
 - `strategies/<strategy_name>/<strategy_name>.py`：策略代码文件
-- `strategies/<strategy_name>/tests/`：本地单元测试（pytest）
-- `strategies/<strategy_name>/Analysis_*.md`：策略分析文档
-- `strategies/<strategy_name>/performance_*.md`：性能分析文档
-- `strategies/<strategy_name>/test_*.md`：测试框架文档
+- `strategies/<strategy_name>/tests/`：本地单元测试（pytest）与测试文档
+- `strategies/<strategy_name>/reports/`：专题分析报告（跨回测对比、深度归因）
+- `strategies/<strategy_name>/backtest_runs/<run_id>/`：单次回测的完整产物
+  - `report/backtest_report.md`：回测数据汇总
+  - `report/strategy-analysis.md`：本次回测策略分析（每次回测必须产出）
+  - `report/performance-analysis.md`：本次回测性能分析（每次回测必须产出）
 - `docs/`：聚宽文档镜像与研究资料
 - `scripts/`：文档转换、辅助脚本
+
+### 3.1 路径别名与引用治理
+
+- `path_aliases.json`：仓库级目录别名配置，是策略、报告、回测产物、文档图片等语义目录的唯一来源。
+- `scripts/path_tools/`：路径治理工具目录。
+  - `aliases.py`：解析 `path_aliases.json` 中的目录别名。
+  - `refactor.py`：移动/改名文件并批量重写仓库内部引用。
+- 新增脚本写入结果目录时，优先通过目录别名解析，不直接硬编码 `strategies/<strategy>/backtest_runs/...` 等结构。
+- 重要 Markdown 内部文件引用采用“双轨格式”：普通路径负责可点击，`pathref` 注释负责机器校验和重写。
+
+示例：
+
+```md
+[阈值对比](strategies/etf_dynamic_rebalance/reports/01-threshold-comparison.md) <!-- pathref: strategy_reports(strategy=etf_dynamic_rebalance)/01-threshold-comparison.md -->
+```
+
+常用命令：
+
+```bash
+# 解析目录别名
+python -m scripts.path_tools.aliases resolve backtest_report_dir strategy=etf_dynamic_rebalance run_id=xxx
+
+# 检查 Markdown pathref 引用
+python -m scripts.path_tools.refactor check
+
+# 移动/改名并重写引用
+python -m scripts.path_tools.refactor move old/path.md new/path.md
+```
 
 ## 4. 开发与验证流程
 

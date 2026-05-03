@@ -1,0 +1,19 @@
+{
+  "roots": {
+    "repo": ".",
+    "docs": "docs",
+    "strategies": "strategies",
+    "skills": ".claude/skills"
+  },
+  "aliases": {
+    "strategy_dir": "{strategies}/{strategy}",
+    "strategy_tests": "{strategy_dir}/tests",
+    "strategy_reports": "{strategy_dir}/reports",
+    "backtest_runs": "{strategy_dir}/backtest_runs",
+    "backtest_run": "{backtest_runs}/{run_id}",
+    "backtest_report_dir": "{backtest_run}/report",
+    "backtest_tabs_dir": "{backtest_run}/tabs_raw",
+    "docs_images": "{docs}/images",
+    "joinquant_skill": "{skills}/joinquant-backtest"
+  }
+}

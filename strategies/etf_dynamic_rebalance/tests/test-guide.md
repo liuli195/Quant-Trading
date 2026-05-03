@@ -24,8 +24,8 @@
 - `docs/Quant_Reports/黄金_AI_纳指100_配比方案.md`：三资产定位、核心公式、60 日波动率、周度调仓、10%~60% 权重约束。
 - `docs/joinquant-api.md`：`set_option('use_real_price', True)`、`set_option("avoid_future_data", True)`、`run_weekly`、`get_price`、`set_order_cost`、`set_slippage`、`order_target_value` 的平台语义。
 - `docs/joinquant-data/JQ_技术分析指标.md`：`BIAS`、`ROC` 的参数、返回字典结构、`check_date` 与未来数据注意事项。
-- `strategies/etf_dynamic_rebalance/Analysis_etf_dynamic_rebalance.md`：2021-01-01 至 2026-04-30 的回测指标基准。
-- `strategies/etf_dynamic_rebalance/performance_etf_dynamic_rebalance.md`：函数级耗时、重复 `BIAS/ROC` 调用、`get_price` 调用成本。
+- `../reports/03-legacy-strategy-analysis.md`：2021-01-01 至 2026-04-30 的回测指标基准（源回测数据未保留，仅供参考）。
+- `../reports/04-legacy-performance-analysis.md`：函数级耗时、重复 `BIAS/ROC` 调用、`get_price` 调用成本（源回测数据未保留，仅供参考）。
 
 ## 3. 代码评审结论
 
@@ -233,7 +233,7 @@
 
 ## 12. 性能回归标准
 
-参考 `performance_etf_dynamic_rebalance.md`：
+参考 `../reports/04-legacy-performance-analysis.md`：
 
 - 2026-04 单月实际回测总耗时约 4 秒。
 - 策略代码执行时间约 0.67 秒。

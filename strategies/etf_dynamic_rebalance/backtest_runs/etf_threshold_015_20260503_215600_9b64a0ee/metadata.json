@@ -1,0 +1,10 @@
+﻿{
+    "backtest_url":  "https://www.joinquant.com/algorithm/backtest/detail?backtestId=9b64a0ee54a47af5e17d48e218673c25",
+    "backtestId":  "9b64a0ee54a47af5e17d48e218673c25",
+    "capital":  "500000",
+    "status":  "completed",
+    "start_date":  "2023-01-01",
+    "end_date":  "2026-04-30",
+    "strategy_name":  "ETF动态调仓_阈值015",
+    "threshold":  0.15
+}

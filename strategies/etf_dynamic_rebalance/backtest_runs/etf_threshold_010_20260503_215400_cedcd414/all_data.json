@@ -1,0 +1,85 @@
+{
+  "run_id": "etf_threshold_010_20260503_215400_cedcd414",
+  "threshold": 0.1,
+  "summary_snapshot": {
+    "策略波动率": "0.148",
+    "胜率": "0.859",
+    "最大回撤": "16.40%",
+    "超额收益": "138.11%",
+    "超额收益最大回撤": "18.00%",
+    "基准收益": "24.17%",
+    "超额收益夏普比率": "1.729",
+    "盈利次数": "183",
+    "索提诺比率": "3.109",
+    "策略收益": "195.65%",
+    "策略年化收益": "40.08%",
+    "信息比率": "2.122",
+    "基准波动率": "0.169",
+    "亏损次数": "30",
+    "日胜率": "0.580",
+    "日均超额收益": "0.11%",
+    "盈亏比": "45.845",
+    "最大回撤区间": "2026/01/29,2026/03/23",
+    "阿尔法": "0.347",
+    "贝塔": "0.457",
+    "夏普比率": "2.438"
+  },
+  "files": {
+    "algorithm_period_return.md": {
+      "path": "tabs_raw/algorithm_period_return.md",
+      "size_bytes": 1533
+    },
+    "algo_volatility.md": {
+      "path": "tabs_raw/algo_volatility.md",
+      "size_bytes": 1518
+    },
+    "alpha.md": {
+      "path": "tabs_raw/alpha.md",
+      "size_bytes": 1530
+    },
+    "benchmark_period_return.md": {
+      "path": "tabs_raw/benchmark_period_return.md",
+      "size_bytes": 1586
+    },
+    "benchmark_volatility.md": {
+      "path": "tabs_raw/benchmark_volatility.md",
+      "size_bytes": 1524
+    },
+    "beta.md": {
+      "path": "tabs_raw/beta.md",
+      "size_bytes": 1515
+    },
+    "information.md": {
+      "path": "tabs_raw/information.md",
+      "size_bytes": 1547
+    },
+    "logs.md": {
+      "path": "tabs_raw/logs.md",
+      "size_bytes": 12242
+    },
+    "max_drawdown.md": {
+      "path": "tabs_raw/max_drawdown.md",
+      "size_bytes": 1521
+    },
+    "positioninfo.md": {
+      "path": "tabs_raw/positioninfo.md",
+      "size_bytes": 13785
+    },
+    "profile.md": {
+      "path": "tabs_raw/profile.md",
+      "size_bytes": 35708
+    },
+    "sharpe.md": {
+      "path": "tabs_raw/sharpe.md",
+      "size_bytes": 1548
+    },
+    "sortino.md": {
+      "path": "tabs_raw/sortino.md",
+      "size_bytes": 1560
+    },
+    "transactioninfo.md": {
+      "path": "tabs_raw/transactioninfo.md",
+      "size_bytes": 14951
+    }
+  }
+}

@@ -1,0 +1,14 @@
+﻿{
+    "backtestId":  "8c080de9278b81da01bf7ab3d5281680",
+    "strategy_name":  "ETF动态调仓_阈值005",
+    "jq_strategy_name":  "ETF动态调仓_阈值005",
+    "backtest_url":  "https://www.joinquant.com/algorithm/backtest/detail?backtestId=8c080de9278b81da01bf7ab3d5281680",
+    "capital":  "500000",
+    "status":  "completed",
+    "threshold":  0.05,
+    "strategy_file":  "strategies/etf_dynamic_rebalance/etf_dynamic_rebalance_threshold_005__upload.py",
+    "start_date":  "2023-01-01",
+    "end_date":  "2026-04-30",
+    "need_performance":  false,
+    "timestamp":  "2026-05-03T21:49:00"
+}

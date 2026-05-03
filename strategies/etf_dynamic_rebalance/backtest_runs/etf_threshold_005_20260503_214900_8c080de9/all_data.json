@@ -1,0 +1,85 @@
+{
+  "run_id": "etf_threshold_005_20260503_214900_8c080de9",
+  "threshold": 0.05,
+  "summary_snapshot": {
+    "策略波动率": "0.148",
+    "胜率": "0.866",
+    "最大回撤": "16.01%",
+    "超额收益": "142.40%",
+    "超额收益最大回撤": "17.80%",
+    "基准收益": "24.17%",
+    "超额收益夏普比率": "1.781",
+    "盈利次数": "381",
+    "索提诺比率": "3.193",
+    "策略收益": "200.98%",
+    "策略年化收益": "40.86%",
+    "信息比率": "2.178",
+    "基准波动率": "0.169",
+    "亏损次数": "59",
+    "日胜率": "0.581",
+    "日均超额收益": "0.12%",
+    "盈亏比": "31.397",
+    "最大回撤区间": "2026/01/29,2026/03/23",
+    "阿尔法": "0.355",
+    "贝塔": "0.458",
+    "夏普比率": "2.496"
+  },
+  "files": {
+    "algorithm_period_return.md": {
+      "path": "tabs_raw/algorithm_period_return.md",
+      "size_bytes": 1534
+    },
+    "algo_volatility.md": {
+      "path": "tabs_raw/algo_volatility.md",
+      "size_bytes": 1518
+    },
+    "alpha.md": {
+      "path": "tabs_raw/alpha.md",
+      "size_bytes": 1530
+    },
+    "benchmark_period_return.md": {
+      "path": "tabs_raw/benchmark_period_return.md",
+      "size_bytes": 1586
+    },
+    "benchmark_volatility.md": {
+      "path": "tabs_raw/benchmark_volatility.md",
+      "size_bytes": 1524
+    },
+    "beta.md": {
+      "path": "tabs_raw/beta.md",
+      "size_bytes": 1515
+    },
+    "information.md": {
+      "path": "tabs_raw/information.md",
+      "size_bytes": 1545
+    },
+    "logs.md": {
+      "path": "tabs_raw/logs.md",
+      "size_bytes": 17526
+    },
+    "max_drawdown.md": {
+      "path": "tabs_raw/max_drawdown.md",
+      "size_bytes": 1521
+    },
+    "positioninfo.md": {
+      "path": "tabs_raw/positioninfo.md",
+      "size_bytes": 13835
+    },
+    "profile.md": {
+      "path": "tabs_raw/profile.md",
+      "size_bytes": 35708
+    },
+    "sharpe.md": {
+      "path": "tabs_raw/sharpe.md",
+      "size_bytes": 1548
+    },
+    "sortino.md": {
+      "path": "tabs_raw/sortino.md",
+      "size_bytes": 1563
+    },
+    "transactioninfo.md": {
+      "path": "tabs_raw/transactioninfo.md",
+      "size_bytes": 14980
+    }
+  }
+}

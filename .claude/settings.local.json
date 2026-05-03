@@ -37,7 +37,23 @@
       "PowerShell(git mv --verbose \"strategies/three_etf_dynamic_allocation/three_etf_dynamic_allocation.py\" \"strategies/etf_dynamic_rebalance/etf_dynamic_rebalance.py\")",
       "PowerShell(git add -A strategies/etf_dynamic_rebalance/)",
       "PowerShell(git add -A strategies/three_etf_dynamic_allocation/)",
-      "PowerShell(Get-ChildItem -Recurse \"strategies/etf_dynamic_rebalance\" | Where-Object { -not $_.PSIsContainer } | ForEach-Object { $_.FullName })"
+      "PowerShell(Get-ChildItem -Recurse \"strategies/etf_dynamic_rebalance\" | Where-Object { -not $_.PSIsContainer } | ForEach-Object { $_.FullName })",
+      "Bash(Get-ChildItem -Path \"d:\\\\My Project\\\\Quant Trading\\\\scripts\" -Name)",
+      "PowerShell(Get-Process chrome -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Process -Name chrome -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Force)",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__select_page",
+      "Read(//c/Users/liuli/Downloads/**)",
+      "Read(//c/Users/liuli/.cache/**)",
+      "Bash(find /tmp -name \"backtest_full*\" -type f)",
+      "Bash(python3)",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 -X utf8)",
+      "Bash(python3 scripts/tabs_to_markdown.py)",
+      "Bash(python3 scripts/txt_to_md.py)",
+      "PowerShell(Get-Process -Name \"node\" -ErrorAction SilentlyContinue | Where-Object { \\(Get-CimInstance Win32_Process -Filter \"ProcessId=$\\($_.Id\\)\"\\).CommandLine -match \"chrome-devtools-mcp\" } | Stop-Process -Force; Write-Host \"Done\")",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_network_requests",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__get_network_request"
     ]
   },
   "outputStyle": "Explanatory"

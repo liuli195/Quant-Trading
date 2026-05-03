@@ -6,9 +6,9 @@
   - 纯函数单元测试（zscore_clip, compute_target_weights, apply_weight_constraints）
   - 因子函数测试（黄金/AI/纳指，monkeypatch BIAS/ROC）
   - 策略初始化测试（set_option, set_order_cost, run_weekly 等）
-  - weekly_rebalance 集成测试（mock 完整调仓流程）
+  - daily_check 集成测试（mock 完整调仓流程，含偏离度阈值）
 
-参考文档：strategies/etf_dynamic_rebalance/test_etf_dynamic_rebalance.md
+参考文档：strategies/etf_dynamic_rebalance/tests/test-guide.md
 """
 
 import sys
@@ -669,17 +669,17 @@ class TestInitialize:
         call_args = strategy.set_slippage.call_args
         assert call_args[1].get('type') == 'fund'
 
-    def test_weekly_rebalance_registration(self, strategy, reset_mocks):
-        """TC-INIT-005: run_weekly 注册 weekly_rebalance, weekday=1, time='open'。"""
+    def test_daily_check_registration(self, strategy, reset_mocks):
+        """TC-INIT-005: run_daily 注册 daily_check, time='open', reference_security='000300.XSHG'。"""
         context = MagicMock()
         strategy.initialize(context)
 
-        assert strategy.run_weekly.called
-        call_args = strategy.run_weekly.call_args
-        # 检查核心参数
-        assert call_args[1].get('weekday') == 1
+        assert strategy.run_daily.called
+        call_args = strategy.run_daily.call_args
         assert call_args[1].get('time') == 'open'
         assert call_args[1].get('reference_security') == '000300.XSHG'
+        # run_daily 不接受 weekday 参数
+        assert 'weekday' not in call_args[1]
 
 
 class TestSetParameter:
@@ -705,14 +705,15 @@ class TestSetParameter:
         assert g.weight_bounds[1] == (0.10, 0.50)  # AI ETF
         assert g.weight_bounds[2] == (0.10, 0.60)  # 纳指
         assert g.max_weight_change == 0.10
+        assert g.rebalance_threshold == 0.10
 
 
 # ============================================================
 # 9. weekly_rebalance 集成测试
 # ============================================================
 
-class TestWeeklyRebalance:
-    """TC-REB 系列：weekly_rebalance 完整调仓流程。"""
+class TestDailyCheck:
+    """TC-REB 系列：daily_check 完整调仓流程，含偏离度阈值。"""
 
     ETF_CODES = ['518880.XSHG', '159819.XSHE', '513100.XSHG']
 
@@ -735,7 +736,7 @@ class TestWeeklyRebalance:
         # Mock order_target_value 返回非 None
         strategy.order_target_value.return_value = MagicMock()
 
-        strategy.weekly_rebalance(context)
+        strategy.daily_check(context)
 
         # 验证调用了 3 次 get_price
         assert strategy.get_price.call_count == 3
@@ -765,7 +766,7 @@ class TestWeeklyRebalance:
 
         strategy.get_price.side_effect = _get_price
 
-        strategy.weekly_rebalance(context)
+        strategy.daily_check(context)
 
         # 不应下单
         assert strategy.order_target_value.call_count == 0
@@ -781,7 +782,7 @@ class TestWeeklyRebalance:
         }
         strategy.get_price.side_effect = make_mock_get_price_return(prices)
 
-        strategy.weekly_rebalance(context)
+        strategy.daily_check(context)
 
         # 不应下单
         assert strategy.order_target_value.call_count == 0
@@ -802,7 +803,7 @@ class TestWeeklyRebalance:
         MOCK_ROC.return_value = {}
         strategy.order_target_value.return_value = MagicMock()
 
-        strategy.weekly_rebalance(context)
+        strategy.daily_check(context)
 
         # 应该成功执行（最长的 80 天满足 61 日门槛）
         assert strategy.order_target_value.call_count == 3
@@ -829,7 +830,7 @@ class TestWeeklyRebalance:
         MOCK_ROC.return_value = {}
         strategy.order_target_value.return_value = MagicMock()
 
-        strategy.weekly_rebalance(context)
+        strategy.daily_check(context)
 
         # 验证约束：每项在 hard bounds 内
         for call_args in strategy.order_target_value.call_args_list:
@@ -854,7 +855,7 @@ class TestWeeklyRebalance:
         # 第一只 ETF 下单失败
         strategy.order_target_value.side_effect = [None, MagicMock(), MagicMock()]
 
-        strategy.weekly_rebalance(context)
+        strategy.daily_check(context)
 
         # 验证调用了 log.error
         error_calls = [
@@ -883,11 +884,143 @@ class TestWeeklyRebalance:
         MOCK_ROC.return_value = {}
         strategy.order_target_value.return_value = MagicMock()
 
-        strategy.weekly_rebalance(context)
+        strategy.daily_check(context)
 
         # NaN 被 dropna 后应仍有足够数据，或跳过调仓但不崩溃
         # 不抛异常即通过
         assert True
+
+    def test_below_threshold_skips(self, strategy, mock_g, reset_mocks):
+        """TC-REB-011: 偏离度 <= 阈值 → 跳过调仓，不放置订单。"""
+        # 当前权重接近等权（与常数价格 RP 结果接近）
+        context = make_mock_context(
+            total_value=500000.0,
+            positions_weights={
+                '518880.XSHG': 0.34,
+                '159819.XSHE': 0.33,
+                '513100.XSHG': 0.33,
+            },
+        )
+
+        # 常数价格 → 零波动率 → 等权目标权重
+        prices = {
+            '518880.XSHG': make_constant_prices(3.0, 100),
+            '159819.XSHE': make_constant_prices(1.5, 100),
+            '513100.XSHG': make_constant_prices(1.0, 100),
+        }
+        strategy.get_price.side_effect = make_mock_get_price_return(prices)
+
+        MOCK_BIAS.return_value = ({}, {}, {})
+        MOCK_ROC.return_value = {}
+
+        strategy.daily_check(context)
+
+        # 偏离度 ≈ |1/3-0.34| + |1/3-0.33| + |1/3-0.33| ≈ 0.013 < 0.10
+        # 应跳过：不下单
+        assert strategy.order_target_value.call_count == 0
+
+        # 验证日志包含"跳过"
+        info_calls = [
+            str(c) for c in strategy.log.info.mock_calls
+        ]
+        assert any("跳过" in c for c in info_calls)
+
+    def test_above_threshold_triggers(self, strategy, mock_g, reset_mocks):
+        """TC-REB-012: 偏离度 > 阈值 → 触发调仓，放置订单。"""
+        context = make_mock_context(
+            total_value=500000.0,
+            positions_weights={
+                '518880.XSHG': 0.15,
+                '159819.XSHE': 0.50,
+                '513100.XSHG': 0.35,
+            },
+        )
+
+        # 常数价格 → 等权目标权重 [1/3, 1/3, 1/3]
+        prices = {
+            '518880.XSHG': make_constant_prices(3.0, 100),
+            '159819.XSHE': make_constant_prices(1.5, 100),
+            '513100.XSHG': make_constant_prices(1.0, 100),
+        }
+        strategy.get_price.side_effect = make_mock_get_price_return(prices)
+
+        MOCK_BIAS.return_value = ({}, {}, {})
+        MOCK_ROC.return_value = {}
+        strategy.order_target_value.return_value = MagicMock()
+
+        strategy.daily_check(context)
+
+        # 偏离度 ≈ |1/3-0.15| + |1/3-0.5| + |1/3-0.35| ≈ 0.366 > 0.10
+        # 应触发：下单 3 次
+        assert strategy.order_target_value.call_count == 3
+
+        # 验证日志包含"触发"
+        info_calls = [
+            str(c) for c in strategy.log.info.mock_calls
+        ]
+        assert any("触发" in c for c in info_calls)
+
+    def test_first_run_no_positions_always_triggers(self, strategy, mock_g, reset_mocks):
+        """TC-REB-013: 无持仓时（首次运行）→ 跳过偏离度检查，直接建仓。"""
+        context = make_mock_context(total_value=500000.0)
+
+        prices = {
+            '518880.XSHG': make_linear_prices(3.0, 0.005, 100),
+            '159819.XSHE': make_linear_prices(1.5, 0.003, 100),
+            '513100.XSHG': make_linear_prices(1.0, 0.004, 100),
+        }
+        strategy.get_price.side_effect = make_mock_get_price_return(prices)
+
+        MOCK_BIAS.return_value = ({}, {}, {})
+        MOCK_ROC.return_value = {}
+        strategy.order_target_value.return_value = MagicMock()
+
+        strategy.daily_check(context)
+
+        # 首次运行应始终执行
+        assert strategy.order_target_value.call_count == 3
+
+        # 验证日志包含"初始建仓"
+        info_calls = [
+            str(c) for c in strategy.log.info.mock_calls
+        ]
+        assert any("初始建仓" in c for c in info_calls)
+
+    def test_exactly_at_threshold_boundary(self, strategy, mock_g, reset_mocks):
+        """TC-REB-014: 偏离度精确等于阈值 → 跳过（使用 <= 判断）。"""
+        context = make_mock_context(
+            total_value=500000.0,
+            positions_weights={
+                '518880.XSHG': 0.3333,
+                '159819.XSHE': 0.3333,
+                '513100.XSHG': 0.3333,
+            },
+        )
+
+        prices = {
+            '518880.XSHG': make_constant_prices(3.0, 100),
+            '159819.XSHE': make_constant_prices(1.5, 100),
+            '513100.XSHG': make_constant_prices(1.0, 100),
+        }
+        strategy.get_price.side_effect = make_mock_get_price_return(prices)
+
+        MOCK_BIAS.return_value = ({}, {}, {})
+        MOCK_ROC.return_value = {}
+        strategy.order_target_value.return_value = MagicMock()
+
+        # 设置一个极低的阈值，偏离度几乎为 0，所以会跳过
+        strategy.g.rebalance_threshold = 0.001
+
+        strategy.daily_check(context)
+
+        # 偏离度 ≈ 0.000 < 0.001，应跳过
+        assert strategy.order_target_value.call_count == 0
+
+        # 验证日志包含"跳过"
+        info_calls = [
+            str(c) for c in strategy.log.info.mock_calls
+        ]
+        assert any("跳过" in c for c in info_calls)
 
 
 # ============================================================
@@ -982,7 +1115,7 @@ class TestDuchiProjectionRegression:
 class TestEdgeCases:
     """边界条件和防御编程测试。"""
 
-    def test_weekly_rebalance_zero_total_value(self, strategy, mock_g, reset_mocks):
+    def test_daily_check_zero_total_value(self, strategy, mock_g, reset_mocks):
         """TC-REB-010: 总资产为 0 → 应不崩溃，跳过调仓。"""
         context = make_mock_context(total_value=0.0)
 
@@ -998,7 +1131,7 @@ class TestEdgeCases:
 
         # 不应崩溃
         try:
-            strategy.weekly_rebalance(context)
+            strategy.daily_check(context)
         except Exception as e:
             pytest.fail(f"total_value=0 时崩溃: {e}")
 

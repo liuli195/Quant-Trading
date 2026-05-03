@@ -1,0 +1,95 @@
+{
+  "run_id": "etf_threshold_015_20260503_215600_9b64a0ee",
+  "threshold": 0.15,
+  "metadata": {
+    "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=9b64a0ee54a47af5e17d48e218673c25",
+    "backtestId": "9b64a0ee54a47af5e17d48e218673c25",
+    "capital": "500000",
+    "status": "completed",
+    "start_date": "2023-01-01",
+    "end_date": "2026-04-30",
+    "strategy_name": "ETF动态调仓_阈值015",
+    "threshold": 0.15
+  },
+  "summary_snapshot": {
+    "策略波动率": "0.149",
+    "胜率": "0.934",
+    "最大回撤": "16.92%",
+    "超额收益": "135.32%",
+    "超额收益最大回撤": "18.11%",
+    "基准收益": "24.17%",
+    "超额收益夏普比率": "1.687",
+    "盈利次数": "114",
+    "索提诺比率": "2.991",
+    "策略收益": "192.19%",
+    "策略年化收益": "39.57%",
+    "信息比率": "2.075",
+    "基准波动率": "0.169",
+    "亏损次数": "8",
+    "日胜率": "0.572",
+    "日均超额收益": "0.11%",
+    "盈亏比": "169.597",
+    "最大回撤区间": "2026/01/29,2026/03/23",
+    "阿尔法": "0.342",
+    "贝塔": "0.459",
+    "夏普比率": "2.380"
+  },
+  "files": {
+    "algo_volatility.md": {
+      "path": "tabs_raw/algo_volatility.md",
+      "size_bytes": 1518
+    },
+    "algorithm_period_return.md": {
+      "path": "tabs_raw/algorithm_period_return.md",
+      "size_bytes": 1490
+    },
+    "alpha.md": {
+      "path": "tabs_raw/alpha.md",
+      "size_bytes": 1530
+    },
+    "benchmark_period_return.md": {
+      "path": "tabs_raw/benchmark_period_return.md",
+      "size_bytes": 1543
+    },
+    "benchmark_volatility.md": {
+      "path": "tabs_raw/benchmark_volatility.md",
+      "size_bytes": 1524
+    },
+    "beta.md": {
+      "path": "tabs_raw/beta.md",
+      "size_bytes": 1515
+    },
+    "information.md": {
+      "path": "tabs_raw/information.md",
+      "size_bytes": 1547
+    },
+    "logs.md": {
+      "path": "tabs_raw/logs.md",
+      "size_bytes": 14204
+    },
+    "max_drawdown.md": {
+      "path": "tabs_raw/max_drawdown.md",
+      "size_bytes": 1521
+    },
+    "positioninfo.md": {
+      "path": "tabs_raw/positioninfo.md",
+      "size_bytes": 13826
+    },
+    "profile.md": {
+      "path": "tabs_raw/profile.md",
+      "size_bytes": 8204
+    },
+    "sharpe.md": {
+      "path": "tabs_raw/sharpe.md",
+      "size_bytes": 1548
+    },
+    "sortino.md": {
+      "path": "tabs_raw/sortino.md",
+      "size_bytes": 1562
+    },
+    "transactioninfo.md": {
+      "path": "tabs_raw/transactioninfo.md",
+      "size_bytes": 14973
+    }
+  }
+}
