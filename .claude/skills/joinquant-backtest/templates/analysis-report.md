@@ -1,6 +1,6 @@
 # 策略分析报告模板
 
-> 文件名：`backtest_runs/<run_id>/report/strategy-analysis.md`
+> 文件名：`backtest_report_dir(strategy=<strategy>, run_id=<run_id>)/strategy-analysis.md`
 
 ## 1. 回测概览
 

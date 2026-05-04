@@ -1,6 +1,6 @@
 # 性能分析报告模板
 
-> 文件名：`backtest_runs/<run_id>/report/performance-analysis.md`
+> 文件名：`backtest_report_dir(strategy=<strategy>, run_id=<run_id>)/performance-analysis.md`
 
 ## 1. 性能分析概览
 

@@ -9,7 +9,7 @@
 含完整参数：
 
 ```text
-/joinquant-backtest strategies/alpha_rotation/alpha_rotation.py 2023-01-01 2025-03-31 500000 true true
+/joinquant-backtest strategies/alpha_rotation/alpha_rotation.py 2023-01-01 2025-03-31 500000 true
 ```
 
 ## 参数说明
@@ -19,6 +19,8 @@
 - 第 3 个参数：结束日期
 - 第 4 个参数：初始资金
 - 第 5 个参数：是否执行性能分析，建议传 `true` 或 `false`
+
+策略分析报告固定生成，不再作为位置参数传入。
 
 ## 多词路径
 

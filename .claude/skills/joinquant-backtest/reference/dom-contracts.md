@@ -87,7 +87,7 @@
 
 日期输入通常是 `readonly`，可以直接赋值 `.value` 后补发事件。
 
-## 虚拟滚动限制（已解决）
+## 虚拟滚动限制
 
 以下标签使用虚拟滚动，DOM `innerText` 只能抓到当前可见部分：
 
@@ -95,12 +95,12 @@
 - `positioninfo`
 - `logs`
 
-**解决方案**：不再依赖 DOM 提取，改用内部 API 直接调用（见下方”内部数据 API”章节）。
+`transactioninfo` 和 `positioninfo` 优先改用内部 API 全量提取；`logs` 仍可能只能得到部分内容。
 
 传统的 DOM 提取方式（`getTabText`）有两种用途：
 
 - API 成功时，用于补抽 `logs`、`profile` 和静态指标标签
-- API 不可用时，作为交易、持仓等大表的降级方案，并在 metadata 中标记数据不完整
+- API 不可用时，作为交易、持仓等大表的降级方案，并按 [output-contract.md](output-contract.md) <!-- pathref: joinquant_skill/reference/output-contract.md --> 标记数据完整度
 
 ## 内部数据 API
 
@@ -138,15 +138,8 @@ window.__backtestId  // 例: “1ac02f6037915805b14b1f4541ff85e5”
 
 ### 调用方式
 
-使用 `evaluate_script` 执行 `fetchAllBacktestData()`（定义在 [../snippets/extract.js](../snippets/extract.js)），返回完整结构化 JSON。
+使用 `evaluate_script` 执行 `fetchAllBacktestData()`（定义在 [../snippets/extract.js](../snippets/extract.js) <!-- pathref: joinquant_skill/snippets/extract.js -->），返回完整结构化 JSON。
 
 ### 首次页面加载与内部 ID 获取
 
 进入回测详情页后，内部 `__backtestId` 由页面 JS 在初始化时设置。确认页面完全加载（等待 `回测完成` 文本出现）后即可调用。
-
-## 建议的代码加载方式
-
-- Ace 写入逻辑：加载 [../snippets/editor.js](../snippets/editor.js)
-- 编译轮询逻辑：加载 [../snippets/compile.js](../snippets/compile.js)
-- 参数设置与启动回测：加载 [../snippets/backtest.js](../snippets/backtest.js)
-- 结果提取与指标汇总：加载 [../snippets/extract.js](../snippets/extract.js)

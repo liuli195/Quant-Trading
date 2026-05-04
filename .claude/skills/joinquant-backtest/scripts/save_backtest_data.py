@@ -5,12 +5,16 @@ Markdown files plus JSON index files for the JoinQuant backtest skill.
 Usage:
   python save_backtest_data.py <persisted_json_path> <run_dir>
   python save_backtest_data.py --api <api_export_json_path> <run_dir>
+  python save_backtest_data.py <persisted_json_path> --strategy <strategy> --run-id <run_id>
+  python save_backtest_data.py --api <api_export_json_path> --strategy <strategy> --run-id <run_id>
 """
+import argparse
 import json
 import os
 import re
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 
 PARTIAL_TABS = {"logs"}
@@ -312,10 +316,55 @@ def api_results_to_md(results):
     return md
 
 
-def save_api_data(api_json_path, run_dir):
+def _ensure_repo_on_path():
+    """Add the repository root to sys.path so path_tools can be imported."""
+    candidates = []
+    cwd = Path.cwd().resolve()
+    candidates.extend([cwd, *cwd.parents])
+
+    script_path = Path(__file__).resolve()
+    candidates.extend([script_path.parent, *script_path.parents])
+
+    for candidate in candidates:
+        if (candidate / "path_aliases.json").is_file():
+            repo = str(candidate)
+            if repo not in sys.path:
+                sys.path.insert(0, repo)
+            return candidate
+
+    raise RuntimeError("Could not find repository root containing path_aliases.json")
+
+
+def resolve_output_dirs(run_dir=None, strategy=None, run_id=None):
+    """Resolve output directories, preferring path aliases when strategy/run_id are provided."""
+    if run_dir and (strategy or run_id):
+        raise ValueError("Use either <run_dir> or --strategy/--run-id, not both")
+
+    if run_dir:
+        resolved_run_dir = os.path.abspath(run_dir)
+        tabs_dir = os.path.join(resolved_run_dir, "tabs_raw")
+        report_dir = os.path.join(resolved_run_dir, "report")
+    else:
+        if not strategy or not run_id:
+            raise ValueError("Either <run_dir> or both --strategy and --run-id are required")
+
+        _ensure_repo_on_path()
+        from scripts.path_tools.aliases import ensure_dir
+
+        resolved_run_dir = str(ensure_dir("backtest_run", strategy=strategy, run_id=run_id))
+        tabs_dir = str(ensure_dir("backtest_tabs_dir", strategy=strategy, run_id=run_id))
+        report_dir = str(ensure_dir("backtest_report_dir", strategy=strategy, run_id=run_id))
+
+    os.makedirs(resolved_run_dir, exist_ok=True)
+    os.makedirs(tabs_dir, exist_ok=True)
+    os.makedirs(report_dir, exist_ok=True)
+    return resolved_run_dir, tabs_dir, report_dir
+
+
+def save_api_data(api_json_path, run_dir, tabs_dir=None):
     """将 fetchAllBacktestData 输出的 JSON 转为三类 API-backed Markdown。"""
     os.makedirs(run_dir, exist_ok=True)
-    tabs_dir = os.path.join(run_dir, "tabs_raw")
+    tabs_dir = tabs_dir or os.path.join(run_dir, "tabs_raw")
     os.makedirs(tabs_dir, exist_ok=True)
 
     with open(api_json_path, "r", encoding="utf-8") as file:
@@ -490,9 +539,9 @@ def build_api_index(api_json_path, files_written):
     }
 
 
-def save_all(persisted_path, run_dir):
+def save_all(persisted_path, run_dir, tabs_dir=None):
     os.makedirs(run_dir, exist_ok=True)
-    tabs_dir = os.path.join(run_dir, "tabs_raw")
+    tabs_dir = tabs_dir or os.path.join(run_dir, "tabs_raw")
     os.makedirs(tabs_dir, exist_ok=True)
 
     data = extract_from_persisted(persisted_path)
@@ -522,12 +571,51 @@ def save_all(persisted_path, run_dir):
     return data
 
 
+def build_parser():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "input_json",
+        nargs="?",
+        help="Persisted DOM JSON path, or <run_dir> when --api is used with legacy arguments.",
+    )
+    parser.add_argument("run_dir", nargs="?", help="Legacy output run directory.")
+    parser.add_argument("--api", dest="api_json", help="API export JSON path.")
+    parser.add_argument("--strategy", help="Strategy alias variable used by path_aliases.json.")
+    parser.add_argument("--run-id", help="Run id alias variable used by path_aliases.json.")
+    return parser
+
+
+def main(argv=None):
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    try:
+        if args.api_json:
+            if args.run_dir:
+                parser.error("--api accepts at most one legacy <run_dir> positional argument")
+            run_dir_arg = args.input_json
+            run_dir, tabs_dir, _ = resolve_output_dirs(
+                run_dir=run_dir_arg,
+                strategy=args.strategy,
+                run_id=args.run_id,
+            )
+            save_api_data(args.api_json, run_dir, tabs_dir=tabs_dir)
+            return 0
+
+        if not args.input_json:
+            parser.error("persisted_json is required when --api is not used")
+
+        run_dir, tabs_dir, _ = resolve_output_dirs(
+            run_dir=args.run_dir,
+            strategy=args.strategy,
+            run_id=args.run_id,
+        )
+        save_all(args.input_json, run_dir, tabs_dir=tabs_dir)
+        return 0
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+
 if __name__ == "__main__":
-    if len(sys.argv) == 4 and sys.argv[1] == "--api":
-        save_api_data(sys.argv[2], sys.argv[3])
-    elif len(sys.argv) == 3:
-        save_all(sys.argv[1], sys.argv[2])
-    else:
-        print("Usage: python save_backtest_data.py <persisted_json> <run_dir>")
-        print("   or: python save_backtest_data.py --api <api_export_json> <run_dir>")
-        sys.exit(1)
+    raise SystemExit(main())
