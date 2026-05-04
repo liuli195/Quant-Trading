@@ -71,7 +71,21 @@
       "Bash(Get-ChildItem -Path \"d:\\\\My Project\\\\Quant Trading\\\\.agents\" -Recurse -File)",
       "Bash(Select-Object FullName)",
       "Bash(git -C \"d:\\\\My Project\\\\Quant Trading\" ls-files --cached)",
-      "Bash(Remove-Item scripts/_add_pathrefs.py)"
+      "Bash(Remove-Item scripts/_add_pathrefs.py)",
+      "Bash(pip list *)",
+      "PowerShell(python -c \"import jqdata; print\\('jqdata version:', jqdata.__version__\\)\" 2>&1)",
+      "PowerShell(if \\(Test-Path \"D:\\\\My Project\\\\Quant Trading\\\\.venv\"\\) { Write-Host \".venv exists\" }; if \\(Test-Path \"D:\\\\My Project\\\\Quant Trading\\\\venv\"\\) { Write-Host \"venv exists\" }; if \\(Test-Path \"$env:USERPROFILE\\\\.virtualenvs\"\\) { Get-ChildItem \"$env:USERPROFILE\\\\.virtualenvs\" } else { Write-Host \"No .virtualenvs dir\" })",
+      "PowerShell(python -c \"import site; print\\('User site:', site.USER_SITE\\); print\\('Site packages:', site.getsitepackages\\(\\)\\)\")",
+      "PowerShell(winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements 2>&1)",
+      "PowerShell(py -3.12 --version)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\Activate.ps1)",
+      "PowerShell(python --version)",
+      "PowerShell(pip install numpy pandas scipy matplotlib pytest lxml beautifulsoup4 python-docx markdownify html2text Pygments lz4 2>&1)",
+      "PowerShell(python -c \"import numpy; import pandas; import scipy; import matplotlib; import pytest; print\\('numpy:', numpy.__version__\\); print\\('pandas:', pandas.__version__\\); print\\('scipy:', scipy.__version__\\); print\\('matplotlib:', matplotlib.__version__\\); print\\('All imports OK'\\)\")",
+      "PowerShell(pip list 2>&1)",
+      "PowerShell(pytest strategies/ -q 2>&1)",
+      "PowerShell(pytest strategies/etf_dynamic_rebalance/tests -q 2>&1)",
+      "Bash(echo.)"
     ]
   },
   "outputStyle": "Explanatory"
