@@ -1,0 +1,16 @@
+{
+  "strategy_name": "etf_dynamic_rebalance",
+  "strategy_file": "strategies/etf_dynamic_rebalance/etf_dynamic_rebalance.py",
+  "strategy_dir": "strategies/etf_dynamic_rebalance",
+  "start_date_requested": "2023-01-01",
+  "start_date_effective": "2023-01-01",
+  "end_date_requested": "2026-04-30",
+  "end_date_effective": "2026-04-30",
+  "capital": 500000,
+  "need_performance": true,
+  "need_analysis": true,
+  "extraction_method": "api",
+  "backtest_id": "b26d8c5b1ebb6f50300c02321aa68785",
+  "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=b26d8c5b1ebb6f50300c02321aa68785",
+  "generated_at": "2026-05-04T08:48:00"
+}

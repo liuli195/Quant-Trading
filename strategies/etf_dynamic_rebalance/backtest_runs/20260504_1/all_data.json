@@ -1,0 +1,86 @@
+{
+  "api_export_json": "D:\\My Project\\Quant Trading\\strategies\\etf_dynamic_rebalance\\backtest_runs\\20260504_1\\api_export.json",
+  "extraction_method": "api",
+  "generated_at": "2026-05-04T00:49:36.953514+00:00",
+  "tabs": {
+    "transactioninfo": {
+      "path": "tabs_raw/transactioninfo.md",
+      "partial": false,
+      "record_count": 436
+    },
+    "positioninfo": {
+      "path": "tabs_raw/positioninfo.md",
+      "partial": false,
+      "record_count": 1000
+    },
+    "daily_returns": {
+      "path": "tabs_raw/daily_returns.md",
+      "partial": false,
+      "record_count": 1
+    },
+    "logs": {
+      "path": "tabs_raw/logs.md",
+      "partial": true,
+      "raw_text_length": 10380
+    },
+    "profile": {
+      "path": "tabs_raw/profile.md",
+      "partial": false,
+      "raw_text_length": 34916
+    },
+    "algorithm_period_return": {
+      "path": "tabs_raw/algorithm_period_return.md",
+      "partial": false,
+      "raw_text_length": 1445
+    },
+    "benchmark_period_return": {
+      "path": "tabs_raw/benchmark_period_return.md",
+      "partial": false,
+      "raw_text_length": 1498
+    },
+    "alpha": {
+      "path": "tabs_raw/alpha.md",
+      "partial": false,
+      "raw_text_length": 1444
+    },
+    "beta": {
+      "path": "tabs_raw/beta.md",
+      "partial": false,
+      "raw_text_length": 1431
+    },
+    "sharpe": {
+      "path": "tabs_raw/sharpe.md",
+      "partial": false,
+      "raw_text_length": 1460
+    },
+    "sortino": {
+      "path": "tabs_raw/sortino.md",
+      "partial": false,
+      "raw_text_length": 1470
+    },
+    "information": {
+      "path": "tabs_raw/information.md",
+      "partial": false,
+      "raw_text_length": 1467
+    },
+    "algo_volatility": {
+      "path": "tabs_raw/algo_volatility.md",
+      "partial": false,
+      "raw_text_length": 1432
+    },
+    "benchmark_volatility": {
+      "path": "tabs_raw/benchmark_volatility.md",
+      "partial": false,
+      "raw_text_length": 1434
+    },
+    "max_drawdown": {
+      "path": "tabs_raw/max_drawdown.md",
+      "partial": false,
+      "raw_text_length": 1433
+    }
+  },
+  "supplemental_dom_tabs": {
+    "status": "not_generated_by_api_mode",
+    "note": "Use collectBacktestTabTexts() for logs, profile, and static metric tabs when needed."
+  }
+}

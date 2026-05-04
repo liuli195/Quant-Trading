@@ -53,7 +53,17 @@
       "Bash(python3 scripts/txt_to_md.py)",
       "PowerShell(Get-Process -Name \"node\" -ErrorAction SilentlyContinue | Where-Object { \\(Get-CimInstance Win32_Process -Filter \"ProcessId=$\\($_.Id\\)\"\\).CommandLine -match \"chrome-devtools-mcp\" } | Stop-Process -Force; Write-Host \"Done\")",
       "mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_network_requests",
-      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__get_network_request"
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__get_network_request",
+      "PowerShell(Get-Process -Name \"chrome\" -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -match \"joinquant|Chrome DevTools|chrome-devtools\" -or $_.Id -eq \\(Get-Process -Id $_.Id\\).Id } | Select-Object Id, ProcessName, MainWindowTitle)",
+      "PowerShell(Get-Process -Name \"chrome\" -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | Where-Object { $_.CommandLine -match \"chrome-devtools-mcp\" } | Select-Object ProcessId, CommandLine)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | ForEach-Object { $cmd = $_.CommandLine; if \\($cmd -match \"user-data-dir\"\\) { Write-Host \"PID $\\($_.ProcessId\\): $cmd\" } })",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | Where-Object { $_.CommandLine -match \"chrome-devtools-mcp\" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; Write-Host \"Killed MCP Chrome processes\")",
+      "PowerShell($dir = \"D:\\\\My Project\\\\Quant Trading\\\\strategies\\\\etf_dynamic_rebalance\\\\backtest_runs\\\\20260504_1\"; New-Item -ItemType Directory -Force -Path \"$dir\\\\report\"; New-Item -ItemType Directory -Force -Path \"$dir\\\\tabs_raw\"; Write-Host \"Created output directories\")",
+      "PowerShell(python \"d:\\\\My Project\\\\Quant Trading\\\\scripts\\\\_extract_backtest_data.py\" \"D:\\\\My Project\\\\Quant Trading\\\\strategies\\\\etf_dynamic_rebalance\\\\backtest_runs\\\\20260504_1\" \"C:\\\\Users\\\\liuli\\\\.claude\\\\projects\\\\d--My-Project-Quant-Trading\\\\b95dd72f-4f12-4d2d-9b91-a8bc8c1920bd\\\\tool-results\")",
+      "PowerShell(python \"d:\\\\My Project\\\\Quant Trading\\\\.claude\\\\skills\\\\joinquant-backtest\\\\scripts\\\\save_backtest_data.py\" --api \"D:\\\\My Project\\\\Quant Trading\\\\strategies\\\\etf_dynamic_rebalance\\\\backtest_runs\\\\20260504_1\\\\api_export.json\" --strategy \"etf_dynamic_rebalance\" --run-id \"20260504_1\")",
+      "PowerShell(python \"d:\\\\My Project\\\\Quant Trading\\\\scripts\\\\_save_dom_tabs.py\" \"D:\\\\My Project\\\\Quant Trading\\\\strategies\\\\etf_dynamic_rebalance\\\\backtest_runs\\\\20260504_1\")",
+      "PowerShell(Get-ChildItem -Recurse \"D:\\\\My Project\\\\Quant Trading\\\\strategies\\\\etf_dynamic_rebalance\\\\backtest_runs\\\\20260504_1\" | Where-Object { -not $_.PSIsContainer } | ForEach-Object { $_.FullName.Substring\\($_.FullName.IndexOf\\(\"backtest_runs\"\\)\\) } | Sort-Object)"
     ]
   },
   "outputStyle": "Explanatory"
