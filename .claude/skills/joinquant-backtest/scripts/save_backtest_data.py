@@ -722,8 +722,6 @@ def default_metadata(extraction_method=None):
         "end_date_requested": "",
         "end_date_effective": "",
         "capital": None,
-        "need_performance": False,
-        "need_analysis": True,
         "backtest_id": "",
         "backtest_url": "",
         "generated_at": "",

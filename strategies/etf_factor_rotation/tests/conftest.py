@@ -64,6 +64,13 @@ def strategy():
     module.FixedSlippage = Mock(return_value=Mock())
     module.get_price = MagicMock()
     module.order_target_value = MagicMock()
+    # 默认返回：每只 ETF 的 current_data mock（paused=False）
+    _default_current_data = {}
+    for _etf in ['159819.XSHE', '513100.XSHG', '518880.XSHG']:
+        _mock = MagicMock()
+        _mock.paused = False
+        _default_current_data[_etf] = _mock
+    module.get_current_data = MagicMock(return_value=_default_current_data)
 
     # mock context.portfolio
     module._mock_portfolio = MagicMock()
@@ -162,7 +169,10 @@ def mock_g(strategy):
         RebalanceThreshold=0.03,
         MaxTotalWeight=1.0,
         live_days=1250,
+        history_buffer=100,
         benchmark='000300.XSHG',
+        use_real_price=True,
+        fq_mode='pre',
     )
     return strategy.g
 
@@ -174,9 +184,17 @@ def mock_g(strategy):
 def _auto_reset_mocks(strategy):
     """每个测试前自动清除 mock 状态。"""
     yield
-    strategy.get_price.reset_mock(side_effect=True, return_value=True)
-    strategy.order_target_value.reset_mock(side_effect=True, return_value=True)
-    strategy.log.reset_mock(side_effect=True, return_value=True)
+    strategy.get_price.reset_mock(return_value=True)
+    strategy.order_target_value.reset_mock(return_value=True)
+    # get_current_data 必须显式赋值 return_value——reset_mock 只接受 bool 标志
+    _cd_default = {}
+    for _etf in ['159819.XSHE', '513100.XSHG', '518880.XSHG']:
+        _m = MagicMock()
+        _m.paused = False
+        _cd_default[_etf] = _m
+    strategy.get_current_data.reset_mock()
+    strategy.get_current_data.return_value = _cd_default
+    strategy.log.reset_mock(return_value=True)
     strategy.set_option.reset_mock()
     strategy.set_order_cost.reset_mock()
     strategy.set_slippage.reset_mock()

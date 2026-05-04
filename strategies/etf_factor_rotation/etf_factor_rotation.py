@@ -32,6 +32,97 @@ import pandas as pd
 
 
 # ============================================================
+# 常量 — 内部字段名到聚宽字段名的映射
+# ============================================================
+FIELD_MAP = {
+    "close": "close",
+    "high": "high",
+    "low": "low",
+    "amount": "money",
+}
+
+
+# ============================================================
+# snapshot_params — 参数快照
+# ============================================================
+def snapshot_params():
+    """
+    从 g 读取全部策略参数，返回只读快照 dict。
+
+    核心计算函数通过接收 params 而非直接读 g，实现解耦。
+    """
+    return {
+        "etf_pool": list(g.etf_pool),
+        "etf_names": list(g.etf_names),
+        "benchmark": g.benchmark,
+        "MA_long": g.MA_long,
+        "MomShort": g.MomShort,
+        "MomMid": g.MomMid,
+        "MomLong": g.MomLong,
+        "w20": g.w20,
+        "w60": g.w60,
+        "w120": g.w120,
+        "TopK": g.TopK,
+        "VolWindow": g.VolWindow,
+        "annual_factor": g.annual_factor,
+        "RSRS_N": g.RSRS_N,
+        "RSRS_M": g.RSRS_M,
+        "RSRS_NegativeFullCut": g.RSRS_NegativeFullCut,
+        "RSRSMinMultiplier": g.RSRSMinMultiplier,
+        "RSRSMaxMultiplier": g.RSRSMaxMultiplier,
+        "CrowdWindow": g.CrowdWindow,
+        "CrowdRetShort": g.CrowdRetShort,
+        "CrowdRetMid": g.CrowdRetMid,
+        "AmountMAWindow": g.AmountMAWindow,
+        "DeviationMAWindow": g.DeviationMAWindow,
+        "CrowdVolWindow": g.CrowdVolWindow,
+        "CrowdStart": g.CrowdStart,
+        "CrowdEnd": g.CrowdEnd,
+        "MinCrowdPenalty": g.MinCrowdPenalty,
+        "PortfolioVolWindow": g.PortfolioVolWindow,
+        "TargetVol": g.TargetVol,
+        "MaxPortfolioVolScale": g.MaxPortfolioVolScale,
+        "MaxWeight": g.MaxWeight,
+        "MinWeight": g.MinWeight,
+        "RebalanceThreshold": g.RebalanceThreshold,
+        "MaxTotalWeight": g.MaxTotalWeight,
+        "use_real_price": g.use_real_price,
+        "fq_mode": g.fq_mode,
+        "history_buffer": g.history_buffer,
+    }
+
+
+# ============================================================
+# validate_params — 参数校验
+# ============================================================
+def validate_params(params):
+    """
+    校验参数合法性，不合法时抛出 ValueError。
+
+    校验规则来自技术实现方案 4.1 节参数校验表。
+    """
+    errors = []
+
+    if abs(params["w20"] + params["w60"] + params["w120"] - 1.0) > 1e-8:
+        errors.append("momentum weights must sum to 1")
+    if params["TopK"] < 1:
+        errors.append("TopK must be >= 1")
+    if not (0 < params["MaxWeight"] <= params["MaxTotalWeight"] <= 1):
+        errors.append("MaxWeight must be in (0, MaxTotalWeight] and MaxTotalWeight <= 1")
+    if not (0 <= params["MinWeight"] <= params["MaxWeight"]):
+        errors.append("MinWeight must be in [0, MaxWeight]")
+    if params["TargetVol"] <= 0:
+        errors.append("TargetVol must be positive")
+    if params["RSRS_M"] <= 0 or params["RSRS_N"] <= 1:
+        errors.append("RSRS_M must be positive and RSRS_N must be > 1")
+    if not (0 <= params["CrowdStart"] < params["CrowdEnd"] <= 1):
+        errors.append("Crowd thresholds must satisfy 0 <= CrowdStart < CrowdEnd <= 1")
+
+    if errors:
+        raise ValueError("; ".join(errors))
+
+
+# ============================================================
 # initialize — 策略初始化
 # ============================================================
 def initialize(context):
@@ -44,9 +135,10 @@ def initialize(context):
     - 设置固定滑点 0
     - 注册每周开盘调仓任务
     """
-    set_option('use_real_price', True)
-    set_option("avoid_future_data", True)
     set_parameter(context)
+    validate_params(snapshot_params())
+    set_option('use_real_price', g.use_real_price)
+    set_option("avoid_future_data", True)
 
     set_order_cost(
         OrderCost(
@@ -134,11 +226,54 @@ def set_parameter(context):
     g.MaxTotalWeight = 1.0
 
     # ---- 数据与基准 ----
+    # 复权模式：场内基金拆分/合并披露可能不完整，JoinQuant 不建议给含场内基金
+    # 的策略开启动态复权。如需验证，将 use_real_price 改为 False、fq_mode 改为 None
+    # 后跑云端短回测对比。
+    g.use_real_price = True
+    g.fq_mode = 'pre'       # 'pre' | 'post' | None（不复权）
     g.live_days = max(
         g.MA_long, g.MomLong, g.RSRS_M,
         g.CrowdWindow, g.PortfolioVolWindow
     ) + 50
+    g.history_buffer = 100
     g.benchmark = '000300.XSHG'
+
+
+# ============================================================
+# _log_step — 调仓中间量诊断日志
+# ============================================================
+def _log_step(name, cn_name, pool, values, fmt=".4f"):
+    """
+    以 "[中文名] name: ETF=value" 格式逐只打印调仓中间量，便于云端回测诊断。
+
+    不在本地单测中验证日志格式，只保证聚宽云端 log.info 可输出。
+    """
+    parts = ["%s=%%s" % etf for etf in pool]
+    template = "[%s] %s: " % (cn_name, name) + ", ".join(parts)
+    formatted = tuple(format(v, fmt) for v in values)
+    log.info(template, *formatted)
+
+
+# ============================================================
+# compose_raw_weights — 权重合成
+# ============================================================
+def compose_raw_weights(rp_weights, trend_gates, selected, rsrs_multipliers, crowd_penalties):
+    """
+    合成各模块输出为 RawWeight。
+
+    各输入数组长度均为 len(pool)。未入选资产权重为 0。
+    """
+    n = len(rp_weights)
+    raw = np.zeros(n)
+    for i in range(n):
+        if selected[i]:
+            raw[i] = (
+                rp_weights[i]
+                * trend_gates[i]
+                * rsrs_multipliers[i]
+                * crowd_penalties[i]
+            )
+    return raw
 
 
 # ============================================================
@@ -146,111 +281,155 @@ def set_parameter(context):
 # ============================================================
 def weekly_check(context):
     """每周开盘时执行一次完整的调仓流程。"""
-    pool = g.etf_pool
+    params = snapshot_params()
+    pool = params["etf_pool"]
     n = len(pool)
 
     # 1. 拉取历史数据
-    prices = get_history_data(context, pool)
+    prices = get_history_data(context, pool, params)
 
     # 2. 计算趋势门槛
-    trend_gates = compute_trend_gates(prices, pool)
+    trend_gates = compute_trend_gates(prices, pool, params)
+    _log_step("TrendGate", "趋势门槛", pool, trend_gates, fmt=".0f")
 
     # 3. 筛选趋势成立资产，计算动量分数
-    momentum_scores = compute_momentum_scores(prices, pool, trend_gates)
+    momentum_scores = compute_momentum_scores(prices, pool, trend_gates, params)
+    _log_step("MomentumScore", "动量分数", pool, momentum_scores, fmt=".4f")
 
     # 4. TopK 选择
-    selected = select_topk(momentum_scores, trend_gates)
+    selected = select_topk(momentum_scores, trend_gates, params)
+    _log_step("Selected", "TopK入选", pool, [1.0 if s else 0.0 for s in selected], fmt=".0f")
 
     # 5. 风险平价基础权重
-    rp_weights = compute_rp_weights(prices, pool, selected)
+    rp_weights = compute_rp_weights(prices, pool, selected, params)
+    _log_step("RPWeight", "风险平价权重", pool, rp_weights, fmt=".4f")
 
     # 6. RSRS 线性修正乘数
-    rsrs_multipliers = compute_rsrs_multipliers(prices, pool)
+    rsrs_multipliers = compute_rsrs_multipliers(prices, pool, params)
+    _log_step("RSRSMultiplier", "RSRS修正乘数", pool, rsrs_multipliers, fmt=".4f")
 
     # 7. 拥挤度线性惩罚乘数
-    crowd_penalties = compute_crowd_penalties(prices, pool)
+    crowd_penalties = compute_crowd_penalties(prices, pool, params)
+    _log_step("CrowdPenalty", "拥挤度惩罚", pool, crowd_penalties, fmt=".4f")
 
     # 8. 合成 RawWeight
-    raw_weights = np.zeros(n)
-    for i in range(n):
-        if selected[i]:
-            raw_weights[i] = (
-                rp_weights[i]
-                * trend_gates[i]
-                * rsrs_multipliers[i]
-                * crowd_penalties[i]
-            )
+    raw_weights = compose_raw_weights(
+        rp_weights, trend_gates, selected, rsrs_multipliers, crowd_penalties
+    )
 
     # 9. 组合波动率缩放
-    portfolio_vol_scale = compute_portfolio_vol_scale(prices, pool, raw_weights)
+    portfolio_vol_scale = compute_portfolio_vol_scale(prices, pool, raw_weights, params)
+    log.info("[组合波动率缩放] PortfolioVolScale=%.4f", portfolio_vol_scale)
 
     # 10. 最终权重
     final_weights = raw_weights * portfolio_vol_scale
+    _log_step("FinalWeight", "最终权重", pool, final_weights, fmt=".4f")
 
     # 11. 应用交易约束
-    final_weights = apply_weight_constraints(final_weights, n)
+    final_weights = apply_weight_constraints(final_weights, params)
 
     # 12. 执行调仓
-    execute_rebalance(context, pool, final_weights)
+    execute_rebalance(context, pool, final_weights, params)
 
 
 # ============================================================
-# get_history_data — 拉取历史行情数据
+# normalize_field_frame — 数据返回结构归一化
 # ============================================================
-def get_history_data(context, pool):
+def normalize_field_frame(raw, field, pool):
     """
-    拉取足够长的历史 OHLC + 成交额数据。
+    将 get_price 返回结果归一化为 DataFrame(index=日期, columns=ETF代码)。
 
-    返回 dict，键为 count 天，值为 DataFrame（columns 为各 ETF）。
+    处理规则：
+      - None 或空 DataFrame → 返回 columns=pool 的空 DataFrame
+      - MultiIndex columns → 用 xs(field) 提取单字段
+      - 普通宽表 → reindex(columns=pool) 补全缺列
     """
-    max_window = max(
-        g.MA_long, g.MomLong, g.RSRS_M,
-        g.CrowdWindow, g.PortfolioVolWindow
+    if raw is None:
+        return pd.DataFrame(columns=pool)
+    if not isinstance(raw, pd.DataFrame):
+        return pd.DataFrame(columns=pool)
+    if len(raw) == 0:
+        return pd.DataFrame(columns=pool)
+
+    if isinstance(raw.columns, pd.MultiIndex):
+        raw = raw.xs(field, axis=1, level=0)
+
+    raw = raw.reindex(columns=pool)
+    return raw.dropna(how='all')
+
+
+# ============================================================
+# compute_history_count — 计算所需历史数据长度
+# ============================================================
+def compute_history_count(params):
+    """
+    按模块显式计算所需历史数据长度。
+
+    说明：
+      - 动量和收益率类计算需要多取 1 日
+      - RSRS 至少需要 RSRS_M + RSRS_N - 1
+      - buffer 用于容忍停牌、缺失值、上市初期数据不足
+    """
+    requirements = [
+        params["MA_long"],
+        max(params["MomShort"], params["MomMid"], params["MomLong"]) + 1,
+        params["VolWindow"] + 1,
+        params["RSRS_M"] + params["RSRS_N"] - 1,
+        params["CrowdWindow"],
+        params["PortfolioVolWindow"] + 1,
+    ]
+    return max(requirements) + params.get("history_buffer", 50)
+
+
+# ============================================================
+# fetch_field + get_history_data — 拉取历史行情数据
+# ============================================================
+def fetch_field(pool, field, count, params, end_date=None):
+    """
+    整池拉取单字段数据，返回 DataFrame（index=日期, columns=ETF代码）。
+
+    panel=False 让 get_price 对多标的直接返回 DataFrame（columns=ETF代码），
+    一次调用替代逐 ETF 循环，将 API 请求数从 len(pool) 降到 1。
+
+    end_date: 历史数据截止日期。开盘调仓时需传入 context.previous_date
+              以避免当日收盘价未来数据。
+    """
+    raw = get_price(
+        pool,
+        count=count,
+        end_date=end_date,
+        frequency='daily',
+        fields=[field],
+        skip_paused=True,
+        fq=params["fq_mode"],
+        panel=False,
     )
-    needed = max_window + 100
+    return normalize_field_frame(raw, field, pool)
+
+
+def get_history_data(context, pool, params):
+    """
+    拉取足够长的历史 OHLC + 成交额数据，并预计算日收益率。
+
+    返回 dict：
+      close/high/low/amount: DataFrame（index=日期, columns=ETF代码）
+      close_ret: DataFrame（index=日期, columns=ETF代码），close 的 pct_change()
+    """
+    needed = compute_history_count(params)
 
     prices = {}
+    prices['close'] = fetch_field(pool, 'close', needed, params, end_date=context.previous_date)
+    prices['high'] = fetch_field(pool, 'high', needed, params, end_date=context.previous_date)
+    prices['low'] = fetch_field(pool, 'low', needed, params, end_date=context.previous_date)
+    prices['amount'] = fetch_field(pool, 'money', needed, params, end_date=context.previous_date)
 
-    close_df = get_price(
-        pool,
-        count=needed,
-        frequency='daily',
-        fields=['close'],
-        skip_paused=True,
-        fq='pre'
-    )['close']
+    # 预计算日收益率，下游风险平价和组合波动率复用同一份
+    prices['close_ret'] = prices['close'].pct_change()
 
-    high_df = get_price(
-        pool,
-        count=needed,
-        frequency='daily',
-        fields=['high'],
-        skip_paused=True,
-        fq='pre'
-    )['high']
-
-    low_df = get_price(
-        pool,
-        count=needed,
-        frequency='daily',
-        fields=['low'],
-        skip_paused=True,
-        fq='pre'
-    )['low']
-
-    amount_df = get_price(
-        pool,
-        count=needed,
-        frequency='daily',
-        fields=['money'],
-        skip_paused=True,
-        fq='pre'
-    )['money']
-
-    prices['close'] = close_df
-    prices['high'] = high_df
-    prices['low'] = low_df
-    prices['amount'] = amount_df
+    # 数据新鲜度日志：确保历史数据不晚于 context.previous_date
+    close_df = prices['close']
+    last_dt = close_df.index[-1] if len(close_df) else None
+    log.info("history end_date=%s, context.previous_date=%s", last_dt, context.previous_date)
 
     return prices
 
@@ -258,14 +437,14 @@ def get_history_data(context, pool):
 # ============================================================
 # compute_trend_gates — 趋势门槛（硬过滤）
 # ============================================================
-def compute_trend_gates(prices, pool):
+def compute_trend_gates(prices, pool, params):
     """
     使用 120 日均线判断趋势方向。
 
     返回: list[float]，1.0 表示通过，0.0 表示剔除
     """
     close = prices['close']
-    ma_window = g.MA_long
+    ma_window = params["MA_long"]
 
     gates = np.zeros(len(pool))
     for i, etf in enumerate(pool):
@@ -284,12 +463,12 @@ def compute_trend_gates(prices, pool):
 # ============================================================
 # compute_momentum_scores — 多周期排名动量分数
 # ============================================================
-def compute_momentum_scores(prices, pool, trend_gates):
+def compute_momentum_scores(prices, pool, trend_gates, params):
     """
     在趋势成立的资产中，计算多周期排名动量分数。
 
-    对每个周期（20/60/120 日）收益率做排名，转化为 0~1 分数，
-    再按权重加总。
+    对 close DataFrame 批量取各周期终点收益，再用 rank(pct=True)
+    在截面上生成 0~1 排名分数，最后按权重线性组合。
 
     返回: np.array，未通过趋势门槛的资产分数为 0
     """
@@ -297,38 +476,33 @@ def compute_momentum_scores(prices, pool, trend_gates):
     n = len(pool)
     scores = np.zeros(n)
 
-    windows = [g.MomShort, g.MomMid, g.MomLong]
-    weights = [g.w20, g.w60, g.w120]
+    windows = [params["MomShort"], params["MomMid"], params["MomLong"]]
+    period_weights = [params["w20"], params["w60"], params["w120"]]
 
-    # 收集趋势成立资产的各周期收益率
     active_indices = [i for i in range(n) if trend_gates[i] > 0]
     if not active_indices:
         return scores
 
-    # 计算每只资产各周期收益率
-    returns = np.zeros((n, 3))
-    for i in range(n):
-        etf = pool[i]
-        if etf not in close.columns:
-            continue
-        series = close[etf].dropna()
-        if len(series) < max(windows):
-            continue
-        for j, w in enumerate(windows):
-            if len(series) > w:
-                returns[i, j] = series.iloc[-1] / series.iloc[-(w + 1)] - 1
+    active_pool = [pool[i] for i in active_indices if pool[i] in close.columns]
+    if not active_pool:
+        return scores
+    active_close = close[active_pool]
+    if len(active_close) <= max(windows):
+        return scores
 
-    # 对活跃资产在每个周期上排名打分
-    for j in range(3):
-        active_ret = [(i, returns[i, j]) for i in active_indices]
-        active_ret.sort(key=lambda x: x[1], reverse=True)
-        n_active = len(active_ret)
-        if n_active == 1:
-            scores[active_ret[0][0]] += weights[j]
-        elif n_active > 1:
-            for rank, (idx, _) in enumerate(active_ret):
-                rank_score = (n_active - rank - 1) / (n_active - 1)
-                scores[idx] += weights[j] * rank_score
+    for j, w in enumerate(windows):
+        if len(active_close) <= w:
+            continue
+        latest = active_close.iloc[-1]
+        past = active_close.iloc[-(w + 1)]
+        period_ret = latest / past - 1  # pd.Series, index=ETF代码
+
+        # rank(pct=True) 将收益率映射到 [0, 1]，收益率越高排名越接近 1
+        ranks = period_ret.rank(pct=True).fillna(0.0)
+
+        for idx_pos, active_i in enumerate(active_indices):
+            etf_code = pool[active_i]
+            scores[active_i] += period_weights[j] * float(ranks.get(etf_code, 0.0))
 
     return scores
 
@@ -336,7 +510,7 @@ def compute_momentum_scores(prices, pool, trend_gates):
 # ============================================================
 # select_topk — TopK 入选
 # ============================================================
-def select_topk(momentum_scores, trend_gates):
+def select_topk(momentum_scores, trend_gates, params):
     """
     在趋势成立资产中按动量分数从高到低选择前 TopK 只。
 
@@ -348,7 +522,7 @@ def select_topk(momentum_scores, trend_gates):
     active = [(i, momentum_scores[i]) for i in range(n) if trend_gates[i] > 0]
     active.sort(key=lambda x: x[1], reverse=True)
 
-    k = min(g.TopK, len(active))
+    k = min(params["TopK"], len(active))
     for idx, _ in active[:k]:
         selected[idx] = True
 
@@ -358,19 +532,18 @@ def select_topk(momentum_scores, trend_gates):
 # ============================================================
 # compute_rp_weights — 逆波动率风险平价
 # ============================================================
-def compute_rp_weights(prices, pool, selected):
+def compute_rp_weights(prices, pool, selected, params):
     """
     对入选资产计算逆波动率风险平价权重。
 
-    未入选资产权重为 0。
-    如果只有一只入选，权重为 1。
+    使用 get_history_data 预计算的 close_ret，避免重复 pct_change()。
 
     返回: np.array
     """
-    close = prices['close']
+    close_ret = prices['close_ret']
     n = len(pool)
-    vol_window = g.VolWindow
-    annual_factor = g.annual_factor
+    vol_window = params["VolWindow"]
+    annual_factor = params["annual_factor"]
 
     weights = np.zeros(n)
     selected_indices = [i for i in range(n) if selected[i]]
@@ -381,14 +554,11 @@ def compute_rp_weights(prices, pool, selected):
     vols = np.zeros(n)
     for i in selected_indices:
         etf = pool[i]
-        if etf not in close.columns:
+        if etf not in close_ret.columns:
             continue
-        series = close[etf].dropna()
-        if len(series) < vol_window + 1:
-            continue
-        daily_ret = series.pct_change().dropna().iloc[-vol_window:]
+        daily_ret = close_ret[etf].dropna().iloc[-vol_window:]
         if len(daily_ret) < 5:
-            vols[i] = 1.0  # 数据不足，给等波动率
+            vols[i] = 1.0
         else:
             vols[i] = daily_ret.std() * np.sqrt(annual_factor)
             if vols[i] < 1e-8:
@@ -409,17 +579,19 @@ def compute_rp_weights(prices, pool, selected):
 # ============================================================
 # compute_rsrs_multipliers — RSRS 线性修正乘数
 # ============================================================
-def compute_rsrs_multipliers(prices, pool):
+def compute_rsrs_multipliers(prices, pool, params):
     """
     对每只 ETF 计算 RSRS 截断线性乘数。
 
     步骤：
-    1. 过去 RSRS_N 日 High ~ Low 回归，得 β 和 R²
+    1. 向量化滚动窗口：过去 RSRS_N 日 High ~ Low 回归，得 β 和 R²
+       β = Cov(low, high) / Var(low)  —— OLS 斜率闭式解
+       R² = Cov² / (Var(low) × Var(high))  —— 即 Corr(low, high)²
     2. 过去 RSRS_M 日 β 标准化，得 RSRS_Z
     3. RSRS_Adj = RSRS_Z × R²
     4. RSRSMultiplier = clip(1 + RSRS_Adj / NegativeFullCut, 0, 1)
 
-    只减仓，不加仓。
+    只减仓，不加仓。使用 pandas 滚动窗口向量化替代逐日 lstsq 循环。
 
     返回: np.array
     """
@@ -427,9 +599,9 @@ def compute_rsrs_multipliers(prices, pool):
     low = prices['low']
     n = len(pool)
 
-    N = g.RSRS_N
-    M = g.RSRS_M
-    full_cut = g.RSRS_NegativeFullCut
+    N = params["RSRS_N"]
+    M = params["RSRS_M"]
+    full_cut = params["RSRS_NegativeFullCut"]
 
     multipliers = np.ones(n)
 
@@ -444,40 +616,34 @@ def compute_rsrs_multipliers(prices, pool):
         h = h.loc[common_idx]
         l = l.loc[common_idx]
 
-        min_len = M + N
+        min_len = M + N - 1
         if len(h) < min_len:
-            multipliers[i] = 1.0
             continue
 
-        # 滚动计算 β
-        betas = []
-        r2s = []
-        for t in range(M + N - 1, len(h)):
-            h_window = h.iloc[t - N + 1:t + 1].values
-            l_window = l.iloc[t - N + 1:t + 1].values
-            if len(h_window) < N or np.std(l_window) < 1e-10:
-                betas.append(1.0)
-                r2s.append(0.0)
-                continue
-            try:
-                X = np.column_stack([np.ones(len(l_window)), l_window])
-                coeffs, residuals, rank, _ = np.linalg.lstsq(X, h_window, rcond=None)
-                betas.append(coeffs[1] if len(coeffs) > 1 else 1.0)
+        # ---- 向量化滚动窗口：一次算完所有 β 和 R² ----
+        # pandas rolling + 闭式公式，替代逐日 for 循环 + lstsq
+        h_roll = h.rolling(N)
+        l_roll = l.rolling(N)
+        cov_vals = h_roll.cov(l).dropna().values
+        var_l_vals = l_roll.var().dropna().values
+        var_h_vals = h_roll.var().dropna().values
 
-                ss_res = residuals[0] if len(residuals) > 0 else 0
-                ss_tot = np.sum((h_window - np.mean(h_window)) ** 2)
-                r2 = 1 - ss_res / ss_tot if ss_tot > 1e-10 else 0.0
-                r2s.append(max(r2, 0.0))
-            except Exception:
-                betas.append(1.0)
-                r2s.append(0.0)
+        betas = cov_vals / var_l_vals
+        r2s = cov_vals ** 2 / (var_h_vals * var_l_vals)
+
+        # 边界守卫：低方差或数值异常时退化为默认值
+        bad = (
+            (var_l_vals < 1e-10) | (var_h_vals < 1e-10)
+            | (~np.isfinite(betas)) | (~np.isfinite(r2s))
+        )
+        betas[bad] = 1.0
+        r2s[bad] = 0.0
 
         if len(betas) < M:
-            multipliers[i] = 1.0
             continue
 
-        # 取最近 M 个 β 做标准化
-        beta_series = np.array(betas[-M:])
+        # ---- 取最近 M 个 β 做标准化 ----
+        beta_series = betas[-M:]
         mean_beta = np.mean(beta_series)
         std_beta = np.std(beta_series)
 
@@ -487,12 +653,12 @@ def compute_rsrs_multipliers(prices, pool):
             rsrs_z = (beta_series[-1] - mean_beta) / std_beta
 
         # 使用最近一期的 R²
-        latest_r2 = r2s[-1] if r2s else 0.0
+        latest_r2 = r2s[-1]
         rsrs_adj = rsrs_z * latest_r2
 
         # 截断线性乘数（只减不加）
         raw_mult = 1.0 + rsrs_adj / full_cut
-        multipliers[i] = np.clip(raw_mult, g.RSRSMinMultiplier, g.RSRSMaxMultiplier)
+        multipliers[i] = np.clip(raw_mult, params["RSRSMinMultiplier"], params["RSRSMaxMultiplier"])
 
     return multipliers
 
@@ -500,12 +666,12 @@ def compute_rsrs_multipliers(prices, pool):
 # ============================================================
 # compute_crowd_penalties — 拥挤度线性惩罚乘数
 # ============================================================
-def compute_crowd_penalties(prices, pool):
+def compute_crowd_penalties(prices, pool, params):
     """
     对每只 ETF 计算拥挤度线性惩罚乘数。
 
-    五类指标：20日涨幅分位、60日涨幅分位、成交额分位、
-    偏离均线分位、短期波动率分位，取均值后线性映射到惩罚乘数。
+    先在 DataFrame 级批量计算五类指标（ret20/ret60/amt_ma20/deviation/vol20），
+    再逐 ETF 取最后一行做分位排名，减少 Python 层逐列 rolling/pct_change 开销。
 
     只减仓，不加仓。
 
@@ -515,78 +681,82 @@ def compute_crowd_penalties(prices, pool):
     amount = prices['amount']
     n = len(pool)
 
-    crowd_window = g.CrowdWindow
-    start = g.CrowdStart
-    end = g.CrowdEnd
-    min_penalty = g.MinCrowdPenalty
+    crowd_window = params["CrowdWindow"]
+    start = params["CrowdStart"]
+    end = params["CrowdEnd"]
+    min_penalty = params["MinCrowdPenalty"]
 
     penalties = np.ones(n)
 
+    # 过滤数据不足的 ETF
+    eligible_etfs = []
     for i, etf in enumerate(pool):
-        if etf not in close.columns:
-            continue
-
-        c = close[etf].dropna()
-        if len(c) < crowd_window:
+        if etf in close.columns and len(close[etf].dropna()) >= crowd_window:
+            eligible_etfs.append(etf)
+        else:
             penalties[i] = 1.0
+
+    if not eligible_etfs:
+        return penalties
+
+    # ---- DataFrame 级批量计算：一次算完所有 ETF 的指标 ----
+    close_recent = close[eligible_etfs].iloc[-crowd_window:]
+
+    # 1) 20日涨幅
+    ret20_df = close_recent / close_recent.shift(params["CrowdRetShort"]) - 1
+
+    # 2) 60日涨幅
+    ret60_df = close_recent / close_recent.shift(params["CrowdRetMid"]) - 1
+
+    # 3) 成交额 MA20（仅对有 amount 数据的 ETF）
+    eligible_amount_cols = [e for e in eligible_etfs if e in amount.columns]
+    amt_ma20_df = None
+    if eligible_amount_cols:
+        amt_aligned = amount[eligible_amount_cols].loc[
+            amount.index.intersection(close_recent.index)
+        ]
+        if len(amt_aligned) >= params["AmountMAWindow"]:
+            amt_ma20_df = amt_aligned.rolling(params["AmountMAWindow"]).mean()
+
+    # 4) 偏离均线程度
+    ma20_df = close_recent.rolling(params["DeviationMAWindow"]).mean()
+    deviation_df = close_recent / ma20_df - 1
+
+    # 5) 短期波动率
+    vol20_df = close_recent.pct_change().rolling(params["CrowdVolWindow"]).std() * np.sqrt(params["annual_factor"])
+
+    # ---- 逐 ETF 从预计算 DataFrame 中取列做分位排名 ----
+    for i, etf in enumerate(pool):
+        if etf not in eligible_etfs:
             continue
 
-        # 取最近 crowd_window 日数据
-        c_recent = c.iloc[-crowd_window:]
-
-        # 存储各指标分位数
         indicators = []
 
-        # 8.2.1 20日涨幅分位数
-        ret20 = c_recent / c_recent.shift(g.CrowdRetShort) - 1
-        indicators.append(percentile_rank(ret20.dropna().iloc[-1], ret20.dropna()))
+        # ret20
+        col20 = ret20_df[etf].dropna()
+        indicators.append(percentile_rank(col20.iloc[-1], col20) if len(col20) > 1 else 0.5)
 
-        # 8.2.2 60日涨幅分位数
-        ret60 = c_recent / c_recent.shift(g.CrowdRetMid) - 1
-        indicators.append(percentile_rank(ret60.dropna().iloc[-1], ret60.dropna()))
+        # ret60
+        col60 = ret60_df[etf].dropna()
+        indicators.append(percentile_rank(col60.iloc[-1], col60) if len(col60) > 1 else 0.5)
 
-        # 8.2.3 成交额分位数
-        if etf in amount.columns:
-            amt = amount[etf].dropna()
-            amt = amt.loc[amt.index.intersection(c_recent.index)]
-            if len(amt) >= g.AmountMAWindow:
-                amt_ma20 = amt.rolling(g.AmountMAWindow).mean().dropna()
-                if len(amt_ma20) > 0:
-                    indicators.append(
-                        percentile_rank(amt_ma20.iloc[-1], amt_ma20)
-                    )
-                else:
-                    indicators.append(0.5)
-            else:
-                indicators.append(0.5)
+        # amt_ma20
+        if amt_ma20_df is not None and etf in amt_ma20_df.columns:
+            col_amt = amt_ma20_df[etf].dropna()
+            indicators.append(percentile_rank(col_amt.iloc[-1], col_amt) if len(col_amt) > 1 else 0.5)
         else:
             indicators.append(0.5)
 
-        # 8.2.4 偏离均线程度分位数
-        ma20 = c_recent.rolling(g.DeviationMAWindow).mean()
-        deviation = c_recent / ma20 - 1
-        deviation_valid = deviation.dropna()
-        if len(deviation_valid) > 0:
-            indicators.append(
-                percentile_rank(deviation_valid.iloc[-1], deviation_valid)
-            )
-        else:
-            indicators.append(0.5)
+        # deviation
+        col_dev = deviation_df[etf].dropna()
+        indicators.append(percentile_rank(col_dev.iloc[-1], col_dev) if len(col_dev) > 1 else 0.5)
 
-        # 8.2.5 短期波动率分位数
-        vol20 = c_recent.pct_change().rolling(g.CrowdVolWindow).std() * np.sqrt(g.annual_factor)
-        vol_valid = vol20.dropna()
-        if len(vol_valid) > 0:
-            indicators.append(
-                percentile_rank(vol_valid.iloc[-1], vol_valid)
-            )
-        else:
-            indicators.append(0.5)
+        # vol20
+        col_vol = vol20_df[etf].dropna()
+        indicators.append(percentile_rank(col_vol.iloc[-1], col_vol) if len(col_vol) > 1 else 0.5)
 
-        # 拥挤度总分
         crowd_score = np.mean(indicators)
 
-        # 线性惩罚映射
         if crowd_score <= start:
             penalty = 1.0
         elif crowd_score >= end:
@@ -618,18 +788,19 @@ def percentile_rank(value, series):
 # ============================================================
 # compute_portfolio_vol_scale — 组合波动率缩放系数
 # ============================================================
-def compute_portfolio_vol_scale(prices, pool, raw_weights):
+def compute_portfolio_vol_scale(prices, pool, raw_weights, params):
     """
     根据 RawWeight 和协方差矩阵计算组合波动率，按目标波动率缩放。
 
+    使用 get_history_data 预计算的 close_ret，避免重复 pct_change()。
     只缩不放（最大系数为 1.0）。
 
     返回: float
     """
-    close = prices['close']
-    vol_window = g.PortfolioVolWindow
-    target_vol = g.TargetVol
-    annual_factor = g.annual_factor
+    close_ret = prices['close_ret']
+    vol_window = params["PortfolioVolWindow"]
+    target_vol = params["TargetVol"]
+    annual_factor = params["annual_factor"]
 
     n = len(pool)
     active_indices = [i for i in range(n) if raw_weights[i] > 1e-8]
@@ -637,17 +808,15 @@ def compute_portfolio_vol_scale(prices, pool, raw_weights):
     if not active_indices:
         return 1.0
 
-    # 构建收益率矩阵 (vol_window, n_active)
     returns_list = []
     for i in active_indices:
         etf = pool[i]
-        if etf not in close.columns:
+        if etf not in close_ret.columns:
             return 1.0
-        series = close[etf].dropna().iloc[-(vol_window + 1):]
-        ret = series.pct_change().dropna()
+        ret = close_ret[etf].dropna().iloc[-vol_window:]
         if len(ret) < vol_window:
             return 1.0
-        returns_list.append(ret.values[-vol_window:])
+        returns_list.append(ret.values)
 
     if not returns_list:
         return 1.0
@@ -664,20 +833,21 @@ def compute_portfolio_vol_scale(prices, pool, raw_weights):
         return 1.0
 
     scale = target_vol / portfolio_vol
-    return min(scale, g.MaxPortfolioVolScale)
+    return min(scale, params["MaxPortfolioVolScale"])
 
 
 # ============================================================
 # apply_weight_constraints — 应用仓位约束
 # ============================================================
-def apply_weight_constraints(final_weights, n):
+def apply_weight_constraints(final_weights, params):
     """
     应用单资产最大仓位和最小有效仓位约束。
 
     不重新归一化。
     """
-    max_w = g.MaxWeight
-    min_w = g.MinWeight
+    max_w = params["MaxWeight"]
+    min_w = params["MinWeight"]
+    n = len(final_weights)
 
     result = np.copy(final_weights)
 
@@ -695,12 +865,15 @@ def apply_weight_constraints(final_weights, n):
 # ============================================================
 # execute_rebalance — 执行调仓
 # ============================================================
-def execute_rebalance(context, pool, final_weights):
+def execute_rebalance(context, pool, final_weights, params):
     """
     根据最终目标权重执行调仓，应用最小调仓阈值。
     剩余仓位保留为现金。
+
+    执行前检查停牌状态，执行后记录订单结果，便于审计和故障定位。
     """
     account_value = context.portfolio.total_value
+    current_data = get_current_data()
 
     for i, etf in enumerate(pool):
         target_value = account_value * final_weights[i]
@@ -713,7 +886,23 @@ def execute_rebalance(context, pool, final_weights):
             continue
 
         # 最小调仓阈值
-        if abs(final_weights[i] - current_weight) < g.RebalanceThreshold:
+        if abs(final_weights[i] - current_weight) < params["RebalanceThreshold"]:
             continue
 
-        order_target_value(etf, target_value)
+        # 停牌检查
+        data = current_data[etf]
+        if data.paused:
+            log.warning("skip paused ETF: %s", etf)
+            continue
+
+        order_obj = order_target_value(etf, target_value)
+        if order_obj is None:
+            log.error(
+                "order failed: %s target_value=%.2f target_weight=%.4f current_weight=%.4f",
+                etf, target_value, final_weights[i], current_weight
+            )
+        else:
+            log.info(
+                "order sent: %s target_weight=%.4f current_weight=%.4f target_value=%.2f",
+                etf, final_weights[i], current_weight, target_value
+            )

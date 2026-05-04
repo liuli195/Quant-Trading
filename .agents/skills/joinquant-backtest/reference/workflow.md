@@ -4,9 +4,9 @@
 
 ## 1. 解析参数与模式
 
-- 解析 `strategy_file`、`start_date`、`end_date`、`capital`、`need_performance`。
-- 若用户要求抓取已有回测详情，或当前页面已经是回测详情页，进入“已有详情页抓取模式”，直接跳到第 9 步。
-- 其余情况进入“上传并新跑回测模式”，从第 2 步开始。
+- 解析 `strategy_file`、`start_date`、`end_date`、`capital`。
+- 若用户要求抓取已有回测详情，或当前页面已经是回测详情页，进入”已有详情页抓取模式”，直接跳到第 9 步。
+- 其余情况进入”上传并新跑回测模式”，从第 2 步开始。
 - 已有详情页抓取模式仍需确定 `strategy` 与 `run_id`；若不能从用户请求、页面标题或回测 ID 推断，先停下确认。
 - 若 `start_date > end_date`，直接停下并要求用户确认，不自动交换。
 
@@ -18,7 +18,6 @@
   - `strategy_name`：文件名去掉 `.py`
   - `strategy_dir`：策略所在目录
   - `strategy`：`path_aliases.json` 中使用的策略目录变量，通常等于 `strategies/<strategy>/` 的目录名
-- 若 `need_performance=true`，确认策略里已包含 `enable_profile()`；缺失时先补齐本地策略再继续。
 
 ## 3. 生成上传版本
 
@@ -103,22 +102,8 @@ DOM 降级路径落盘：
 python "<skill_dir>/scripts/save_backtest_data.py" "<persisted_json_path>" --strategy "<strategy>" --run-id "<run_id>"
 ```
 
-落盘脚本负责生成 `tabs_raw/`、`metadata.json`、`summary_metrics.json`、`all_data.json` 和 `report/backtest_report.md`。策略分析与性能分析报告由后续步骤按模板生成，不由落盘脚本自动覆盖。
+落盘脚本负责生成 `tabs_raw/`、`metadata.json`、`summary_metrics.json`、`all_data.json` 和 `report/backtest_report.md`。策略分析与性能分析报告不在本技能流程内，基于落盘数据单独运行。
 
-## 11. 生成策略分析报告
-
-- 使用 [../templates/analysis-report.md](../templates/analysis-report.md) <!-- pathref: agents_joinquant_skill/templates/analysis-report.md --> 作为骨架。
-- 读取 `metadata.json`、`summary_metrics.json`、`all_data.json` 与关键 `tabs_raw/*.md`。
-- 写入或更新：`backtest_report_dir(strategy=<strategy>, run_id=<run_id>)/strategy-analysis.md`。
-- 若文件已存在，先读取现有内容并做增量更新，不盲目覆盖人工分析。
-
-## 12. 生成性能分析报告
-
-- `need_performance=true` 时生成正式性能分析报告；第 2 步应已确保策略包含 `enable_profile()`。
-- 使用 [../templates/performance-report.md](../templates/performance-report.md) <!-- pathref: agents_joinquant_skill/templates/performance-report.md --> 作为骨架。
-- 读取 `tabs_raw/profile.md` 与相关指标，写入或更新：`backtest_report_dir(strategy=<strategy>, run_id=<run_id>)/performance-analysis.md`。
-- 若 `need_performance=false` 且页面无 profile 数据，按输出契约保留空内容或说明性文件。
-
-## 13. 校验完成条件
+## 11. 校验完成条件
 
 完成前按 [output-contract.md](output-contract.md) <!-- pathref: agents_joinquant_skill/reference/output-contract.md --> 校验产物；出现异常时，按 [troubleshooting.md](troubleshooting.md) <!-- pathref: agents_joinquant_skill/reference/troubleshooting.md --> 处理。

@@ -11,9 +11,7 @@ strategies/<strategy>/backtest_runs/<run_id>/
 ├── summary_metrics.json
 ├── all_data.json
 ├── report/
-│   ├── backtest_report.md
-│   ├── strategy-analysis.md
-│   └── performance-analysis.md
+│   └── backtest_report.md
 └── tabs_raw/
     ├── daily_returns.md
     ├── transactioninfo.md
@@ -56,8 +54,6 @@ strategies/<strategy>/backtest_runs/<run_id>/
   "end_date_requested": "",
   "end_date_effective": "",
   "capital": 500000,
-  "need_performance": false,
-  "need_analysis": true,
   "extraction_method": "api",
   "backtest_id": "",
   "backtest_url": "",
@@ -69,9 +65,7 @@ strategies/<strategy>/backtest_runs/<run_id>/
 
 保存浏览器端数据提取原文。已有回测详情页优先由 API bundle 主路径生成；具体内部 API、提取函数和字段契约见 [browser-contracts.md](browser-contracts.md) <!-- pathref: joinquant_skill/reference/browser-contracts.md -->。
 
-禁止用会消耗积分的页面“导出”入口生成该文件。
-
-`need_analysis` 当前固定为 `true`，用于兼容历史元数据结构；调用参数不再单独传入该值。
+禁止用会消耗积分的页面”导出”入口生成该文件。
 
 ### `summary_metrics.json`
 
@@ -111,13 +105,7 @@ strategies/<strategy>/backtest_runs/<run_id>/
 
 由 `save_backtest_data.py` 根据已落盘数据生成，职责是汇总本次回测的核心指标、数据覆盖和提取方式。
 
-### `report/strategy-analysis.md`
-
-由流程的策略分析步骤按模板生成或更新，职责是解释收益、风险、交易行为与策略改进建议。落盘脚本不得自动覆盖该文件。
-
-### `report/performance-analysis.md`
-
-由流程的性能分析步骤按模板生成或更新，职责是解释 profile 热点、瓶颈路径和优化优先级。落盘脚本不得自动覆盖该文件。
+策略分析与性能分析报告不在本技能产物范围内，基于已下载的 `api_export.json` 单独运行生成，模板参见 [templates/](../templates/) <!-- pathref: joinquant_skill/templates/ -->。
 
 ## Markdown 产物约定
 
@@ -164,9 +152,8 @@ DOM 降级方式获取时，在 `all_data.json` 对应标签上标记：
 正常完成后，应至少看到：
 
 - `metadata.json`、`summary_metrics.json`、`all_data.json`
-- `report/backtest_report.md`、`report/strategy-analysis.md`
-- `need_performance=true` 时，`report/performance-analysis.md` 包含正式性能分析；`need_performance=false` 时允许为空内容或说明性内容
+- `report/backtest_report.md`
 - API 主路径：`tabs_raw/transactioninfo.md`、`tabs_raw/positioninfo.md`、`tabs_raw/daily_returns.md`
 - DOM 降级或补充路径：执行过 `collectBacktestTabTexts()` 的标签应出现在 `tabs_raw/` 与 `all_data.json`
 
-若 `need_performance=false` 且页面没有性能分析数据，允许 `profile.md` 为空内容，但文件仍建议保留。
+若页面没有性能分析数据，允许 `profile.md` 为空内容，但文件仍建议保留。策略分析与性能分析报告基于落盘数据单独运行。

@@ -85,7 +85,27 @@
       "PowerShell(pip list 2>&1)",
       "PowerShell(pytest strategies/ -q 2>&1)",
       "PowerShell(pytest strategies/etf_dynamic_rebalance/tests -q 2>&1)",
-      "Bash(echo.)"
+      "Bash(echo.)",
+      "Bash(Get-ChildItem \".venv\" -Directory -ErrorAction SilentlyContinue)",
+      "Bash(Get-ChildItem \"venv\" -Directory -ErrorAction SilentlyContinue)",
+      "Bash(\".venv/Scripts/python\" -m pytest \"strategies/etf_factor_rotation/tests/test_etf_factor_rotation.py::TestComputeRSRSMultipliers\" -v)",
+      "Bash(\".venv/Scripts/python\" -m pytest \"strategies/etf_factor_rotation/tests/test_etf_factor_rotation.py\" -v)",
+      "PowerShell(.venv/Scripts/python -m pytest strategies/etf_factor_rotation/tests -q 2>&1)",
+      "PowerShell(.venv/Scripts/python -m pytest strategies/etf_factor_rotation/tests -v 2>&1)",
+      "PowerShell(.venv/Scripts/python -m scripts.path_tools.refactor check 2>&1)",
+      "PowerShell(.venv/Scripts/python -m pytest \"strategies/etf_factor_rotation/tests/test_etf_factor_rotation.py::TestWeeklyCheckIntegration::test_all_trend_gates_zero_goes_to_cash\" -v --tb=long 2>&1)",
+      "PowerShell(.venv/Scripts/python -m pytest \"strategies/etf_factor_rotation/tests/test_etf_factor_rotation.py::TestWeeklyCheckIntegration\" -v --tb=short 2>&1)",
+      "Bash(.venv/Scripts/python -c ' *)",
+      "Bash(.venv/Scripts/python -m pytest strategies/etf_factor_rotation/tests -q)",
+      "Bash(Get-Command python *)",
+      "Bash(Select-Object -ExpandProperty Source)",
+      "Bash(Get-Command python3 *)",
+      "PowerShell(Get-Command python -ErrorAction SilentlyContinue)",
+      "Bash(pytest strategies/etf_factor_rotation/tests -q)",
+      "Bash(Copy-Item \"d:\\\\My Project\\\\Quant Trading\\\\.claude\\\\skills\\\\joinquant-backtest\\\\SKILL.md\" \"d:\\\\My Project\\\\Quant Trading\\\\.agents\\\\skills\\\\joinquant-backtest\\\\SKILL.md\" -Force)",
+      "PowerShell(python -m py_compile strategies/etf_factor_rotation/etf_factor_rotation.py)",
+      "PowerShell(python -m py_compile strategies/etf_factor_rotation/tests/test_etf_factor_rotation.py)",
+      "PowerShell(python -m py_compile strategies/etf_factor_rotation/tests/conftest.py)"
     ]
   },
   "outputStyle": "Explanatory"
