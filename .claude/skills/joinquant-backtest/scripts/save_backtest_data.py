@@ -316,6 +316,165 @@ def api_results_to_md(results):
     return md
 
 
+RISK_TAB_DEFS = [
+    ("algorithm_period_return", "策略收益"),
+    ("benchmark_period_return", "基准收益"),
+    ("alpha", "阿尔法"),
+    ("beta", "贝塔"),
+    ("sharpe", "夏普比率"),
+    ("sortino", "索提诺比率"),
+    ("information", "信息比率"),
+    ("algo_volatility", "波动率"),
+    ("benchmark_volatility", "基准波动率"),
+    ("max_drawdown", "最大回撤"),
+]
+
+
+def api_result_rows_to_md(rows):
+    """新版 bundle 的 result_rows → Markdown 表格。"""
+    md = "# 每日收益\n\n"
+    if not rows:
+        return md + "(无收益数据)\n"
+
+    md += f"- 交易日数：{len(rows)}\n\n"
+    md += "| 日期 | 策略收益 | 基准收益 | 当日盈利 | 当日亏损 | 当日买入 | 当日卖出 |\n"
+    md += "|------|----------|----------|----------|----------|----------|----------|\n"
+    for row in rows:
+        md += (
+            f"| {row.get('date', '')} | {row.get('algorithm_return_value', '')} | "
+            f"{row.get('benchmark_return_value', '')} | {row.get('gains_earn', '')} | "
+            f"{row.get('gains_lose', '')} | {row.get('orders_buy', '')} | "
+            f"{row.get('orders_sell', '')} |\n"
+        )
+    return md
+
+
+def api_risk_tab_to_md(title, rows):
+    """新版 bundle 的单个风险标签页 → Markdown 表格。"""
+    md = f"# {title}\n\n"
+    if not rows:
+        return md + "(无数据)\n"
+
+    md += "| 日期 | 1个月 | 3个月 | 6个月 | 12个月 |\n"
+    md += "|------|-------|-------|-------|--------|\n"
+    for row in rows:
+        md += (
+            f"| {row.get('date', '')} | {row.get('1month', '')} | "
+            f"{row.get('3month', '')} | {row.get('6month', '')} | "
+            f"{row.get('12month', '')} |\n"
+        )
+    return md
+
+
+def api_logs_to_md(log_rows, partial=False, title="策略日志"):
+    text = "\n".join(str(row) for row in log_rows)
+    md = logs_to_md(text)
+    if partial:
+        md += "\n> 注：日志接口返回 `max=true`，当前文件为免费只读接口可获取部分；未使用扣积分导出。\n"
+    if title != "策略日志":
+        md = md.replace("# 策略日志", f"# {title}", 1)
+    return md
+
+
+def api_profile_to_md(profile_text):
+    """profile 接口响应可能是 JSON 字符串，也可能是原始文本。"""
+    text = profile_text or ""
+    try:
+        parsed = json.loads(text)
+        text = parsed.get("data", {}).get("profile", text)
+    except (TypeError, json.JSONDecodeError):
+        pass
+    return profile_to_md(text)
+
+
+def summary_metrics_from_stats(stats):
+    data = (stats or {}).get("data", {})
+
+    def pct(value):
+        return "" if value is None else f"{float(value) * 100:.2f}%"
+
+    def fixed(value, digits=3):
+        return "" if value is None else f"{float(value):.{digits}f}"
+
+    return {
+        "策略收益": pct(data.get("algorithm_return")),
+        "策略年化收益": pct(data.get("annual_algo_return")),
+        "基准收益": pct(data.get("benchmark_return")),
+        "超额收益": pct(data.get("excess_return")),
+        "最大回撤": pct(data.get("max_drawdown")),
+        "最大回撤区间": ",".join(data.get("max_drawdown_period") or []),
+        "阿尔法": fixed(data.get("alpha")),
+        "贝塔": fixed(data.get("beta")),
+        "夏普比率": fixed(data.get("sharpe")),
+        "索提诺比率": fixed(data.get("sortino")),
+        "信息比率": fixed(data.get("information")),
+        "策略波动率": fixed(data.get("algorithm_volatility")),
+        "基准波动率": fixed(data.get("benchmark_volatility")),
+        "胜率": fixed(data.get("win_ratio")),
+        "盈亏比": fixed(data.get("profit_loss_ratio")),
+        "日胜率": fixed(data.get("day_win_ratio")),
+        "盈利次数": data.get("win_count"),
+        "亏损次数": data.get("lose_count"),
+    }
+
+
+def metadata_from_api_bundle(api_data):
+    meta = default_metadata(extraction_method="api")
+    bundle_meta = api_data.get("metadata") or {}
+    meta.update(
+        {
+            "strategy_name": bundle_meta.get("strategy_name") or bundle_meta.get("strategyName", ""),
+            "start_date_effective": bundle_meta.get("start_date_effective", ""),
+            "end_date_effective": bundle_meta.get("end_date_effective", ""),
+            "capital": bundle_meta.get("capital"),
+            "backtest_id": bundle_meta.get("backtest_id", ""),
+            "backtest_url": bundle_meta.get("backtest_url", ""),
+            "generated_at": bundle_meta.get("generated_at") or datetime.now(timezone.utc).isoformat(),
+            "extraction_method": bundle_meta.get("extraction_method", "api"),
+            "export_used": bundle_meta.get("export_used", False),
+            "frequency": bundle_meta.get("frequency", ""),
+            "py_version": bundle_meta.get("py_version", ""),
+        }
+    )
+    return meta
+
+
+def write_report_files(api_data, run_dir, report_dir, files_written):
+    os.makedirs(report_dir, exist_ok=True)
+    summary = summary_metrics_from_stats(api_data.get("stats", {}))
+    meta = metadata_from_api_bundle(api_data)
+    counts = api_data.get("counts", {})
+    partial = api_data.get("partial", {})
+
+    def line(key):
+        return f"| {key} | {summary.get(key, '')} |"
+
+    backtest_report = "# 回测数据汇总\n\n"
+    backtest_report += f"- 策略名称：{meta.get('strategy_name', '')}\n"
+    backtest_report += f"- 回测 ID：{meta.get('backtest_id', '')}\n"
+    backtest_report += f"- 回测 URL：{meta.get('backtest_url', '')}\n"
+    backtest_report += f"- 区间：{meta.get('start_date_effective', '')} 至 {meta.get('end_date_effective', '')}\n"
+    backtest_report += "- 提取方式：聚宽详情页只读 JSON 接口；未使用扣积分导出。\n\n"
+    backtest_report += "## 核心指标\n\n| 指标 | 值 |\n| --- | --- |\n"
+    for key in ["策略收益", "策略年化收益", "基准收益", "超额收益", "最大回撤", "夏普比率", "阿尔法", "贝塔", "信息比率"]:
+        backtest_report += line(key) + "\n"
+    backtest_report += "\n## 数据覆盖\n\n| 数据 | 记录数 | 完整度 |\n| --- | ---: | --- |\n"
+    backtest_report += f"| 交易详情 | {counts.get('transactions', '')} | {'部分' if partial.get('transactions') else '完整'} |\n"
+    backtest_report += f"| 每日持仓&收益 | {counts.get('positions', '')} | {'部分' if partial.get('positions') else '完整'} |\n"
+    backtest_report += f"| 每日收益 | {counts.get('result_rows', '')} | 完整 |\n"
+    backtest_report += f"| 风险标签页 | {counts.get('risk_rows', '')} | 10 个标签完整 |\n"
+    backtest_report += f"| 日志 | {counts.get('logs', '')} | {'免费接口部分' if partial.get('logs') else '完整'} |\n"
+
+    with open(os.path.join(report_dir, "backtest_report.md"), "w", encoding="utf-8") as file:
+        file.write(backtest_report)
+
+    files_written.extend(
+        [
+            ("report/backtest_report.md", 1),
+        ]
+    )
+
+
 def _ensure_repo_on_path():
     """Add the repository root to sys.path so path_tools can be imported."""
     candidates = []
@@ -362,13 +521,18 @@ def resolve_output_dirs(run_dir=None, strategy=None, run_id=None):
 
 
 def save_api_data(api_json_path, run_dir, tabs_dir=None):
-    """将 fetchAllBacktestData 输出的 JSON 转为三类 API-backed Markdown。"""
+    """将 fetchAllBacktestData 或 fetchExistingBacktestBundle 输出的 JSON 落盘。"""
     os.makedirs(run_dir, exist_ok=True)
     tabs_dir = tabs_dir or os.path.join(run_dir, "tabs_raw")
+    report_dir = os.path.join(run_dir, "report")
     os.makedirs(tabs_dir, exist_ok=True)
+    os.makedirs(report_dir, exist_ok=True)
 
     with open(api_json_path, "r", encoding="utf-8") as file:
         api_data = json.load(file)
+
+    if api_data.get("metadata", {}).get("schema_version") == 2 or "risk_tabs" in api_data:
+        return save_api_bundle_data(api_json_path, api_data, run_dir, tabs_dir, report_dir)
 
     transactions = api_data.get("transactions", [])
     positions = api_data.get("positions", [])
@@ -410,6 +574,72 @@ def save_api_data(api_json_path, run_dir, tabs_dir=None):
     for name, count in files_written:
         print(f"  {name}: {count} records")
     print(f"Created index file: {index_path}")
+    return {name: count for name, count in files_written}
+
+
+def save_api_bundle_data(api_json_path, api_data, run_dir, tabs_dir, report_dir):
+    """新版一次性 JS bundle → 现有输出契约。"""
+    files_written = []
+
+    transactions = api_data.get("transactions", {}).get("rows", [])
+    positions = api_data.get("positions", {}).get("rows", [])
+    result_rows = api_data.get("result_rows", [])
+    logs = api_data.get("logs", {}).get("rows", [])
+    error_logs = api_data.get("error_logs", {}).get("rows", [])
+    risk_tabs = api_data.get("risk_tabs", {})
+
+    outputs = {
+        "transactioninfo.md": api_transaction_to_md(transactions),
+        "positioninfo.md": api_position_to_md(positions),
+        "daily_returns.md": api_result_rows_to_md(result_rows),
+        "logs.md": api_logs_to_md(logs, partial=api_data.get("partial", {}).get("logs", False)),
+        "profile.md": api_profile_to_md(api_data.get("profile_text", "")),
+    }
+
+    if error_logs:
+        outputs["error_logs.md"] = api_logs_to_md(error_logs, title="错误日志")
+
+    for name, title in RISK_TAB_DEFS:
+        tab = risk_tabs.get(name, {})
+        outputs[f"{name}.md"] = api_risk_tab_to_md(tab.get("label") or title, tab.get("rows", []))
+
+    for filename, content in outputs.items():
+        with open(os.path.join(tabs_dir, filename), "w", encoding="utf-8") as file:
+            file.write(content)
+        if filename == "transactioninfo.md":
+            count = len(transactions)
+        elif filename == "positioninfo.md":
+            count = len(positions)
+        elif filename == "daily_returns.md":
+            count = len(result_rows)
+        elif filename == "logs.md":
+            count = len(logs)
+        elif filename == "error_logs.md":
+            count = len(error_logs)
+        elif filename.replace(".md", "") in risk_tabs:
+            count = len(risk_tabs[filename.replace(".md", "")].get("rows", []))
+        else:
+            count = len(content)
+        files_written.append((filename, count))
+
+    metadata = metadata_from_api_bundle(api_data)
+    summary_metrics = summary_metrics_from_stats(api_data.get("stats", {}))
+
+    with open(os.path.join(run_dir, "metadata.json"), "w", encoding="utf-8") as file:
+        json.dump(metadata, file, ensure_ascii=False, indent=2)
+    with open(os.path.join(run_dir, "summary_metrics.json"), "w", encoding="utf-8") as file:
+        json.dump(summary_metrics, file, ensure_ascii=False, indent=2)
+
+    write_report_files(api_data, run_dir, report_dir, files_written)
+
+    index = build_api_bundle_index(api_json_path, files_written, api_data)
+    with open(os.path.join(run_dir, "all_data.json"), "w", encoding="utf-8") as file:
+        json.dump(index, file, ensure_ascii=False, indent=2)
+
+    print(f"Saved {len(files_written)} API bundle files to {tabs_dir}")
+    for name, count in files_written:
+        print(f"  {name}: {count} records")
+    print(f"Created index file: {os.path.join(run_dir, 'all_data.json')}")
     return {name: count for name, count in files_written}
 
 
@@ -536,6 +766,37 @@ def build_api_index(api_json_path, files_written):
             "status": "not_generated_by_api_mode",
             "note": "Use collectBacktestTabTexts() for logs, profile, and static metric tabs when needed.",
         },
+    }
+
+
+def build_api_bundle_index(api_json_path, files_written, api_data):
+    partial = api_data.get("partial", {})
+
+    def is_partial(name):
+        key = name.replace(".md", "")
+        if key == "logs":
+            return bool(partial.get("logs"))
+        if key == "transactioninfo":
+            return bool(partial.get("transactions"))
+        if key == "positioninfo":
+            return bool(partial.get("positions"))
+        return False
+
+    return {
+        "api_export_json": os.path.abspath(api_json_path),
+        "extraction_method": "api_bundle",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "counts": api_data.get("counts", {}),
+        "partial": partial,
+        "tabs": {
+            name.replace(".md", "").replace("report/", ""): {
+                "path": f"tabs_raw/{name}" if not name.startswith("report/") else name,
+                "partial": is_partial(name),
+                "record_count": count,
+            }
+            for name, count in files_written
+        },
+        "note": "Generated from one fetchExistingBacktestBundle() JSON payload; no JoinQuant export endpoint was confirmed or used.",
     }
 
 

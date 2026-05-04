@@ -6,6 +6,7 @@
 
 ```text
 strategies/<strategy>/backtest_runs/<run_id>/
+├── api_export.json
 ├── metadata.json
 ├── summary_metrics.json
 ├── all_data.json
@@ -64,6 +65,12 @@ strategies/<strategy>/backtest_runs/<run_id>/
 }
 ```
 
+### `api_export.json`
+
+保存浏览器端数据提取原文。已有回测详情页优先由 API bundle 主路径生成；具体内部 API、提取函数和字段契约见 [browser-contracts.md](browser-contracts.md) <!-- pathref: joinquant_skill/reference/browser-contracts.md -->。
+
+禁止用会消耗积分的页面“导出”入口生成该文件。
+
 `need_analysis` 当前固定为 `true`，用于兼容历史元数据结构；调用参数不再单独传入该值。
 
 ### `summary_metrics.json`
@@ -100,11 +107,24 @@ strategies/<strategy>/backtest_runs/<run_id>/
 }
 ```
 
+### `report/backtest_report.md`
+
+由 `save_backtest_data.py` 根据已落盘数据生成，职责是汇总本次回测的核心指标、数据覆盖和提取方式。
+
+### `report/strategy-analysis.md`
+
+由流程的策略分析步骤按模板生成或更新，职责是解释收益、风险、交易行为与策略改进建议。落盘脚本不得自动覆盖该文件。
+
+### `report/performance-analysis.md`
+
+由流程的性能分析步骤按模板生成或更新，职责是解释 profile 热点、瓶颈路径和优化优先级。落盘脚本不得自动覆盖该文件。
+
 ## Markdown 产物约定
 
 `tabs_raw/*.md` 全部使用中文标题和说明，转换规则如下：
 
-- API 主路径至少生成 `transactioninfo.md`、`positioninfo.md`、`daily_returns.md`
+- 新版 API bundle 主路径必须生成 `transactioninfo.md`、`positioninfo.md`、`daily_returns.md`、10 个风险标签页、`logs.md`、`profile.md`
+- 旧版 API 主路径至少生成 `transactioninfo.md`、`positioninfo.md`、`daily_returns.md`
 - 指标表：转换为 Markdown 表格
 - `transactioninfo.md`：输出月度汇总 + 逐笔明细
 - `positioninfo.md`：按日期分组，每天一张表
@@ -118,13 +138,13 @@ strategies/<strategy>/backtest_runs/<run_id>/
 | `transactioninfo.md` | **100%** | 通过内部 API 获取全部交易记录 |
 | `positioninfo.md` | **100%** | 通过内部 API 获取全部持仓日 |
 | `daily_returns.md` | **100%** | 通过内部 API 获取每日收益曲线 |
-| `logs.md` | 部分 | 仍受虚拟滚动限制 |
-| 指标表格（alpha, beta 等） | **100%** | 静态 DOM，无虚拟滚动，按需补抽 |
+| `logs.md` | 部分 | 免费只读接口或 DOM 降级都可能截断 |
+| 指标表格（alpha, beta 等） | **100%** | 新版 API bundle 通过 `/algorithm/backtest/risk` 一次性获取 10 个标签页 |
 
 API 方式获取时，`metadata.json` 中应标记：
 ```json
 {
-  "extraction_method": "api"
+  "extraction_method": "api 或 joinquant_detail_readonly_api"
 }
 ```
 

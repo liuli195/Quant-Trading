@@ -35,3 +35,12 @@
 - 用户说“帮我把这个策略传到聚宽回测一下”
 - 用户说“跑一遍 JoinQuant backtest，并给我分析报告”
 - 用户说“做一次 performance 分析，看看 profile 结果”
+- 用户说“打开已有回测详情，把所有详细回测数据保存下来”
+
+## 已有回测详情数据
+
+在回测详情页按 `reference/browser-contracts.md` 的“API bundle 主路径”执行只读抓取，然后一次性落盘：
+
+```bash
+python "<skill_dir>/scripts/save_backtest_data.py" --api "<run_dir>/api_export.json" --strategy etf_dynamic_rebalance --run-id "<run_id>"
+```

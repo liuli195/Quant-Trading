@@ -85,7 +85,8 @@ function isProfileReady() {
 async function fetchAllBacktestData() {
   const internalId = window.backtestId;
   if (!internalId) {
-    return { error: "window.backtestId not found — page may not be a backtest detail page" };
+    window.__fetchedData = { error: "window.backtestId not found — page may not be a backtest detail page" };
+    return window.__fetchedData;
   }
 
   // 通用分页加载器
@@ -161,7 +162,7 @@ async function fetchAllBacktestData() {
     fetchAllResults(),
   ]);
 
-  return {
+  window.__fetchedData = {
     internalId,
     transactions,
     positions,
@@ -172,8 +173,231 @@ async function fetchAllBacktestData() {
       resultPages: results.length,
     },
   };
+  return window.__fetchedData;
 }
 
 function dumpFetchedBacktestData() {
   return JSON.stringify(window.__fetchedData || {});
+}
+
+// One-shot, no-export bundle for an existing JoinQuant backtest detail page.
+// Runs entirely in the browser via evaluate_script/DevTools console and only
+// calls read-only same-origin JSON endpoints used by the detail page itself.
+async function fetchExistingBacktestBundle(options = {}) {
+  const backtestId = options.backtestId || window.backtestId || document.querySelector("#backtestId")?.value || new URLSearchParams(location.search).get("backtestId");
+  if (!backtestId) {
+    throw new Error("backtestId not found. Open a JoinQuant backtest detail page first.");
+  }
+
+  const maxPages = options.maxPages || 80;
+  const metadata = {
+    schema_version: 2,
+    strategy: options.strategy || "",
+    strategy_name: options.strategyName || options.strategy_name || "",
+    backtest_id: backtestId,
+    backtest_url: location.href,
+    generated_at: new Date().toISOString(),
+    start_date_effective: options.startDate || options.start_date_effective || "",
+    end_date_effective: options.endDate || options.end_date_effective || "",
+    capital: options.capital || null,
+    frequency: options.frequency || "",
+    py_version: options.pyVersion || options.py_version || "",
+    extraction_method: "joinquant_detail_readonly_api",
+    export_used: false,
+  };
+
+  const [stats, result, dayResult, risk, runtime, source, profileText] = await Promise.all([
+    jqFetchJson(`/algorithm/backtest/stats?backtestId=${backtestId}&ajax=1`),
+    jqFetchJson(`/algorithm/backtest/result?backtestId=${backtestId}&offset=0&userRecordOffset=0&ajax=1`),
+    jqFetchJson(`/algorithm/backtest/dayResult?backtestId=${backtestId}&offset=0&ajax=1`),
+    jqFetchJson(`/algorithm/backtest/risk?backtestId=${backtestId}&ajax=1`),
+    jqFetchJson(`/algorithm/backtest/runTimeInfo?backtestId=${backtestId}&ajax=1`),
+    jqFetchJson(`/algorithm/backtest/source?backtestId=${backtestId}&ajax=1`),
+    jqFetchText(`/algorithm/backtest/profile?backtestId=${backtestId}&ajax=1`),
+  ]);
+
+  const [transactions, positions, logs, errorLogs] = await Promise.all([
+    jqCollectTransactions(backtestId, maxPages),
+    jqCollectPositionsByDate(backtestId, maxPages, metadata.end_date_effective),
+    jqCollectLogs("log", backtestId, maxPages),
+    jqCollectLogs("error", backtestId, maxPages),
+  ]);
+
+  const bundle = {
+    metadata,
+    stats,
+    result,
+    day_result: dayResult,
+    risk,
+    runtime,
+    source,
+    profile_text: profileText,
+    transactions,
+    positions,
+    logs,
+    error_logs: errorLogs,
+    result_rows: jqBuildResultRows(result),
+    risk_tabs: jqBuildRiskTabs(risk),
+  };
+
+  bundle.counts = {
+    transactions: transactions.rows.length,
+    positions: positions.rows.length,
+    logs: logs.rows.length,
+    error_logs: errorLogs.rows.length,
+    result_rows: bundle.result_rows.length,
+    risk_rows: Object.values(bundle.risk_tabs).reduce((sum, tab) => sum + tab.rows.length, 0),
+  };
+  bundle.partial = {
+    transactions: transactions.partial,
+    positions: positions.partial,
+    logs: logs.partial,
+  };
+
+  window.__jqBacktestBundle = bundle;
+  return bundle;
+}
+
+function dumpExistingBacktestBundle() {
+  return JSON.stringify(window.__jqBacktestBundle || {});
+}
+
+async function jqFetchJson(url) {
+  const response = await fetch(url, {
+    credentials: "include",
+    headers: { "X-Requested-With": "XMLHttpRequest" },
+  });
+  if (!response.ok) throw new Error(`${response.status} ${url}`);
+  return response.json();
+}
+
+async function jqFetchText(url) {
+  const response = await fetch(url, {
+    credentials: "include",
+    headers: { "X-Requested-With": "XMLHttpRequest" },
+  });
+  if (!response.ok) throw new Error(`${response.status} ${url}`);
+  return response.text();
+}
+
+function jqLastDate(rows) {
+  if (!rows.length) return null;
+  const row = rows[rows.length - 1];
+  return row.tradeDate || row.date || null;
+}
+
+async function jqCollectTransactions(backtestId, maxPages) {
+  const rows = [];
+  const pages = [];
+  let offset = 0;
+  let dateOffset = null;
+
+  for (let page = 0; page < maxPages; page += 1) {
+    let query = `/algorithm/backtest/transactionInfo?backtestId=${backtestId}&ajax=1`;
+    if (offset > 0) query += `&offset=${offset}`;
+    if (dateOffset) query += `&dateOffset=${encodeURIComponent(dateOffset)}`;
+    const json = await jqFetchJson(query);
+    const data = json.data || {};
+    const batch = data.transaction || [];
+    rows.push(...batch);
+    pages.push({ page, query, count: batch.length, offset, dateOffset, max: data.max === true, firstDate: batch[0]?.date || null, lastDate: jqLastDate(batch) });
+    if (!batch.length || data.max === true) break;
+    offset += batch.length;
+    dateOffset = jqLastDate(batch) || dateOffset;
+  }
+
+  return { rows, pages, partial: pages.at(-1)?.max === true };
+}
+
+async function jqCollectPositionsByDate(backtestId, maxPages, endDate = "") {
+  const rows = [];
+  const pages = [];
+  const seen = new Set();
+  let dateOffset = null;
+
+  for (let page = 0; page < maxPages; page += 1) {
+    let query = `/algorithm/backtest/positionInfo?backtestId=${backtestId}&ajax=1`;
+    if (dateOffset) query += `&dateOffset=${encodeURIComponent(dateOffset)}`;
+    const json = await jqFetchJson(query);
+    const data = json.data || {};
+    const batch = data.position || [];
+    let added = 0;
+    for (const row of batch) {
+      const key = JSON.stringify([row.date, row.time, row.stock, row.amount, row.value, row.dailyGains, row.positionPersent]);
+      if (!seen.has(key)) {
+        seen.add(key);
+        rows.push(row);
+        added += 1;
+      }
+    }
+    const lastDate = jqLastDate(batch);
+    pages.push({ page, query, count: batch.length, added, max: data.max === true, firstDate: batch[0]?.date || null, lastDate });
+    if (!batch.length || !lastDate) break;
+    if (lastDate === dateOffset) break;
+    dateOffset = lastDate;
+    if (endDate && lastDate >= endDate) break;
+  }
+
+  return { rows, pages, partial: false, method: "dateOffset segmented without export" };
+}
+
+async function jqCollectLogs(endpoint, backtestId, maxPages) {
+  const rows = [];
+  const pages = [];
+  let offset = 0;
+
+  for (let page = 0; page < maxPages; page += 1) {
+    const query = `/algorithm/backtest/${endpoint}?backtestId=${backtestId}&offset=${offset}&ajax=1`;
+    const json = await jqFetchJson(query);
+    const data = json.data || {};
+    const batch = data.logArr || [];
+    rows.push(...batch);
+    pages.push({ page, query, count: batch.length, offset, responseOffset: data.offset ?? null, max: data.max === true });
+    if (!batch.length || data.max === true) break;
+    offset += batch.length;
+  }
+
+  return { rows, pages, partial: pages.at(-1)?.max === true };
+}
+
+function jqDateFromMs(ms) {
+  const date = new Date(ms);
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${date.getUTCFullYear()}-${month}-${day}`;
+}
+
+function jqBuildResultRows(resultJson) {
+  const result = resultJson?.data?.result || {};
+  const times = result.overallReturn?.time || result.benchmark?.time || [];
+  return times.map((time, index) => ({
+    date: jqDateFromMs(time),
+    algorithm_return_value: result.overallReturn?.value?.[index] ?? "",
+    benchmark_return_value: result.benchmark?.value?.[index] ?? "",
+    gains_earn: result.gains?.earn?.value?.[index] ?? "",
+    gains_lose: result.gains?.lose?.value?.[index] ?? "",
+    orders_buy: result.orders?.buy?.value?.[index] ?? "",
+    orders_sell: result.orders?.sell?.value?.[index] ?? "",
+  }));
+}
+
+function jqBuildRiskTabs(riskJson) {
+  const risk = riskJson?.data?.risk || {};
+  const tabs = {};
+  const definitions = [
+    ["algorithm_period_return", "策略收益", "algorithmPeriodReturn"],
+    ["benchmark_period_return", "基准收益", "benchmarkPeriodReturn"],
+    ["alpha", "阿尔法", "alpha"],
+    ["beta", "贝塔", "beta"],
+    ["sharpe", "夏普比率", "sharp"],
+    ["sortino", "索提诺比率", "sortino"],
+    ["information", "信息比率", "information"],
+    ["algo_volatility", "波动率", "algovolatility"],
+    ["benchmark_volatility", "基准波动率", "benchmarkvolatility"],
+    ["max_drawdown", "最大回撤", "maxdrawdown"],
+  ];
+  for (const [name, label, sourceKey] of definitions) {
+    tabs[name] = { label, source_key: sourceKey, rows: Array.isArray(risk[sourceKey]) ? risk[sourceKey] : [] };
+  }
+  return tabs;
 }

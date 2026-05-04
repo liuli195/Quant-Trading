@@ -1,0 +1,19 @@
+{
+  "strategy_name": "ETF????",
+  "strategy_file": "",
+  "strategy_dir": "",
+  "start_date_requested": "",
+  "start_date_effective": "2023-01-01",
+  "end_date_requested": "",
+  "end_date_effective": "2026-04-30",
+  "capital": 500000,
+  "need_performance": false,
+  "need_analysis": true,
+  "backtest_id": "1f5280174bd0a504c886ef67be5a8789",
+  "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=1f5280174bd0a504c886ef67be5a8789",
+  "generated_at": "2026-05-04T11:14:18.117326+00:00",
+  "extraction_method": "joinquant_detail_readonly_api",
+  "export_used": false,
+  "frequency": "??",
+  "py_version": "Python3"
+}

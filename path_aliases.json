@@ -3,7 +3,9 @@
     "repo": ".",
     "docs": "docs",
     "strategies": "strategies",
-    "skills": ".claude/skills"
+    "skills": ".claude/skills",
+    "scripts": "scripts",
+    "agents_skills": ".agents/skills"
   },
   "aliases": {
     "strategy_dir": "{strategies}/{strategy}",
@@ -14,6 +16,9 @@
     "backtest_report_dir": "{backtest_run}/report",
     "backtest_tabs_dir": "{backtest_run}/tabs_raw",
     "docs_images": "{docs}/images",
-    "joinquant_skill": "{skills}/joinquant-backtest"
+    "joinquant_skill": "{skills}/joinquant-backtest",
+    "agents_joinquant_skill": "{agents_skills}/joinquant-backtest",
+    "joinquant_data": "{docs}/joinquant-data",
+    "quant_reports": "{docs}/Quant_Reports"
   }
 }
