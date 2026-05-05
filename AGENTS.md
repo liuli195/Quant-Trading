@@ -1,131 +1,64 @@
 # AGENTS.md
 
-## 1. 项目定位与边界
+## 背景
 
 本项目是基于 Python 的 A 股/场内基金量化交易策略仓库，交易与回测环境为 **聚宽 (JoinQuant)**。
+策略代码仅在聚宽云端可运行；本地负责编写、静态检查、单元测试、文档维护、回测结果分析。
 
-- 策略运行边界：策略代码仅在聚宽云端可运行，本地不能直接执行完整策略。
-- 本地职责边界：本地用于编写代码、静态检查、单元测试、文档维护、回测结果分析。
-- 目标：以可复用、可测试、可审计的方式持续迭代策略。
+## 结构
 
-## 2. 核心文档与入口
+- `strategies/<name>/<name>.py` — 策略代码
+- `strategies/<name>/tests/` — pytest 本地单元测试
+- `strategies/<name>/reports/` — 专题分析报告
+- `strategies/<name>/test_batches/<batch_id>/scenarios/<scenario_id>/` — 批量测试场景
+- `strategies/<name>/backtest_runs/<run_id>/` — 单次回测产物
+  - `metadata.json` / `summary_metrics.json` — 运行元数据与汇总指标
+  - `report/backtest_report.md` — 回测数据汇总
+  - `report/strategy-analysis.md` — 策略分析（每次回测必须产出）
+  - `report/performance-analysis.md` — 性能分析（每次回测必须产出）
+  - `tabs_raw/` — 聚宽原始指标（收益、回撤、夏普、换手等）
+- `docs/` / `docs/joinquant-data/` — 聚宽文档镜像与研究资料
+- `scripts/jq_automation/` — jq-auto 云端回测工具
+- `scripts/path_tools/` — 路径治理工具（aliases.py / refactor.py）
+- `path_aliases.json` — 目录别名配置，新增脚本引用结果目录时须通过别名解析，不硬编码路径
 
-- 聚宽 API 在线文档：<https://www.joinquant.com/help/api/help#name:api>
-- 聚宽 API 离线文档：`docs/joinquant-api.md`（优先查阅）
-- 聚宽回测入口：<https://www.joinquant.com/algorithm/index/list>
-- 聚宽模拟交易入口：<https://www.joinquant.com/algorithm/trade/list>
+## 工具入口
 
-## 3. 仓库结构约定
+- 聚宽 API 文档：`docs/joinquant-api.md`（离线，优先）| <https://www.joinquant.com/help/api/help#name:api>（在线）
+- 语法检查：`.\.venv\Scripts\python.exe -m py_compile <策略文件>`
+- 单元测试：`.\.venv\Scripts\python.exe -m pytest <策略>/tests -q`
+- 云端回测：`python -m scripts.jq-auto`（首次需在 Chrome 手动登录聚宽，后续工具自动复用登录态）
+- 路径别名解析：`python -m scripts.path_tools.aliases resolve <别名> <参数>`
+- 路径引用校验：`python -m scripts.path_tools.refactor check`
 
-- `strategies/`：策略主目录
-- `strategies/<strategy_name>/<strategy_name>.py`：策略代码文件
-- `strategies/<strategy_name>/tests/`：本地单元测试（pytest）与测试文档
-- `strategies/<strategy_name>/reports/`：专题分析报告（跨回测对比、深度归因）
-- `strategies/<strategy_name>/backtest_runs/<run_id>/`：单次回测的完整产物
-  - `report/backtest_report.md`：回测数据汇总
-  - `report/strategy-analysis.md`：本次回测策略分析（每次回测必须产出）
-  - `report/performance-analysis.md`：本次回测性能分析（每次回测必须产出）
-- `docs/`：聚宽文档镜像与研究资料
-- `scripts/`：文档转换、辅助脚本
+## 通用约定
 
-### 3.1 路径别名与引用治理
+### 开发流程
+本地修改 → 语法/单测校验 → 云端回测 → 分析结果 → 模拟交易。
 
-- `path_aliases.json`：仓库级目录别名配置，是策略、报告、回测产物、文档图片等语义目录的唯一来源。
-- `scripts/path_tools/`：路径治理工具目录。
-  - `aliases.py`：解析 `path_aliases.json` 中的目录别名。
-  - `refactor.py`：移动/改名文件并批量重写仓库内部引用。
-- 新增脚本写入结果目录时，优先通过目录别名解析，不直接硬编码 `strategies/<strategy>/backtest_runs/...` 等结构。
-- 重要 Markdown 内部文件引用采用“双轨格式”：普通路径负责可点击，`pathref` 注释负责机器校验和重写。
+### 策略代码规范
 
-示例：
+- **生命周期**：`initialize` 集中完成环境选项、参数初始化、费用/滑点设置、定时任务注册；`handle_data` 或 `run_daily/run_weekly` 实现调仓主逻辑。
+- **参数管理**：统一在 `initialize` 中集中定义，避免魔法数字，命名体现含义与单位。
+- **数据与性能**：先筛选后计算，优先批量接口与向量化，缓存可复用数据，处理停牌、缺失值、上市时长不足等边界。
+- **风控与执行**：明确仓位上下限与调仓步长；记录关键风控参数（最大回撤、换手、仓位漂移）；下单前后记录目标权重与实际成交偏差。
 
-```md
-[阈值对比](strategies/etf_dynamic_rebalance/reports/01-threshold-comparison.md) <!-- pathref: strategy_reports(strategy=etf_dynamic_rebalance)/01-threshold-comparison.md -->
-```
+### 注释与文档
 
-常用命令：
+- 注释解释"为什么"，不逐行翻译代码；推荐三层结构：
+  - **模块头**：策略思想、适用标的、核心公式与约束
+  - **函数**：输入、输出、关键副作用
+  - **关键语句**：复杂计算、风控裁剪、边界处理
+- 研究结论、参数变更理由写入分析文档，不留在代码注释里。
 
-```bash
-# 解析目录别名
-python -m scripts.path_tools.aliases resolve backtest_report_dir strategy=etf_dynamic_rebalance run_id=xxx
+### 提交前检查
 
-# 检查 Markdown pathref 引用
-python -m scripts.path_tools.refactor check
+语法/单测通过、无未来函数、参数一致、分析文档同步。
 
-# 移动/改名并重写引用
-python -m scripts.path_tools.refactor move old/path.md new/path.md
-```
+## 重要约束
 
-## 4. 开发与验证流程
-
-推荐流程：
-
-1. 在本地修改策略与测试代码。
-2. 执行本地校验（语法/单测）。
-3. 通过 `jq-auto` CLI 上传到聚宽并执行云端回测（入口：`scripts/jq-auto.py`）。
-4. 分析回测结果，记录在策略目录文档中。
-5. 必要时进入模拟交易观察，再进行下一轮迭代。
-
-说明：上传与回测环节依赖浏览器登录态，请先在 Chrome 中手动登录聚宽。
-
-## 5. 本地检查命令
-
-本地 Python 命令必须优先使用项目虚拟环境：
-
-- Windows PowerShell：`.\.venv\Scripts\python.exe`
-- 在 Claude/Codex/自动化环境中调用项目虚拟环境时，默认使用提权执行；不提权时可能无法访问 `.venv` 或解析项目目录，导致误用系统 Python。
-- 不直接使用系统 `python` 或裸 `pytest`，除非项目虚拟环境不可用且用户明确同意。
-- 详细环境说明见 `docs/local-python-env.md`。
-
-示例命令（在仓库根目录执行）：
-
-```bash
-# 语法检查（按需替换为目标策略文件）
-.\.venv\Scripts\python.exe -m py_compile strategies/etf_dynamic_rebalance/etf_dynamic_rebalance.py
-
-# 单元测试（示例）
-.\.venv\Scripts\python.exe -m pytest strategies/etf_dynamic_rebalance/tests -q
-```
-
-## 6. 策略代码规范
-
-### 6.1 生命周期函数
-
-- `initialize(context)`：集中完成环境选项、参数初始化、费用/滑点设置、定时任务注册。
-- `handle_data(context, data)` 或 `run_daily/run_weekly`：实现调仓主逻辑。
-
-### 6.2 参数管理
-
-- 策略参数统一在初始化阶段集中定义（如 `set_parameter`）。
-- 避免魔法数字散落在交易逻辑中。
-- 参数命名需要体现含义与单位（如窗口长度、阈值、权重上限）。
-
-### 6.3 数据与性能
-
-- 先筛选后计算，避免全市场全量重复查询。
-- 同一周期内可复用的数据应缓存到局部变量。
-- 优先批量接口、向量化计算，减少逐条循环调用 API。
-- 明确处理缺失值、停牌、上市时长不足等边界情况。
-
-### 6.4 风险与执行约束
-
-- 明确仓位上下限与调仓步长限制。
-- 对关键风控参数（最大回撤、单次换手、仓位漂移）保留日志。
-- 下单前后记录目标权重、当前权重、实际成交偏差。
-
-## 7. 注释与文档规范
-
-- 注释目标是解释“为什么”，而不是逐行翻译“做了什么”。
-- 推荐三层注释结构：
-  - 模块头注释：策略思想、适用标的、核心公式与约束
-  - 函数注释：输入、输出、关键副作用
-  - 关键语句注释：复杂计算、风控裁剪、边界处理
-- 研究结论、参数变更理由应写入对应策略目录的分析文档，而不是留在代码注释里。
-
-## 8. 提交前检查清单
-
-- 代码是否通过语法检查与相关单元测试？
-- 是否避免引入未来函数或隐式未来数据？
-- 参数、手续费、滑点、调仓频率是否与策略设计一致？
-- 新增/修改逻辑是否同步更新分析文档与性能分析？
-- 是否可以被他人根据文档复现回测流程？
+- 策略代码**仅能在聚宽云端运行**，本地不可执行完整策略。
+- 本地 Python 命令必须通过 `.\.venv\Scripts\python.exe`，不使用系统 Python。
+  - **Codex环境中须提权执行**，否则可能无法访问 `.venv` 或解析项目目录，导致误用系统 Python。
+- Markdown 内部文件引用采用双轨格式（可点击路径 + `pathref` 注释），确保机器可校验。
+- 每次执行任务后记得清理临时产物。
