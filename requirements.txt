@@ -6,3 +6,4 @@ beautifulsoup4
 markdownify
 python-docx
 pyyaml==6.0.3
+playwright>=1.40,<2

@@ -6,10 +6,12 @@
 
 - Windows PowerShell：`.\.venv\Scripts\python.exe`
 - 不建议直接使用系统 `python`，因为本机可能同时存在多个 Python 发行版，且默认 `python` 不一定带有 `pip`。
+- Codex/自动化执行本项目 Python 命令时，默认应请求/使用提权执行项目虚拟环境；不提权可能无法访问 `.venv` 或正确解析项目目录。
 
 ## 当前约定
 
 - 本地策略检查：使用 `.venv` 中的 Python 3.12
+- 自动化代理执行：优先提权调用 `.venv\Scripts\python.exe` 或 `.venv\Scripts\pytest.exe`，避免退回系统 Python
 - JoinQuant 云端运行：仍以聚宽环境为准，本地仅做编写、静态检查、单元测试和文档分析
 - `jqlib` 不作为本地依赖安装要求；相关测试通过 stub 或 monkeypatch 隔离
 

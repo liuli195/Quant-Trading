@@ -70,21 +70,22 @@ python -m scripts.path_tools.refactor move old/path.md new/path.md
 
 ## 5. 本地检查命令
 
+本地 Python 命令必须优先使用项目虚拟环境：
+
+- Windows PowerShell：`.\.venv\Scripts\python.exe`
+- 在 Codex/自动化环境中调用项目虚拟环境时，默认使用提权执行；不提权时可能无法访问 `.venv` 或解析项目目录，导致误用系统 Python。
+- 不直接使用系统 `python` 或裸 `pytest`，除非项目虚拟环境不可用且用户明确同意。
+- 详细环境说明见 `docs/local-python-env.md`。
+
 示例命令（在仓库根目录执行）：
 
 ```bash
 # 语法检查（按需替换为目标策略文件）
-python -m py_compile strategies/etf_dynamic_rebalance/etf_dynamic_rebalance.py
+.\.venv\Scripts\python.exe -m py_compile strategies/etf_dynamic_rebalance/etf_dynamic_rebalance.py
 
 # 单元测试（示例）
-pytest strategies/etf_dynamic_rebalance/tests -q
+.\.venv\Scripts\python.exe -m pytest strategies/etf_dynamic_rebalance/tests -q
 ```
-
-如果新增策略，建议同步补齐 `tests/` 目录并至少覆盖：
-
-- 参数初始化正确性
-- 核心权重/信号函数
-- 调仓流程关键分支
 
 ## 6. 策略代码规范
 

@@ -1,0 +1,16 @@
+{
+  "batch_id": "20260505-0000-etf-factor-rotation-full-test",
+  "strategy": "etf_factor_rotation",
+  "created": "2026-05-05T00:00:00",
+  "status": "in_progress",
+  "scenarios": {
+    "s01-smoke": { "primary_run_id": null, "status": "completed", "note": "Quick backtest (Ctrl+Alt+B) on editor page, 2026-04-01~2026-04-30. No separate backtestId." },
+    "s02-default-baseline": { "primary_run_id": "20260505-0933-bt7a98269d2440d36f387fb95085dfb39d", "status": "completed" },
+    "s03-fq-b": { "primary_run_id": null, "status": "pending" },
+    "s04-test-params": { "primary_run_id": null, "status": "pending" },
+    "s05-long-baseline": { "primary_run_id": null, "status": "pending" },
+    "s06-profile-off": { "primary_run_id": null, "status": "pending" },
+    "s07-high-window": { "primary_run_id": null, "status": "pending" },
+    "s08-extended-pool": { "primary_run_id": null, "status": "pending" }
+  }
+}

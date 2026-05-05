@@ -110,7 +110,24 @@
       "PowerShell(pip show pyyaml)",
       "PowerShell(.venv\\\\Scripts\\\\pip.exe install pyyaml)",
       "PowerShell(.venv\\\\Scripts\\\\pip.exe show pyyaml)",
-      "PowerShell(.venv\\\\Scripts\\\\python.exe -c \"import yaml; print\\('yaml version:', yaml.__version__\\)\")"
+      "PowerShell(.venv\\\\Scripts\\\\python.exe -c \"import yaml; print\\('yaml version:', yaml.__version__\\)\")",
+      "Bash(Get-ChildItem -Recurse -Depth 3)",
+      "Bash(Select-Object FullName, Length)",
+      "Bash(Format-Table -AutoSize)",
+      "PowerShell(.venv\\\\Scripts\\\\python.exe -m pytest strategies\\\\etf_factor_rotation\\\\tests -q 2>&1)",
+      "PowerShell(.venv\\\\Scripts\\\\python.exe .claude/skills/jq-run/scripts/strip_comments.py strategies/etf_factor_rotation/etf_factor_rotation.py strategies/etf_factor_rotation/etf_factor_rotation__upload.py)",
+      "PowerShell([Convert]::ToBase64String\\([Text.Encoding]::UTF8.GetBytes\\(\\(Get-Content -Path \"strategies/etf_factor_rotation/etf_factor_rotation__upload.py\" -Raw\\)\\)\\))",
+      "PowerShell([Convert]::ToBase64String\\([Text.Encoding]::UTF8.GetBytes\\(\\(Get-Content -Path \"strategies/etf_factor_rotation/etf_factor_rotation.py\" -Raw\\)\\)\\))",
+      "PowerShell([Convert]::ToBase64String\\([Text.Encoding]::UTF8.GetBytes\\(\\(Get-Content -Path \"strategies/etf_factor_rotation/etf_factor_rotation__upload.py\" -Raw\\)\\)\\) | Set-Content -Path \"$env:TEMP\\\\jq_upload_b64.txt\" -NoNewline; Write-Output \"Base64 saved to temp, length: $\\(\\(Get-Content -Path \"$env:TEMP\\\\jq_upload_b64.txt\" -Raw\\).Length\\)\")",
+      "PowerShell([Convert]::ToBase64String\\([Text.Encoding]::UTF8.GetBytes\\(\\(Get-Content strategies/etf_factor_rotation/etf_factor_rotation__upload.py -Raw\\)\\)\\) | Set-Content -Path \"$env:TEMP\\\\jq_code_b64.txt\" -NoNewline; $len = \\(Get-Content \"$env:TEMP\\\\jq_code_b64.txt\" -Raw\\).Length; Write-Output \"Base64 length: $len\")",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | ForEach-Object { $cmd = $_.CommandLine; if \\($cmd -match \"user-data-dir\"\\) { Write-Host \"PID $\\($_.ProcessId\\): $\\($cmd.Substring\\(0, [Math]::Min\\(200, $cmd.Length\\)\\)\\)\" } })",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | ForEach-Object { $cmd = $_.CommandLine; if \\($cmd -match \"chrome-devtools-mcp\"\\) { Write-Host \"PID $\\($_.ProcessId\\): $\\($cmd.Substring\\(0, [Math]::Min\\(200, $cmd.Length\\)\\)\\)\" } })",
+      "PowerShell($killedNodes = 0; Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | ForEach-Object { $cmd = $_.CommandLine; if \\($cmd -match \"chrome-devtools-mcp\"\\) { Write-Host \"Killing node PID $\\($_.ProcessId\\)\"; Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; $killedNodes++ } }; Write-Host \"Killed $\\($killedNodes\\) node MCP processes\")",
+      "PowerShell($killedChrome = 0; Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | ForEach-Object { $cmd = $_.CommandLine; if \\($cmd -match \"chrome-devtools-mcp\"\\) { Write-Host \"Killing chrome PID $\\($_.ProcessId\\)\"; Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; $killedChrome++ } }; Write-Host \"Killed $\\($killedChrome\\) Chrome MCP processes\")",
+      "PowerShell($b64 = Get-Content \"strategies/etf_factor_rotation/etf_factor_rotation__upload.b64.txt\" -Raw; Write-Host \"Base64 length: $\\($b64.Length\\)\")",
+      "PowerShell(Stop-Process -Name \"chrome\" -Force -ErrorAction SilentlyContinue)",
+      "PowerShell($bytes = [System.IO.File]::ReadAllBytes\\(\"strategies/etf_factor_rotation/etf_factor_rotation.py\"\\); [Convert]::ToBase64String\\($bytes\\))",
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_console_messages"
     ]
   },
   "outputStyle": "Explanatory"
