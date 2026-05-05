@@ -4,8 +4,9 @@ import argparse
 import asyncio
 import json
 import sys
-from pathlib import Path
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from .artifacts import save_api_bundle, save_dom_tabs
@@ -299,7 +300,10 @@ async def _run_scenario(
             await browser.write_strategy_code(code)
             await browser.click_compile()
             await browser.wait_compile_complete()
-            effective = await browser.apply_backtest_params(config.start_date, config.end_date, config.capital)
+            effective = await browser.apply_backtest_params(
+                config.start_date, config.end_date, config.capital,
+                frequency=config.frequency, py_version=config.py_version,
+            )
             print(f"Effective backtest params: {json.dumps(effective, ensure_ascii=False)}")
             await browser.start_full_backtest()
             backtest_id = browser.current_backtest_id()
@@ -329,6 +333,8 @@ async def _run_scenario(
                 update_actual_minutes(ledger, run_id, actual_minutes)
                 print(f"JoinQuant actual compute time: {actual_minutes:.2f} min")
     except Exception as exc:
+        if run_id and _set_quota_status(ledger, run_id, "failed"):
+            save_ledger(ledger, ledger_path)
         manifest_file = manifest_path or _config_manifest_path(config)
         if manifest_file and manifest_file.is_file():
             update_manifest(manifest_file, scenario_id=config.scenario_id,
@@ -417,11 +423,13 @@ def _print_run_plan(config: ScenarioConfig, ledger_path: Path, remaining: float,
     print(f"  upload file: {upload_path}")
 
 
-def _set_quota_status(ledger: dict[str, Any], run_id: str, status: str) -> None:
+def _set_quota_status(ledger: dict[str, Any], run_id: str, status: str) -> bool:
     for item in reversed(ledger.get("runs", [])):
         if item.get("run_id") == run_id:
             item["status"] = status
-            return
+            item["updated_at"] = datetime.now().isoformat(timespec="seconds")
+            return True
+    return False
 
 
 def _confirm(prompt: str) -> bool:

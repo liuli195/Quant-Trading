@@ -100,6 +100,11 @@ class ScenarioConfig:
         strategy = str(data.get("strategy") or _infer_strategy_name(strategy_file))
         if not strategy:
             raise ConfigError("strategy is required when it cannot be inferred from strategy_file")
+        estimated_raw = (
+            data["estimated_minutes"]
+            if data.get("estimated_minutes") not in (None, "")
+            else data.get("estimated_compute_minutes", 0)
+        )
 
         return cls(
             strategy_file=strategy_file,
@@ -113,7 +118,7 @@ class ScenarioConfig:
             batch_id=_none_or_str(data.get("batch_id")),
             strategy_name=_none_or_str(data.get("strategy_name")) or strategy_file.stem,
             edit_url=_none_or_str(data.get("edit_url")),
-            estimated_minutes=float(data.get("estimated_minutes") or data.get("estimated_compute_minutes") or 0),
+            estimated_minutes=_parse_optional_float("estimated_minutes", estimated_raw),
             run_id=_none_or_str(data.get("run_id")),
             params_base=_dictify(data.get("params_base")),
             raw=dict(data),
@@ -198,6 +203,17 @@ def _parse_capital(value: Any) -> int | float:
     except ValueError as exc:
         raise ConfigError("capital must be numeric") from exc
     return int(parsed) if parsed.is_integer() else parsed
+
+
+def _parse_optional_float(name: str, value: Any) -> float:
+    if value in (None, ""):
+        return 0.0
+    if isinstance(value, bool):
+        raise ConfigError(f"{name} must be numeric")
+    try:
+        return float(str(value).replace(",", ""))
+    except (TypeError, ValueError) as exc:
+        raise ConfigError(f"{name} must be numeric") from exc
 
 
 def _infer_strategy_name(strategy_file: Path) -> str:

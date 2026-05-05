@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -28,6 +29,7 @@ COMPILE_BUTTON_SELECTORS = [
     "text=编译运行",
     "text=编译",
 ]
+logger = logging.getLogger(__name__)
 
 
 class AutomationError(RuntimeError):
@@ -164,11 +166,11 @@ class JoinQuantBrowser:
             poll_ms=poll_ms,
         )
 
-    async def apply_backtest_params(self, start_date: str, end_date: str, capital: int | float) -> dict[str, str]:
+    async def apply_backtest_params(self, start_date: str, end_date: str, capital: int | float, frequency: str = "", py_version: str = "") -> dict[str, str]:
         return await self._eval_snippet_function(
             "backtest.js",
-            "return applyBacktestParams(payload.start_date, payload.end_date, payload.capital);",
-            {"start_date": start_date, "end_date": end_date, "capital": capital},
+            "return applyBacktestParams(payload.start_date, payload.end_date, payload.capital, payload.frequency, payload.py_version);",
+            {"start_date": start_date, "end_date": end_date, "capital": capital, "frequency": frequency, "py_version": py_version},
         )
 
     async def start_full_backtest(self) -> None:
@@ -286,6 +288,19 @@ class JoinQuantBrowser:
         page = self._require_page()
         if EDIT_URL_MARKER not in page.url:
             raise AutomationError(f"Expected JoinQuant editor page, got: {page.url}")
+        try:
+            await page.wait_for_function(
+                """
+                () => Boolean(
+                  document.getElementById('ide-container')
+                  || document.querySelector('.ace_editor')
+                  || document.getElementById('code')
+                )
+                """,
+                timeout=15_000,
+            )
+        except PlaywrightTimeoutError as exc:
+            raise AutomationError(f"Expected JoinQuant editor controls on page, got: {page.url}") from exc
 
     async def _dismiss_modals(self) -> None:
         """Dismiss any Bootstrap modals or onboarding dialogs blocking the editor."""
@@ -294,15 +309,15 @@ class JoinQuantBrowser:
         try:
             await page.keyboard.press("Escape")
             await page.wait_for_timeout(500)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to dismiss modal with Escape: %s", exc)
         try:
             close_btn = page.locator(".modal .close, .bootstrap-dialog .close, .bootstrap-dialog-close-button, .modal button:has-text('确定'), .modal button:has-text('关闭'), .modal button:has-text('知道了')").first
             if await close_btn.count() and await close_btn.is_visible():
                 await close_btn.click()
                 await page.wait_for_timeout(500)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to dismiss modal with close button: %s", exc)
         try:
             await page.evaluate("""
                 () => {
@@ -312,8 +327,8 @@ class JoinQuantBrowser:
                 }
             """)
             await page.wait_for_timeout(300)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to force-hide modal overlays: %s", exc)
 
     async def _ensure_not_login_page(self) -> None:
         page = self._require_page()

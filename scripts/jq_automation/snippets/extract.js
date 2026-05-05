@@ -184,8 +184,17 @@ function dumpFetchedBacktestData() {
 // Runs entirely in the browser via evaluate_script/DevTools console and only
 // calls read-only same-origin JSON endpoints used by the detail page itself.
 async function fetchExistingBacktestBundle(options = {}) {
-  const backtestId = options.backtestId || window.backtestId || document.querySelector("#backtestId")?.value || new URLSearchParams(location.search).get("backtestId");
-  if (!backtestId) {
+  // 详情页外部 ID（用户可见，来自 URL）
+  const detailBacktestId = options.backtestId
+    || new URLSearchParams(location.search).get("backtestId")
+    || "";
+  // 聚宽内部 API ID（可能不同于详情页 ID，但 API 请求必须用它）
+  const internalBacktestId = window.backtestId
+    || document.querySelector("#backtestId")?.value
+    || detailBacktestId;
+
+  const apiId = internalBacktestId || detailBacktestId;
+  if (!apiId) {
     throw new Error("backtestId not found. Open a JoinQuant backtest detail page first.");
   }
 
@@ -194,7 +203,7 @@ async function fetchExistingBacktestBundle(options = {}) {
     schema_version: 2,
     strategy: options.strategy || "",
     strategy_name: options.strategyName || options.strategy_name || "",
-    backtest_id: backtestId,
+    backtest_id: detailBacktestId || apiId,
     backtest_url: location.href,
     generated_at: new Date().toISOString(),
     start_date_effective: options.startDate || options.start_date_effective || "",
@@ -204,54 +213,84 @@ async function fetchExistingBacktestBundle(options = {}) {
     py_version: options.pyVersion || options.py_version || "",
     extraction_method: "joinquant_detail_readonly_api",
     export_used: false,
+    internal_backtest_id: internalBacktestId || detailBacktestId,
   };
+  if (detailBacktestId && internalBacktestId && detailBacktestId !== internalBacktestId) {
+    metadata.id_mismatch = true;
+  }
 
-  const [stats, result, dayResult, risk, runtime, source, profileText] = await Promise.all([
-    jqFetchJson(`/algorithm/backtest/stats?backtestId=${backtestId}&ajax=1`),
-    jqFetchJson(`/algorithm/backtest/result?backtestId=${backtestId}&offset=0&userRecordOffset=0&ajax=1`),
-    jqFetchJson(`/algorithm/backtest/dayResult?backtestId=${backtestId}&offset=0&ajax=1`),
-    jqFetchJson(`/algorithm/backtest/risk?backtestId=${backtestId}&ajax=1`),
-    jqFetchJson(`/algorithm/backtest/runTimeInfo?backtestId=${backtestId}&ajax=1`),
-    jqFetchJson(`/algorithm/backtest/source?backtestId=${backtestId}&ajax=1`),
-    jqFetchText(`/algorithm/backtest/profile?backtestId=${backtestId}&ajax=1`),
+  // 分页抓取所有 result 页
+  var resultPages = [];
+  var resultRows = [];
+  var resultPageMeta = [];
+  for (var rp = 0; rp < maxPages; rp++) {
+    var rOffset = rp * 804;
+    var rJson = await jqFetchJson(
+      "/algorithm/backtest/result?backtestId=" + apiId + "&offset=" + rOffset + "&userRecordOffset=0&ajax=1"
+    );
+    var rData = rJson?.data?.result;
+    if (!rData?.benchmark?.time || rData.benchmark.time.length === 0) break;
+    resultPages.push(rData);
+    resultPageMeta.push({ page: rp, offset: rOffset, count: rData.benchmark.time.length });
+    var pageRows = jqBuildResultRowsFromPage(rData);
+    for (var ri = 0; ri < pageRows.length; ri++) {
+      resultRows.push(pageRows[ri]);
+    }
+    if (rData.benchmark.time.length < 804) break;
+  }
+
+  const [stats, dayResult, risk, runtime, source, profileText] = await Promise.all([
+    jqFetchJson("/algorithm/backtest/stats?backtestId=" + apiId + "&ajax=1"),
+    jqFetchJson("/algorithm/backtest/dayResult?backtestId=" + apiId + "&offset=0&ajax=1"),
+    jqFetchJson("/algorithm/backtest/risk?backtestId=" + apiId + "&ajax=1"),
+    jqFetchJson("/algorithm/backtest/runTimeInfo?backtestId=" + apiId + "&ajax=1"),
+    jqFetchJson("/algorithm/backtest/source?backtestId=" + apiId + "&ajax=1"),
+    jqFetchText("/algorithm/backtest/profile?backtestId=" + apiId + "&ajax=1"),
   ]);
 
   const [transactions, positions, logs, errorLogs] = await Promise.all([
-    jqCollectTransactions(backtestId, maxPages),
-    jqCollectPositionsByDate(backtestId, maxPages, metadata.end_date_effective),
-    jqCollectLogs("log", backtestId, maxPages),
-    jqCollectLogs("error", backtestId, maxPages),
+    jqCollectTransactions(apiId, maxPages),
+    jqCollectPositionsByDate(apiId, maxPages, metadata.end_date_effective),
+    jqCollectLogs("log", apiId, maxPages),
+    jqCollectLogs("error", apiId, maxPages),
   ]);
 
-  const bundle = {
-    metadata,
-    stats,
-    result,
+  var bundle = {
+    metadata: metadata,
+    stats: stats,
+    result_pages: resultPages,
+    result_page_meta: resultPageMeta,
     day_result: dayResult,
-    risk,
-    runtime,
-    source,
+    risk: risk,
+    runtime: runtime,
+    source: source,
     profile_text: profileText,
-    transactions,
-    positions,
-    logs,
+    transactions: transactions,
+    positions: positions,
+    logs: logs,
     error_logs: errorLogs,
-    result_rows: jqBuildResultRows(result),
+    result_rows: resultRows,
     risk_tabs: jqBuildRiskTabs(risk),
   };
+
+  var resultsPartial = resultPages.length >= maxPages
+    && resultPages.length > 0
+    && (resultPages[resultPages.length - 1].benchmark?.time?.length || 0) >= 804;
 
   bundle.counts = {
     transactions: transactions.rows.length,
     positions: positions.rows.length,
     logs: logs.rows.length,
     error_logs: errorLogs.rows.length,
-    result_rows: bundle.result_rows.length,
-    risk_rows: Object.values(bundle.risk_tabs).reduce((sum, tab) => sum + tab.rows.length, 0),
+    result_rows: resultRows.length,
+    result_pages: resultPages.length,
+    risk_rows: Object.values(bundle.risk_tabs).reduce(function(sum, tab) { return sum + tab.rows.length; }, 0),
   };
   bundle.partial = {
     transactions: transactions.partial,
     positions: positions.partial,
     logs: logs.partial,
+    results: resultsPartial,
   };
 
   window.__jqBacktestBundle = bundle;
@@ -368,17 +407,26 @@ function jqDateFromMs(ms) {
 }
 
 function jqBuildResultRows(resultJson) {
+  // resultJson 是完整 API 响应（含 data.result 包装），供 fetchAllBacktestData 使用
   const result = resultJson?.data?.result || {};
+  return jqBuildResultRowsFromPage(result);
+}
+
+function jqBuildResultRowsFromPage(result) {
+  // result 是单个 result 页对象（即 data.result 内容）
   const times = result.overallReturn?.time || result.benchmark?.time || [];
-  return times.map((time, index) => ({
-    date: jqDateFromMs(time),
-    algorithm_return_value: result.overallReturn?.value?.[index] ?? "",
-    benchmark_return_value: result.benchmark?.value?.[index] ?? "",
-    gains_earn: result.gains?.earn?.value?.[index] ?? "",
-    gains_lose: result.gains?.lose?.value?.[index] ?? "",
-    orders_buy: result.orders?.buy?.value?.[index] ?? "",
-    orders_sell: result.orders?.sell?.value?.[index] ?? "",
-  }));
+  if (!times.length) return [];
+  return times.map(function(time, index) {
+    return {
+      date: jqDateFromMs(time),
+      algorithm_return_value: result.overallReturn?.value?.[index] ?? "",
+      benchmark_return_value: result.benchmark?.value?.[index] ?? "",
+      gains_earn: result.gains?.earn?.value?.[index] ?? "",
+      gains_lose: result.gains?.lose?.value?.[index] ?? "",
+      orders_buy: result.orders?.buy?.value?.[index] ?? "",
+      orders_sell: result.orders?.sell?.value?.[index] ?? "",
+    };
+  });
 }
 
 function jqBuildRiskTabs(riskJson) {

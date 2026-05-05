@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import json
 import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import Mock, patch
 
+from scripts.jq_automation import artifacts
 from scripts.jq_automation.browser import CompileFailed, wait_for_compile_completion
+from scripts.jq_automation.cli import _bundle_options
 from scripts.jq_automation.config import ConfigError, ScenarioConfig
-from scripts.jq_automation.manifest import update_manifest
+from scripts.jq_automation.local import LocalCheckError, apply_params_overrides
+from scripts.jq_automation.manifest import list_pending_runs, update_manifest
 from scripts.jq_automation.paths import extract_backtest_id, make_run_id
 from scripts.jq_automation.quota import (
     append_quota_entry,
@@ -57,6 +62,66 @@ class CoreTests(unittest.TestCase):
                     }
                 )
 
+    def test_scenario_config_rejects_invalid_estimated_minutes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(ConfigError, "estimated_minutes must be numeric"):
+                ScenarioConfig.from_mapping(
+                    {
+                        "strategy_file": str(Path(tmp) / "strategies" / "s" / "s.py"),
+                        "strategy": "s",
+                        "scenario_id": "s01",
+                        "start_date": "2026-04-01",
+                        "end_date": "2026-05-01",
+                        "capital": 100000,
+                        "estimated_minutes": "unknown",
+                    }
+                )
+
+    def test_scenario_config_expands_grid_sweep(self) -> None:
+        config = ScenarioConfig.from_mapping(
+            {
+                "strategy_file": "strategies/demo/demo.py",
+                "strategy": "demo",
+                "scenario_id": "s01",
+                "start_date": "2026-04-01",
+                "end_date": "2026-05-01",
+                "capital": 100000,
+                "sweep": {
+                    "strategy": "grid",
+                    "dimensions": {"TopK": [1, 2], "fq_mode": [None]},
+                },
+            }
+        )
+
+        runs = config.expand_runs()
+
+        self.assertEqual([run.label for run in runs], ["TopK=1_fq_mode=None", "TopK=2_fq_mode=None"])
+        self.assertEqual(runs[1].params_diff, {"TopK": 2, "fq_mode": None})
+
+    def test_scenario_config_expands_list_sweep(self) -> None:
+        config = ScenarioConfig.from_mapping(
+            {
+                "strategy_file": "strategies/demo/demo.py",
+                "strategy": "demo",
+                "scenario_id": "s01",
+                "start_date": "2026-04-01",
+                "end_date": "2026-05-01",
+                "capital": 100000,
+                "sweep": {
+                    "strategy": "list",
+                    "combinations": [
+                        {"label": "conservative", "params": {"TopK": 1}},
+                        {"label": "baseline", "params": {"TopK": 2}},
+                    ],
+                },
+            }
+        )
+
+        runs = config.expand_runs()
+
+        self.assertEqual([run.label for run in runs], ["conservative", "baseline"])
+        self.assertEqual(runs[0].params_diff, {"TopK": 1})
+
     def test_backtest_id_and_run_id_helpers(self) -> None:
         self.assertEqual(
             extract_backtest_id("https://www.joinquant.com/algorithm/backtest/detail?backtestId=abc123&x=1"),
@@ -98,6 +163,29 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(updated["scenarios"]["s02"]["primary_run_id"], "old")
             self.assertIn("updated", updated)
 
+    def test_list_pending_runs_filters_completed_and_failed_scenarios(self) -> None:
+        manifest = {
+            "scenarios": {
+                "s01": {"status": "pending"},
+                "s02": {
+                    "runs": [
+                        {"label": "done", "status": "completed"},
+                        {"label": "retry", "status": "failed"},
+                    ]
+                },
+                "s03": {"status": "failed"},
+                "s04": {"runs": [{"label": "next", "status": "pending"}]},
+            }
+        }
+
+        pending = list_pending_runs(manifest)
+
+        self.assertEqual(
+            [(sid, entry["label"] if entry else None) for sid, entry in pending],
+            [("s01", None), ("s02", "retry"), ("s04", "next")],
+        )
+        self.assertEqual(list_pending_runs(manifest, {"s04"}), [("s04", {"label": "next", "status": "pending"})])
+
     def test_quota_counts_non_failed_runs(self) -> None:
         ledger = {"budget_minutes": 60, "runs": []}
         append_quota_entry(ledger, scenario_id="s01", run_id="r1", estimated_minutes=12, status="completed")
@@ -112,6 +200,13 @@ class CoreTests(unittest.TestCase):
         update_actual_minutes(ledger, "r1", 0.16)
         # actual 0.16 min should be used instead of estimated 30 min
         self.assertAlmostEqual(used_minutes(ledger), 0.16)
+
+    def test_used_minutes_counts_cancelled_actual_minutes(self) -> None:
+        ledger = {"budget_minutes": 60, "runs": []}
+        append_quota_entry(ledger, scenario_id="s01", run_id="r1", estimated_minutes=30, status="cancelled")
+        update_actual_minutes(ledger, "r1", 2.5)
+
+        self.assertAlmostEqual(used_minutes(ledger), 2.5)
 
     def test_update_actual_minutes_ignores_unknown_run_id(self) -> None:
         ledger = {"budget_minutes": 60, "runs": []}
@@ -152,6 +247,202 @@ class CoreTests(unittest.TestCase):
         with self.assertRaisesRegex(CompileFailed, "bad strategy"):
             asyncio.run(wait_for_compile_completion(page, _compile_snippet, timeout_ms=1000, poll_ms=1))
 
+    def test_apply_params_overrides_only_updates_set_parameter_assignments(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            strategy_file = Path(tmp) / "demo.py"
+            strategy_file.write_text(
+                "\n".join(
+                    [
+                        "def set_parameter(context):",
+                        "    g.TopK = 2",
+                        "    g.names = ['old']",
+                        "",
+                        "def update_runtime_state():",
+                        "    g.TopK = g.TopK + 1",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            tmp_file = apply_params_overrides(strategy_file, {"TopK": 3, "names": ["new", 2]})
+
+            rewritten = tmp_file.read_text(encoding="utf-8")
+            self.assertIn("    g.TopK = 3\n", rewritten)
+            self.assertIn("    g.names = ['new', 2]\n", rewritten)
+            self.assertIn("    g.TopK = g.TopK + 1\n", rewritten)
+
+    def test_apply_params_overrides_rejects_multiline_parameter_assignment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            strategy_file = Path(tmp) / "demo.py"
+            strategy_file.write_text(
+                "\n".join(
+                    [
+                        "def set_parameter(context):",
+                        "    g.TopK = (",
+                        "        2",
+                        "    )",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(LocalCheckError, "multi-line assignment"):
+                apply_params_overrides(strategy_file, {"TopK": 3})
+
+    def test_apply_params_overrides_refuses_non_parameter_assignment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            strategy_file = Path(tmp) / "demo.py"
+            strategy_file.write_text(
+                "\n".join(
+                    [
+                        "def set_parameter(context):",
+                        "    pass",
+                        "",
+                        "def update_runtime_state():",
+                        "    g.TopK = g.TopK + 1",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(LocalCheckError, "outside set_parameter"):
+                apply_params_overrides(strategy_file, {"TopK": 3})
+
+    def test_save_api_bundle_uses_resolved_output_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp) / "run"
+            tabs_dir = run_dir / "tabs_raw"
+            run_dir.mkdir()
+            tabs_dir.mkdir()
+            save_module = Mock()
+            bundle = {"metadata": {"schema_version": 2}, "counts": {"result_rows": 1}}
+
+            with (
+                patch.object(artifacts, "resolve_run_dir", return_value=run_dir),
+                patch.object(artifacts, "resolve_tabs_dir", return_value=tabs_dir),
+                patch.object(artifacts, "_load_save_backtest_data", return_value=save_module),
+            ):
+                result = artifacts.save_api_bundle(bundle, strategy="demo", run_id="r1")
+
+            self.assertEqual(result, run_dir)
+            self.assertEqual(json.loads((run_dir / "api_export.json").read_text(encoding="utf-8")), bundle)
+            save_module.save_api_data.assert_called_once_with(
+                str(run_dir / "api_export.json"),
+                str(run_dir),
+                tabs_dir=str(tabs_dir),
+            )
+
+
+    def test_bundle_options_includes_frequency_and_py_version(self) -> None:
+        config = ScenarioConfig.from_mapping(
+            {
+                "strategy_file": "strategies/demo/demo.py",
+                "strategy": "demo",
+                "scenario_id": "s01",
+                "start_date": "2026-04-01",
+                "end_date": "2026-05-01",
+                "capital": 100000,
+                "frequency": "每分钟",
+                "py_version": "Python2",
+            }
+        )
+        opts = _bundle_options(config)
+        self.assertEqual(opts["frequency"], "每分钟")
+        self.assertEqual(opts["pyVersion"], "Python2")
+        self.assertEqual(opts["startDate"], "2026-04-01")
+        self.assertEqual(opts["capital"], 100000)
+
+    def test_metadata_from_api_bundle_preserves_internal_id_and_mismatch(self) -> None:
+        save = _load_save_backtest_data()
+
+        bundle = {
+            "metadata": {
+                "backtest_id": "detail-abc",
+                "internal_backtest_id": "internal-xyz",
+                "id_mismatch": True,
+                "backtest_url": "https://example.com/?backtestId=detail-abc",
+                "strategy_name": "test",
+                "start_date_effective": "2026-01-01",
+                "end_date_effective": "2026-01-31",
+                "capital": 100000,
+                "frequency": "每天",
+                "py_version": "Python3",
+            }
+        }
+        meta = save.metadata_from_api_bundle(bundle)
+        self.assertEqual(meta["backtest_id"], "detail-abc")
+        self.assertEqual(meta["internal_backtest_id"], "internal-xyz")
+        self.assertTrue(meta.get("id_mismatch"))
+
+        # 无 mismatch 时不应设置 id_mismatch
+        bundle_no_mismatch = {
+            "metadata": {
+                "backtest_id": "same-id",
+                "internal_backtest_id": "same-id",
+                "backtest_url": "https://example.com/?backtestId=same-id",
+            }
+        }
+        meta2 = save.metadata_from_api_bundle(bundle_no_mismatch)
+        self.assertEqual(meta2["backtest_id"], "same-id")
+        self.assertNotIn("id_mismatch", meta2)
+
+    def test_build_api_bundle_index_respects_partial_results(self) -> None:
+        save = _load_save_backtest_data()
+
+        files_written = [
+            ("daily_returns.md", 804),
+            ("transactioninfo.md", 10),
+            ("logs.md", 50),
+        ]
+        api_data = {
+            "counts": {"result_rows": 804, "transactions": 10, "logs": 50},
+            "partial": {"results": True, "logs": False},
+        }
+
+        index = save.build_api_bundle_index("fake.json", files_written, api_data)
+        tabs = index["tabs"]
+
+        self.assertTrue(tabs["daily_returns"]["partial"], "daily_returns should be partial when partial.results is True")
+        self.assertFalse(tabs["logs"]["partial"])
+
+        # 当 partial.results 为 False 时
+        api_data2 = {
+            "counts": {"result_rows": 804},
+            "partial": {"results": False},
+        }
+        index2 = save.build_api_bundle_index("fake.json", files_written, api_data2)
+        self.assertFalse(index2["tabs"]["daily_returns"]["partial"])
+
+    def test_apply_backtest_params_snippet_payload_includes_frequency_py_version(self) -> None:
+        """验证 browser.apply_backtest_params 构造的 payload 包含 frequency 和 py_version。"""
+        from scripts.jq_automation.browser import JoinQuantBrowser
+
+        # 通过检查 snippet payload 结构来验证合约
+        captured_payload = {}
+
+        class FakePage:
+            async def evaluate(self, expression, arg):
+                captured_payload.update(arg.get("payload", {}))
+                return {"start_date": "2026-01-01", "end_date": "2026-01-31",
+                        "capital": "100000", "frequency": "1d", "py_version": "Python3"}
+
+        browser = JoinQuantBrowser.__new__(JoinQuantBrowser)
+        browser._require_page = lambda: FakePage()
+        browser.snippet_reader = lambda name: "function applyBacktestParams(){}"
+
+        import asyncio
+        asyncio.run(browser.apply_backtest_params(
+            "2026-01-01", "2026-01-31", 100000,
+            frequency="每天", py_version="Python3",
+        ))
+
+        self.assertEqual(captured_payload.get("frequency"), "每天")
+        self.assertEqual(captured_payload.get("py_version"), "Python3")
+        self.assertEqual(captured_payload.get("capital"), 100000)
+
 
 class _FakeCompilePage:
     def __init__(self, states: list[dict[str, object]], error_text: str = "") -> None:
@@ -173,6 +464,16 @@ class _FakeCompilePage:
 
 def _compile_snippet(_name: str) -> str:
     return "function readCompileState(){} function readCompileErrors(){}"
+
+
+def _load_save_backtest_data():
+    """Load save_backtest_data.py via importlib for direct function testing."""
+    root = Path(__file__).resolve().parents[3]
+    candidate = root / "scripts" / "jq_automation" / "scripts" / "save_backtest_data.py"
+    spec = importlib.util.spec_from_file_location("_test_save_backtest_data", candidate)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 if __name__ == "__main__":

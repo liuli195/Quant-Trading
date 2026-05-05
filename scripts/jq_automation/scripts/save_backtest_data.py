@@ -18,6 +18,11 @@ from pathlib import Path
 
 
 PARTIAL_TABS = {"logs"}
+SYM_MAP = {
+    "黄金ETF(518880.XSHG)": "黄金ETF",
+    "人工智能ETF易方达(159819.XSHE)": "AI ETF",
+    "纳指ETF(513100.XSHG)": "纳指ETF",
+}
 
 
 def metric_to_md(title, text):
@@ -28,15 +33,19 @@ def metric_to_md(title, text):
 
     title = lines[0].strip().replace("\ufeff", "") or title
     md = f"# {title}\n\n"
-    md += "| 日期 | 1个月 | 3个月 | 6个月 | 12个月 |\n"
-    md += "|------|-------|-------|-------|--------|\n"
-    for line in lines[2:]:
-        line = line.strip()
-        if not line:
-            continue
-        parts = line.split("\t")
-        if len(parts) >= 5:
-            md += "| " + " | ".join(p.strip() for p in parts[:5]) + " |\n"
+    data_rows = [line.strip().split("\t") for line in lines[2:] if line.strip()]
+    headers = lines[1].strip().split("\t") if len(lines) > 1 and lines[1].strip() else []
+    fallback_headers = ["日期", "1个月", "3个月", "6个月", "12个月"]
+    column_count = max([len(headers), *[len(row) for row in data_rows], len(fallback_headers)])
+    if not headers:
+        headers = fallback_headers
+    while len(headers) < column_count:
+        headers.append(f"列{len(headers) + 1}")
+    md += "| " + " | ".join(headers[:column_count]) + " |\n"
+    md += "| " + " | ".join("---" for _ in range(column_count)) + " |\n"
+    for parts in data_rows:
+        padded = (parts + [""] * column_count)[:column_count]
+        md += "| " + " | ".join(p.strip() for p in padded) + " |\n"
     return md
 
 
@@ -94,14 +103,9 @@ def transaction_to_md(text):
     md += "\n## 逐笔明细\n\n"
     md += "| 日期 | 标的 | 方向 | 数量 | 成交价 | 成交额 | 平仓盈亏 | 手续费 |\n"
     md += "|------|------|------|------|--------|--------|----------|--------|\n"
-    sym_map = {
-        "黄金ETF(518880.XSHG)": "黄金ETF",
-        "人工智能ETF易方达(159819.XSHE)": "AI ETF",
-        "纳指ETF(513100.XSHG)": "纳指ETF",
-    }
     for record in records:
         symbol = record["symbol"]
-        for full, short in sym_map.items():
+        for full, short in SYM_MAP.items():
             symbol = symbol.replace(full, short)
         md += (
             f"| {record['date']} | {symbol} | {record['dir']} | {record['amount']} | "
@@ -148,11 +152,6 @@ def position_to_md(text):
     if current_date and current_holdings:
         days[current_date] = current_holdings
 
-    sym_map = {
-        "黄金ETF(518880.XSHG)": "黄金ETF",
-        "人工智能ETF易方达(159819.XSHE)": "AI ETF",
-        "纳指ETF(513100.XSHG)": "纳指ETF",
-    }
     md = f"# 每日持仓与收益\n\n- 持仓天数：{len(days)}\n\n"
     for date in sorted(days):
         md += f"## {date}\n\n"
@@ -163,7 +162,7 @@ def position_to_md(text):
                 md += f"| **合计** | | | **{holding['value']}** | |\n"
             else:
                 symbol = holding["sym"]
-                for full, short in sym_map.items():
+                for full, short in SYM_MAP.items():
                     symbol = symbol.replace(full, short)
                 md += (
                     f"| {symbol} | {holding['qty']} | {holding['price']} | "
@@ -178,13 +177,6 @@ def position_to_md(text):
 # ============================================================
 # 处理通过内部 API (fetchAllBacktestData) 获取的结构化 JSON 数据，
 # 替代原来的 DOM 文本解析方式，数据完整度 100%。
-
-SYM_MAP = {
-    "黄金ETF(518880.XSHG)": "黄金ETF",
-    "人工智能ETF易方达(159819.XSHE)": "AI ETF",
-    "纳指ETF(513100.XSHG)": "纳指ETF",
-}
-
 
 def _short_symbol(name):
     for full, short in SYM_MAP.items():
@@ -434,8 +426,11 @@ def metadata_from_api_bundle(api_data):
             "export_used": bundle_meta.get("export_used", False),
             "frequency": bundle_meta.get("frequency", ""),
             "py_version": bundle_meta.get("py_version", ""),
+            "internal_backtest_id": bundle_meta.get("internal_backtest_id", ""),
         }
     )
+    if bundle_meta.get("id_mismatch"):
+        meta["id_mismatch"] = True
     return meta
 
 
@@ -461,7 +456,7 @@ def write_report_files(api_data, run_dir, report_dir, files_written):
     backtest_report += "\n## 数据覆盖\n\n| 数据 | 记录数 | 完整度 |\n| --- | ---: | --- |\n"
     backtest_report += f"| 交易详情 | {counts.get('transactions', '')} | {'部分' if partial.get('transactions') else '完整'} |\n"
     backtest_report += f"| 每日持仓&收益 | {counts.get('positions', '')} | {'部分' if partial.get('positions') else '完整'} |\n"
-    backtest_report += f"| 每日收益 | {counts.get('result_rows', '')} | 完整 |\n"
+    backtest_report += f"| 每日收益 | {counts.get('result_rows', '')} | {'部分' if partial.get('results') else '完整'} |\n"
     backtest_report += f"| 风险标签页 | {counts.get('risk_rows', '')} | 10 个标签完整 |\n"
     backtest_report += f"| 日志 | {counts.get('logs', '')} | {'免费接口部分' if partial.get('logs') else '完整'} |\n"
 
@@ -774,6 +769,8 @@ def build_api_bundle_index(api_json_path, files_written, api_data):
         key = name.replace(".md", "")
         if key == "logs":
             return bool(partial.get("logs"))
+        if key == "daily_returns":
+            return bool(partial.get("results"))
         if key == "transactioninfo":
             return bool(partial.get("transactions"))
         if key == "positioninfo":

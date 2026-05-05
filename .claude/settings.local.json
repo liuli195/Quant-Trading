@@ -46,7 +46,8 @@
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest scripts/jq_automation/tests strategies/etf_factor_rotation/tests -q 2>&1)",
       "PowerShell($file = \"d:\\\\My Project\\\\Quant Trading\\\\strategies\\\\etf_factor_rotation\\\\backtest_runs\\\\20260505-2218-bt149cf2096d978f58083820813960d145\\\\api_export.json\"; $json = Get-Content $file -Raw -Encoding UTF8 | ConvertFrom-Json; $json.runtime | ConvertTo-Json -Depth 5)",
       "PowerShell($file = \"d:\\\\My Project\\\\Quant Trading\\\\strategies\\\\etf_dynamic_rebalance\\\\backtest_runs\\\\20260504_1\\\\api_export.json\"; $json = Get-Content $file -Raw -Encoding UTF8 | ConvertFrom-Json; $keys = $json | Get-Member -MemberType NoteProperty | % Name; Write-Output \"Top keys: $keys\"; if \\($json.runtime\\) { $json.runtime | ConvertTo-Json -Depth 5 } else { Write-Output \"No runtime field\" })",
-      "Bash(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest scripts/jq_automation/tests/test_core.py -q)"
+      "Bash(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest scripts/jq_automation/tests/test_core.py -q)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest scripts/jq_automation/tests/test_core.py -q 2>&1)"
     ]
   },
   "outputStyle": "Explanatory"

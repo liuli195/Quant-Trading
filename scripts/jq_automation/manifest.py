@@ -59,8 +59,10 @@ def update_manifest(
     target_label = label or "default"
     entry = _find_run(runs, target_label)
     if entry is None:
-        # If there is exactly one entry with label "default" and no run_id,
-        # replace it with the caller's label (first explicit update after migration).
+        # This single empty default entry is a placeholder created while
+        # expanding an old scenario.  Rename it on the first real run update so
+        # the manifest keeps one run entry instead of a stale default plus the
+        # actual labeled run.
         if len(runs) == 1 and runs[0].get("label") == "default" and not runs[0].get("run_id") and target_label != "default":
             runs[0]["label"] = target_label
             entry = runs[0]

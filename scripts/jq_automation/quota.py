@@ -44,12 +44,16 @@ def used_minutes(ledger: dict[str, Any]) -> float:
 
     ``actual_minutes`` is sourced from JoinQuant's /algorithm/backtest/runTimeInfo
     (field ``needSeconds`` converted to minutes) and reflects the real CPU time
-    the platform billed, which is far more accurate than our pre-flight estimate.
+    the platform billed.  When actual usage is known, it is counted even for a
+    failed or cancelled run.
     """
     total = 0.0
     for item in ledger.get("runs", []):
-        if item.get("status") not in {"failed", "cancelled"}:
-            total += float(item.get("actual_minutes") or item.get("estimated_minutes") or 0)
+        actual_minutes = item.get("actual_minutes")
+        if actual_minutes not in (None, ""):
+            total += float(actual_minutes)
+        elif item.get("status") not in {"failed", "cancelled"}:
+            total += float(item.get("estimated_minutes") or 0)
     return total
 
 

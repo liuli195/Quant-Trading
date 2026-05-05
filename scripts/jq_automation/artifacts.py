@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,7 @@ def save_dom_tabs(dom_tabs: dict[str, str], *, strategy: str, run_id: str) -> Pa
     return run_dir
 
 
+@lru_cache(maxsize=1)
 def _load_save_backtest_data():
     root = repo_root()
     candidates = [

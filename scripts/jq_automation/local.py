@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import ast
 import importlib.util
 import py_compile
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 from .paths import repo_root
 
@@ -45,25 +48,107 @@ def generate_upload_file(strategy_file: str | Path, output_path: str | Path | No
 def apply_params_overrides(strategy_file: str | Path, overrides: dict[str, Any]) -> Path:
     """Write a temporary copy of the strategy file with parameter overrides applied.
 
-    Overrides are injected into the ``set_parameter`` function body by matching
-    ``g.<param_name> = ...`` lines.  Returns the path of the temporary file
+    Overrides are injected into ``set_parameter`` by replacing matching
+    ``g.<param_name> = ...`` assignment statements.  Returns the path of the temporary file
     (which the caller should delete after upload).
 
-    Only scalar values (int, float, bool, str, None) and simple lists of
-    strings are supported as override values.
+    Only scalar values (int, float, bool, str, None) and lists of those scalar
+    values are supported as override values.
     """
-    import re
     source = Path(strategy_file).resolve()
     code = source.read_text(encoding="utf-8")
-    for name, value in overrides.items():
-        value_literal = _to_py_literal(value)
-        pattern = re.compile(rf"(g\.{re.escape(name)}\s*=\s*)[^\n]+")
-        if not pattern.search(code):
-            raise LocalCheckError(f"Parameter g.{name} not found in strategy file")
-        code = pattern.sub(rf"\g<1>{value_literal}", code)
+    replacements = _build_param_replacements(code, overrides)
+    lines = code.splitlines(keepends=True)
+    for start_lineno, end_lineno, replacement in sorted(replacements, reverse=True):
+        line_end = _line_ending(lines[end_lineno - 1])
+        lines[start_lineno - 1:end_lineno] = [replacement + line_end]
+    code = "".join(lines)
+    try:
+        ast.parse(code)
+    except SyntaxError as exc:
+        raise LocalCheckError(f"Parameter overrides produced invalid Python: {exc}") from exc
     tmp_path = source.with_name(f"{source.stem}__sweep_tmp.py")
     tmp_path.write_text(code, encoding="utf-8")
     return tmp_path
+
+
+def _build_param_replacements(code: str, overrides: dict[str, Any]) -> list[tuple[int, int, str]]:
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as exc:
+        raise LocalCheckError(f"Strategy file is not valid Python: {exc}") from exc
+
+    set_parameter = next(
+        (
+            node
+            for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "set_parameter"
+        ),
+        None,
+    )
+    if set_parameter is None:
+        raise LocalCheckError("set_parameter function not found in strategy file")
+
+    all_g_names = {
+        name
+        for node in ast.walk(tree)
+        for name in _assigned_g_names(node)
+    }
+    parameter_assignments: dict[str, ast.AST] = {}
+    duplicates: set[str] = set()
+    for node in ast.walk(set_parameter):
+        for name in _assigned_g_names(node):
+            if name in parameter_assignments:
+                duplicates.add(name)
+            parameter_assignments[name] = node
+
+    replacements = []
+    for name, value in overrides.items():
+        node = parameter_assignments.get(name)
+        if node is None:
+            if name in all_g_names:
+                raise LocalCheckError(
+                    f"g.{name} exists outside set_parameter; refusing to override non-parameter assignment"
+                )
+            raise LocalCheckError(f"Parameter g.{name} not found in set_parameter")
+        if name in duplicates:
+            raise LocalCheckError(f"Parameter g.{name} is assigned more than once in set_parameter")
+        end_lineno = getattr(node, "end_lineno", None)
+        if end_lineno is None:
+            raise LocalCheckError(f"Cannot determine source span for parameter g.{name}")
+        if end_lineno != node.lineno:
+            raise LocalCheckError(
+                f"Parameter g.{name} uses a multi-line assignment; override it manually or keep it on one line"
+            )
+        indent = " " * node.col_offset
+        replacements.append((node.lineno, end_lineno, f"{indent}g.{name} = {_to_py_literal(value)}"))
+    return replacements
+
+
+def _assigned_g_names(node: ast.AST) -> list[str]:
+    targets: list[ast.AST] = []
+    if isinstance(node, ast.Assign):
+        targets = list(node.targets)
+    elif isinstance(node, ast.AnnAssign):
+        targets = [node.target]
+
+    names = []
+    for target in targets:
+        if (
+            isinstance(target, ast.Attribute)
+            and isinstance(target.value, ast.Name)
+            and target.value.id == "g"
+        ):
+            names.append(target.attr)
+    return names
+
+
+def _line_ending(line: str) -> str:
+    if line.endswith("\r\n"):
+        return "\r\n"
+    if line.endswith("\n"):
+        return "\n"
+    return ""
 
 
 def _to_py_literal(value: Any) -> str:
@@ -81,6 +166,7 @@ def _to_py_literal(value: Any) -> str:
     raise LocalCheckError(f"Unsupported param type: {type(value).__name__} for value {value!r}")
 
 
+@lru_cache(maxsize=1)
 def _load_strip_comments():
     root = repo_root()
     candidates = [
