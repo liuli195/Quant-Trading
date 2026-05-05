@@ -1,0 +1,17 @@
+{
+  "strategy_name": "ma_crossover",
+  "strategy_file": "",
+  "strategy_dir": "",
+  "start_date_requested": "",
+  "start_date_effective": "2026-01-01",
+  "end_date_requested": "",
+  "end_date_effective": "2026-03-31",
+  "capital": 100000,
+  "backtest_id": "f7ef75002ee557c79428d0029c4371bf",
+  "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=48ef4a644906d1ada69ba04637aa4bb6",
+  "generated_at": "2026-05-05T11:39:17.281Z",
+  "extraction_method": "joinquant_detail_readonly_api",
+  "export_used": false,
+  "frequency": "每天",
+  "py_version": "Python3"
+}

@@ -1,5 +1,7 @@
 function readCompileState() {
-  const hasCancel = !!document.querySelector(".cancel-build");
+  const cancelBtn = document.querySelector("#cancel-daily-backtest-button, .cancel-build, .cancel-button");
+  // Only treat as compiling if the cancel button is actually visible in the layout
+  const hasCancel = !!(cancelBtn && cancelBtn.offsetParent !== null);
   const bodyText = document.body ? document.body.innerText || "" : "";
   const hasError = bodyText.includes("ERROR") || bodyText.includes("Traceback");
 

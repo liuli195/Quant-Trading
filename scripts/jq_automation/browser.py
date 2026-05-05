@@ -20,6 +20,7 @@ LIST_URL = "https://www.joinquant.com/algorithm/index/list"
 EDIT_URL_MARKER = "/algorithm/index/edit"
 DETAIL_URL_MARKER = "/algorithm/backtest/detail"
 COMPILE_BUTTON_SELECTORS = [
+    "#validate-button",
     "#compile-button",
     "#build-button",
     "#run-code",
@@ -59,27 +60,48 @@ class JoinQuantBrowser:
             raise AutomationError("Playwright is not installed. Run: pip install -r requirements.txt")
         self.user_data_dir.mkdir(parents=True, exist_ok=True)
         self._playwright = await async_playwright().start()
+        storage_state = self._storage_state_path
         self.context = await self._playwright.chromium.launch_persistent_context(
             user_data_dir=str(self.user_data_dir),
-            channel="chrome",
             headless=self.headless,
             slow_mo=self.slow_mo,
             viewport={"width": 1440, "height": 950},
         )
         self.page = self.context.pages[0] if self.context.pages else await self.context.new_page()
+        # Restore cookies from persisted storage state
+        if storage_state.is_file():
+            import json
+            state = json.loads(storage_state.read_text(encoding="utf-8"))
+            if state.get("cookies"):
+                await self.context.add_cookies(state["cookies"])
         return self
 
     async def __aexit__(self, *_: object) -> None:
         if self.context:
+            # Persist cookies to storage state file before closing
+            try:
+                cookies = await self.context.cookies()
+                state = {"cookies": cookies}
+                self._storage_state_path.write_text(
+                    __import__("json").dumps(state, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+            except Exception:
+                pass
             await self.context.close()
         if self._playwright:
             await self._playwright.stop()
+
+    @property
+    def _storage_state_path(self) -> Path:
+        return self.user_data_dir / "storage_state.json"
 
     async def open_strategy_editor(self, strategy_name: str, edit_url: str | None = None) -> None:
         page = self._require_page()
         if edit_url:
             await page.goto(edit_url, wait_until="domcontentloaded")
             await self._assert_editor_page()
+            await self._dismiss_modals()
             return
 
         await page.goto(LIST_URL, wait_until="domcontentloaded")
@@ -108,6 +130,7 @@ class JoinQuantBrowser:
             )
         await page.goto(found["href"], wait_until="domcontentloaded")
         await self._assert_editor_page()
+        await self._dismiss_modals()
 
     async def write_strategy_code(self, code: str) -> dict[str, Any]:
         result = await self._eval_snippet_function(
@@ -122,9 +145,11 @@ class JoinQuantBrowser:
     async def click_compile(self) -> None:
         page = self._require_page()
         for selector in COMPILE_BUTTON_SELECTORS:
-            locator = page.locator(selector).first()
+            locator = page.locator(selector).first
             try:
-                if await locator.count() and await locator.is_visible(timeout=1200):
+                count = await locator.count()
+                visible = count and await locator.is_visible()
+                if visible:
                     await locator.click()
                     return
             except Exception:
@@ -224,10 +249,55 @@ class JoinQuantBrowser:
         if EDIT_URL_MARKER not in page.url:
             raise AutomationError(f"Expected JoinQuant editor page, got: {page.url}")
 
+    async def _dismiss_modals(self) -> None:
+        """Dismiss any Bootstrap modals or onboarding dialogs blocking the editor."""
+        page = self._require_page()
+        await page.wait_for_timeout(800)
+        try:
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(500)
+        except Exception:
+            pass
+        try:
+            close_btn = page.locator(".modal .close, .bootstrap-dialog .close, .bootstrap-dialog-close-button, .modal button:has-text('确定'), .modal button:has-text('关闭'), .modal button:has-text('知道了')").first
+            if await close_btn.count() and await close_btn.is_visible():
+                await close_btn.click()
+                await page.wait_for_timeout(500)
+        except Exception:
+            pass
+        try:
+            await page.evaluate("""
+                () => {
+                    document.querySelectorAll('.modal.in, .modal.show, .bootstrap-dialog, .layui-layer')
+                        .forEach(el => { el.style.display = 'none'; el.classList.remove('in', 'show'); });
+                    document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+                }
+            """)
+            await page.wait_for_timeout(300)
+        except Exception:
+            pass
+
     async def _ensure_not_login_page(self) -> None:
         page = self._require_page()
-        if "login" in page.url.lower():
-            raise AutomationError("JoinQuant login is required. Log in in the dedicated Chrome window, then retry.")
+        if "login" not in page.url.lower():
+            return
+        if self.headless:
+            raise AutomationError(
+                "JoinQuant login is required. "
+                "Run once without --headless to log in interactively, then retry."
+            )
+        # Non-headless mode: wait for the user to log in
+        print("聚宽登录页面已打开，请在浏览器中完成登录...")
+        try:
+            await page.wait_for_url(
+                lambda url: "login" not in url.lower(),
+                timeout=300_000,
+            )
+            print("登录完成，继续自动化流程...")
+        except Exception:
+            raise AutomationError(
+                "Timed out waiting for JoinQuant login. Please log in and retry."
+            )
 
     def _require_page(self):
         if self.page is None:

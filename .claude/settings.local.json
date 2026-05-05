@@ -127,7 +127,26 @@
       "PowerShell($b64 = Get-Content \"strategies/etf_factor_rotation/etf_factor_rotation__upload.b64.txt\" -Raw; Write-Host \"Base64 length: $\\($b64.Length\\)\")",
       "PowerShell(Stop-Process -Name \"chrome\" -Force -ErrorAction SilentlyContinue)",
       "PowerShell($bytes = [System.IO.File]::ReadAllBytes\\(\"strategies/etf_factor_rotation/etf_factor_rotation.py\"\\); [Convert]::ToBase64String\\($bytes\\))",
-      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_console_messages"
+      "mcp__plugin_chrome-devtools-mcp_chrome-devtools__list_console_messages",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -c \"import playwright; print\\('playwright OK:', playwright.__version__\\)\")",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -c \"import sys; print\\(sys.executable\\)\")",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pip install playwright)",
+      "PowerShell(New-Item -ItemType Directory -Path \"d:\\\\My Project\\\\Quant Trading\\\\strategies\\\\ma_crossover\\\\test_batches\\\\smoke-20260505\\\\scenarios\\\\s01-baseline\" -Force)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m playwright install chromium)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.jq_automation compile-check strategies/ma_crossover/ma_crossover.py --write-upload)",
+      "PowerShell($chromiumDirs = Get-ChildItem -Path \"$env:LOCALAPPDATA\\\\ms-playwright\" -Recurse -Filter \"chrome.exe\" -ErrorAction SilentlyContinue | Select-Object -First 3; if \\($chromiumDirs\\) { $chromiumDirs | ForEach-Object { $_.FullName } } else { echo \"Chromium not yet installed\" })",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m playwright install chromium 2>&1)",
+      "PowerShell(Get-ChildItem -Path \"$env:LOCALAPPDATA\\\\ms-playwright\" -Recurse -Filter \"chrome.exe\" -Depth 4 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName -First 1)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe .local\\\\jq_login_helper.py)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.jq_automation run strategies/ma_crossover/test_batches/smoke-20260505/scenarios/s01-baseline/scenario.json --yes --backtest-timeout 180)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.jq_automation run strategies/ma_crossover/test_batches/smoke-20260505/scenarios/s01-baseline/scenario.json --yes --backtest-timeout 180 2>&1)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe .local\\\\login_once.py)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.jq_automation upload strategies/ma_crossover/ma_crossover.py --strategy-name ma_crossover)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.jq_automation compile-check strategies/ma_crossover/ma_crossover.py --write-upload 2>&1)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.jq_automation upload strategies/ma_crossover/ma_crossover.py --strategy-name ma_crossover --headless)",
+      "PowerShell($networkDir = \"d:\\\\My Project\\\\Quant Trading\\\\.local\\\\chrome-jq\\\\Default\\\\Network\"; if \\(Test-Path \"$networkDir\\\\Cookies\"\\) { $f = Get-Item \"$networkDir\\\\Cookies\"; echo \"Cookies: $\\($f.Length\\) bytes\" } else { echo \"No Cookies file\" })",
+      "PowerShell($f = Get-Item \"d:\\\\My Project\\\\Quant Trading\\\\.local\\\\chrome-jq\\\\storage_state.json\" -ErrorAction SilentlyContinue; if \\($f\\) { $content = Get-Content $f.FullName -Raw | ConvertFrom-Json; echo \"cookies count: $\\($content.cookies.Count\\)\"; echo \"file size: $\\($f.Length\\) bytes\" } else { echo \"storage_state.json MISSING\" })",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.jq_automation run strategies/ma_crossover/test_batches/smoke-20260505/scenarios/s01-baseline/scenario.json --yes --backtest-timeout 180 --headless)"
     ]
   },
   "outputStyle": "Explanatory"
