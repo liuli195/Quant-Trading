@@ -337,12 +337,11 @@ def weekly_check(context):
 # ============================================================
 def normalize_field_frame(raw, field, pool):
     """
-    将 get_price 返回结果归一化为 DataFrame(index=日期, columns=ETF代码)。
+    将 get_price 返回的单 ETF 结果归一化，辅助测试与本地诊断。
 
     处理规则：
       - None 或空 DataFrame → 返回 columns=pool 的空 DataFrame
-      - MultiIndex columns → 用 xs(field) 提取单字段
-      - 普通宽表 → reindex(columns=pool) 补全缺列
+      - 普通 DataFrame → reindex(columns=pool) 补全缺列
     """
     if raw is None:
         return pd.DataFrame(columns=pool)
@@ -350,9 +349,6 @@ def normalize_field_frame(raw, field, pool):
         return pd.DataFrame(columns=pool)
     if len(raw) == 0:
         return pd.DataFrame(columns=pool)
-
-    if isinstance(raw.columns, pd.MultiIndex):
-        raw = raw.xs(field, axis=1, level=0)
 
     raw = raw.reindex(columns=pool)
     return raw.dropna(how='all')
@@ -386,25 +382,35 @@ def compute_history_count(params):
 # ============================================================
 def fetch_field(pool, field, count, params, end_date=None):
     """
-    整池拉取单字段数据，返回 DataFrame（index=日期, columns=ETF代码）。
+    逐 ETF 拉取单字段数据，返回 DataFrame（index=日期, columns=ETF代码）。
 
-    panel=False 让 get_price 对多标的直接返回 DataFrame（columns=ETF代码），
-    一次调用替代逐 ETF 循环，将 API 请求数从 len(pool) 降到 1。
+    单标的 + panel=False 在聚宽云端稳定返回 DataFrame（columns=字段名），
+    多标的传入 panel=False 可能仍返回 Panel，因此改为逐只拉取后手工组装。
 
     end_date: 历史数据截止日期。开盘调仓时需传入 context.previous_date
               以避免当日收盘价未来数据。
     """
-    raw = get_price(
-        pool,
-        count=count,
-        end_date=end_date,
-        frequency='daily',
-        fields=[field],
-        skip_paused=True,
-        fq=params["fq_mode"],
-        panel=False,
-    )
-    return normalize_field_frame(raw, field, pool)
+    series_map = {}
+    for etf in pool:
+        df = get_price(
+            etf,
+            count=count,
+            end_date=end_date,
+            frequency='daily',
+            fields=[field],
+            skip_paused=True,
+            fq=params["fq_mode"],
+            panel=False,
+        )
+        if df is not None and len(df) > 0:
+            series_map[etf] = df[field]
+
+    if not series_map:
+        return pd.DataFrame(columns=pool)
+
+    result = pd.DataFrame(series_map)
+    result = result.reindex(columns=pool)
+    return result.dropna(how='all')
 
 
 def get_history_data(context, pool, params):

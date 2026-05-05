@@ -1,3 +1,0 @@
-[mcp_servers.streamable-mcp-server]
-args = ["C:/Users/liuli/AppData/Roaming/npm/node_modules/mcp-chrome-bridge/dist/mcp/mcp-server-stdio.js"]
-command = "node"

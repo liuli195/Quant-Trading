@@ -62,7 +62,7 @@ python -m scripts.path_tools.refactor move old/path.md new/path.md
 
 1. 在本地修改策略与测试代码。
 2. 执行本地校验（语法/单测）。
-3. 通过浏览器上传到聚宽，执行云端回测。
+3. 通过 `jq-auto` CLI 上传到聚宽并执行云端回测（入口：`scripts/jq-auto.py`）。
 4. 分析回测结果，记录在策略目录文档中。
 5. 必要时进入模拟交易观察，再进行下一轮迭代。
 
@@ -73,7 +73,7 @@ python -m scripts.path_tools.refactor move old/path.md new/path.md
 本地 Python 命令必须优先使用项目虚拟环境：
 
 - Windows PowerShell：`.\.venv\Scripts\python.exe`
-- 在 Codex/自动化环境中调用项目虚拟环境时，默认使用提权执行；不提权时可能无法访问 `.venv` 或解析项目目录，导致误用系统 Python。
+- 在 Claude/Codex/自动化环境中调用项目虚拟环境时，默认使用提权执行；不提权时可能无法访问 `.venv` 或解析项目目录，导致误用系统 Python。
 - 不直接使用系统 `python` 或裸 `pytest`，除非项目虚拟环境不可用且用户明确同意。
 - 详细环境说明见 `docs/local-python-env.md`。
 

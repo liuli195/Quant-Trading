@@ -45,8 +45,7 @@ def generate_upload_file(strategy_file: str | Path, output_path: str | Path | No
 def _load_strip_comments():
     root = repo_root()
     candidates = [
-        root / ".agents" / "skills" / "jq-run" / "scripts" / "strip_comments.py",
-        root / ".claude" / "skills" / "jq-run" / "scripts" / "strip_comments.py",
+        root / "scripts" / "jq_automation" / "scripts" / "strip_comments.py",
     ]
     for candidate in candidates:
         if candidate.is_file():
@@ -55,4 +54,4 @@ def _load_strip_comments():
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
                 return module.strip_python_comments
-    raise LocalCheckError("Could not find jq-run strip_comments.py")
+    raise LocalCheckError("Could not find strip_comments.py")

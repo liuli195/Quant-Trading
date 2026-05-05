@@ -4,8 +4,7 @@
     "docs": "docs",
     "strategies": "strategies",
     "skills": ".claude/skills",
-    "scripts": "scripts",
-    "agents_skills": ".agents/skills"
+    "scripts": "scripts"
   },
   "aliases": {
     "strategy_dir": "{strategies}/{strategy}",
@@ -21,14 +20,8 @@
     "test_batch_scenarios": "{test_batch}/scenarios",
     "test_scenario": "{test_batch_scenarios}/{scenario_id}",
     "docs_images": "{docs}/images",
-    "joinquant_skill": "{skills}/joinquant-backtest",
-    "agents_joinquant_skill": "{agents_skills}/joinquant-backtest",
-    "jq_run_skill": "{skills}/jq-run",
-    "agents_jq_run_skill": "{agents_skills}/jq-run",
     "jq_analyze_skill": "{skills}/jq-analyze",
-    "agents_jq_analyze_skill": "{agents_skills}/jq-analyze",
     "jq_fix_skill": "{skills}/jq-fix",
-    "agents_jq_fix_skill": "{agents_skills}/jq-fix",
     "joinquant_data": "{docs}/joinquant-data",
     "joinquant_quota_ledger": "{joinquant_data}/quota_ledger",
     "quant_reports": "{docs}/Quant_Reports"

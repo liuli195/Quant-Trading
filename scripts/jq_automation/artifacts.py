@@ -38,8 +38,7 @@ def save_dom_tabs(dom_tabs: dict[str, str], *, strategy: str, run_id: str) -> Pa
 def _load_save_backtest_data():
     root = repo_root()
     candidates = [
-        root / ".agents" / "skills" / "jq-run" / "scripts" / "save_backtest_data.py",
-        root / ".claude" / "skills" / "jq-run" / "scripts" / "save_backtest_data.py",
+        root / "scripts" / "jq_automation" / "scripts" / "save_backtest_data.py",
     ]
     for candidate in candidates:
         if candidate.is_file():
@@ -48,4 +47,4 @@ def _load_save_backtest_data():
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
                 return module
-    raise ArtifactError("Could not find jq-run save_backtest_data.py")
+    raise ArtifactError("Could not find save_backtest_data.py")

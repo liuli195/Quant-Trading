@@ -1,4 +1,0 @@
-interface:
-  display_name: "JQ 结果分析"
-  short_description: "本地分析已保存的聚宽回测结果。"
-  default_prompt: "/jq-analyze <strategy> <batch_id|run_id>"

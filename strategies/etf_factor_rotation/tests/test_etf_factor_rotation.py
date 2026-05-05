@@ -55,14 +55,12 @@ def make_prices_dataframe(prices_dict, start_date='2020-01-01'):
 # 辅助函数 — 构造 mock get_price 返回值（R2 修复：逐 ETF 调用）
 # ============================================================
 def _setup_get_price_mock(strategy, close=None, high=None, low=None, amount=None):
-    """配置 strategy.get_price 同时支持单 ETF 和整池拉取两种模式。
+    """配置 strategy.get_price mock，模拟逐 ETF 拉取模式。
 
-    fetch_field 优化后改为整池拉取：
-        get_price(pool, count=..., fields=[field], panel=False, skip_paused=True, fq='pre')
+    fetch_field 改为逐 ETF 拉取：
+        get_price(etf, count=..., fields=[field], panel=False, skip_paused=True, fq='pre')
 
-    mock 检测 security 是 list 还是 str：
-    - list：构建多 ETF DataFrame（columns=ETF代码, index=日期），单字段时值直接是字段数据
-    - str：构建单 ETF DataFrame（columns=[field], index=日期），向后兼容旧测试
+    mock 对单 ETF（str）返回单字段 DataFrame（columns=[field], index=日期）。
     """
     field_data_map = {'close': close, 'high': high, 'low': low, 'money': amount}
 
@@ -78,18 +76,7 @@ def _setup_get_price_mock(strategy, close=None, high=None, low=None, amount=None
                        skip_paused=None, fq=None, panel=None, end_date=None):
         field = fields[0] if fields else 'close'
 
-        # 整池拉取：security 是 list
-        if isinstance(security, list):
-            series_map = {}
-            for etf in security:
-                s = _build_etf_series(etf, field)
-                if s is not None and len(s) > 0:
-                    series_map[etf] = s
-            if not series_map:
-                return None
-            return pd.DataFrame(series_map)
-
-        # 单 ETF 拉取：security 是 str（向后兼容）
+        # 逐 ETF 拉取：security 是 str
         s = _build_etf_series(security, field)
         if s is None or len(s) == 0:
             return None
@@ -1318,8 +1305,8 @@ class TestGetHistoryDataEndDate:
 class TestFetchField:
     """测试 fetch_field 的逐 ETF 拉取行为和 panel=False 传参。"""
 
-    def test_calls_get_price_with_full_pool(self, strategy, mock_g):
-        """优化后 fetch_field 应整池拉取，一次调用替代逐 ETF 循环。"""
+    def test_calls_get_price_per_etf(self, strategy, mock_g):
+        """fetch_field 应逐 ETF 调用 get_price，3 只 ETF 产生 3 次调用。"""
         params = strategy.snapshot_params()
         pool = mock_g.etf_pool
         n_days = 100
@@ -1330,12 +1317,9 @@ class TestFetchField:
 
         result = strategy.fetch_field(pool, 'close', 100, params)
 
-        assert strategy.get_price.call_count == 1
-        security_arg = strategy.get_price.call_args[0][0]
-        assert isinstance(security_arg, list), (
-            f"Expected list (pool) for batch call, got {type(security_arg)}"
-        )
-        assert security_arg == pool
+        assert strategy.get_price.call_count == 3
+        called_etfs = [c[0][0] for c in strategy.get_price.call_args_list]
+        assert called_etfs == pool
 
     def test_passes_panel_false(self, strategy, mock_g):
         """整池拉取时 get_price 必须传 panel=False。"""
@@ -1392,7 +1376,7 @@ class TestFetchField:
         assert mock_g.etf_pool[1] in result.columns
 
     def test_full_integration_with_new_fetch_pattern(self, strategy, mock_g):
-        """完整集成验证：weekly_check 使用新的逐 ETF 拉取模式不崩溃。"""
+        """完整集成验证：weekly_check 使用逐 ETF 拉取模式不崩溃。"""
         params = strategy.snapshot_params()
         n_days = 800
         rng = np.random.default_rng(42)
@@ -1428,29 +1412,10 @@ class TestFetchField:
 
         strategy.weekly_check(context)
 
-        assert strategy.get_price.call_count == 4
+        # 4 字段 × 3 ETF = 12 次调用
+        assert strategy.get_price.call_count == 12
         for call_args in strategy.get_price.call_args_list:
             assert call_args[1].get('panel') is False
-
-    def test_multiindex_columns_handling(self, strategy, mock_g):
-        """MultiIndex columns 时 fetch_field 应调用 xs 提取子字段。"""
-        params = strategy.snapshot_params()
-        # 构造 MultiIndex columns (field, etf)
-        pool = mock_g.etf_pool
-        dates = pd.date_range('2020-01-01', periods=10, freq='B')
-        multi_cols = pd.MultiIndex.from_product([['close'], pool])
-        multi_df = pd.DataFrame(
-            np.random.randn(10, 3), index=dates, columns=multi_cols
-        )
-
-        # 让 get_price 返回 MultiIndex DataFrame
-        strategy.get_price.side_effect = None
-        strategy.get_price.return_value = multi_df
-
-        result = strategy.fetch_field(pool, 'close', 100, params)
-        assert isinstance(result, pd.DataFrame)
-        assert not isinstance(result.columns, pd.MultiIndex)
-        assert list(result.columns) == pool
 
     def test_get_price_returns_none_returns_empty_dataframe(self, strategy, mock_g):
         """get_price 返回 None 时 fetch_field 应返回 columns=pool 的空 DataFrame。"""

@@ -62,7 +62,7 @@ python -m scripts.path_tools.refactor move old/path.md new/path.md
 
 1. 在本地修改策略与测试代码。
 2. 执行本地校验（语法/单测）。
-3. 通过浏览器上传到聚宽，执行云端回测。
+3. 通过 `jq-auto` CLI 上传到聚宽并执行云端回测（入口：`scripts/jq-auto.py`）。
 4. 分析回测结果，记录在策略目录文档中。
 5. 必要时进入模拟交易观察，再进行下一轮迭代。
 
