@@ -136,15 +136,15 @@ class TestSetParameter:
         )
         assert g.live_days >= max_window
 
-    def test_fq_mode_defaults_to_pre(self, strategy):
-        """R4: fq_mode 默认为 'pre'，云端 A/B 测试时可改为 None。"""
+    def test_fq_mode_defaults_to_none(self, strategy):
+        """fq_mode 默认为 None（不复权），经 FQ A/B 对比验证 fq='pre' 对场内基金不可靠。"""
         strategy.set_parameter(strategy)
-        assert strategy.g.fq_mode == 'pre'
+        assert strategy.g.fq_mode is None
 
-    def test_use_real_price_defaults_to_true(self, strategy):
-        """R4: use_real_price 默认为 True，云端 A/B 测试时可改为 False。"""
+    def test_use_real_price_defaults_to_false(self, strategy):
+        """use_real_price 默认为 False，配合 fq=None 使用。"""
         strategy.set_parameter(strategy)
-        assert strategy.g.use_real_price is True
+        assert strategy.g.use_real_price is False
 
 
 class TestInitialize:
@@ -154,7 +154,7 @@ class TestInitialize:
         context = SimpleNamespace()
         context.portfolio = strategy._mock_portfolio
         strategy.initialize(context)
-        strategy.set_option.assert_any_call('use_real_price', True)
+        strategy.set_option.assert_any_call('use_real_price', False)
         strategy.set_option.assert_any_call('avoid_future_data', True)
 
     def test_initialize_registers_weekly_task(self, strategy):

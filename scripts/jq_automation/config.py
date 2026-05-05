@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import itertools
 import json
 import re
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -13,6 +15,13 @@ DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 class ConfigError(ValueError):
     """Raised when a scenario config is missing required fields."""
+
+
+@dataclass(frozen=True)
+class RunSpec:
+    """A single run within a scenario — one parameter combination."""
+    label: str
+    params_diff: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -30,7 +39,43 @@ class ScenarioConfig:
     edit_url: str | None = None
     estimated_minutes: float = 0.0
     run_id: str | None = None
+    params_base: dict[str, Any] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
+
+    def expand_runs(self) -> list[RunSpec]:
+        """Return the list of runs for this scenario.
+
+        If the scenario config contains a 'sweep' block, expand it into
+        individual RunSpec entries.  Otherwise return a single default run.
+        """
+        sweep = self.raw.get("sweep")
+        if not sweep:
+            label = "default"
+            params_diff = _dictify(self.raw.get("params_diff"))
+            if not params_diff and self.params_base:
+                label = "baseline"
+            return [RunSpec(label=label, params_diff=params_diff)]
+        return _expand_sweep(sweep)
+
+    def for_run(self, run_spec: RunSpec, run_id: str | None = None) -> "ScenarioConfig":
+        """Derive a single-run config for one sweep combination."""
+        return ScenarioConfig(
+            strategy_file=self.strategy_file,
+            strategy=self.strategy,
+            scenario_id=self.scenario_id,
+            start_date=self.start_date,
+            end_date=self.end_date,
+            capital=self.capital,
+            frequency=self.frequency,
+            py_version=self.py_version,
+            batch_id=self.batch_id,
+            strategy_name=self.strategy_name,
+            edit_url=self.edit_url,
+            estimated_minutes=self.estimated_minutes,
+            run_id=run_id or self.run_id,
+            params_base={**self.params_base, **run_spec.params_diff},
+            raw={**self.raw, "_run_label": run_spec.label, "_run_params_diff": run_spec.params_diff},
+        )
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any], base_dir: Path | None = None) -> "ScenarioConfig":
@@ -70,6 +115,7 @@ class ScenarioConfig:
             edit_url=_none_or_str(data.get("edit_url")),
             estimated_minutes=float(data.get("estimated_minutes") or data.get("estimated_compute_minutes") or 0),
             run_id=_none_or_str(data.get("run_id")),
+            params_base=_dictify(data.get("params_base")),
             raw=dict(data),
         )
 
@@ -98,6 +144,38 @@ def load_config_mapping(path: str | Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ConfigError("Scenario config must contain a JSON/YAML object")
     return data
+
+
+def _expand_sweep(sweep: dict[str, Any]) -> list[RunSpec]:
+    """Expand a sweep definition into individual RunSpec entries."""
+    strategy = sweep.get("strategy", "grid")
+    if strategy == "grid":
+        dimensions = sweep["dimensions"]
+        if not isinstance(dimensions, dict) or not dimensions:
+            raise ConfigError("sweep.strategy=grid requires non-empty dimensions dict")
+        keys = list(dimensions.keys())
+        values = [dimensions[k] for k in keys]
+        result = []
+        for combo in itertools.product(*values):
+            params = dict(zip(keys, combo))
+            label = "_".join(f"{k}={v}" for k, v in params.items())
+            result.append(RunSpec(label=label, params_diff=params))
+        return result
+    if strategy == "list":
+        combinations = sweep.get("combinations")
+        if not isinstance(combinations, list) or not combinations:
+            raise ConfigError("sweep.strategy=list requires non-empty combinations list")
+        return [
+            RunSpec(label=c["label"], params_diff=dict(c.get("params", {})))
+            for c in combinations
+        ]
+    raise ConfigError(f"Unknown sweep strategy: {strategy}")
+
+
+def _dictify(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    return {}
 
 
 def _validate_date(name: str, value: str) -> str:

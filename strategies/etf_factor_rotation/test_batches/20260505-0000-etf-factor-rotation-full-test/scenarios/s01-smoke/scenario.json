@@ -1,0 +1,13 @@
+{
+  "strategy_file": "d:/My Project/Quant Trading/strategies/etf_factor_rotation/etf_factor_rotation.py",
+  "scenario_id": "s01-smoke",
+  "start_date": "2026-04-01",
+  "end_date": "2026-04-30",
+  "capital": 100000,
+  "estimated_minutes": 5,
+  "batch_id": "20260505-0000-etf-factor-rotation-full-test",
+  "note": "Quick backtest (Ctrl+Alt+B) on editor page, no separate backtestId.",
+  "params_diff": {
+    "note": "使用策略文件默认参数（当时默认为 use_real_price=True, fq_mode='pre'）"
+  }
+}

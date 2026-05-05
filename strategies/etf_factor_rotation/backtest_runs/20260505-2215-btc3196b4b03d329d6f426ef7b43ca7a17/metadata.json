@@ -7,16 +7,16 @@
   "end_date_requested": "",
   "end_date_effective": "2026-04-30",
   "capital": 100000,
-  "backtest_id": "7a98269d2440d36f387fb95085dfb39d",
-  "backtest_url": "https://www.joinquant.com/algorithm/index/edit?algorithmId=0a555d56d87886f1c9d8fb27dc63bb61",
-  "generated_at": "2026-05-05T09:33:23.113Z",
+  "backtest_id": "137e145bd8820cd978e6a3fcc78cbeab",
+  "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=c3196b4b03d329d6f426ef7b43ca7a17",
+  "generated_at": "2026-05-05T14:15:46.999Z",
   "extraction_method": "joinquant_detail_readonly_api",
   "export_used": false,
   "frequency": "每天",
   "py_version": "Python3",
   "params": {
-    "use_real_price": true,
-    "fq_mode": "pre",
+    "use_real_price": false,
+    "fq_mode": null,
     "etf_pool": ["159819.XSHE", "513100.XSHG", "518880.XSHG"],
     "TopK": 2,
     "MA_long": 120,
@@ -32,6 +32,6 @@
     "MaxWeight": 0.60, "MinWeight": 0.05,
     "MaxTotalWeight": 1.0,
     "RebalanceThreshold": 0.03,
-    "note": "当时默认参数。此 run 因 fq='pre' 导致 get_price 返回空数据，全年零交易。"
+    "note": "不复权对比组 (FQ-B)。唯一差异为 use_real_price=False, fq=None，其余默认。"
   }
 }

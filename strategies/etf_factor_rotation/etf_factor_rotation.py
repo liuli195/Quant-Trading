@@ -226,11 +226,11 @@ def set_parameter(context):
     g.MaxTotalWeight = 1.0
 
     # ---- 数据与基准 ----
-    # 复权模式：场内基金拆分/合并披露可能不完整，JoinQuant 不建议给含场内基金
-    # 的策略开启动态复权。如需验证，将 use_real_price 改为 False、fq_mode 改为 None
-    # 后跑云端短回测对比。
-    g.use_real_price = True
-    g.fq_mode = 'pre'       # 'pre' | 'post' | None（不复权）
+    # 复权模式：fq='pre' 在 FQ A/B 对比测试中证实对场内基金会
+    # 导致 get_price 返回空数据（2025-04~2026-04 区间复现）。
+    # 故默认关闭复权。参考 FQ comparison: R2/backtest_runs/*/report/fq-comparison.md
+    g.use_real_price = False
+    g.fq_mode = None        # 不复权（场内基金默认）
     g.live_days = max(
         g.MA_long, g.MomLong, g.RSRS_M,
         g.CrowdWindow, g.PortfolioVolWindow

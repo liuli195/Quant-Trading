@@ -1,0 +1,14 @@
+{
+  "strategy_file": "d:/My Project/Quant Trading/strategies/etf_factor_rotation/etf_factor_rotation.py",
+  "scenario_id": "s03-fq-b",
+  "start_date": "2025-04-01",
+  "end_date": "2026-04-30",
+  "capital": 100000,
+  "estimated_minutes": 20,
+  "batch_id": "20260505-0000-etf-factor-rotation-full-test",
+  "params_diff": {
+    "use_real_price": false,
+    "fq_mode": null,
+    "note": "不复权对比组。与 R1 (s02) 区间完全一致，唯一差异为复权参数。其余参数均为默认值。"
+  }
+}

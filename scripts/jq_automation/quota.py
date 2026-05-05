@@ -40,11 +40,43 @@ def save_ledger(ledger: dict[str, Any], path: str | Path | None = None) -> Path:
 
 
 def used_minutes(ledger: dict[str, Any]) -> float:
+    """Sum consumed minutes, preferring actual_minutes over estimated_minutes.
+
+    ``actual_minutes`` is sourced from JoinQuant's /algorithm/backtest/runTimeInfo
+    (field ``needSeconds`` converted to minutes) and reflects the real CPU time
+    the platform billed, which is far more accurate than our pre-flight estimate.
+    """
     total = 0.0
     for item in ledger.get("runs", []):
         if item.get("status") not in {"failed", "cancelled"}:
-            total += float(item.get("estimated_minutes") or item.get("actual_minutes") or 0)
+            total += float(item.get("actual_minutes") or item.get("estimated_minutes") or 0)
     return total
+
+
+def update_actual_minutes(ledger: dict[str, Any], run_id: str, actual_minutes: float) -> dict[str, Any] | None:
+    """Record the actual consumed minutes for a completed run.
+
+    Call this after extracting ``needSeconds`` from the runtime API bundle.
+    """
+    for item in ledger.get("runs", []):
+        if item.get("run_id") == run_id:
+            item["actual_minutes"] = float(actual_minutes)
+            return item
+    return None
+
+
+def extract_actual_minutes_from_bundle(bundle: dict[str, Any]) -> float | None:
+    """Extract actual consumed minutes from an API bundle's runtime section.
+
+    JoinQuant's runTimeInfo API returns ``data.needSeconds`` — the precise
+    CPU-seconds consumed by the backtest.  We convert to minutes.
+    """
+    runtime = bundle.get("runtime", {})
+    data = runtime.get("data", {}) if isinstance(runtime, dict) else {}
+    need_seconds = data.get("needSeconds")
+    if isinstance(need_seconds, (int, float)) and need_seconds > 0:
+        return need_seconds / 60.0
+    return None
 
 
 def remaining_minutes(ledger: dict[str, Any]) -> float:

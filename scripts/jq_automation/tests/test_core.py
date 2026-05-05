@@ -11,7 +11,13 @@ from scripts.jq_automation.browser import CompileFailed, wait_for_compile_comple
 from scripts.jq_automation.config import ConfigError, ScenarioConfig
 from scripts.jq_automation.manifest import update_manifest
 from scripts.jq_automation.paths import extract_backtest_id, make_run_id
-from scripts.jq_automation.quota import append_quota_entry, remaining_minutes, used_minutes
+from scripts.jq_automation.quota import (
+    append_quota_entry,
+    extract_actual_minutes_from_bundle,
+    remaining_minutes,
+    update_actual_minutes,
+    used_minutes,
+)
 
 
 class CoreTests(unittest.TestCase):
@@ -79,8 +85,16 @@ class CoreTests(unittest.TestCase):
 
             updated = update_manifest(manifest_path, scenario_id="s01", run_id="run-1", status="completed")
 
-            self.assertEqual(updated["scenarios"]["s01"]["primary_run_id"], "run-1")
+            # After migration, primary_run_id should be gone, replaced by runs[]
+            self.assertNotIn("primary_run_id", updated["scenarios"]["s01"])
+            self.assertEqual(len(updated["scenarios"]["s01"]["runs"]), 1)
+            s01_run = updated["scenarios"]["s01"]["runs"][0]
+            self.assertEqual(s01_run["run_id"], "run-1")
+            self.assertEqual(s01_run["status"], "completed")
             self.assertEqual(updated["scenarios"]["s01"]["status"], "completed")
+
+            # s02 was not touched — its primary_run_id is preserved until
+            # it receives its own update_manifest call.
             self.assertEqual(updated["scenarios"]["s02"]["primary_run_id"], "old")
             self.assertIn("updated", updated)
 
@@ -91,6 +105,27 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(used_minutes(ledger), 12)
         self.assertEqual(remaining_minutes(ledger), 48)
+
+    def test_used_minutes_prefers_actual_over_estimated(self) -> None:
+        ledger = {"budget_minutes": 60, "runs": []}
+        append_quota_entry(ledger, scenario_id="s01", run_id="r1", estimated_minutes=30, status="completed")
+        update_actual_minutes(ledger, "r1", 0.16)
+        # actual 0.16 min should be used instead of estimated 30 min
+        self.assertAlmostEqual(used_minutes(ledger), 0.16)
+
+    def test_update_actual_minutes_ignores_unknown_run_id(self) -> None:
+        ledger = {"budget_minutes": 60, "runs": []}
+        self.assertIsNone(update_actual_minutes(ledger, "nonexistent", 5.0))
+
+    def test_extract_actual_minutes_from_bundle(self) -> None:
+        bundle = {"runtime": {"data": {"needSeconds": 9.63}}}
+        self.assertAlmostEqual(extract_actual_minutes_from_bundle(bundle), 9.63 / 60.0)
+
+    def test_extract_actual_minutes_handles_missing_fields(self) -> None:
+        self.assertIsNone(extract_actual_minutes_from_bundle({}))
+        self.assertIsNone(extract_actual_minutes_from_bundle({"runtime": {}}))
+        self.assertIsNone(extract_actual_minutes_from_bundle({"runtime": {"data": {}}}))
+        self.assertIsNone(extract_actual_minutes_from_bundle({"runtime": {"data": {"needSeconds": 0}}}))
 
     def test_wait_for_compile_completion_requires_cancel_cycle(self) -> None:
         page = _FakeCompilePage(

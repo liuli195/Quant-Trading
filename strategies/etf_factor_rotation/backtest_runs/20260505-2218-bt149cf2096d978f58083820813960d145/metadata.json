@@ -3,13 +3,13 @@
   "strategy_file": "",
   "strategy_dir": "",
   "start_date_requested": "",
-  "start_date_effective": "2025-04-01",
+  "start_date_effective": "2025-11-01",
   "end_date_requested": "",
   "end_date_effective": "2026-04-30",
   "capital": 100000,
-  "backtest_id": "7a98269d2440d36f387fb95085dfb39d",
-  "backtest_url": "https://www.joinquant.com/algorithm/index/edit?algorithmId=0a555d56d87886f1c9d8fb27dc63bb61",
-  "generated_at": "2026-05-05T09:33:23.113Z",
+  "backtest_id": "ef1d35b73e9ebbaa6d73542f5defbab3",
+  "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=149cf2096d978f58083820813960d145",
+  "generated_at": "2026-05-05T14:18:42.732Z",
   "extraction_method": "joinquant_detail_readonly_api",
   "export_used": false,
   "frequency": "每天",
@@ -28,10 +28,10 @@
     "CrowdWindow": 500,
     "CrowdStart": 0.60, "CrowdEnd": 0.95,
     "MinCrowdPenalty": 0.30,
-    "TargetVol": 0.12,
-    "MaxWeight": 0.60, "MinWeight": 0.05,
+    "TargetVol": 0.05,
+    "MaxWeight": 0.30, "MinWeight": 0.20,
     "MaxTotalWeight": 1.0,
     "RebalanceThreshold": 0.03,
-    "note": "当时默认参数。此 run 因 fq='pre' 导致 get_price 返回空数据，全年零交易。"
+    "note": "边界约束测试。变更: MaxWeight=0.30, MinWeight=0.20, TargetVol=0.05。fq 使用当时默认值 'pre'（现已改为 None）。"
   }
 }

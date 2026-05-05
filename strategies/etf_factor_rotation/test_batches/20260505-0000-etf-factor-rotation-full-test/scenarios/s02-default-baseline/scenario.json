@@ -1,0 +1,12 @@
+{
+  "strategy_file": "d:/My Project/Quant Trading/strategies/etf_factor_rotation/etf_factor_rotation.py",
+  "scenario_id": "s02-default-baseline",
+  "start_date": "2025-04-01",
+  "end_date": "2026-04-30",
+  "capital": 100000,
+  "estimated_minutes": 20,
+  "batch_id": "20260505-0000-etf-factor-rotation-full-test",
+  "params_diff": {
+    "note": "使用策略文件默认参数（当时默认为 use_real_price=True, fq_mode='pre'）。此 run 因 fq='pre' 导致 get_price 返回空数据，全年零交易，需用 fq=None 重跑。"
+  }
+}

@@ -11,8 +11,8 @@ from typing import Any
 from .artifacts import save_api_bundle, save_dom_tabs
 from .browser import AutomationError, CompileFailed, JoinQuantBrowser
 from .config import ConfigError, ScenarioConfig, load_config_mapping, load_scenario_config
-from .local import LocalCheckError, compile_strategy, generate_upload_file
-from .manifest import ManifestError, load_manifest, update_manifest
+from .local import LocalCheckError, apply_params_overrides, compile_strategy, generate_upload_file
+from .manifest import ManifestError, list_pending_runs, load_manifest, update_manifest
 from .paths import (
     default_chrome_user_data_dir,
     extract_backtest_id,
@@ -24,10 +24,12 @@ from .quota import (
     QuotaError,
     append_quota_entry,
     assert_quota_available,
+    extract_actual_minutes_from_bundle,
     ledger_path_for,
     load_ledger,
     remaining_minutes,
     save_ledger,
+    update_actual_minutes,
 )
 
 
@@ -130,38 +132,106 @@ def cmd_fetch(args: argparse.Namespace) -> int:
 def cmd_batch(args: argparse.Namespace) -> int:
     manifest_path = Path(args.manifest_json).resolve()
     manifest = load_manifest(manifest_path)
-    scenario_filter = set(args.scenario or [])
-    scenario_ids = [
-        scenario_id
-        for scenario_id, info in manifest.get("scenarios", {}).items()
-        if (not scenario_filter or scenario_id in scenario_filter) and info.get("status") != "completed"
-    ]
-    if not scenario_ids:
-        print("No pending scenarios selected.")
+    scenario_filter = set(args.scenario) if args.scenario else None
+
+    # Resolve pending runs — supports both old (primary_run_id) and new (runs[])
+    pending = list_pending_runs(manifest, scenario_filter)
+    if not pending:
+        print("No pending runs selected.")
         return 0
 
-    print("Selected scenarios:")
-    for scenario_id in scenario_ids:
-        print(f"  - {scenario_id}")
-    if not args.yes and not _confirm("Type RUN to start the selected JoinQuant cloud scenarios: "):
+    print("Selected runs:")
+    for sid, run_entry in pending:
+        label = run_entry.get("label") if run_entry else "(unexpanded)"
+        print(f"  {sid}/{label}")
+    if not args.yes and not _confirm("Type RUN to start the selected JoinQuant cloud runs: "):
         print("Cancelled.")
         return 1
 
-    for scenario_id in scenario_ids:
-        scenario_path = manifest_path.parent / "scenarios" / scenario_id / "scenario.json"
+    for sid, run_entry in pending:
+        scenario_path = manifest_path.parent / "scenarios" / sid / "scenario.json"
         if not scenario_path.is_file():
-            update_manifest(manifest_path, scenario_id=scenario_id, status="failed", error=f"Missing {scenario_path}")
+            label = run_entry.get("label", "default") if run_entry else "default"
+            update_manifest(manifest_path, scenario_id=sid,
+                            label=label, status="failed",
+                            error=f"Missing {scenario_path}")
             print(f"Missing scenario config: {scenario_path}", file=sys.stderr)
             continue
+
         data = load_config_mapping(scenario_path)
         data.setdefault("batch_id", manifest.get("batch_id"))
         data.setdefault("strategy", manifest.get("strategy"))
-        data.setdefault("scenario_id", scenario_id)
+        data.setdefault("scenario_id", sid)
         config = ScenarioConfig.from_mapping(data, base_dir=scenario_path.parent)
-        result = asyncio.run(_run_scenario(args, config, already_confirmed=True, manifest_path=manifest_path))
-        if result:
-            return result
+
+        # If the scenario isn't expanded yet, expand from config now
+        if run_entry is None:
+            for run_spec in config.expand_runs():
+                update_manifest(manifest_path, scenario_id=sid,
+                                label=run_spec.label,
+                                params_diff=run_spec.params_diff,
+                                status="pending")
+            # Reload manifest each iteration to avoid stale run status
+            manifest = load_manifest(manifest_path)
+            for _sid, _entry in list_pending_runs(manifest, {sid}):
+                if _entry is None:
+                    continue
+                if _run_one(args, manifest_path, _sid, _entry, config):
+                    return 1
+                manifest = load_manifest(manifest_path)  # refresh after each run
+            continue
+
+        if _run_one(args, manifest_path, sid, run_entry, config):
+            return 1
     return 0
+
+
+def _run_one(args: argparse.Namespace, manifest_path: Path, sid: str,
+             run_entry: dict[str, Any], config: ScenarioConfig) -> int:
+    """Execute a single run within a batch scenario."""
+    merged_params = {**config.params_base, **run_entry.get("params_diff", {})}
+
+    tmp_file = None
+    try:
+        if merged_params:
+            tmp_file = apply_params_overrides(config.strategy_file, merged_params)
+            run_config = ScenarioConfig(
+                strategy_file=tmp_file,
+                strategy=config.strategy,
+                scenario_id=config.scenario_id,
+                start_date=config.start_date,
+                end_date=config.end_date,
+                capital=config.capital,
+                frequency=config.frequency,
+                py_version=config.py_version,
+                batch_id=config.batch_id,
+                strategy_name=config.strategy_name,
+                edit_url=config.edit_url,
+                estimated_minutes=config.estimated_minutes,
+                raw={**config.raw, "_run_label": run_entry.get("label"),
+                     "_run_params_diff": run_entry.get("params_diff", {})},
+            )
+        else:
+            run_config = config
+
+        label = run_entry.get("label", "default")
+        update_manifest(manifest_path, scenario_id=sid, label=label,
+                        params_diff=run_entry.get("params_diff"),
+                        status="in_progress")
+
+        result = asyncio.run(_run_scenario(args, run_config, already_confirmed=True,
+                                           manifest_path=manifest_path,
+                                           manifest_label=label))
+        return result or 0
+    except Exception as exc:
+        label = run_entry.get("label", "default")
+        update_manifest(manifest_path, scenario_id=sid, label=label,
+                        status="failed", error=str(exc))
+        print(f"Run failed: {sid}/{label}: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        if tmp_file and tmp_file.exists():
+            tmp_file.unlink()
 
 
 async def _upload_code(args: argparse.Namespace, strategy_name: str, code: str, *, compile_after: bool) -> int:
@@ -186,6 +256,7 @@ async def _run_scenario(
     *,
     already_confirmed: bool,
     manifest_path: Path | None = None,
+    manifest_label: str | None = None,
 ) -> int:
     compile_strategy(config.strategy_file)
     upload_path = generate_upload_file(config.strategy_file)
@@ -193,7 +264,6 @@ async def _run_scenario(
 
     ledger_path = ledger_path_for()
     ledger = load_ledger(ledger_path)
-    assert_quota_available(ledger, config.estimated_minutes)
     _print_run_plan(config, ledger_path, remaining_minutes(ledger), upload_path)
     if not already_confirmed and not _confirm("Type RUN to start this formal JoinQuant cloud backtest: "):
         print("Cancelled.")
@@ -207,6 +277,25 @@ async def _run_scenario(
             slow_mo=args.slow_mo,
         ) as browser:
             await browser.open_strategy_editor(config.strategy_name or config.strategy_file.stem, edit_url=config.edit_url)
+
+            # --- read actual daily quota from JoinQuant's editor page ---
+            daily_usage = await browser.read_daily_runtime_usage()
+            if daily_usage["used_minutes_today"] is not None and daily_usage["free_limit_minutes"] is not None:
+                actual_remaining = daily_usage["free_limit_minutes"] - daily_usage["used_minutes_today"]
+                print(f"JoinQuant daily usage: {daily_usage['used_minutes_today']:g} / {daily_usage['free_limit_minutes']:g} min (remaining {actual_remaining:g} min)")
+                if actual_remaining <= 0:
+                    raise QuotaError(
+                        f"JoinQuant daily free quota exhausted "
+                        f"({daily_usage['used_minutes_today']:g} / {daily_usage['free_limit_minutes']:g} min)"
+                    )
+                if config.estimated_minutes and config.estimated_minutes > actual_remaining:
+                    raise QuotaError(
+                        f"Estimated {config.estimated_minutes:g} min exceeds "
+                        f"JoinQuant remaining {actual_remaining:g} min"
+                    )
+            else:
+                # Fall back to local ledger when page parsing fails
+                assert_quota_available(ledger, config.estimated_minutes)
             await browser.write_strategy_code(code)
             await browser.click_compile()
             await browser.wait_compile_complete()
@@ -230,17 +319,28 @@ async def _run_scenario(
                 run_id = config.run_id or make_run_id(backtest_id)
             if fetched.method == "api":
                 run_dir = save_api_bundle(fetched.payload, strategy=config.strategy, run_id=run_id)
+                actual_minutes = extract_actual_minutes_from_bundle(fetched.payload)
             else:
                 run_dir = save_dom_tabs(fetched.payload, strategy=config.strategy, run_id=run_id)
+                actual_seconds = await browser.fetch_runtime_seconds()
+                actual_minutes = (actual_seconds / 60.0) if actual_seconds else None
+
+            if actual_minutes is not None:
+                update_actual_minutes(ledger, run_id, actual_minutes)
+                print(f"JoinQuant actual compute time: {actual_minutes:.2f} min")
     except Exception as exc:
         manifest_file = manifest_path or _config_manifest_path(config)
         if manifest_file and manifest_file.is_file():
-            update_manifest(manifest_file, scenario_id=config.scenario_id, status="failed", error=str(exc))
+            update_manifest(manifest_file, scenario_id=config.scenario_id,
+                            label=manifest_label, status="failed", error=str(exc))
         raise
 
     manifest_file = manifest_path or _config_manifest_path(config)
     if manifest_file and manifest_file.is_file():
-        update_manifest(manifest_file, scenario_id=config.scenario_id, run_id=run_id, status="completed")
+        params_diff = config.raw.get("_run_params_diff")
+        update_manifest(manifest_file, scenario_id=config.scenario_id,
+                        run_id=run_id, label=manifest_label,
+                        params_diff=params_diff, status="completed")
 
     _set_quota_status(ledger, run_id, "completed")
     save_ledger(ledger, ledger_path)

@@ -1,0 +1,17 @@
+{
+  "strategy_file": "d:/My Project/Quant Trading/strategies/etf_factor_rotation/etf_factor_rotation.py",
+  "scenario_id": "s04-test-params",
+  "start_date": "2025-11-01",
+  "end_date": "2026-04-30",
+  "capital": 100000,
+  "estimated_minutes": 8,
+  "batch_id": "20260505-0000-etf-factor-rotation-full-test",
+  "params_diff": {
+    "MaxWeight": 0.30,
+    "MinWeight": 0.20,
+    "TargetVol": 0.05,
+    "use_real_price": true,
+    "fq_mode": "pre",
+    "note": "边界约束测试。fq_mode 使用当时默认值 'pre'（R3 运行后策略默认值已改为 fq=None）。其余参数均为默认值。"
+  }
+}

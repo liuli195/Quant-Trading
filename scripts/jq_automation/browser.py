@@ -209,6 +209,44 @@ class JoinQuantBrowser:
         page = self._require_page()
         return extract_backtest_id(page.url)
 
+    async def read_daily_runtime_usage(self) -> dict[str, Any]:
+        """Read today's actual used time and free limit from the editor page."""
+        page = self._require_page()
+        popover_text = await page.evaluate("""() => {
+            const el = document.querySelector('.run-time-popover-html');
+            return el ? el.innerText : '';
+        }""")
+        import re
+        used_match = re.search(r"今日已运行时长[：:]\s*([\d.]+)\s*分钟", popover_text)
+        free_match = re.search(r"免费可用时长[：:]\s*([\d.]+)\s*分钟", popover_text)
+        return {
+            "used_minutes_today": float(used_match.group(1)) if used_match else None,
+            "free_limit_minutes": float(free_match.group(1)) if free_match else None,
+        }
+
+    async def fetch_runtime_seconds(self) -> float | None:
+        """Fetch the actual compute seconds for the current backtest from runTimeInfo."""
+        page = self._require_page()
+        try:
+            result = await page.evaluate("""async () => {
+                const backtestId = window.backtestId
+                    || new URLSearchParams(location.search).get('backtestId');
+                if (!backtestId) return null;
+                const resp = await fetch(
+                    '/algorithm/backtest/runTimeInfo?backtestId=' + backtestId + '&ajax=1',
+                    { credentials: 'include',
+                      headers: { 'X-Requested-With': 'XMLHttpRequest' } }
+                );
+                if (!resp.ok) return null;
+                const json = await resp.json();
+                return json?.data?.needSeconds ?? null;
+            }""")
+            if isinstance(result, (int, float)) and result > 0:
+                return float(result)
+        except Exception:
+            pass
+        return None
+
     async def _install_extract_contract(self) -> None:
         page = self._require_page()
         source = self.snippet_reader("extract.js")

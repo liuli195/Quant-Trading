@@ -4,13 +4,76 @@
   "created": "2026-05-05T00:00:00",
   "status": "in_progress",
   "scenarios": {
-    "s01-smoke": { "primary_run_id": null, "status": "completed", "note": "Quick backtest (Ctrl+Alt+B) on editor page, 2026-04-01~2026-04-30. No separate backtestId." },
-    "s02-default-baseline": { "primary_run_id": "20260505-0933-bt7a98269d2440d36f387fb95085dfb39d", "status": "completed" },
-    "s03-fq-b": { "primary_run_id": null, "status": "pending" },
-    "s04-test-params": { "primary_run_id": null, "status": "pending" },
-    "s05-long-baseline": { "primary_run_id": null, "status": "pending" },
-    "s06-profile-off": { "primary_run_id": null, "status": "pending" },
-    "s07-high-window": { "primary_run_id": null, "status": "pending" },
-    "s08-extended-pool": { "primary_run_id": null, "status": "pending" }
-  }
+    "s01-smoke": {
+      "status": "completed",
+      "runs": [
+        {
+          "run_id": null,
+          "label": "quick_backtest",
+          "params_diff": {},
+          "status": "completed",
+          "note": "Quick backtest (Ctrl+Alt+B) on editor page, 2026-04-01~2026-04-30."
+        }
+      ]
+    },
+    "s02-default-baseline": {
+      "status": "completed",
+      "runs": [
+        {
+          "run_id": "20260505-0933-bt7a98269d2440d36f387fb95085dfb39d",
+          "label": "R1_baseline",
+          "params_diff": {
+            "note": "当时默认: use_real_price=True, fq=pre。此 run 因 fq=pre 导致 get_price 返回空数据，全年零交易。"
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    "s03-fq-b": {
+      "status": "completed",
+      "runs": [
+        {
+          "run_id": "20260505-2215-btc3196b4b03d329d6f426ef7b43ca7a17",
+          "label": "fq=None",
+          "params_diff": {
+            "use_real_price": false,
+            "fq_mode": null
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    "s04-test-params": {
+      "status": "completed",
+      "runs": [
+        {
+          "run_id": "20260505-2218-bt149cf2096d978f58083820813960d145",
+          "label": "test_params",
+          "params_diff": {
+            "MaxWeight": 0.30,
+            "MinWeight": 0.20,
+            "TargetVol": 0.05
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    "s05-long-baseline": {
+      "status": "pending",
+      "runs": []
+    },
+    "s06-profile-off": {
+      "status": "pending",
+      "runs": []
+    },
+    "s07-high-window": {
+      "status": "pending",
+      "runs": []
+    },
+    "s08-extended-pool": {
+      "status": "pending",
+      "runs": []
+    }
+  },
+  "updated": "2026-05-05T23:05:00"
 }
