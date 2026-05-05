@@ -105,7 +105,12 @@
       "Bash(Copy-Item \"d:\\\\My Project\\\\Quant Trading\\\\.claude\\\\skills\\\\joinquant-backtest\\\\SKILL.md\" \"d:\\\\My Project\\\\Quant Trading\\\\.agents\\\\skills\\\\joinquant-backtest\\\\SKILL.md\" -Force)",
       "PowerShell(python -m py_compile strategies/etf_factor_rotation/etf_factor_rotation.py)",
       "PowerShell(python -m py_compile strategies/etf_factor_rotation/tests/test_etf_factor_rotation.py)",
-      "PowerShell(python -m py_compile strategies/etf_factor_rotation/tests/conftest.py)"
+      "PowerShell(python -m py_compile strategies/etf_factor_rotation/tests/conftest.py)",
+      "Bash(pip --version)",
+      "PowerShell(pip show pyyaml)",
+      "PowerShell(.venv\\\\Scripts\\\\pip.exe install pyyaml)",
+      "PowerShell(.venv\\\\Scripts\\\\pip.exe show pyyaml)",
+      "PowerShell(.venv\\\\Scripts\\\\python.exe -c \"import yaml; print\\('yaml version:', yaml.__version__\\)\")"
     ]
   },
   "outputStyle": "Explanatory"

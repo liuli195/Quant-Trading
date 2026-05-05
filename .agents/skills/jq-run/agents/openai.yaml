@@ -1,0 +1,4 @@
+interface:
+  display_name: "JQ 云端回测"
+  short_description: "上传聚宽、编译、正式回测并保存结果。"
+  default_prompt: "/jq-run strategies/<strategy>/<strategy>.py"

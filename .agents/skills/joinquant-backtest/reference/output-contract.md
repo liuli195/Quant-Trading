@@ -105,7 +105,7 @@ strategies/<strategy>/backtest_runs/<run_id>/
 
 由 `save_backtest_data.py` 根据已落盘数据生成，职责是汇总本次回测的核心指标、数据覆盖和提取方式。
 
-策略分析与性能分析报告不在本技能产物范围内，基于已下载的 `api_export.json` 单独运行生成，模板参见 [templates/](../templates/) <!-- pathref: agents_joinquant_skill/templates/ -->。
+策略分析与性能分析报告不在本技能产物范围内，基于已下载的 `api_export.json` 单独运行生成，模板参见 [templates](../templates) <!-- pathref: agents_joinquant_skill/templates/ -->。
 
 ## Markdown 产物约定
 
