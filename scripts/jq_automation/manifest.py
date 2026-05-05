@@ -129,3 +129,76 @@ def _find_run(runs: list[dict[str, Any]], label: str) -> dict[str, Any] | None:
         if r.get("label") == label:
             return r
     return None
+
+
+# ---------------------------------------------------------------------------
+# AB experiment manifest helpers
+# ---------------------------------------------------------------------------
+
+
+def get_ab_experiment(manifest: dict[str, Any], experiment_id: str) -> dict[str, Any] | None:
+    """Return the AB experiment entry from a manifest, or None."""
+    return manifest.get("ab_experiments", {}).get(experiment_id)
+
+
+def update_ab_experiment(
+    path: str | Path,
+    experiment_id: str,
+    variant_label: str,
+    **fields: Any,
+) -> dict[str, Any]:
+    """Update a single variant entry inside an AB experiment in the manifest."""
+    manifest_path = Path(path)
+    data = load_manifest(manifest_path)
+    ab_exps = data.setdefault("ab_experiments", {})
+    exp = ab_exps.setdefault(experiment_id, {
+        "status": "pending",
+        "baseline": "",
+        "controls": [],
+        "config_hash": "",
+        "variants": [],
+        "upload_session": {},
+    })
+    variants = exp.setdefault("variants", [])
+
+    entry = None
+    for v in variants:
+        if v.get("label") == variant_label:
+            entry = v
+            break
+    if entry is None:
+        entry = {"label": variant_label, "status": "pending"}
+        # Inherit upload_index from number of existing variants
+        entry["upload_index"] = len(variants) + 1
+        variants.append(entry)
+
+    for key, value in fields.items():
+        entry[key] = value
+
+    _aggregate_ab_experiment_status(exp)
+    data["updated"] = datetime.now().isoformat(timespec="seconds")
+    manifest_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    return exp
+
+
+def sync_ab_experiment_status(manifest: dict[str, Any], experiment_id: str) -> dict[str, Any] | None:
+    """Recompute the experiment-level status from its variants."""
+    exp = manifest.get("ab_experiments", {}).get(experiment_id)
+    if not exp:
+        return None
+    _aggregate_ab_experiment_status(exp)
+    return exp
+
+
+def _aggregate_ab_experiment_status(exp: dict[str, Any]) -> dict[str, Any]:
+    """Aggregate variant statuses into experiment status (mutates and returns)."""
+    statuses = {v.get("status") for v in exp.get("variants", [])}
+    if "failed" in statuses:
+        exp["status"] = "failed"
+    elif "in_progress" in statuses or "started" in statuses:
+        exp["status"] = "in_progress"
+    elif all(s == "completed" for s in statuses) and statuses:
+        exp["status"] = "completed"
+    else:
+        exp["status"] = "pending"
+    return exp

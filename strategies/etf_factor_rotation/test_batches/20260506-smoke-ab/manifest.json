@@ -1,0 +1,77 @@
+{
+  "ab_experiments": {
+    "smoke-params-ab": {
+      "status": "completed",
+      "baseline": "main_branch",
+      "controls": [
+        "main_branch"
+      ],
+      "config_hash": "sha256:97360d9596edcc8242ff2aca4fc3b8f8e25fe39a8fe17768b6a4d614a55e3795",
+      "variants": [
+        {
+          "label": "main_branch",
+          "scenario_id": "ab-smoke-params-ab-main_branch",
+          "run_label": "main_branch",
+          "run_id": "20260506-0314-bt30cba1413b71d2db54bf0af0ab15eb9b",
+          "role": "control",
+          "is_baseline": true,
+          "upload_index": 1,
+          "code_source": {
+            "type": "git",
+            "ref": "main",
+            "commit": "bf3c97ba07f5a38d64452abb79813a93a24a6a74",
+            "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+          },
+          "params_mode": "params_diff",
+          "params_diff": {
+            "TopK": 2,
+            "TargetVol": 0.12
+          },
+          "scan_source": null,
+          "uploaded_code_sha256": null,
+          "backtest_id": "30cba1413b71d2db54bf0af0ab15eb9b",
+          "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=30cba1413b71d2db54bf0af0ab15eb9b",
+          "status": "completed"
+        },
+        {
+          "label": "feature_branch",
+          "scenario_id": "ab-smoke-params-ab-feature_branch",
+          "run_label": "feature_branch",
+          "run_id": "20260506-0315-bt640080d57fef5127e820a0613bea2d2d",
+          "role": "variant",
+          "is_baseline": false,
+          "upload_index": 2,
+          "code_source": {
+            "type": "git",
+            "ref": "feature/基于GIT的AB测试",
+            "commit": "bf3c97ba07f5a38d64452abb79813a93a24a6a74",
+            "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+          },
+          "params_mode": "params_diff",
+          "params_diff": {
+            "TopK": 3,
+            "TargetVol": 0.12
+          },
+          "scan_source": null,
+          "uploaded_code_sha256": null,
+          "backtest_id": "640080d57fef5127e820a0613bea2d2d",
+          "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=640080d57fef5127e820a0613bea2d2d",
+          "status": "completed"
+        }
+      ],
+      "upload_session": {
+        "session_started_at": "2026-05-06T03:13:54",
+        "session_finished_at": "2026-05-06T03:15:35",
+        "strategy_name": "etf_factor_rotation",
+        "edit_url": null,
+        "candidate_order": [
+          "main_branch",
+          "feature_branch"
+        ]
+      }
+    }
+  },
+  "batch_id": "20260506-smoke-ab",
+  "strategy": "etf_factor_rotation",
+  "updated": "2026-05-06T03:15:35"
+}

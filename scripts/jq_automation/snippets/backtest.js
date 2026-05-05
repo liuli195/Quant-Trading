@@ -14,19 +14,20 @@ function setInputValue(id, value, needInputEvent) {
 
 function normalizeFrequency(raw) {
   var v = String(raw || "").trim().toLowerCase();
-  if (["每天", "daily", "day", "1d", "d"].indexOf(v) !== -1) return "1d";
-  if (["每分钟", "minute", "1m", "m"].indexOf(v) !== -1) return "1m";
-  if (["每五分钟", "5m", "5min"].indexOf(v) !== -1) return "5m";
-  if (["每十五分钟", "15m", "15min"].indexOf(v) !== -1) return "15m";
-  if (["每三十分钟", "30m", "30min"].indexOf(v) !== -1) return "30m";
-  if (["每小时", "hourly", "60m", "1h", "h"].indexOf(v) !== -1) return "60m";
+  if (["day", "daily", "1d", "d"].indexOf(v) !== -1) return "day";
+  if (["min", "minute", "1m", "m"].indexOf(v) !== -1) return "minute";
+  if (["tick"].indexOf(v) !== -1) return "tick";
+  if (["5m", "5min"].indexOf(v) !== -1) return "5m";
+  if (["15m", "15min"].indexOf(v) !== -1) return "15m";
+  if (["30m", "30min"].indexOf(v) !== -1) return "30m";
+  if (["60m", "60min", "1h", "h", "hourly"].indexOf(v) !== -1) return "60m";
   return raw ? v : "";
 }
 
 function normalizePyVersion(raw) {
   var v = String(raw || "").trim().toLowerCase();
-  if (["python3", "py3", "3", "python 3"].indexOf(v) !== -1) return "Python3";
-  if (["python2", "py2", "2", "python 2"].indexOf(v) !== -1) return "Python2";
+  if (["python3", "py3", "3", "python 3"].indexOf(v) !== -1) return "3";
+  if (["python2", "py2", "2", "python 2"].indexOf(v) !== -1) return "2";
   return raw || "";
 }
 
@@ -49,13 +50,68 @@ function applySelectValue(selectors, normalizedValue, rawValue) {
   return false;
 }
 
+function _clickSelectpickerOption(freqHiddenInput, normalizedValue) {
+  // Find the Bootstrap selectpicker container near the hidden frequency input.
+  var container = freqHiddenInput.parentElement;
+  while (container && container.tagName !== "BODY") {
+    var btn = container.querySelector("button.dropdown-toggle, button.selectpicker");
+    if (btn) {
+      // Open the dropdown if not already open.
+      if (!btn.parentElement.classList.contains("open")) {
+        btn.click();
+      }
+      // Find and click the matching option.
+      var dropdown = container.querySelector("ul.dropdown-menu, div.dropdown-menu");
+      if (dropdown) {
+        var items = dropdown.querySelectorAll("li");
+        for (var i = 0; i < items.length; i++) {
+          var text = (items[i].textContent || "").trim().toLowerCase();
+          if (text === normalizedValue || items[i].classList.contains("selected")) {
+            items[i].querySelector("a")?.click();
+            return true;
+          }
+        }
+        // Fallback: click the first non-separator item that contains matching text
+        for (var j = 0; j < items.length; j++) {
+          var t = (items[j].textContent || "").trim().toLowerCase();
+          if (t.indexOf(normalizedValue) !== -1 || normalizedValue.indexOf(t) !== -1) {
+            items[j].querySelector("a")?.click();
+            return true;
+          }
+        }
+      }
+      // Close dropdown if we couldn't find the option.
+      if (btn.parentElement.classList.contains("open")) {
+        btn.click();
+      }
+      break;
+    }
+    container = container.parentElement;
+  }
+  return false;
+}
+
 function applyFrequency(freq) {
   if (!freq) return;
   var normalized = normalizeFrequency(freq);
   if (!normalized) return;
+
+  // 1. Set hidden input directly (new JoinQuant UI).
+  var freqHidden = document.getElementById("frequency");
+  if (freqHidden && freqHidden.type === "hidden") {
+    freqHidden.value = normalized;
+    freqHidden.dispatchEvent(new Event("change", { bubbles: true }));
+    return;
+  }
+
+  // 2. Try legacy <select> elements.
   var selectors = ["#frequency", "#runFreq", "select[name=\"frequency\"]", "select[name=\"runFreq\"]"];
   if (applySelectValue(selectors, normalized, freq)) return;
 
+  // 3. Try Bootstrap selectpicker (visible dropdown).
+  if (freqHidden && _clickSelectpickerOption(freqHidden, normalized)) return;
+
+  // 4. Try radio buttons.
   var radios = document.querySelectorAll("input[type=\"radio\"][name*=\"freq\"], input[type=\"radio\"][name*=\"Freq\"]");
   for (var i = 0; i < radios.length; i++) {
     var rv = (radios[i].value || "").trim();
@@ -73,9 +129,20 @@ function applyPyVersion(pyVer) {
   if (!pyVer) return;
   var normalized = normalizePyVersion(pyVer);
   if (!normalized) return;
+
+  // 1. Try legacy <select> elements.
   var selectors = ["#pyVersion", "#py_version", "select[name=\"pyVersion\"]", "select[name=\"py_version\"]"];
   if (applySelectValue(selectors, normalized, pyVer)) return;
 
+  // 2. Try hidden input (new JoinQuant UI).
+  var hidden = document.querySelector("input[name=\"backtest[pyVersion]\"]");
+  if (hidden) {
+    hidden.value = normalized;
+    hidden.dispatchEvent(new Event("change", { bubbles: true }));
+    return;
+  }
+
+  // 3. Try radio buttons.
   var radios = document.querySelectorAll("input[type=\"radio\"][name*=\"py\"], input[type=\"radio\"][name*=\"version\"]");
   for (var i = 0; i < radios.length; i++) {
     var rv = (radios[i].value || "").trim().toLowerCase();
@@ -129,7 +196,7 @@ function applyBacktestParams(startDate, endDate, capital, frequency, pyVersion) 
 
 function readEffectiveBacktestParams() {
   var freqEl = document.querySelector("#frequency, #runFreq, select[name=\"frequency\"]");
-  var pyEl = document.querySelector("#pyVersion, #py_version, select[name=\"py_version\"]");
+  var pyEl = document.querySelector("#pyVersion, #py_version, select[name=\"py_version\"], input[name=\"backtest[pyVersion]\"]");
 
   return {
     start_date: document.getElementById("startTime")?.value || "",

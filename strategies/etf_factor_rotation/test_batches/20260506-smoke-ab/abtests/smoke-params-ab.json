@@ -1,0 +1,52 @@
+{
+  "experiment_id": "smoke-params-ab",
+  "strategy": "etf_factor_rotation",
+  "batch_id": "20260506-smoke-ab",
+  "baseline": "main_branch",
+  "controls": ["main_branch"],
+  "base": {
+    "code_source": {
+      "type": "git",
+      "ref": "main",
+      "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+    },
+    "start_date": "2026-03-01",
+    "end_date": "2026-03-31",
+    "capital": 100000,
+    "estimated_minutes": 3,
+    "frequency": "1d",
+    "py_version": "Python3"
+  },
+  "variants": [
+    {
+      "label": "main_branch",
+      "role": "control",
+      "params_mode": "params_diff",
+      "params_diff": {
+        "TopK": 2,
+        "TargetVol": 0.12
+      },
+      "note": "main 分支 + TopK=2"
+    },
+    {
+      "label": "feature_branch",
+      "role": "variant",
+      "code_source": {
+        "type": "git",
+        "ref": "feature/基于GIT的AB测试",
+        "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+      },
+      "params_mode": "params_diff",
+      "params_diff": {
+        "TopK": 3,
+        "TargetVol": 0.12
+      },
+      "note": "feature 分支 + TopK=3"
+    }
+  ],
+  "metrics": [
+    { "key": "annual_return", "direction": "maximize" },
+    { "key": "max_drawdown", "direction": "minimize" },
+    { "key": "sharpe", "direction": "maximize" }
+  ]
+}

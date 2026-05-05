@@ -48,6 +48,14 @@ def main(argv: list[str] | None = None) -> int:
     except (AutomationError, CompileFailed, ConfigError, LocalCheckError, ManifestError, QuotaError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+    except Exception as exc:
+        # Catch AB test errors and GitVersionError even if abtest module cannot
+        # be imported (the ab subcommand handler will have already imported them).
+        name = type(exc).__name__
+        if name in ("ABConfigError", "ABExpandError", "ABReportError", "GitVersionError"):
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        raise
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -95,6 +103,29 @@ def build_parser() -> argparse.ArgumentParser:
     batch_parser.add_argument("--backtest-timeout", type=int, default=180)
     add_browser_args(batch_parser)
     batch_parser.set_defaults(func=cmd_batch)
+
+    # -- ab subcommands --
+    ab_parser = subparsers.add_parser("ab", help="AB test experiment management.")
+    ab_sub = ab_parser.add_subparsers(dest="ab_command", required=True)
+
+    expand_parser = ab_sub.add_parser("expand", help="Expand AB config into scenarios and manifest entry.")
+    expand_parser.add_argument("ab_config", help="Path to AB experiment JSON config.")
+    expand_parser.add_argument("--force-reset-pending", action="store_true")
+    expand_parser.set_defaults(func=cmd_ab_expand)
+
+    run_parser = ab_sub.add_parser("run", help="Run all pending AB variants in one upload session.")
+    run_parser.add_argument("ab_config")
+    run_parser.add_argument("--yes", action="store_true")
+    run_parser.add_argument("--backtest-timeout", type=int, default=180)
+    add_browser_args(run_parser)
+    run_parser.set_defaults(func=cmd_ab_run)
+
+    report_parser = ab_sub.add_parser("report", help="Generate AB comparison report.")
+    report_parser.add_argument("ab_config_or_manifest", help="AB config or manifest JSON path.")
+    report_parser.add_argument("--experiment", required=True)
+    report_parser.add_argument("--allow-partial", action="store_true")
+    report_parser.set_defaults(func=cmd_ab_report)
+
     return parser
 
 
@@ -436,6 +467,39 @@ def _confirm(prompt: str) -> bool:
     if not sys.stdin.isatty():
         return False
     return input(prompt).strip() == "RUN"
+
+
+# ---------------------------------------------------------------------------
+# AB test command handlers
+# ---------------------------------------------------------------------------
+
+
+def cmd_ab_expand(args: argparse.Namespace) -> int:
+    from .abtest import ABConfigError, ABExpandError, load_ab_config, expand_ab_experiment
+
+    config = load_ab_config(args.ab_config)
+    manifest_path = resolve_batch_manifest(config.strategy, config.batch_id)
+    expand_ab_experiment(config, manifest_path, force_reset_pending=args.force_reset_pending)
+    print(f"AB experiment '{config.experiment_id}' expanded successfully.")
+    return 0
+
+
+def cmd_ab_run(args: argparse.Namespace) -> int:
+    from .abtest import ABConfigError, ABExpandError, load_ab_config, run_ab_experiment
+
+    config = load_ab_config(args.ab_config)
+    manifest_path = resolve_batch_manifest(config.strategy, config.batch_id)
+    return run_ab_experiment(args, config, manifest_path)
+
+
+def cmd_ab_report(args: argparse.Namespace) -> int:
+    from .abtest import ABConfigError, ABReportError, write_ab_report
+
+    return write_ab_report(
+        Path(args.ab_config_or_manifest),
+        args.experiment,
+        allow_partial=args.allow_partial,
+    )
 
 
 if __name__ == "__main__":

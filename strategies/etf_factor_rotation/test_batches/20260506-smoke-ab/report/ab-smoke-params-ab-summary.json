@@ -1,0 +1,66 @@
+{
+  "status": "completed",
+  "baseline": "main_branch",
+  "controls": [
+    "main_branch"
+  ],
+  "generated_at": "2026-05-06T03:17:24",
+  "variants": [
+    {
+      "label": "main_branch",
+      "role": "control",
+      "is_baseline": true,
+      "metrics": {
+        "excess_return": 0.0063,
+        "actual_minutes": 0.12383333333333332,
+        "annual_return": -0.4374,
+        "sharpe": -3.334,
+        "max_drawdown": 0.069
+      },
+      "metadata": {
+        "backtest_id": "30cba1413b71d2db54bf0af0ab15eb9b",
+        "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=30cba1413b71d2db54bf0af0ab15eb9b",
+        "strategy_name": "etf_factor_rotation",
+        "start_date": "2026-03-01",
+        "end_date": "2026-03-31",
+        "capital": 100000,
+        "params_snapshot": {},
+        "extraction_method": "joinquant_detail_readonly_api"
+      },
+      "artifacts_present": {
+        "has_backtest_report": true,
+        "has_strategy_analysis": false,
+        "has_performance_analysis": false
+      },
+      "issues": []
+    },
+    {
+      "label": "feature_branch",
+      "role": "variant",
+      "is_baseline": false,
+      "metrics": {
+        "excess_return": 0.0063,
+        "actual_minutes": 0.125,
+        "annual_return": -0.4374,
+        "sharpe": -3.334,
+        "max_drawdown": 0.069
+      },
+      "metadata": {
+        "backtest_id": "640080d57fef5127e820a0613bea2d2d",
+        "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=640080d57fef5127e820a0613bea2d2d",
+        "strategy_name": "etf_factor_rotation",
+        "start_date": "2026-03-01",
+        "end_date": "2026-03-31",
+        "capital": 100000,
+        "params_snapshot": {},
+        "extraction_method": "joinquant_detail_readonly_api"
+      },
+      "artifacts_present": {
+        "has_backtest_report": true,
+        "has_strategy_analysis": false,
+        "has_performance_analysis": false
+      },
+      "issues": []
+    }
+  ]
+}

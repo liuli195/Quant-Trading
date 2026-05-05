@@ -19,6 +19,8 @@
     "test_batch_report_dir": "{test_batch}/report",
     "test_batch_scenarios": "{test_batch}/scenarios",
     "test_scenario": "{test_batch_scenarios}/{scenario_id}",
+    "test_batch_abtests": "{test_batch}/abtests",
+    "test_batch_abtest": "{test_batch_abtests}/{experiment_id}",
     "docs_images": "{docs}/images",
     "jq_analyze_skill": "{skills}/jq-analyze",
     "jq_fix_skill": "{skills}/jq-fix",

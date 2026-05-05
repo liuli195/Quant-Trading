@@ -1,0 +1,16 @@
+{
+  "strategy_file": "C:\\Users\\liuli\\AppData\\Local\\Temp\\tmp5dvsiom_\\dummy.py",
+  "scenario_id": "ab-test-ab-branch_best",
+  "start_date": "2025-05-01",
+  "end_date": "2026-04-30",
+  "capital": 100000,
+  "frequency": "每天",
+  "py_version": "Python3",
+  "estimated_minutes": 20.0,
+  "batch_id": "test-batch",
+  "strategy": "demo_strategy",
+  "params_diff": {},
+  "_params_mode": "baked_in_git",
+  "_scan_source": null,
+  "_experiment_id": "test-ab"
+}

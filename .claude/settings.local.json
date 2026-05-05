@@ -48,7 +48,14 @@
       "PowerShell($file = \"d:\\\\My Project\\\\Quant Trading\\\\strategies\\\\etf_dynamic_rebalance\\\\backtest_runs\\\\20260504_1\\\\api_export.json\"; $json = Get-Content $file -Raw -Encoding UTF8 | ConvertFrom-Json; $keys = $json | Get-Member -MemberType NoteProperty | % Name; Write-Output \"Top keys: $keys\"; if \\($json.runtime\\) { $json.runtime | ConvertTo-Json -Depth 5 } else { Write-Output \"No runtime field\" })",
       "Bash(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest scripts/jq_automation/tests/test_core.py -q)",
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest scripts/jq_automation/tests/test_core.py -q 2>&1)",
-      "Bash(Select-Object -First 100)"
+      "Bash(Select-Object -First 100)",
+      "PowerShell(Get-ChildItem -Path \"d:\\\\My Project\\\\Quant Trading\\\\strategies\" -Recurse -Directory | Select-Object FullName | ForEach-Object { $_.FullName.Replace\\('d:\\\\My Project\\\\Quant Trading\\\\', ''\\) })",
+      "Bash(Select-Object Name,Directory,Length)",
+      "Bash(Format-Table -AutoSize)",
+      "Bash(powershell.exe -Command \"Get-ChildItem -Path 'd:\\\\My Project\\\\Quant Trading\\\\strategies\\\\etf_factor_rotation\\\\backtest_runs\\\\20260505-0933-bt7a98269d2440d36f387fb95085dfb39d' -Recurse -File | Select-Object Name,Directory,Length | Format-Table -AutoSize\")",
+      "Bash(.\\\\.venv\\\\Scripts\\\\python.exe -m py_compile scripts\\\\jq_automation\\\\git_versioning.py)",
+      "PowerShell(Set-Location \"d:\\\\My Project\\\\Quant Trading\"; $dir = \"strategies/etf_factor_rotation/test_batches/20260506-smoke-ab\"; New-Item -ItemType Directory -Path $dir -Force | Out-Null; New-Item -ItemType Directory -Path \"$dir/abtests\" -Force | Out-Null; New-Item -ItemType Directory -Path \"$dir/report\" -Force | Out-Null; Write-Host \"Directories ready: $dir\")",
+      "PowerShell(Set-Location \"d:\\\\My Project\\\\Quant Trading\"; Get-ChildItem \"strategies/etf_factor_rotation/test_batches/20260506-smoke-ab/scenarios\" -Recurse -File | ForEach-Object { $_.FullName })"
     ]
   },
   "outputStyle": "Explanatory"
