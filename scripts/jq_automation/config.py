@@ -32,7 +32,7 @@ class ScenarioConfig:
     start_date: str
     end_date: str
     capital: int | float
-    frequency: str = "每天"
+    frequency: str = "1d"
     py_version: str = "Python3"
     batch_id: str | None = None
     strategy_name: str | None = None
@@ -113,7 +113,7 @@ class ScenarioConfig:
             start_date=start_date,
             end_date=end_date,
             capital=_parse_capital(data["capital"]),
-            frequency=str(data.get("frequency") or "每天"),
+            frequency=_normalize_frequency(str(data.get("frequency") or "1d")),
             py_version=str(data.get("py_version") or data.get("pyVersion") or "Python3"),
             batch_id=_none_or_str(data.get("batch_id")),
             strategy_name=_none_or_str(data.get("strategy_name")) or strategy_file.stem,
@@ -191,6 +191,38 @@ def _validate_date(name: str, value: str) -> str:
     except ValueError as exc:
         raise ConfigError(f"{name} is not a valid date: {value}") from exc
     return value
+
+
+def _normalize_frequency(raw: str) -> str:
+    """Normalize frequency to the canonical English form expected by JoinQuant.
+
+    Accepts both Chinese display text and English aliases.  Unknown values
+    raise ConfigError so the mistake is caught at the boundary rather than
+    silently failing inside the browser automation.
+    """
+    v = raw.strip().lower()
+    # Daily
+    if v in ("每天", "daily", "1d", "d", "day"):
+        return "1d"
+    # Minute
+    if v in ("每分钟", "minute", "1m", "m", "min"):
+        return "1m"
+    # Tick
+    if v in ("tick",):
+        return "tick"
+    # Sub-minute bars
+    if v in ("5m", "5min"):
+        return "5m"
+    if v in ("15m", "15min"):
+        return "15m"
+    if v in ("30m", "30min"):
+        return "30m"
+    if v in ("60m", "60min", "1h", "h", "hourly"):
+        return "60m"
+    raise ConfigError(
+        f"Unsupported frequency: {raw!r}. "
+        "Use '1d' (daily), '1m' (minute), 'tick', '5m', '15m', '30m', or '60m'."
+    )
 
 
 def _parse_capital(value: Any) -> int | float:

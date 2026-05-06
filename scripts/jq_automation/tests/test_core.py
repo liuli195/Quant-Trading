@@ -5,7 +5,7 @@ import importlib.util
 import json
 import tempfile
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -45,8 +45,53 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(config.strategy, "demo_strategy")
             self.assertEqual(config.strategy_name, "demo_strategy")
             self.assertEqual(config.capital, 100000)
-            self.assertEqual(config.frequency, "每天")
+            self.assertEqual(config.frequency, "1d")
             self.assertEqual(config.py_version, "Python3")
+
+    def test_normalize_frequency_accepts_english_aliases(self) -> None:
+        from scripts.jq_automation.config import _normalize_frequency
+
+        self.assertEqual(_normalize_frequency("1d"), "1d")
+        self.assertEqual(_normalize_frequency("day"), "1d")
+        self.assertEqual(_normalize_frequency("daily"), "1d")
+        self.assertEqual(_normalize_frequency("d"), "1d")
+        self.assertEqual(_normalize_frequency("1m"), "1m")
+        self.assertEqual(_normalize_frequency("minute"), "1m")
+        self.assertEqual(_normalize_frequency("m"), "1m")
+        self.assertEqual(_normalize_frequency("tick"), "tick")
+        self.assertEqual(_normalize_frequency("5m"), "5m")
+        self.assertEqual(_normalize_frequency("60m"), "60m")
+
+    def test_normalize_frequency_accepts_chinese_display_text(self) -> None:
+        from scripts.jq_automation.config import _normalize_frequency
+
+        self.assertEqual(_normalize_frequency("每天"), "1d")
+        self.assertEqual(_normalize_frequency("每分钟"), "1m")
+
+    def test_normalize_frequency_rejects_unknown_value(self) -> None:
+        from scripts.jq_automation.config import _normalize_frequency, ConfigError
+
+        with self.assertRaises(ConfigError):
+            _normalize_frequency("每周")
+        with self.assertRaises(ConfigError):
+            _normalize_frequency("monthly")
+        with self.assertRaises(ConfigError):
+            _normalize_frequency("")
+
+    def test_scenario_config_rejects_unknown_frequency(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ConfigError):
+                ScenarioConfig.from_mapping(
+                    {
+                        "strategy_file": str(Path(tmp) / "strategies" / "s" / "s.py"),
+                        "strategy": "s",
+                        "scenario_id": "s01",
+                        "start_date": "2026-04-01",
+                        "end_date": "2026-05-01",
+                        "capital": 100000,
+                        "frequency": "每周",
+                    }
+                )
 
     def test_scenario_config_rejects_reversed_dates(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -345,12 +390,12 @@ class CoreTests(unittest.TestCase):
                 "start_date": "2026-04-01",
                 "end_date": "2026-05-01",
                 "capital": 100000,
-                "frequency": "每分钟",
+                "frequency": "1m",
                 "py_version": "Python2",
             }
         )
         opts = _bundle_options(config)
-        self.assertEqual(opts["frequency"], "每分钟")
+        self.assertEqual(opts["frequency"], "1m")
         self.assertEqual(opts["pyVersion"], "Python2")
         self.assertEqual(opts["startDate"], "2026-04-01")
         self.assertEqual(opts["capital"], 100000)
@@ -368,7 +413,7 @@ class CoreTests(unittest.TestCase):
                 "start_date_effective": "2026-01-01",
                 "end_date_effective": "2026-01-31",
                 "capital": 100000,
-                "frequency": "每天",
+                "frequency": "1d",
                 "py_version": "Python3",
             }
         }
@@ -436,12 +481,64 @@ class CoreTests(unittest.TestCase):
         import asyncio
         asyncio.run(browser.apply_backtest_params(
             "2026-01-01", "2026-01-31", 100000,
-            frequency="每天", py_version="Python3",
+            frequency="1d", py_version="Python3",
         ))
 
-        self.assertEqual(captured_payload.get("frequency"), "每天")
+        self.assertEqual(captured_payload.get("frequency"), "1d")
         self.assertEqual(captured_payload.get("py_version"), "Python3")
         self.assertEqual(captured_payload.get("capital"), 100000)
+
+    def test_expand_runs_preserves_non_sweep_params_diff(self) -> None:
+        """非 sweep 场景的 params_diff 应被保留在 RunSpec 中。"""
+        config = ScenarioConfig.from_mapping(
+            {
+                "strategy_file": "strategies/demo/demo.py",
+                "strategy": "demo",
+                "scenario_id": "s01",
+                "start_date": "2026-04-01",
+                "end_date": "2026-05-01",
+                "capital": 100000,
+                "params_diff": {"TopK": 3, "MaxWeight": 0.5},
+            }
+        )
+
+        runs = config.expand_runs()
+        self.assertEqual(len(runs), 1)
+        self.assertEqual(runs[0].label, "default")
+        self.assertEqual(runs[0].params_diff, {"TopK": 3, "MaxWeight": 0.5})
+
+    def test_for_run_sets_run_params_diff_in_raw(self) -> None:
+        """for_run() 应将 RunSpec.params_diff 写入派生 config 的 raw._run_params_diff。"""
+        config = ScenarioConfig.from_mapping(
+            {
+                "strategy_file": "strategies/demo/demo.py",
+                "strategy": "demo",
+                "scenario_id": "s01",
+                "start_date": "2026-04-01",
+                "end_date": "2026-05-01",
+                "capital": 100000,
+                "params_diff": {"RSRS_M": 800, "CrowdWindow": 700},
+            }
+        )
+
+        runs = config.expand_runs()
+        derived = config.for_run(runs[0])
+        self.assertEqual(derived.raw.get("_run_params_diff"), {"RSRS_M": 800, "CrowdWindow": 700})
+
+    def test_compile_date_range_uses_last_30_days(self) -> None:
+        """短周期编译参数应取最近 30 天，不超过给定的 end_date_cap。"""
+        from scripts.jq_automation.cli import _compile_date_range
+
+        # 无 cap：最近 30 天到今日
+        start, end = _compile_date_range()
+        today = datetime.now()
+        self.assertEqual(end, today.strftime("%Y-%m-%d"))
+        self.assertGreaterEqual(today - datetime.strptime(start, "%Y-%m-%d"), timedelta(days=29))
+
+        # 有历史 cap：不应超过 cap 日期
+        start_capped, end_capped = _compile_date_range(end_date_cap="2025-12-31")
+        self.assertEqual(end_capped, "2025-12-31")
+        self.assertEqual(start_capped, "2025-12-01")
 
 
 class _FakeCompilePage:

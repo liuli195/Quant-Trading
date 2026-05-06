@@ -5,7 +5,7 @@ import asyncio
 import json
 import sys
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +32,21 @@ from .quota import (
     save_ledger,
     update_actual_minutes,
 )
+
+
+def _compile_date_range(end_date_cap: str | None = None) -> tuple[str, str]:
+    """Return a short (start_date, end_date) pair for compile-safe backtest params.
+
+    Uses the last 30 days capped at *end_date_cap* (when the configured backtest
+    end date is in the past).  Extracted so the date arithmetc is testable.
+    """
+    today = datetime.now()
+    end = today
+    if end_date_cap:
+        cap = datetime.strptime(end_date_cap, "%Y-%m-%d")
+        end = min(today, cap)
+    start = end - timedelta(days=30)
+    return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
 
 
 @dataclass(frozen=True)
@@ -154,6 +169,10 @@ def cmd_upload(args: argparse.Namespace) -> int:
 
 def cmd_run(args: argparse.Namespace) -> int:
     config = load_scenario_config(args.scenario_config)
+    runs = config.expand_runs()
+    if len(runs) != 1:
+        raise ConfigError(f"Scenario config must expand to exactly 1 run, got {len(runs)}")
+    config = config.for_run(runs[0])
     return asyncio.run(_run_scenario(args, config, already_confirmed=args.yes))
 
 
@@ -276,6 +295,11 @@ async def _upload_code(args: argparse.Namespace, strategy_name: str, code: str, 
         result = await browser.write_strategy_code(code)
         print(f"Uploaded {result['length']} chars to Ace editor.")
         if compile_after:
+            short_start, short_end = _compile_date_range()
+            await browser.apply_backtest_params(
+                short_start, short_end, 100000,
+                frequency="day", py_version="Python3",
+            )
             await browser.click_compile()
             await browser.wait_compile_complete()
             print("JoinQuant compile finished without ERROR/Traceback.")
@@ -329,6 +353,11 @@ async def _run_scenario(
                 # Fall back to local ledger when page parsing fails
                 assert_quota_available(ledger, config.estimated_minutes)
             await browser.write_strategy_code(code)
+            short_start, short_end = _compile_date_range(end_date_cap=config.end_date)
+            await browser.apply_backtest_params(
+                short_start, short_end, config.capital,
+                frequency=config.frequency, py_version=config.py_version,
+            )
             await browser.click_compile()
             await browser.wait_compile_complete()
             effective = await browser.apply_backtest_params(

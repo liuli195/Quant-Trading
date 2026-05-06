@@ -55,7 +55,20 @@
       "Bash(powershell.exe -Command \"Get-ChildItem -Path 'd:\\\\My Project\\\\Quant Trading\\\\strategies\\\\etf_factor_rotation\\\\backtest_runs\\\\20260505-0933-bt7a98269d2440d36f387fb95085dfb39d' -Recurse -File | Select-Object Name,Directory,Length | Format-Table -AutoSize\")",
       "Bash(.\\\\.venv\\\\Scripts\\\\python.exe -m py_compile scripts\\\\jq_automation\\\\git_versioning.py)",
       "PowerShell(Set-Location \"d:\\\\My Project\\\\Quant Trading\"; $dir = \"strategies/etf_factor_rotation/test_batches/20260506-smoke-ab\"; New-Item -ItemType Directory -Path $dir -Force | Out-Null; New-Item -ItemType Directory -Path \"$dir/abtests\" -Force | Out-Null; New-Item -ItemType Directory -Path \"$dir/report\" -Force | Out-Null; Write-Host \"Directories ready: $dir\")",
-      "PowerShell(Set-Location \"d:\\\\My Project\\\\Quant Trading\"; Get-ChildItem \"strategies/etf_factor_rotation/test_batches/20260506-smoke-ab/scenarios\" -Recurse -File | ForEach-Object { $_.FullName })"
+      "PowerShell(Set-Location \"d:\\\\My Project\\\\Quant Trading\"; Get-ChildItem \"strategies/etf_factor_rotation/test_batches/20260506-smoke-ab/scenarios\" -Recurse -File | ForEach-Object { $_.FullName })",
+      "Bash(Select-Object Name)",
+      "Bash(Sort-Object Name)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest strategies/etf_factor_rotation/tests -q)",
+      "Bash(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.jq_automation run \"strategies/etf_factor_rotation/test_batches/20260505-0000-etf-factor-rotation-full-test/scenarios/s05-long-baseline/config.json\" --yes)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.jq_automation run \"strategies/etf_factor_rotation/test_batches/20260505-0000-etf-factor-rotation-full-test/scenarios/s05-long-baseline/config.json\" --yes)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest scripts/jq_automation/tests -q)",
+      "PowerShell(& \".\\\\.venv\\\\Scripts\\\\python.exe\" -m pytest \"strategies/etf_factor_rotation/tests\" -q 2>&1)",
+      "PowerShell(& \".\\\\.venv\\\\Scripts\\\\python.exe\" -m scripts.jq_automation run \"strategies/etf_factor_rotation/test_batches/20260505-0000-etf-factor-rotation-full-test/scenarios/s06-profile-off/config.json\" --yes 2>&1)",
+      "PowerShell(& \".\\\\.venv\\\\Scripts\\\\python.exe\" -m scripts.jq_automation run \"strategies/etf_factor_rotation/test_batches/20260505-0000-etf-factor-rotation-full-test/scenarios/s07-high-window/config.json\" --yes 2>&1)",
+      "PowerShell(& \".\\\\.venv\\\\Scripts\\\\python.exe\" -m scripts.jq_automation run \"strategies/etf_factor_rotation/test_batches/20260505-0000-etf-factor-rotation-full-test/scenarios/s08-extended-pool/config.json\" --yes 2>&1)",
+      "PowerShell(& \".\\\\.venv\\\\Scripts\\\\python.exe\" -m pytest \"scripts/jq_automation/tests\" -q 2>&1)",
+      "PowerShell(& \".\\\\.venv\\\\Scripts\\\\python.exe\" -m pytest \"scripts/jq_automation/tests\" -q -v 2>&1)",
+      "Bash(Select-Object -ExpandProperty Name)"
     ]
   },
   "outputStyle": "Explanatory"

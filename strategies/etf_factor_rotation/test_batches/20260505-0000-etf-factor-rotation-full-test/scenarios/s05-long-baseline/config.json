@@ -1,0 +1,13 @@
+{
+  "strategy_file": "d:/My Project/Quant Trading/strategies/etf_factor_rotation/etf_factor_rotation.py",
+  "strategy": "etf_factor_rotation",
+  "scenario_id": "s05-long-baseline",
+  "start_date": "2018-01-01",
+  "end_date": "2026-04-30",
+  "capital": 100000,
+  "frequency": "1d",
+  "py_version": "Python3",
+  "batch_id": "20260505-0000-etf-factor-rotation-full-test",
+  "estimated_minutes": 35,
+  "params_diff": {}
+}

@@ -18,6 +18,7 @@ from .git_versioning import (
     materialize_strategy_source,
     resolve_git_ref,
 )
+from .cli import _compile_date_range
 from .local import apply_params_overrides, compile_strategy, generate_upload_file
 from .manifest import load_manifest
 from .metrics import DEFAULT_METRICS, METRIC_LABEL_CN, collect_all_metrics
@@ -587,8 +588,14 @@ async def _ab_run_session(
                 # -- navigate to editor (first variant opens, subsequent just reuse) --
                 await browser.open_strategy_editor(strategy_name, edit_url=edit_url)
 
-                # -- upload & compile --
+                # -- upload & compile (short date range to avoid quota waste) --
                 await browser.write_strategy_code(code)
+                short_start, short_end = _compile_date_range(end_date_cap=config.base["end_date"])
+                await browser.apply_backtest_params(
+                    short_start, short_end, config.base["capital"],
+                    frequency=str(config.base.get("frequency") or "每天"),
+                    py_version=str(config.base.get("py_version") or "Python3"),
+                )
                 await browser.click_compile()
                 await browser.wait_compile_complete()
 
