@@ -1,0 +1,103 @@
+{
+  "api_export_json": "D:\\My Project\\Quant Trading\\strategies\\etf_factor_rotation\\backtest_runs\\20260506-1921-btc7488e9834cae42a85355fd34fa31cbf\\api_export.json",
+  "extraction_method": "api_bundle",
+  "generated_at": "2026-05-06T11:23:21.381478+00:00",
+  "counts": {
+    "transactions": 469,
+    "positions": 4889,
+    "logs": 1000,
+    "error_logs": 0,
+    "result_rows": 2411,
+    "result_pages": 3,
+    "risk_rows": 1000
+  },
+  "partial": {
+    "transactions": false,
+    "positions": false,
+    "logs": true,
+    "results": false
+  },
+  "tabs": {
+    "transactioninfo": {
+      "path": "tabs_raw/transactioninfo.md",
+      "partial": false,
+      "record_count": 469
+    },
+    "positioninfo": {
+      "path": "tabs_raw/positioninfo.md",
+      "partial": false,
+      "record_count": 4889
+    },
+    "daily_returns": {
+      "path": "tabs_raw/daily_returns.md",
+      "partial": false,
+      "record_count": 2411
+    },
+    "logs": {
+      "path": "tabs_raw/logs.md",
+      "partial": true,
+      "record_count": 1000
+    },
+    "profile": {
+      "path": "tabs_raw/profile.md",
+      "partial": false,
+      "record_count": 18
+    },
+    "algorithm_period_return": {
+      "path": "tabs_raw/algorithm_period_return.md",
+      "partial": false,
+      "record_count": 100
+    },
+    "benchmark_period_return": {
+      "path": "tabs_raw/benchmark_period_return.md",
+      "partial": false,
+      "record_count": 100
+    },
+    "alpha": {
+      "path": "tabs_raw/alpha.md",
+      "partial": false,
+      "record_count": 100
+    },
+    "beta": {
+      "path": "tabs_raw/beta.md",
+      "partial": false,
+      "record_count": 100
+    },
+    "sharpe": {
+      "path": "tabs_raw/sharpe.md",
+      "partial": false,
+      "record_count": 100
+    },
+    "sortino": {
+      "path": "tabs_raw/sortino.md",
+      "partial": false,
+      "record_count": 100
+    },
+    "information": {
+      "path": "tabs_raw/information.md",
+      "partial": false,
+      "record_count": 100
+    },
+    "algo_volatility": {
+      "path": "tabs_raw/algo_volatility.md",
+      "partial": false,
+      "record_count": 100
+    },
+    "benchmark_volatility": {
+      "path": "tabs_raw/benchmark_volatility.md",
+      "partial": false,
+      "record_count": 100
+    },
+    "max_drawdown": {
+      "path": "tabs_raw/max_drawdown.md",
+      "partial": false,
+      "record_count": 100
+    },
+    "backtest_report": {
+      "path": "report/backtest_report.md",
+      "partial": false,
+      "record_count": 1
+    }
+  },
+  "note": "Generated from one fetchExistingBacktestBundle() JSON payload; no JoinQuant export endpoint was confirmed or used."
+}

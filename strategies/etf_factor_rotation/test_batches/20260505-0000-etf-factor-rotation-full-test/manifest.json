@@ -8,11 +8,11 @@
       "status": "completed",
       "runs": [
         {
-          "run_id": null,
-          "label": "quick_backtest",
+          "run_id": "20260506-0314-bt30cba1413b71d2db54bf0af0ab15eb9b",
+          "label": "R0_smoke_fixed",
           "params_diff": {},
           "status": "completed",
-          "note": "Quick backtest (Ctrl+Alt+B) on editor page, 2026-04-01~2026-04-30."
+          "note": "fq=post 修正重跑。区间 2026-03-01~2026-03-31。原编辑器快速回测未落盘，此 run 为正式 R0。重复 run 20260506-0315 同数据忽略。"
         }
       ]
     },
@@ -21,9 +21,17 @@
       "runs": [
         {
           "run_id": "20260505-0933-bt7a98269d2440d36f387fb95085dfb39d",
-          "label": "R1_baseline",
+          "label": "R1_baseline_fq_pre_FAILED",
           "params_diff": {
-            "note": "当时默认: use_real_price=True, fq=pre。此 run 因 fq=pre 导致 get_price 返回空数据，全年零交易。"
+            "note": "fq=pre 导致 get_price 返回空数据，全年零交易。已废弃，保留供 FQ A/B 对比参考。"
+          },
+          "status": "failed"
+        },
+        {
+          "run_id": "20260505-2023-bt41b9a777fa2e2f1ce80858aec7d140aa",
+          "label": "R1_baseline_fixed",
+          "params_diff": {
+            "note": "fq=post 修正版。区间 2024-01-01~2024-06-30（6 月，偏离计划 1 年要求）。数据管道修复验证通过，策略完整运行。"
           },
           "status": "completed"
         }
@@ -50,8 +58,8 @@
           "run_id": "20260505-2218-bt149cf2096d978f58083820813960d145",
           "label": "test_params",
           "params_diff": {
-            "MaxWeight": 0.30,
-            "MinWeight": 0.20,
+            "MaxWeight": 0.3,
+            "MinWeight": 0.2,
             "TargetVol": 0.05
           },
           "status": "completed"
@@ -59,21 +67,60 @@
       ]
     },
     "s05-long-baseline": {
-      "status": "pending",
-      "runs": []
+      "status": "completed",
+      "runs": [
+        {
+          "run_id": "20260506-1756-btac5a03b99d8722f55b0a05a57554abf0",
+          "label": "default",
+          "params_diff": {},
+          "status": "completed"
+        }
+      ]
     },
     "s06-profile-off": {
-      "status": "pending",
-      "runs": []
+      "status": "completed",
+      "runs": [
+        {
+          "run_id": "20260506-1921-btc7488e9834cae42a85355fd34fa31cbf",
+          "label": "default",
+          "params_diff": {},
+          "status": "completed"
+        }
+      ]
     },
     "s07-high-window": {
-      "status": "pending",
-      "runs": []
+      "status": "completed",
+      "runs": [
+        {
+          "run_id": "20260506-1937-bt3c84878563018bbeeabaf16b953d3e2a",
+          "label": "default",
+          "params_diff": {
+            "RSRS_M": 800,
+            "CrowdWindow": 700
+          },
+          "status": "completed"
+        }
+      ]
     },
     "s08-extended-pool": {
-      "status": "pending",
-      "runs": []
+      "status": "completed",
+      "runs": [
+        {
+          "run_id": "20260506-1944-bt88d80f50a3c47c4474cb7c4ff9b439fc",
+          "label": "default",
+          "params_diff": {
+            "etf_pool": ["159819.XSHE", "513100.XSHG", "518880.XSHG", "510050.XSHG", "510300.XSHG", "159915.XSHE"],
+            "TopK": 3
+          },
+          "status": "completed"
+        }
+      ]
     }
   },
-  "updated": "2026-05-05T23:05:00"
+  "corrections": {
+    "s01": "原无 run_id（编辑器快速回测），补 20260506-0314 为正式 R0 落盘。",
+    "s02": "原 20260505-0933 (fq=pre) 零交易废弃，替换为 20260505-2023 (fq=post)。R1 区间 6 月偏离计划 1 年，需在 issue-log 记录。",
+    "dup_runs": ["20260506-0315 与 0314 数据完全相同，保留 0314 忽略 0315。"]
+  },
+  "updated": "2026-05-06T20:00:00"
 }

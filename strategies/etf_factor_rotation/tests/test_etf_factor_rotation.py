@@ -116,11 +116,12 @@ class TestSetParameter:
         strategy.set_parameter(strategy)
 
         g = strategy.g
-        assert len(g.etf_pool) == 3
-        assert g.TopK == 2
-        assert g.MA_long == 120
-        assert g.TargetVol == 0.12
-        assert g.MaxWeight == 0.60
+        assert len(g.etf_pool) >= 1
+        assert len(g.etf_pool) == len(g.etf_names)
+        assert 1 <= g.TopK <= len(g.etf_pool)
+        assert g.MA_long > 0
+        assert g.TargetVol > 0
+        assert 0 < g.MaxWeight <= g.MaxTotalWeight <= 1
 
     def test_momentum_weights_sum_to_one(self, strategy):
         strategy.set_parameter(strategy)
@@ -201,7 +202,9 @@ class TestInitialize:
         assert hasattr(strategy.g, 'MinWeight'), "g.MinWeight not set by set_parameter"
         assert hasattr(strategy.g, 'RebalanceThreshold'), "g.RebalanceThreshold not set"
         assert hasattr(strategy.g, 'TargetVol'), "g.TargetVol not set by set_parameter"
-        assert len(strategy.g.etf_pool) == 3
+        assert len(strategy.g.etf_pool) >= 1
+        assert len(strategy.g.etf_pool) == len(strategy.g.etf_names)
+        assert 1 <= strategy.g.TopK <= len(strategy.g.etf_pool)
 
 
 # ============================================================

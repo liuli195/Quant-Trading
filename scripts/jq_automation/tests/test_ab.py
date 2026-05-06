@@ -67,7 +67,7 @@ def _ab_config_dict(**overrides: object) -> dict:
             "end_date": "2026-04-30",
             "capital": 100000,
             "estimated_minutes": 20,
-            "frequency": "每天",
+            "frequency": "1d",
             "py_version": "Python3",
         },
         "variants": [

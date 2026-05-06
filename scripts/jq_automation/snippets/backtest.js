@@ -14,6 +14,7 @@ function setInputValue(id, value, needInputEvent) {
 
 function normalizeFrequency(raw) {
   var v = String(raw || "").trim().toLowerCase();
+  // English aliases.
   if (["day", "daily", "1d", "d"].indexOf(v) !== -1) return "day";
   if (["min", "minute", "1m", "m"].indexOf(v) !== -1) return "minute";
   if (["tick"].indexOf(v) !== -1) return "tick";
@@ -21,6 +22,9 @@ function normalizeFrequency(raw) {
   if (["15m", "15min"].indexOf(v) !== -1) return "15m";
   if (["30m", "30min"].indexOf(v) !== -1) return "30m";
   if (["60m", "60min", "1h", "h", "hourly"].indexOf(v) !== -1) return "60m";
+  // Chinese display text (safety net — Python normalizes first, but accept here too).
+  if (v === "每天") return "day";
+  if (v === "每分钟") return "minute";
   return raw ? v : "";
 }
 

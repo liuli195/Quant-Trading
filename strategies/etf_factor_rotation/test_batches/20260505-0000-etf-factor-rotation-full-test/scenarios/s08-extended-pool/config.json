@@ -1,0 +1,16 @@
+{
+  "strategy_file": "d:/My Project/Quant Trading/strategies/etf_factor_rotation/etf_factor_rotation.py",
+  "strategy": "etf_factor_rotation",
+  "scenario_id": "s08-extended-pool",
+  "start_date": "2026-02-01",
+  "end_date": "2026-04-30",
+  "capital": 100000,
+  "frequency": "1d",
+  "py_version": "Python3",
+  "batch_id": "20260505-0000-etf-factor-rotation-full-test",
+  "estimated_minutes": 8,
+  "params_diff": {
+    "etf_pool": ["159819.XSHE", "513100.XSHG", "518880.XSHG", "510050.XSHG", "510300.XSHG", "159915.XSHE"],
+    "TopK": 3
+  }
+}
