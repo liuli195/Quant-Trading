@@ -1,0 +1,128 @@
+{
+  "batch_id": "20260507-targetvol-scan",
+  "strategy": "etf_factor_rotation",
+  "created": "2026-05-07T00:00:00",
+  "status": "pending",
+  "scenarios": {
+    "s03-targetvol-scan-ultralow": {
+      "status": "completed",
+      "runs": [
+        {
+          "run_id": "20260507-0619-bt1f9e588c3a2891238a06e2013258886d",
+          "label": "TV=0.04",
+          "params_diff": {
+            "TargetVol": 0.04
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260507-0621-bt56a49a22c9649620597d2b1c7223a8ee",
+          "label": "TV=0.05",
+          "params_diff": {
+            "TargetVol": 0.05
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260507-0623-bt0ca77eab09b91548696834a6618c2118",
+          "label": "TV=0.06",
+          "params_diff": {
+            "TargetVol": 0.06
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260507-0625-bt69dc0ff8b24797f86790f58edd568ace",
+          "label": "TV=0.07",
+          "params_diff": {
+            "TargetVol": 0.07
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    "s02-targetvol-scan-low": {
+      "status": "completed",
+      "runs": [
+        {
+          "run_id": "20260507-0604-bt663a4ac9f81deccf693195dab5dc1e65",
+          "label": "TV=0.08",
+          "params_diff": {
+            "TargetVol": 0.08
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260507-0606-bt25f2f78931b8c57c8493d5521bcf8139",
+          "label": "TV=0.09",
+          "params_diff": {
+            "TargetVol": 0.09
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260507-0608-bt3987596a420b50632cf796de82c3e4bd",
+          "label": "TV=0.10",
+          "params_diff": {
+            "TargetVol": 0.1
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260507-0610-bt5965d85dd52516580bfbb4a4e5a31b35",
+          "label": "TV=0.11",
+          "params_diff": {
+            "TargetVol": 0.11
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    "s01-targetvol-scan": {
+      "status": "completed",
+      "runs": [
+        {
+          "run_id": "20260507-0547-btbac39e64cea76d5fdde490163382884b",
+          "label": "TV=0.12",
+          "params_diff": {
+            "TargetVol": 0.12
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260507-0549-bt4255148c5d49ac45b9de48544d417c9b",
+          "label": "TV=0.15",
+          "params_diff": {
+            "TargetVol": 0.15
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260507-0551-btdb439ed38d3d77f4c341c37c0c7ab9f7",
+          "label": "TV=0.18",
+          "params_diff": {
+            "TargetVol": 0.18
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260507-0553-bt3d27c9d6a5882f74acf951e2178620d5",
+          "label": "TV=0.21",
+          "params_diff": {
+            "TargetVol": 0.21
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260507-0555-btb16d6354e885f42ae346a73fcbe52151",
+          "label": "TV=0.24",
+          "params_diff": {
+            "TargetVol": 0.24
+          },
+          "status": "completed"
+        }
+      ]
+    }
+  },
+  "updated": "2026-05-07T06:26:56"
+}

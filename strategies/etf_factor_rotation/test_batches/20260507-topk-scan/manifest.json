@@ -1,0 +1,30 @@
+{
+  "batch_id": "20260507-topk-scan",
+  "strategy": "etf_factor_rotation",
+  "created": "2026-05-07T00:00:00",
+  "status": "pending",
+  "scenarios": {
+    "s01-topk-scan": {
+      "status": "completed",
+      "runs": [
+        {
+          "run_id": "20260507-0424-btfa1fc77dd168c0112656f5b0be1ec58e",
+          "label": "TopK=2",
+          "params_diff": {
+            "TopK": 2
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260507-0426-bt2796484d1b98e2de0ad70978a41674b1",
+          "label": "TopK=3",
+          "params_diff": {
+            "TopK": 3
+          },
+          "status": "completed"
+        }
+      ]
+    }
+  },
+  "updated": "2026-05-07T04:28:08"
+}

@@ -103,7 +103,9 @@ class TestModuleLoading:
             'select_topk', 'compute_rp_weights', 'compute_rsrs_multipliers',
             'compute_crowd_penalties', 'percentile_rank',
             'compute_portfolio_vol_scale', 'apply_weight_constraints',
-            'execute_rebalance',
+            'execute_rebalance', 'fund_code', 'format_etf_name',
+            'build_etf_display_names', 'fetch_etf_official_name',
+            'load_etf_display_names',
         ]
         for fn in core_funcs:
             assert hasattr(strategy, fn), f"Missing function: {fn}"
@@ -122,6 +124,9 @@ class TestSetParameter:
         assert g.MA_long > 0
         assert g.TargetVol > 0
         assert 0 < g.MaxWeight <= g.MaxTotalWeight <= 1
+        for etf, name in zip(g.etf_pool, g.etf_names):
+            assert etf in name
+        assert strategy.get_security_info.call_count >= len(g.etf_pool)
 
     def test_momentum_weights_sum_to_one(self, strategy):
         strategy.set_parameter(strategy)
@@ -146,6 +151,69 @@ class TestSetParameter:
         """use_real_price 默认为 False，配合 fq=None 使用。"""
         strategy.set_parameter(strategy)
         assert strategy.g.use_real_price is False
+
+
+class TestEtfDisplayNames:
+    """测试基金展示名始终保留编号，供报告和日志检索。"""
+
+    def test_format_etf_name_adds_fund_code(self, strategy):
+        assert (
+            strategy.format_etf_name('159819.XSHE', '人工智能ETF易方达')
+            == '人工智能ETF易方达(159819.XSHE)'
+        )
+
+    def test_format_etf_name_keeps_existing_security_code(self, strategy):
+        name = '纳指ETF(513100.XSHG)'
+        assert strategy.format_etf_name('513100.XSHG', name) == name
+
+    def test_format_etf_name_upgrades_short_code_suffix(self, strategy):
+        assert (
+            strategy.format_etf_name('518880.XSHG', '黄金ETF(518880)')
+            == '黄金ETF(518880.XSHG)'
+        )
+
+    def test_build_etf_display_names_aligned_to_pool(self, strategy):
+        pool = ['159819.XSHE', '513100.XSHG', '518880.XSHG']
+        names = ['人工智能ETF易方达', '纳指ETF', '黄金ETF']
+        result = strategy.build_etf_display_names(pool, names)
+        assert result == [
+            '人工智能ETF易方达(159819.XSHE)',
+            '纳指ETF(513100.XSHG)',
+            '黄金ETF(518880.XSHG)',
+        ]
+
+    def test_fetch_etf_official_name_reads_joinquant_display_name(self, strategy):
+        result = strategy.fetch_etf_official_name('159819.XSHE')
+        assert result == '人工智能ETF易方达'
+        strategy.get_security_info.assert_called_with('159819.XSHE')
+
+    def test_load_etf_display_names_uses_joinquant_api(self, strategy):
+        pool = ['159819.XSHE', '513100.XSHG', '518880.XSHG']
+        result = strategy.load_etf_display_names(pool)
+        assert result == [
+            '人工智能ETF易方达(159819.XSHE)',
+            '纳指ETF(513100.XSHG)',
+            '黄金ETF(518880.XSHG)',
+        ]
+
+    def test_fetch_etf_official_name_fallback_when_api_fails(self, strategy):
+        strategy.get_security_info.side_effect = RuntimeError("api unavailable")
+        result = strategy.fetch_etf_official_name('159819.XSHE', fallback_name='人工智能ETF易方达')
+        assert result == '人工智能ETF易方达'
+
+    def test_log_step_uses_numbered_names(self, strategy, mock_g):
+        strategy._log_step(
+            "TrendGate",
+            "趋势门槛",
+            mock_g.etf_pool,
+            [1.0, 0.0, 1.0],
+            fmt=".0f",
+            etf_names=mock_g.etf_names,
+        )
+        log_text = str(strategy.log.info.call_args_list)
+        assert '人工智能ETF易方达(159819.XSHE)' in log_text
+        assert '纳指ETF(513100.XSHG)' in log_text
+        assert '黄金ETF(518880.XSHG)' in log_text
 
 
 class TestInitialize:
@@ -1591,12 +1659,16 @@ class TestExecuteRebalance:
 
         strategy.execute_rebalance(context, mock_g.etf_pool, final_weights, params)
 
-        info_calls = [
-            str(c) for c in strategy.log.info.call_args_list
+        sent_calls = [
+            c for c in strategy.log.info.call_args_list
             if 'order sent' in str(c)
         ]
+        info_calls = [str(c) for c in sent_calls]
         assert len(info_calls) >= 1, "Expected info log when order succeeds"
         # 验证日志包含关键字段
+        first_call_args = sent_calls[0][0]
+        assert first_call_args[1] == '人工智能ETF易方达(159819.XSHE)'
+        assert first_call_args[2] == '159819.XSHE'
         combined = ' '.join(info_calls)
         assert 'target_weight' in combined
         assert 'current_weight' in combined
@@ -1720,12 +1792,22 @@ class TestSnapshotParams:
         assert params["TargetVol"] == mock_g.TargetVol
         assert params["fq_mode"] == mock_g.fq_mode
         assert params["history_buffer"] == mock_g.history_buffer
+        assert params["etf_names"] == mock_g.etf_names
 
     def test_snapshot_list_values_are_copies(self, strategy, mock_g):
         params = strategy.snapshot_params()
         # 修改快照不应影响 g
         params["etf_pool"].append("999999.XSHG")
         assert len(mock_g.etf_pool) == 3
+
+    def test_snapshot_upgrades_short_fund_codes(self, strategy, mock_g):
+        mock_g.etf_names = ['人工智能ETF易方达(159819)', '纳指ETF', '黄金ETF(518880)']
+        params = strategy.snapshot_params()
+        assert params["etf_names"] == [
+            '人工智能ETF易方达(159819.XSHE)',
+            '纳指ETF(513100.XSHG)',
+            '黄金ETF(518880.XSHG)',
+        ]
 
     def test_snapshot_captures_modified_g(self, strategy, mock_g):
         """修改 g 后再快照，params 应反映新值。"""
@@ -1793,6 +1875,12 @@ class TestValidateParams:
         mock_g.TargetVol = -0.1
         params = strategy.snapshot_params()
         with pytest.raises(ValueError, match="; "):
+            strategy.validate_params(params)
+
+    def test_etf_names_without_security_code_raises(self, strategy, mock_g):
+        params = strategy.snapshot_params()
+        params["etf_names"][0] = "人工智能ETF易方达"
+        with pytest.raises(ValueError, match="JoinQuant security code"):
             strategy.validate_params(params)
 
 

@@ -4,7 +4,7 @@ enable_profile()
 ============================================================
 策略名称：ETF 多因子轮动策略（线性乘数版）
 策略类型：周线级别、场内基金、多因子动态配置
-适用标的：AI ETF（159819）、纳指100 ETF（513100）、黄金 ETF（518880）
+适用标的：159819.XSHE、513100.XSHG、518880.XSHG（中文名运行时通过聚宽 API 读取）
 
 核心思想：
   趋势门槛判断"能不能买"，动量排序决定"买谁"，风险平价分配基础仓位，
@@ -42,6 +42,62 @@ FIELD_MAP = {
 }
 
 
+def fund_code(security):
+    """从聚宽证券代码中提取 6 位基金代码，用于报告和日志展示。"""
+    return str(security).split(".")[0]
+
+
+def format_etf_name(security, name):
+    """保证基金显示名使用 中文名(聚宽代码) 标准格式。"""
+    security = str(security)
+    code = fund_code(security)
+    display_name = str(name).strip() if name is not None else str(security)
+    full_suffix = "(%s)" % security
+    short_suffix = "(%s)" % code
+    if display_name == security:
+        return display_name
+    if display_name.endswith(full_suffix):
+        return display_name
+    if code and display_name.endswith(short_suffix):
+        display_name = display_name[:-len(short_suffix)].strip()
+    return "%s%s" % (display_name, full_suffix)
+
+
+def build_etf_display_names(pool, names=None):
+    """按 etf_pool 顺序生成带编号的基金显示名列表。"""
+    names = names or []
+    result = []
+    for i, etf in enumerate(pool):
+        base_name = names[i] if i < len(names) else etf
+        result.append(format_etf_name(etf, base_name))
+    return result
+
+
+def fetch_etf_official_name(security, fallback_name=None):
+    """通过聚宽 API 读取基金官方中文名，失败时回退到已有名称或代码。"""
+    try:
+        info = get_security_info(security)
+        for attr in ("display_name", "name"):
+            value = getattr(info, attr, None)
+            if value:
+                return str(value).strip()
+    except Exception as exc:
+        log.warning("fetch ETF official name failed: security=%s error=%s", security, exc)
+
+    return fallback_name or str(security)
+
+
+def load_etf_display_names(pool, fallback_names=None):
+    """从聚宽官方证券信息生成标准 ETF 显示名。"""
+    fallback_names = fallback_names or []
+    names = []
+    for i, etf in enumerate(pool):
+        fallback_name = fallback_names[i] if i < len(fallback_names) else None
+        official_name = fetch_etf_official_name(etf, fallback_name=fallback_name)
+        names.append(format_etf_name(etf, official_name))
+    return names
+
+
 # ============================================================
 # snapshot_params — 参数快照
 # ============================================================
@@ -51,9 +107,11 @@ def snapshot_params():
 
     核心计算函数通过接收 params 而非直接读 g，实现解耦。
     """
+    etf_pool = list(g.etf_pool)
+    etf_names = build_etf_display_names(etf_pool, list(g.etf_names))
     return {
-        "etf_pool": list(g.etf_pool),
-        "etf_names": list(g.etf_names),
+        "etf_pool": etf_pool,
+        "etf_names": etf_names,
         "benchmark": g.benchmark,
         "MA_long": g.MA_long,
         "MomShort": g.MomShort,
@@ -117,6 +175,11 @@ def validate_params(params):
         errors.append("RSRS_M must be positive and RSRS_N must be > 1")
     if not (0 <= params["CrowdStart"] < params["CrowdEnd"] <= 1):
         errors.append("Crowd thresholds must satisfy 0 <= CrowdStart < CrowdEnd <= 1")
+    if len(params["etf_pool"]) != len(params["etf_names"]):
+        errors.append("etf_pool and etf_names must have the same length")
+    for etf, name in zip(params["etf_pool"], params["etf_names"]):
+        if str(etf) not in str(name):
+            errors.append("etf_names must include JoinQuant security code: %s" % etf)
 
     if errors:
         raise ValueError("; ".join(errors))
@@ -174,11 +237,11 @@ def set_parameter(context):
 
     # ---- 资产池 ----
     g.etf_pool = [
-        '159819.XSHE',   # AI ETF
-        '513100.XSHG',   # 纳指100 ETF
-        '518880.XSHG',   # 黄金 ETF
+        '159819.XSHE',
+        '513100.XSHG',
+        '518880.XSHG',
     ]
-    g.etf_names = ['AI ETF', '纳指100ETF', '黄金ETF']
+    g.etf_names = load_etf_display_names(g.etf_pool)
 
     # ---- 趋势门槛 ----
     g.MA_long = 120
@@ -190,7 +253,7 @@ def set_parameter(context):
     g.w20 = 0.2
     g.w60 = 0.3
     g.w120 = 0.5
-    g.TopK = 2
+    g.TopK = 3
 
     # ---- 风险平价 ----
     g.VolWindow = 60
@@ -199,9 +262,9 @@ def set_parameter(context):
     # ---- RSRS 修正 ----
     g.RSRS_N = 18        # 回归窗口
     g.RSRS_M = 600       # 标准化窗口
-    g.RSRS_NegativeFullCut = 1.0
+    g.RSRS_NegativeFullCut = 1.8
     g.RSRSMinMultiplier = 0.0
-    g.RSRSMaxMultiplier = 1.0
+    g.RSRSMaxMultiplier = 1.3
 
     # ---- 拥挤度惩罚 ----
     g.CrowdWindow = 500
@@ -216,7 +279,7 @@ def set_parameter(context):
 
     # ---- 组合波动率控制 ----
     g.PortfolioVolWindow = 60
-    g.TargetVol = 0.12
+    g.TargetVol = 0.08
     g.MaxPortfolioVolScale = 1.0
 
     # ---- 仓位与交易约束 ----
@@ -242,13 +305,14 @@ def set_parameter(context):
 # ============================================================
 # _log_step — 调仓中间量诊断日志
 # ============================================================
-def _log_step(name, cn_name, pool, values, fmt=".4f"):
+def _log_step(name, cn_name, pool, values, fmt=".4f", etf_names=None):
     """
-    以 "[中文名] name: ETF=value" 格式逐只打印调仓中间量，便于云端回测诊断。
+    以 "[中文名] name: 基金名(聚宽代码)=value" 格式逐只打印调仓中间量，便于云端回测诊断。
 
     不在本地单测中验证日志格式，只保证聚宽云端 log.info 可输出。
     """
-    parts = ["%s=%%s" % etf for etf in pool]
+    labels = build_etf_display_names(pool, etf_names)
+    parts = ["%s=%%s" % label for label in labels]
     template = "[%s] %s: " % (cn_name, name) + ", ".join(parts)
     formatted = tuple(format(v, fmt) for v in values)
     log.info(template, *formatted)
@@ -283,6 +347,7 @@ def weekly_check(context):
     """每周开盘时执行一次完整的调仓流程。"""
     params = snapshot_params()
     pool = params["etf_pool"]
+    etf_names = params["etf_names"]
     n = len(pool)
 
     # 1. 拉取历史数据
@@ -290,27 +355,41 @@ def weekly_check(context):
 
     # 2. 计算趋势门槛
     trend_gates = compute_trend_gates(prices, pool, params)
-    _log_step("TrendGate", "趋势门槛", pool, trend_gates, fmt=".0f")
+    _log_step("TrendGate", "趋势门槛", pool, trend_gates, fmt=".0f", etf_names=etf_names)
 
     # 3. 筛选趋势成立资产，计算动量分数
     momentum_scores = compute_momentum_scores(prices, pool, trend_gates, params)
-    _log_step("MomentumScore", "动量分数", pool, momentum_scores, fmt=".4f")
+    _log_step("MomentumScore", "动量分数", pool, momentum_scores, fmt=".4f", etf_names=etf_names)
 
     # 4. TopK 选择
     selected = select_topk(momentum_scores, trend_gates, params)
-    _log_step("Selected", "TopK入选", pool, [1.0 if s else 0.0 for s in selected], fmt=".0f")
+    _log_step(
+        "Selected",
+        "TopK入选",
+        pool,
+        [1.0 if s else 0.0 for s in selected],
+        fmt=".0f",
+        etf_names=etf_names,
+    )
 
     # 5. 风险平价基础权重
     rp_weights = compute_rp_weights(prices, pool, selected, params)
-    _log_step("RPWeight", "风险平价权重", pool, rp_weights, fmt=".4f")
+    _log_step("RPWeight", "风险平价权重", pool, rp_weights, fmt=".4f", etf_names=etf_names)
 
     # 6. RSRS 线性修正乘数
     rsrs_multipliers = compute_rsrs_multipliers(prices, pool, params)
-    _log_step("RSRSMultiplier", "RSRS修正乘数", pool, rsrs_multipliers, fmt=".4f")
+    _log_step(
+        "RSRSMultiplier",
+        "RSRS修正乘数",
+        pool,
+        rsrs_multipliers,
+        fmt=".4f",
+        etf_names=etf_names,
+    )
 
     # 7. 拥挤度线性惩罚乘数
     crowd_penalties = compute_crowd_penalties(prices, pool, params)
-    _log_step("CrowdPenalty", "拥挤度惩罚", pool, crowd_penalties, fmt=".4f")
+    _log_step("CrowdPenalty", "拥挤度惩罚", pool, crowd_penalties, fmt=".4f", etf_names=etf_names)
 
     # 8. 合成 RawWeight
     raw_weights = compose_raw_weights(
@@ -323,7 +402,7 @@ def weekly_check(context):
 
     # 10. 最终权重
     final_weights = raw_weights * portfolio_vol_scale
-    _log_step("FinalWeight", "最终权重", pool, final_weights, fmt=".4f")
+    _log_step("FinalWeight", "最终权重", pool, final_weights, fmt=".4f", etf_names=etf_names)
 
     # 11. 应用交易约束
     final_weights = apply_weight_constraints(final_weights, params)
@@ -880,8 +959,10 @@ def execute_rebalance(context, pool, final_weights, params):
     """
     account_value = context.portfolio.total_value
     current_data = get_current_data()
+    etf_names = build_etf_display_names(pool, params.get("etf_names"))
 
     for i, etf in enumerate(pool):
+        etf_name = etf_names[i]
         target_value = account_value * final_weights[i]
         current_pos = context.portfolio.positions[etf]
         current_value = current_pos.total_amount * current_pos.price if current_pos.total_amount > 0 else 0
@@ -898,17 +979,17 @@ def execute_rebalance(context, pool, final_weights, params):
         # 停牌检查
         data = current_data[etf]
         if data.paused:
-            log.warning("skip paused ETF: %s", etf)
+            log.warning("skip paused ETF: %s security=%s", etf_name, etf)
             continue
 
         order_obj = order_target_value(etf, target_value)
         if order_obj is None:
             log.error(
-                "order failed: %s target_value=%.2f target_weight=%.4f current_weight=%.4f",
-                etf, target_value, final_weights[i], current_weight
+                "order failed: %s security=%s target_value=%.2f target_weight=%.4f current_weight=%.4f",
+                etf_name, etf, target_value, final_weights[i], current_weight
             )
         else:
             log.info(
-                "order sent: %s target_weight=%.4f current_weight=%.4f target_value=%.2f",
-                etf, final_weights[i], current_weight, target_value
+                "order sent: %s security=%s target_weight=%.4f current_weight=%.4f target_value=%.2f",
+                etf_name, etf, final_weights[i], current_weight, target_value
             )

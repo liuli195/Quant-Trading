@@ -1,0 +1,23 @@
+{
+  "strategy_file": "d:/My Project/Quant Trading/strategies/etf_factor_rotation/etf_factor_rotation.py",
+  "strategy": "etf_factor_rotation",
+  "scenario_id": "s01-rsrsmaxmultiplier-scan",
+  "start_date": "2021-01-01",
+  "end_date": "2026-04-30",
+  "capital": 100000,
+  "frequency": "1d",
+  "py_version": "Python3",
+  "batch_id": "20260507-rsrsmaxmultiplier-scan",
+  "estimated_minutes": 18,
+  "sweep": {
+    "strategy": "list",
+    "combinations": [
+      {"label": "RMM=1.0", "params": {"RSRSMaxMultiplier": 1.0}},
+      {"label": "RMM=1.1", "params": {"RSRSMaxMultiplier": 1.1}},
+      {"label": "RMM=1.2", "params": {"RSRSMaxMultiplier": 1.2}},
+      {"label": "RMM=1.3", "params": {"RSRSMaxMultiplier": 1.3}},
+      {"label": "RMM=1.4", "params": {"RSRSMaxMultiplier": 1.4}},
+      {"label": "RMM=1.5", "params": {"RSRSMaxMultiplier": 1.5}}
+    ]
+  }
+}

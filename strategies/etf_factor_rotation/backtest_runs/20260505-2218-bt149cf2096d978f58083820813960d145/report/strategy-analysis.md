@@ -36,7 +36,7 @@
 ## 4. 交易行为观察
 
 - **调仓频率**：24 次周检查，仅 3 周有交易（首次建仓 2025-11-03，首次清仓 2025-11-10，二次建仓 2025-12-22，二次清仓 2026-01-12）
-- **交易标的**：仅纳指 ETF (513100) 和黄金 ETF (518880)，AI ETF (159819) 从未实际建仓
+- **交易标的**：仅纳指ETF(513100.XSHG) 和黄金ETF(518880.XSHG)，人工智能ETF易方达(159819.XSHE) 从未实际建仓
 - **关键行为链**（以 2025-11-03 首次调仓为例）：
 
   ```
@@ -44,14 +44,14 @@
   MomentumScore: [0.87, 0.63, 0.50] → AI > 纳指 > 黄金
   Selected: [AI, 纳指] → TopK=2
   RPWeight: [0.26, 0.74, 0]
-  RSRSMultiplier: [0.43, 1.0, 1.0] → AI ETF 被 RSRS 大幅削减
+  RSRSMultiplier: [0.43, 1.0, 1.0] → 人工智能ETF易方达(159819.XSHE) 被 RSRS 大幅削减
   CrowdPenalty: [0.90, 0.45, 0.64] → 纳指拥挤度惩罚严重
   PortfolioVolScale: 0.66 → 组合波动率超 TargetVol=0.05
   FinalWeight: [0.066, 0.217, 0]
   → 裁剪后: AI=0 (低于 MinWeight=0.20), 纳指=0.217 (唯一建仓)
   ```
 
-- **根因诊断**：TargetVol=0.05 导致 PortfolioVolScale=0.66，结合 RSRS 和拥挤度惩罚，AI ETF 最终权重 0.066 < MinWeight=0.20，被裁剪掉。**MinWeight=0.20 过高，与 TargetVol=0.05 配合时几乎不可能同时持有两只 ETF**。
+- **根因诊断**：TargetVol=0.05 导致 PortfolioVolScale=0.66，结合 RSRS 和拥挤度惩罚，人工智能ETF易方达(159819.XSHE) 最终权重 0.066 < MinWeight=0.20，被裁剪掉。**MinWeight=0.20 过高，与 TargetVol=0.05 配合时几乎不可能同时持有两只 ETF**。
 
 ## 5. 参数灵敏度分析
 
@@ -78,11 +78,11 @@
 
 ### C1-SIG-009：MaxWeight 边界生效
 
-2025-11-03 首次建仓：纳指 ETF final_weight=0.217 < MaxWeight=0.30，该约束**未被触及**。MaxWeight 在 R3 参数下未成为活跃约束——TargetVol=0.05 先于 MaxWeight 绑定了仓位上限。
+2025-11-03 首次建仓：纳指ETF(513100.XSHG) final_weight=0.217 < MaxWeight=0.30，该约束**未被触及**。MaxWeight 在 R3 参数下未成为活跃约束——TargetVol=0.05 先于 MaxWeight 绑定了仓位上限。
 
 ### C1-SIG-010：MinWeight 边界生效
 
-2025-11-03：AI ETF final_weight=0.066 < MinWeight=0.20 → 裁剪为 0。MinWeight **生效**，且是 R3 中最活跃的约束之一。
+2025-11-03：人工智能ETF易方达(159819.XSHE) final_weight=0.066 < MinWeight=0.20 → 裁剪为 0。MinWeight **生效**，且是 R3 中最活跃的约束之一。
 
 ### 边界压力测试
 

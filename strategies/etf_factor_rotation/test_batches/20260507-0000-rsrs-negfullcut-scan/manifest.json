@@ -1,0 +1,75 @@
+{
+  "batch_id": "20260507-0000-rsrs-negfullcut-scan",
+  "strategy": "etf_factor_rotation",
+  "created": "2026-05-07T00:00:00",
+  "status": "pending",
+  "scenarios": {
+    "s02-rsrs-scan-mid": {
+      "status": "completed",
+      "runs": [
+        {
+          "run_id": "20260507-0341-bt235477ccecbc4cc4949bbccb467a0bde",
+          "label": "NFC=1.6",
+          "params_diff": {
+            "RSRS_NegativeFullCut": 1.6
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260507-0343-bt7c554142e9a47668c32aa3b07bc07f7b",
+          "label": "NFC=1.7",
+          "params_diff": {
+            "RSRS_NegativeFullCut": 1.7
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    "s01-rsrs-scan": {
+      "status": "completed",
+      "runs": [
+        {
+          "run_id": "20260507-0318-bt219e526c9941f131f8e08b9b5371359d",
+          "label": "NFC=1.0",
+          "params_diff": {
+            "RSRS_NegativeFullCut": 1.0
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260507-0320-bt92297a4c5b8e4bcc22b832c29ebc2e00",
+          "label": "NFC=1.2",
+          "params_diff": {
+            "RSRS_NegativeFullCut": 1.2
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260507-0322-bt377eeb5e8b9ccfb5545c41a042f8f7ae",
+          "label": "NFC=1.5",
+          "params_diff": {
+            "RSRS_NegativeFullCut": 1.5
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260507-0324-bt84435d141c06188fcfdf4031d1fb1c94",
+          "label": "NFC=1.8",
+          "params_diff": {
+            "RSRS_NegativeFullCut": 1.8
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260507-0326-bteb49d2cd9f2e0aa9814baa2177ac8eaf",
+          "label": "NFC=2.0",
+          "params_diff": {
+            "RSRS_NegativeFullCut": 2.0
+          },
+          "status": "completed"
+        }
+      ]
+    }
+  },
+  "updated": "2026-05-07T03:45:12"
+}
