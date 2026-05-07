@@ -1,0 +1,19 @@
+{
+  "strategy_file": "d:/My Project/Quant Trading/strategies/etf_factor_rotation/etf_factor_rotation.py",
+  "strategy": "etf_factor_rotation",
+  "scenario_id": "s01-topk-scan",
+  "start_date": "2021-01-01",
+  "end_date": "2026-04-30",
+  "capital": 500000,
+  "frequency": "1d",
+  "py_version": "Python3",
+  "batch_id": "20260507-topk-scan",
+  "estimated_minutes": 40,
+  "sweep": {
+    "strategy": "list",
+    "combinations": [
+      {"label": "TopK=2", "params": {"TopK": 2}},
+      {"label": "TopK=3", "params": {"TopK": 3}}
+    ]
+  }
+}

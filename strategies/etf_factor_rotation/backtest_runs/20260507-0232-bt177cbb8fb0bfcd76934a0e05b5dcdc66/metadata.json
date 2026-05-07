@@ -1,0 +1,19 @@
+{
+  "strategy_name": "etf_factor_rotation",
+  "strategy_file": "",
+  "strategy_dir": "",
+  "start_date_requested": "",
+  "start_date_effective": "2026-04-01",
+  "end_date_requested": "",
+  "end_date_effective": "2026-04-30",
+  "capital": 100000,
+  "backtest_id": "177cbb8fb0bfcd76934a0e05b5dcdc66",
+  "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=177cbb8fb0bfcd76934a0e05b5dcdc66",
+  "generated_at": "2026-05-06T18:32:57.402Z",
+  "extraction_method": "joinquant_detail_readonly_api",
+  "export_used": false,
+  "frequency": "1d",
+  "py_version": "Python3",
+  "internal_backtest_id": "a6e7ac560e344a4617ff8864169cfa8b",
+  "id_mismatch": true
+}

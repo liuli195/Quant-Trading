@@ -19,9 +19,14 @@ from pathlib import Path
 
 PARTIAL_TABS = {"logs"}
 SYM_MAP = {
-    "黄金ETF(518880.XSHG)": "黄金ETF",
-    "人工智能ETF易方达(159819.XSHE)": "AI ETF",
-    "纳指ETF(513100.XSHG)": "纳指ETF",
+    "黄金ETF(518880.XSHG)": "黄金ETF(518880.XSHG)",
+    "人工智能ETF易方达(159819.XSHE)": "人工智能ETF易方达(159819.XSHE)",
+    "纳指ETF(513100.XSHG)": "纳指ETF(513100.XSHG)",
+    "上证50ETF(510050.XSHG)": "上证50ETF(510050.XSHG)",
+    "50ETF(510050.XSHG)": "上证50ETF(510050.XSHG)",
+    "沪深300ETF(510300.XSHG)": "沪深300ETF(510300.XSHG)",
+    "300ETF(510300.XSHG)": "沪深300ETF(510300.XSHG)",
+    "创业板ETF(159915.XSHE)": "创业板ETF(159915.XSHE)",
 }
 
 
@@ -104,9 +109,7 @@ def transaction_to_md(text):
     md += "| 日期 | 标的 | 方向 | 数量 | 成交价 | 成交额 | 平仓盈亏 | 手续费 |\n"
     md += "|------|------|------|------|--------|--------|----------|--------|\n"
     for record in records:
-        symbol = record["symbol"]
-        for full, short in SYM_MAP.items():
-            symbol = symbol.replace(full, short)
+        symbol = _short_symbol(record["symbol"])
         md += (
             f"| {record['date']} | {symbol} | {record['dir']} | {record['amount']} | "
             f"{record['price']} | {record['value']} | {record['pnl']} | {record['comm']} |\n"
@@ -161,9 +164,7 @@ def position_to_md(text):
             if holding["type"] == "total":
                 md += f"| **合计** | | | **{holding['value']}** | |\n"
             else:
-                symbol = holding["sym"]
-                for full, short in SYM_MAP.items():
-                    symbol = symbol.replace(full, short)
+                symbol = _short_symbol(holding["sym"])
                 md += (
                     f"| {symbol} | {holding['qty']} | {holding['price']} | "
                     f"{holding['mv']} | {holding['pnl']} |\n"
@@ -179,9 +180,27 @@ def position_to_md(text):
 # 替代原来的 DOM 文本解析方式，数据完整度 100%。
 
 def _short_symbol(name):
+    code_match = re.search(r"\((\d{6}(?:\.[^)]+)?)\)", name)
     for full, short in SYM_MAP.items():
         name = name.replace(full, short)
+    if code_match:
+        raw_code = code_match.group(1)
+        security = _normalize_fund_security(raw_code)
+        short_suffix = f"({raw_code})"
+        full_suffix = f"({security})"
+        if raw_code != security and name.endswith(short_suffix):
+            name = name[:-len(short_suffix)] + full_suffix
+        if security not in name:
+            name = f"{name}({security})"
     return name
+
+
+def _normalize_fund_security(code):
+    if "." in code:
+        return code
+    if code.startswith(("15", "16", "18")):
+        return f"{code}.XSHE"
+    return f"{code}.XSHG"
 
 
 def api_transaction_to_md(transactions):

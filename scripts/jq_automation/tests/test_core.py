@@ -461,6 +461,42 @@ class CoreTests(unittest.TestCase):
         index2 = save.build_api_bundle_index("fake.json", files_written, api_data2)
         self.assertFalse(index2["tabs"]["daily_returns"]["partial"])
 
+    def test_short_symbol_keeps_standard_joinquant_code_format(self) -> None:
+        save = _load_save_backtest_data()
+
+        self.assertEqual(
+            save._short_symbol("人工智能ETF易方达(159819.XSHE)"),
+            "人工智能ETF易方达(159819.XSHE)",
+        )
+        self.assertEqual(
+            save._short_symbol("50ETF(510050.XSHG)"),
+            "上证50ETF(510050.XSHG)",
+        )
+        self.assertEqual(
+            save._short_symbol("黄金ETF(518880)"),
+            "黄金ETF(518880.XSHG)",
+        )
+
+    def test_api_position_report_keeps_full_security_code(self) -> None:
+        save = _load_save_backtest_data()
+
+        md = save.api_position_to_md([
+            {
+                "security": "基金",
+                "date": "2026-05-01",
+                "stock": "人工智能ETF易方达(159819.XSHE)",
+                "amount": "100",
+                "price": "1.000",
+                "value": "100",
+                "dailyGains": "0",
+                "gain": "0",
+                "avgCost": "1.000",
+                "positionPersent": "10%",
+            }
+        ])
+
+        self.assertIn("人工智能ETF易方达(159819.XSHE)", md)
+
     def test_apply_backtest_params_snippet_payload_includes_frequency_py_version(self) -> None:
         """验证 browser.apply_backtest_params 构造的 payload 包含 frequency 和 py_version。"""
         from scripts.jq_automation.browser import JoinQuantBrowser

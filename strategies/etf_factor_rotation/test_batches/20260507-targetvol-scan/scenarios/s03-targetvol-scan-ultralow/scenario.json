@@ -1,0 +1,21 @@
+{
+  "strategy_file": "d:/My Project/Quant Trading/strategies/etf_factor_rotation/etf_factor_rotation.py",
+  "strategy": "etf_factor_rotation",
+  "scenario_id": "s03-targetvol-scan-ultralow",
+  "start_date": "2021-01-01",
+  "end_date": "2026-04-30",
+  "capital": 100000,
+  "frequency": "1d",
+  "py_version": "Python3",
+  "batch_id": "20260507-targetvol-scan",
+  "estimated_minutes": 6,
+  "sweep": {
+    "strategy": "list",
+    "combinations": [
+      {"label": "TV=0.04", "params": {"TargetVol": 0.04}},
+      {"label": "TV=0.05", "params": {"TargetVol": 0.05}},
+      {"label": "TV=0.06", "params": {"TargetVol": 0.06}},
+      {"label": "TV=0.07", "params": {"TargetVol": 0.07}}
+    ]
+  }
+}

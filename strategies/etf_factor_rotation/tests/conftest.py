@@ -64,6 +64,17 @@ def strategy():
     module.FixedSlippage = Mock(return_value=Mock())
     module.get_price = MagicMock()
     module.order_target_value = MagicMock()
+    _security_names = {
+        '159819.XSHE': '人工智能ETF易方达',
+        '513100.XSHG': '纳指ETF',
+        '518880.XSHG': '黄金ETF',
+    }
+    module.get_security_info = MagicMock(
+        side_effect=lambda security: SimpleNamespace(
+            display_name=_security_names.get(security, security),
+            name=_security_names.get(security, security),
+        )
+    )
     # 默认返回：每只 ETF 的 current_data mock（paused=False）
     _default_current_data = {}
     for _etf in ['159819.XSHE', '513100.XSHG', '518880.XSHG']:
@@ -136,7 +147,11 @@ def mock_g(strategy):
             '513100.XSHG',
             '518880.XSHG',
         ],
-        etf_names=['AI ETF', '纳指100ETF', '黄金ETF'],
+        etf_names=[
+            '人工智能ETF易方达(159819.XSHE)',
+            '纳指ETF(513100.XSHG)',
+            '黄金ETF(518880.XSHG)',
+        ],
         MA_long=120,
         MomShort=20,
         MomMid=60,
@@ -149,9 +164,9 @@ def mock_g(strategy):
         annual_factor=252,
         RSRS_N=18,
         RSRS_M=600,
-        RSRS_NegativeFullCut=1.0,
+        RSRS_NegativeFullCut=1.8,
         RSRSMinMultiplier=0.0,
-        RSRSMaxMultiplier=1.0,
+        RSRSMaxMultiplier=1.3,
         CrowdWindow=500,
         CrowdRetShort=20,
         CrowdRetMid=60,
@@ -186,6 +201,16 @@ def _auto_reset_mocks(strategy):
     yield
     strategy.get_price.reset_mock(return_value=True)
     strategy.order_target_value.reset_mock(return_value=True)
+    _security_names = {
+        '159819.XSHE': '人工智能ETF易方达',
+        '513100.XSHG': '纳指ETF',
+        '518880.XSHG': '黄金ETF',
+    }
+    strategy.get_security_info.reset_mock()
+    strategy.get_security_info.side_effect = lambda security: SimpleNamespace(
+        display_name=_security_names.get(security, security),
+        name=_security_names.get(security, security),
+    )
     # get_current_data 必须显式赋值 return_value——reset_mock 只接受 bool 标志
     _cd_default = {}
     for _etf in ['159819.XSHE', '513100.XSHG', '518880.XSHG']:
