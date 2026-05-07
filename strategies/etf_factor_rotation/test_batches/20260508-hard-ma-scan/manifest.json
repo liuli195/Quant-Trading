@@ -1,0 +1,78 @@
+{
+  "batch_id": "20260508-hard-ma-scan",
+  "strategy": "etf_factor_rotation",
+  "created": "2026-05-08T00:10:00",
+  "status": "pending",
+  "scenarios": {
+    "s01-ma-long-scan": {
+      "status": "completed",
+      "runs": [
+        {
+          "run_id": "20260508-0013-bt869bfbeb9021c76b30f76a90dd622f6a",
+          "label": "MA=120_baseline",
+          "params_diff": {
+            "MA_long": 120
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260508-0014-bt9bb4faba66f1fb565ad2783fb33147c3",
+          "label": "MA=20",
+          "params_diff": {
+            "MA_long": 20
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994",
+          "label": "MA=40",
+          "params_diff": {
+            "MA_long": 40
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260508-0019-bt91c62e12c5cc7fd16dd43466b0b7d502",
+          "label": "MA=60",
+          "params_diff": {
+            "MA_long": 60
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260508-0021-bt5ce8b6f11fe037f9780b2e051ed2979d",
+          "label": "MA=80",
+          "params_diff": {
+            "MA_long": 80
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260508-0023-bt595479372f9c3d54da84c2f826894688",
+          "label": "MA=100",
+          "params_diff": {
+            "MA_long": 100
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260508-0025-bt3365e3ec6040aa54f1a2b8462d0dcf49",
+          "label": "MA=140",
+          "params_diff": {
+            "MA_long": 140
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260508-0027-btb2784ac85d31dd228ec8f7e4e36ce212",
+          "label": "MA=160",
+          "params_diff": {
+            "MA_long": 160
+          },
+          "status": "completed"
+        }
+      ]
+    }
+  },
+  "updated": "2026-05-08T00:29:55"
+}

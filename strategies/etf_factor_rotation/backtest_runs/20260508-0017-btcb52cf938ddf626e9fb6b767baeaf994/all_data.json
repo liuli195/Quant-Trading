@@ -1,0 +1,76 @@
+{
+  "api_export_json": "D:\\My Project\\Quant Trading\\strategies\\etf_factor_rotation\\backtest_runs\\20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994\\api_export.json",
+  "extraction_method": "research_bundle",
+  "generated_at": "2026-05-07T16:18:45.562247+00:00",
+  "counts": {
+    "results": 1289,
+    "positions": 2229,
+    "orders": 401,
+    "records": 0,
+    "balances": 1289,
+    "period_risk_tabs": 10
+  },
+  "partial": {
+    "results": false,
+    "positions": false,
+    "orders": false,
+    "records": false,
+    "risk": false,
+    "period_risks": false,
+    "balances": false,
+    "logs": true
+  },
+  "primary_extraction_method": "joinquant_research_get_backtest",
+  "fallback_extraction_method": "",
+  "research_export_path": "jq_auto_exports/research_backtest_cb52cf938ddf626e9fb6b767baeaf994.json",
+  "research_downloaded": true,
+  "detail_api_used": true,
+  "tabs": {
+    "daily_returns": {
+      "path": "tabs_raw/daily_returns.md",
+      "partial": false,
+      "record_count": 1289
+    },
+    "transactioninfo": {
+      "path": "tabs_raw/transactioninfo.md",
+      "partial": false,
+      "record_count": 401
+    },
+    "positioninfo": {
+      "path": "tabs_raw/positioninfo.md",
+      "partial": false,
+      "record_count": 2229
+    },
+    "records": {
+      "path": "tabs_raw/records.md",
+      "partial": false,
+      "record_count": 0
+    },
+    "balances": {
+      "path": "tabs_raw/balances.md",
+      "partial": false,
+      "record_count": 1289
+    },
+    "risk": {
+      "path": "tabs_raw/risk.md",
+      "partial": false,
+      "record_count": 31
+    },
+    "period_risks": {
+      "path": "tabs_raw/period_risks.md",
+      "partial": false,
+      "record_count": 10
+    },
+    "profile": {
+      "path": "tabs_raw/profile.md",
+      "partial": false,
+      "record_count": 3788
+    },
+    "logs": {
+      "path": "tabs_raw/logs.md",
+      "partial": true,
+      "record_count": 143
+    }
+  },
+  "note": "Generated from JoinQuant research get_backtest() schema v3 bundle. Platform logs are not provided by get_backtest()."
+}
