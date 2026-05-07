@@ -1,0 +1,22 @@
+{
+  "strategy_name": "etf_factor_rotation",
+  "strategy_file": "",
+  "strategy_dir": "",
+  "start_date_requested": "",
+  "start_date_effective": "",
+  "end_date_requested": "",
+  "end_date_effective": "",
+  "capital": null,
+  "backtest_id": "30cba1413b71d2db54bf0af0ab15eb9b",
+  "backtest_url": "",
+  "generated_at": "2026-05-07T18:53:07",
+  "extraction_method": "joinquant_research_get_backtest",
+  "primary_extraction_method": "joinquant_research_get_backtest",
+  "fallback_extraction_method": "",
+  "research_export_path": "jq_auto_exports/research_backtest_30cba1413b71d2db54bf0af0ab15eb9b.json",
+  "research_downloaded": true,
+  "detail_api_used": true,
+  "frequency": "每天",
+  "py_version": "Python3",
+  "internal_backtest_id": "ded274971538a01bfb137eda65f52e16"
+}

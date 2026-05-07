@@ -39,6 +39,7 @@ class ScenarioConfig:
     edit_url: str | None = None
     estimated_minutes: float = 0.0
     run_id: str | None = None
+    result_source: str = "auto"
     params_base: dict[str, Any] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
 
@@ -73,6 +74,7 @@ class ScenarioConfig:
             edit_url=self.edit_url,
             estimated_minutes=self.estimated_minutes,
             run_id=run_id or self.run_id,
+            result_source=self.result_source,
             params_base={**self.params_base, **run_spec.params_diff},
             raw={**self.raw, "_run_label": run_spec.label, "_run_params_diff": run_spec.params_diff},
         )
@@ -120,6 +122,7 @@ class ScenarioConfig:
             edit_url=_none_or_str(data.get("edit_url")),
             estimated_minutes=_parse_optional_float("estimated_minutes", estimated_raw),
             run_id=_none_or_str(data.get("run_id")),
+            result_source=_normalize_result_source(str(data.get("result_source") or "auto")),
             params_base=_dictify(data.get("params_base")),
             raw=dict(data),
         )
@@ -223,6 +226,13 @@ def _normalize_frequency(raw: str) -> str:
         f"Unsupported frequency: {raw!r}. "
         "Use '1d' (daily), '1m' (minute), 'tick', '5m', '15m', '30m', or '60m'."
     )
+
+
+def _normalize_result_source(raw: str) -> str:
+    value = raw.strip().lower()
+    if value in {"auto", "research", "detail"}:
+        return value
+    raise ConfigError("result_source must be one of: auto, research, detail")
 
 
 def _parse_capital(value: Any) -> int | float:

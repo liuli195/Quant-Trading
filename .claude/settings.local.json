@@ -94,7 +94,14 @@
       "PowerShell(& \".\\\\.venv\\\\Scripts\\\\python.exe\" -m scripts.jq_automation batch \"strategies/etf_factor_rotation/test_batches/20260507-targetvol-scan/manifest.json\" --yes)",
       "PowerShell(& \".\\\\.venv\\\\Scripts\\\\python.exe\" -m scripts.jq_automation batch \"strategies/etf_factor_rotation/test_batches/20260507-targetvol-scan/manifest.json\" --scenario \"s02-targetvol-scan-low\" --yes)",
       "PowerShell(& \".\\\\.venv\\\\Scripts\\\\python.exe\" -m scripts.jq_automation batch \"strategies/etf_factor_rotation/test_batches/20260507-targetvol-scan/manifest.json\" --scenario \"s03-targetvol-scan-ultralow\" --yes)",
-      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.jq_automation fetch 9185c8dff5682cc51043774c05817179 --strategy etf_dynamic_rebalance)"
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.jq_automation fetch 9185c8dff5682cc51043774c05817179 --strategy etf_dynamic_rebalance)",
+      "Bash(git show *)",
+      "Bash(mkdir -p .claude/skills/jq-param-scan/references .claude/skills/jq-param-scan/templates .claude/skills/jq-param-scan/agents .claude/skills/jq-ab-test/references .claude/skills/jq-ab-test/agents)",
+      "Bash(python -m scripts.path_tools.refactor check)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.jq_automation --help 2>&1)"
+    ],
+    "additionalDirectories": [
+      "d:\\My Project\\Quant Trading\\.claude\\skills\\jq-param-scan"
     ]
   },
   "outputStyle": "Explanatory"

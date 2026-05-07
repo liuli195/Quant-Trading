@@ -478,7 +478,7 @@ def run_ab_experiment(args: Any, config: ABExperimentConfig, manifest_path: Path
 
     # We import these lazily to avoid circular imports at module level.
     from .browser import AutomationError, CompileFailed, JoinQuantBrowser
-    from .cli import _bundle_options, _fetch_with_dom_fallback
+    from .cli import _bundle_options, _fetch_backtest_data, _selected_result_source
     from .cli import _set_quota_status as cli_set_quota_status
 
     import asyncio
@@ -489,7 +489,8 @@ def run_ab_experiment(args: Any, config: ABExperimentConfig, manifest_path: Path
             AutomationError=AutomationError,
             CompileFailed=CompileFailed,
             _bundle_options=_bundle_options,
-            _fetch_with_dom_fallback=_fetch_with_dom_fallback,
+            _fetch_backtest_data=_fetch_backtest_data,
+            _selected_result_source=_selected_result_source,
             cli_set_quota_status=cli_set_quota_status,
         )
     )
@@ -505,7 +506,8 @@ async def _ab_run_session(
     AutomationError: Any,
     CompileFailed: Any,
     _bundle_options: Any,
-    _fetch_with_dom_fallback: Any,
+    _fetch_backtest_data: Any,
+    _selected_result_source: Any,
     cli_set_quota_status: Any,
 ) -> int:
     """Core async session: one browser, one editor, sequential variant uploads."""
@@ -635,10 +637,18 @@ async def _ab_run_session(
                     "capital": config.base["capital"],
                     "frequency": str(config.base.get("frequency") or "每天"),
                     "pyVersion": str(config.base.get("py_version") or "Python3"),
+                    "resultSource": str(config.base.get("result_source") or "auto"),
                 }
-                fetched = await _fetch_with_dom_fallback(browser, bundle_opts)
+                fetched = await _fetch_backtest_data(
+                    browser,
+                    bundle_opts,
+                    result_source=_selected_result_source(
+                        args,
+                        str(config.base.get("result_source") or "auto"),
+                    ),
+                )
 
-                if fetched.method == "api":
+                if fetched.method in {"api", "research"}:
                     run_dir = save_api_bundle(fetched.payload, strategy=config.strategy, run_id=run_id)
                     actual_minutes = extract_actual_minutes_from_bundle(fetched.payload)
                 else:

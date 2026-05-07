@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -32,6 +33,8 @@ from .quota import (
     save_ledger,
     update_actual_minutes,
 )
+from .research import EXTRACTION_METHOD as RESEARCH_EXTRACTION_METHOD
+from .research import ResearchBacktestFetcher, ResearchFetchError
 
 
 def _compile_date_range(end_date_cap: str | None = None) -> tuple[str, str]:
@@ -60,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return int(args.func(args))
-    except (AutomationError, CompileFailed, ConfigError, LocalCheckError, ManifestError, QuotaError, OSError) as exc:
+    except (AutomationError, CompileFailed, ConfigError, LocalCheckError, ManifestError, QuotaError, ResearchFetchError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     except Exception as exc:
@@ -94,6 +97,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("scenario_config")
     run_parser.add_argument("--yes", action="store_true", help="Confirm this run was manually approved.")
     run_parser.add_argument("--backtest-timeout", type=int, default=180, help="Formal backtest wait timeout in seconds.")
+    add_result_source_arg(run_parser)
     add_browser_args(run_parser)
     run_parser.set_defaults(func=cmd_run)
 
@@ -108,6 +112,7 @@ def build_parser() -> argparse.ArgumentParser:
     fetch_parser.add_argument("--frequency", default="每天")
     fetch_parser.add_argument("--py-version", default="Python3")
     fetch_parser.add_argument("--backtest-timeout", type=int, default=180)
+    add_result_source_arg(fetch_parser)
     add_browser_args(fetch_parser)
     fetch_parser.set_defaults(func=cmd_fetch)
 
@@ -116,6 +121,7 @@ def build_parser() -> argparse.ArgumentParser:
     batch_parser.add_argument("--scenario", action="append", help="Limit to one scenario id; can be repeated.")
     batch_parser.add_argument("--yes", action="store_true", help="Confirm this batch was manually approved.")
     batch_parser.add_argument("--backtest-timeout", type=int, default=180)
+    add_result_source_arg(batch_parser)
     add_browser_args(batch_parser)
     batch_parser.set_defaults(func=cmd_batch)
 
@@ -132,6 +138,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("ab_config")
     run_parser.add_argument("--yes", action="store_true")
     run_parser.add_argument("--backtest-timeout", type=int, default=180)
+    add_result_source_arg(run_parser)
     add_browser_args(run_parser)
     run_parser.set_defaults(func=cmd_ab_run)
 
@@ -148,6 +155,15 @@ def add_browser_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--user-data-dir", default=str(default_chrome_user_data_dir()), help="Dedicated Chrome profile directory.")
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--slow-mo", type=int, default=0)
+
+
+def add_result_source_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--result-source",
+        choices=("auto", "research", "detail"),
+        default=None,
+        help="Backtest result source: auto (research then detail fallback), research, or detail.",
+    )
 
 
 def cmd_compile_check(args: argparse.Namespace) -> int:
@@ -261,6 +277,7 @@ def _run_one(args: argparse.Namespace, manifest_path: Path, sid: str,
                 estimated_minutes=config.estimated_minutes,
                 raw={**config.raw, "_run_label": run_entry.get("label"),
                      "_run_params_diff": run_entry.get("params_diff", {})},
+                result_source=config.result_source,
             )
         else:
             run_config = config
@@ -377,11 +394,15 @@ async def _run_scenario(
             )
             save_ledger(ledger, ledger_path)
             await browser.wait_backtest_complete(timeout_ms=args.backtest_timeout * 1000)
-            fetched = await _fetch_with_dom_fallback(browser, _bundle_options(config))
+            fetched = await _fetch_backtest_data(
+                browser,
+                _bundle_options(config),
+                result_source=_selected_result_source(args, config.result_source),
+            )
             if not run_id:
                 backtest_id = browser.current_backtest_id() or fetched.payload.get("metadata", {}).get("backtest_id", "")
                 run_id = config.run_id or make_run_id(backtest_id)
-            if fetched.method == "api":
+            if fetched.method in {"api", "research"}:
                 run_dir = save_api_bundle(fetched.payload, strategy=config.strategy, run_id=run_id)
                 actual_minutes = extract_actual_minutes_from_bundle(fetched.payload)
             else:
@@ -434,10 +455,14 @@ async def _fetch_existing(args: argparse.Namespace) -> int:
             "frequency": args.frequency,
             "pyVersion": args.py_version,
         }
-        fetched = await _fetch_with_dom_fallback(browser, options)
+        fetched = await _fetch_backtest_data(
+            browser,
+            options,
+            result_source=_selected_result_source(args, "auto"),
+        )
         if not args.run_id:
             run_id = make_run_id(browser.current_backtest_id() or fetched.payload.get("metadata", {}).get("backtest_id", backtest_id))
-        if fetched.method == "api":
+        if fetched.method in {"api", "research"}:
             run_dir = save_api_bundle(fetched.payload, strategy=args.strategy, run_id=run_id)
         else:
             run_dir = save_dom_tabs(fetched.payload, strategy=args.strategy, run_id=run_id)
@@ -453,6 +478,58 @@ async def _fetch_with_dom_fallback(browser: JoinQuantBrowser, options: dict[str,
         return FetchedBacktestData(method="dom", payload=await browser.collect_dom_tabs())
 
 
+async def _fetch_backtest_data(
+    browser: JoinQuantBrowser,
+    options: dict[str, Any],
+    *,
+    result_source: str = "auto",
+) -> FetchedBacktestData:
+    if result_source == "detail":
+        return await _fetch_with_dom_fallback(browser, options)
+
+    backtest_id = browser.current_backtest_id() or str(options.get("backtestId") or options.get("backtest_id") or "")
+    supplemental_detail: dict[str, Any] = {}
+    try:
+        supplemental_detail = await browser.fetch_detail_supplemental({**options, "backtestId": backtest_id})
+    except Exception as exc:
+        supplemental_detail = {"detail_api_used": False, "detail_supplemental_error": str(exc)}
+
+    try:
+        if os.environ.get("JQ_AUTO_FORCE_RESEARCH_FAILURE"):
+            raise ResearchFetchError("forced research failure via JQ_AUTO_FORCE_RESEARCH_FAILURE")
+        payload = await ResearchBacktestFetcher(browser).fetch(
+            backtest_id,
+            {**options, "backtestId": backtest_id},
+            supplemental_detail=supplemental_detail,
+        )
+        return FetchedBacktestData(method="research", payload=payload)
+    except Exception as exc:
+        if result_source == "research":
+            raise ResearchFetchError(str(exc)) from exc
+        print(f"Research bundle failed, falling back to detail API/DOM: {exc}", file=sys.stderr)
+        await browser.open_backtest_detail(backtest_id)
+        fallback = await _fetch_with_dom_fallback(browser, options)
+        _annotate_research_fallback(fallback.payload, fallback.method, exc)
+        return fallback
+
+
+def _annotate_research_fallback(payload: dict[str, Any], method: str, exc: Exception) -> None:
+    if not isinstance(payload, dict):
+        return
+    metadata = payload.setdefault("metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+        payload["metadata"] = metadata
+    actual_method = str(metadata.get("extraction_method") or method)
+    metadata.setdefault("attempted_primary_extraction_method", RESEARCH_EXTRACTION_METHOD)
+    metadata["primary_extraction_method"] = actual_method
+    metadata["fallback_extraction_method"] = actual_method
+    metadata["research_downloaded"] = False
+    metadata["research_fetch_failed"] = True
+    metadata["research_fetch_error"] = str(exc)
+    metadata["detail_api_used"] = method == "api"
+
+
 def _bundle_options(config: ScenarioConfig) -> dict[str, Any]:
     return {
         "strategy": config.strategy,
@@ -462,7 +539,13 @@ def _bundle_options(config: ScenarioConfig) -> dict[str, Any]:
         "capital": config.capital,
         "frequency": config.frequency,
         "pyVersion": config.py_version,
+        "resultSource": config.result_source,
     }
+
+
+def _selected_result_source(args: argparse.Namespace, config_value: str | None = None) -> str:
+    value = getattr(args, "result_source", None) or config_value or "auto"
+    return str(value).lower()
 
 
 def _config_manifest_path(config: ScenarioConfig) -> Path | None:

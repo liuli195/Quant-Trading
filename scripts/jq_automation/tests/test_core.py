@@ -93,6 +93,34 @@ class CoreTests(unittest.TestCase):
                     }
                 )
 
+    def test_scenario_config_parses_result_source(self) -> None:
+        config = ScenarioConfig.from_mapping(
+            {
+                "strategy_file": "strategies/demo/demo.py",
+                "strategy": "demo",
+                "scenario_id": "s01",
+                "start_date": "2026-04-01",
+                "end_date": "2026-05-01",
+                "capital": 100000,
+                "result_source": "research",
+            }
+        )
+        self.assertEqual(config.result_source, "research")
+        self.assertEqual(config.for_run(config.expand_runs()[0]).result_source, "research")
+
+        with self.assertRaisesRegex(ConfigError, "result_source"):
+            ScenarioConfig.from_mapping(
+                {
+                    "strategy_file": "strategies/demo/demo.py",
+                    "strategy": "demo",
+                    "scenario_id": "s01",
+                    "start_date": "2026-04-01",
+                    "end_date": "2026-05-01",
+                    "capital": 100000,
+                    "result_source": "unknown",
+                }
+            )
+
     def test_scenario_config_rejects_reversed_dates(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaisesRegex(ConfigError, "start_date"):
@@ -399,6 +427,152 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(opts["pyVersion"], "Python2")
         self.assertEqual(opts["startDate"], "2026-04-01")
         self.assertEqual(opts["capital"], 100000)
+        self.assertEqual(opts["resultSource"], "auto")
+
+    def test_research_script_contains_all_get_backtest_methods(self) -> None:
+        from scripts.jq_automation.research import ResearchFetchOptions, build_research_export_script
+
+        script = build_research_export_script(
+            ResearchFetchOptions(backtest_id="bt123", strategy="demo", export_path="jq_auto_exports/bt123.json")
+        )
+
+        self.assertIn("get_backtest", script)
+        for method in [
+            "get_results",
+            "get_positions",
+            "get_orders",
+            "get_records",
+            "get_risk",
+            "get_period_risks",
+            "get_balances",
+        ]:
+            self.assertIn(method, script)
+        self.assertIn("write_file", script)
+
+    def test_research_script_handles_joinquant_cloud_runtime_quirks(self) -> None:
+        from scripts.jq_automation.research import (
+            ResearchFetchOptions,
+            _EXECUTE_RESEARCH_SCRIPT_JS,
+            _READ_RESEARCH_FILE_JS,
+            build_research_export_script,
+        )
+
+        script = build_research_export_script(
+            ResearchFetchOptions(backtest_id="bt123", strategy="demo", export_path="jq_auto_exports/bt123.json")
+        )
+
+        self.assertIn("_metadata = json.loads(", script)
+        self.assertNotIn("_metadata = {", script)
+        self.assertIn('os.path.expanduser("~")', script)
+        self.assertIn("os.makedirs", script)
+        self.assertIn("specs && specs.kernelspecs", _EXECUTE_RESEARCH_SCRIPT_JS)
+        self.assertIn('ctype.includes("text/html")', _READ_RESEARCH_FILE_JS)
+        self.assertIn("continue;", _READ_RESEARCH_FILE_JS)
+
+    def test_research_context_selects_joinquant_research_iframe(self) -> None:
+        from scripts.jq_automation.research import _research_context
+
+        class FakeFrame:
+            url = "https://www.joinquant.com/user/123/tree?"
+
+            async def evaluate(self, _script: str) -> str:
+                return "complete"
+
+        class FakePage:
+            url = "https://www.joinquant.com/research"
+
+            def __init__(self) -> None:
+                self.frame_obj = FakeFrame()
+                self.selector_waited = False
+
+            async def wait_for_selector(self, _selector: str, timeout: int) -> None:
+                self.selector_waited = timeout == 30000
+
+            def frame(self, name: str):
+                return self.frame_obj if name == "research" else None
+
+            async def wait_for_timeout(self, _timeout: int) -> None:
+                return None
+
+        page = FakePage()
+        result = asyncio.run(_research_context(page))
+        self.assertIs(result, page.frame_obj)
+        self.assertTrue(page.selector_waited)
+
+    def test_normalize_research_bundle_schema_v3(self) -> None:
+        from scripts.jq_automation.research import ResearchFetchOptions, normalize_research_bundle
+
+        bundle = normalize_research_bundle(
+            {
+                "results": [{"time": "2026-01-01", "returns": 0.1, "benchmark_returns": 0.05}],
+                "positions": [{"time": "2026-01-01", "security": "510300.XSHG", "amount": 100}],
+                "orders": [{"time": "2026-01-01", "security": "510300.XSHG", "amount": 100}],
+                "records": [{"time": "2026-01-01", "score": 1}],
+                "risk": {"algorithm_return": 0.1},
+                "period_risks": {"alpha": [{"date": "2026-01", "1month": 0.1}]},
+                "balances": [{"time": "2026-01-01", "total_value": 100000}],
+            },
+            fetch_options=ResearchFetchOptions(
+                backtest_id="bt123",
+                strategy="demo",
+                strategy_name="demo",
+                export_path="jq_auto_exports/bt123.json",
+            ),
+            supplemental_detail={"runtime": {"data": {"needSeconds": 60}}, "logs_partial": True},
+        )
+
+        self.assertEqual(bundle["metadata"]["schema_version"], 3)
+        self.assertEqual(bundle["metadata"]["extraction_method"], "joinquant_research_get_backtest")
+        self.assertTrue(bundle["metadata"]["research_downloaded"])
+        self.assertEqual(bundle["counts"]["results"], 1)
+        self.assertTrue(bundle["partial"]["logs"])
+        self.assertEqual(bundle["supplemental_detail"]["runtime"]["data"]["needSeconds"], 60)
+
+    def test_save_research_bundle_data_outputs_existing_contract(self) -> None:
+        save = _load_save_backtest_data()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp) / "run"
+            tabs_dir = run_dir / "tabs_raw"
+            run_dir.mkdir()
+            tabs_dir.mkdir()
+            api_path = run_dir / "api_export.json"
+            api_data = {
+                "metadata": {
+                    "schema_version": 3,
+                    "strategy_name": "demo",
+                    "backtest_id": "bt123",
+                    "extraction_method": "joinquant_research_get_backtest",
+                    "primary_extraction_method": "joinquant_research_get_backtest",
+                    "research_export_path": "jq_auto_exports/bt123.json",
+                    "research_downloaded": True,
+                    "detail_api_used": True,
+                },
+                "results": [{"time": "2026-01-01", "returns": 0.1, "benchmark_returns": 0.05}],
+                "positions": [{"time": "2026-01-01", "security": "510300.XSHG", "amount": 100, "price": 4.0}],
+                "orders": [{"time": "2026-01-01", "security": "510300.XSHG", "amount": 100, "price": 4.0}],
+                "records": [{"time": "2026-01-01", "score": 1}],
+                "risk": {"algorithm_return": 0.1, "annual_algo_return": 0.2, "max_drawdown": 0.03},
+                "period_risks": {"alpha": [{"date": "2026-01", "1month": 0.1}]},
+                "balances": [{"time": "2026-01-01", "total_value": 100000}],
+                "supplemental_detail": {"logs_partial": True, "logs_count": 1000, "profile_text": ""},
+                "counts": {"results": 1, "positions": 1, "orders": 1, "records": 1, "balances": 1, "period_risk_tabs": 1},
+                "partial": {"logs": True},
+            }
+            api_path.write_text(json.dumps(api_data, ensure_ascii=False), encoding="utf-8")
+
+            save.save_api_data(str(api_path), str(run_dir), tabs_dir=str(tabs_dir))
+
+            self.assertTrue((tabs_dir / "daily_returns.md").is_file())
+            self.assertTrue((tabs_dir / "transactioninfo.md").is_file())
+            self.assertTrue((tabs_dir / "records.md").is_file())
+            meta = json.loads((run_dir / "metadata.json").read_text(encoding="utf-8"))
+            self.assertEqual(meta["primary_extraction_method"], "joinquant_research_get_backtest")
+            summary = json.loads((run_dir / "summary_metrics.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["策略收益"], "10.00%")
+            index = json.loads((run_dir / "all_data.json").read_text(encoding="utf-8"))
+            self.assertEqual(index["extraction_method"], "research_bundle")
+            self.assertTrue(index["tabs"]["logs"]["partial"])
 
     def test_metadata_from_api_bundle_preserves_internal_id_and_mismatch(self) -> None:
         save = _load_save_backtest_data()
@@ -415,12 +589,23 @@ class CoreTests(unittest.TestCase):
                 "capital": 100000,
                 "frequency": "1d",
                 "py_version": "Python3",
+                "attempted_primary_extraction_method": "joinquant_research_get_backtest",
+                "primary_extraction_method": "joinquant_detail_readonly_api",
+                "fallback_extraction_method": "joinquant_detail_readonly_api",
+                "research_downloaded": False,
+                "research_fetch_failed": True,
+                "research_fetch_error": "forced research failure",
+                "detail_api_used": True,
             }
         }
         meta = save.metadata_from_api_bundle(bundle)
         self.assertEqual(meta["backtest_id"], "detail-abc")
         self.assertEqual(meta["internal_backtest_id"], "internal-xyz")
         self.assertTrue(meta.get("id_mismatch"))
+        self.assertEqual(meta["attempted_primary_extraction_method"], "joinquant_research_get_backtest")
+        self.assertEqual(meta["fallback_extraction_method"], "joinquant_detail_readonly_api")
+        self.assertTrue(meta["research_fetch_failed"])
+        self.assertEqual(meta["research_fetch_error"], "forced research failure")
 
         # 无 mismatch 时不应设置 id_mismatch
         bundle_no_mismatch = {
@@ -443,6 +628,15 @@ class CoreTests(unittest.TestCase):
             ("logs.md", 50),
         ]
         api_data = {
+            "metadata": {
+                "attempted_primary_extraction_method": "joinquant_research_get_backtest",
+                "primary_extraction_method": "joinquant_detail_readonly_api",
+                "fallback_extraction_method": "joinquant_detail_readonly_api",
+                "research_downloaded": False,
+                "research_fetch_failed": True,
+                "research_fetch_error": "forced research failure",
+                "detail_api_used": True,
+            },
             "counts": {"result_rows": 804, "transactions": 10, "logs": 50},
             "partial": {"results": True, "logs": False},
         }
@@ -452,6 +646,9 @@ class CoreTests(unittest.TestCase):
 
         self.assertTrue(tabs["daily_returns"]["partial"], "daily_returns should be partial when partial.results is True")
         self.assertFalse(tabs["logs"]["partial"])
+        self.assertEqual(index["attempted_primary_extraction_method"], "joinquant_research_get_backtest")
+        self.assertEqual(index["fallback_extraction_method"], "joinquant_detail_readonly_api")
+        self.assertTrue(index["research_fetch_failed"])
 
         # 当 partial.results 为 False 时
         api_data2 = {
@@ -460,6 +657,21 @@ class CoreTests(unittest.TestCase):
         }
         index2 = save.build_api_bundle_index("fake.json", files_written, api_data2)
         self.assertFalse(index2["tabs"]["daily_returns"]["partial"])
+
+    def test_annotate_research_fallback_marks_detail_payload(self) -> None:
+        from scripts.jq_automation.cli import _annotate_research_fallback
+
+        payload = {"metadata": {"extraction_method": "joinquant_detail_readonly_api"}}
+        _annotate_research_fallback(payload, "api", RuntimeError("research unavailable"))
+
+        meta = payload["metadata"]
+        self.assertEqual(meta["attempted_primary_extraction_method"], "joinquant_research_get_backtest")
+        self.assertEqual(meta["primary_extraction_method"], "joinquant_detail_readonly_api")
+        self.assertEqual(meta["fallback_extraction_method"], "joinquant_detail_readonly_api")
+        self.assertFalse(meta["research_downloaded"])
+        self.assertTrue(meta["research_fetch_failed"])
+        self.assertEqual(meta["research_fetch_error"], "research unavailable")
+        self.assertTrue(meta["detail_api_used"])
 
     def test_short_symbol_keeps_standard_joinquant_code_format(self) -> None:
         save = _load_save_backtest_data()

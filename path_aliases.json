@@ -24,6 +24,9 @@
     "docs_images": "{docs}/images",
     "jq_analyze_skill": "{skills}/jq-analyze",
     "jq_fix_skill": "{skills}/jq-fix",
+    "jq_run_skill": "{skills}/jq-run",
+    "jq_param_scan_skill": "{skills}/jq-param-scan",
+    "jq_ab_test_skill": "{skills}/jq-ab-test",
     "joinquant_data": "{docs}/joinquant-data",
     "joinquant_quota_ledger": "{joinquant_data}/quota_ledger",
     "quant_reports": "{docs}/Quant_Reports"

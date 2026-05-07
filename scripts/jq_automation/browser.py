@@ -249,6 +249,115 @@ class JoinQuantBrowser:
             pass
         return None
 
+    async def fetch_detail_supplemental(self, options: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Fetch detail-page-only fields used to supplement research results."""
+        page = self._require_page()
+        return await page.evaluate(
+            """
+            async (options) => {
+              const detailBacktestId = options?.backtestId
+                || options?.backtest_id
+                || new URLSearchParams(location.search).get('backtestId')
+                || "";
+              const internalBacktestId = window.backtestId
+                || document.querySelector("#backtestId")?.value
+                || detailBacktestId;
+              const apiId = internalBacktestId || detailBacktestId;
+              if (!apiId) {
+                throw new Error("backtestId not found on detail page");
+              }
+
+              async function fetchJson(url) {
+                const response = await fetch(url, {
+                  credentials: "include",
+                  headers: { "X-Requested-With": "XMLHttpRequest" },
+                });
+                if (!response.ok) throw new Error(`${response.status} ${url}`);
+                return response.json();
+              }
+
+              async function fetchText(url) {
+                const response = await fetch(url, {
+                  credentials: "include",
+                  headers: { "X-Requested-With": "XMLHttpRequest" },
+                });
+                if (!response.ok) throw new Error(`${response.status} ${url}`);
+                return response.text();
+              }
+
+              async function collectLogMeta(endpoint) {
+                const pages = [];
+                let offset = 0;
+                for (let page = 0; page < 20; page += 1) {
+                  const query = `/algorithm/backtest/${endpoint}?backtestId=${apiId}&offset=${offset}&ajax=1`;
+                  const json = await fetchJson(query);
+                  const data = json.data || {};
+                  const batch = data.logArr || [];
+                  pages.push({
+                    page,
+                    query,
+                    count: batch.length,
+                    offset,
+                    responseOffset: data.offset ?? null,
+                    max: data.max === true,
+                  });
+                  if (!batch.length || data.max === true) break;
+                  offset += batch.length;
+                }
+                return {
+                  count: pages.reduce((sum, item) => sum + item.count, 0),
+                  partial: pages.at(-1)?.max === true,
+                  pages,
+                };
+              }
+
+              const result = {
+                detail_backtest_id: detailBacktestId,
+                internal_backtest_id: internalBacktestId,
+                detail_api_used: true,
+                detail_api_url: location.href,
+                runtime: null,
+                source: null,
+                profile_text: "",
+                logs_partial: null,
+                logs_count: null,
+                error_logs_partial: null,
+                error_logs_count: null,
+                errors: {},
+              };
+
+              const tasks = [
+                ["runtime", () => fetchJson(`/algorithm/backtest/runTimeInfo?backtestId=${apiId}&ajax=1`)],
+                ["source", () => fetchJson(`/algorithm/backtest/source?backtestId=${apiId}&ajax=1`)],
+                ["profile_text", () => fetchText(`/algorithm/backtest/profile?backtestId=${apiId}&ajax=1`)],
+                ["logs", () => collectLogMeta("log")],
+                ["error_logs", () => collectLogMeta("error")],
+              ];
+
+              for (const [key, fn] of tasks) {
+                try {
+                  const value = await fn();
+                  if (key === "logs") {
+                    result.logs_partial = value.partial;
+                    result.logs_count = value.count;
+                    result.logs_pages = value.pages;
+                  } else if (key === "error_logs") {
+                    result.error_logs_partial = value.partial;
+                    result.error_logs_count = value.count;
+                    result.error_logs_pages = value.pages;
+                  } else {
+                    result[key] = value;
+                  }
+                } catch (error) {
+                  result.errors[key] = error && error.message ? error.message : String(error);
+                }
+              }
+              return result;
+            }
+            """,
+            options or {},
+        )
+
     async def _install_extract_contract(self) -> None:
         page = self._require_page()
         source = self.snippet_reader("extract.js")

@@ -446,11 +446,216 @@ def metadata_from_api_bundle(api_data):
             "frequency": bundle_meta.get("frequency", ""),
             "py_version": bundle_meta.get("py_version", ""),
             "internal_backtest_id": bundle_meta.get("internal_backtest_id", ""),
+            "attempted_primary_extraction_method": bundle_meta.get("attempted_primary_extraction_method", ""),
+            "primary_extraction_method": bundle_meta.get("primary_extraction_method", ""),
+            "fallback_extraction_method": bundle_meta.get("fallback_extraction_method", ""),
+            "research_export_path": bundle_meta.get("research_export_path", ""),
+            "research_downloaded": bundle_meta.get("research_downloaded", False),
+            "research_fetch_failed": bundle_meta.get("research_fetch_failed", False),
+            "research_fetch_error": bundle_meta.get("research_fetch_error", ""),
+            "detail_api_used": bundle_meta.get("detail_api_used", False),
         }
     )
     if bundle_meta.get("id_mismatch"):
         meta["id_mismatch"] = True
     return meta
+
+
+def metadata_from_research_bundle(api_data):
+    meta = default_metadata(extraction_method="research")
+    bundle_meta = api_data.get("metadata") or {}
+    supplemental = api_data.get("supplemental_detail") or {}
+    meta.update(
+        {
+            "strategy_name": bundle_meta.get("strategy_name", ""),
+            "start_date_effective": bundle_meta.get("start_date_effective", ""),
+            "end_date_effective": bundle_meta.get("end_date_effective", ""),
+            "capital": bundle_meta.get("capital"),
+            "backtest_id": bundle_meta.get("backtest_id", ""),
+            "backtest_url": bundle_meta.get("backtest_url", ""),
+            "generated_at": bundle_meta.get("generated_at") or datetime.now(timezone.utc).isoformat(),
+            "extraction_method": bundle_meta.get("extraction_method", "joinquant_research_get_backtest"),
+            "primary_extraction_method": bundle_meta.get("primary_extraction_method", "joinquant_research_get_backtest"),
+            "fallback_extraction_method": bundle_meta.get("fallback_extraction_method", ""),
+            "research_export_path": bundle_meta.get("research_export_path", ""),
+            "research_downloaded": bundle_meta.get("research_downloaded", False),
+            "detail_api_used": bundle_meta.get("detail_api_used", supplemental.get("detail_api_used", False)),
+            "frequency": bundle_meta.get("frequency", ""),
+            "py_version": bundle_meta.get("py_version", ""),
+            "internal_backtest_id": supplemental.get("internal_backtest_id", ""),
+        }
+    )
+    return meta
+
+
+def summary_metrics_from_research_bundle(api_data):
+    risk = api_data.get("risk") or {}
+    if not isinstance(risk, dict):
+        risk = {}
+    summary = summary_metrics_from_stats({"data": risk})
+
+    aliases = {
+        "策略收益": ["algorithm_return", "returns", "total_returns", "total_return"],
+        "策略年化收益": ["annual_algo_return", "annual_return", "algorithm_annual_return"],
+        "基准收益": ["benchmark_return", "benchmark_returns"],
+        "超额收益": ["excess_return"],
+        "最大回撤": ["max_drawdown"],
+        "阿尔法": ["alpha"],
+        "贝塔": ["beta"],
+        "夏普比率": ["sharpe", "sharp"],
+        "索提诺比率": ["sortino"],
+        "信息比率": ["information", "information_ratio"],
+        "策略波动率": ["algorithm_volatility", "volatility", "algo_volatility"],
+        "基准波动率": ["benchmark_volatility"],
+    }
+    percent_keys = {"策略收益", "策略年化收益", "基准收益", "超额收益", "最大回撤"}
+    for label, keys in aliases.items():
+        if summary.get(label):
+            continue
+        for key in keys:
+            if key in risk and risk[key] not in (None, ""):
+                try:
+                    value = float(risk[key])
+                    summary[label] = f"{value * 100:.2f}%" if label in percent_keys else f"{value:.3f}"
+                except (TypeError, ValueError):
+                    summary[label] = str(risk[key])
+                break
+    return summary
+
+
+def _research_time(value):
+    if value in (None, ""):
+        return ""
+    text = str(value)
+    if "T" in text:
+        return text.split("T", 1)[0]
+    if " " in text:
+        return text.split(" ", 1)[0]
+    return text
+
+
+def _pick(row, *keys):
+    if not isinstance(row, dict):
+        return ""
+    for key in keys:
+        if key in row and row[key] not in (None, ""):
+            return row[key]
+    return ""
+
+
+def _escape_md(value):
+    return str(value).replace("|", "\\|").replace("\n", "<br>")
+
+
+def _generic_rows_to_md(title, rows):
+    md = f"# {title}\n\n"
+    if isinstance(rows, dict):
+        rows = [rows]
+    elif not isinstance(rows, list):
+        rows = [rows] if rows not in (None, "") else []
+    if not rows:
+        return md + "(无数据)\n"
+    dict_rows = [row for row in rows if isinstance(row, dict)]
+    if not dict_rows:
+        return md + "\n".join(str(row) for row in rows) + "\n"
+    keys = []
+    for row in dict_rows:
+        for key in row.keys():
+            if key not in keys:
+                keys.append(key)
+    keys = keys[:16]
+    md += f"- 记录数：{len(rows)}\n\n"
+    md += "| " + " | ".join(keys) + " |\n"
+    md += "| " + " | ".join("---" for _ in keys) + " |\n"
+    for row in dict_rows:
+        md += "| " + " | ".join(_escape_md(row.get(key, "")) for key in keys) + " |\n"
+    return md
+
+
+def research_results_to_md(results):
+    md = "# 每日收益\n\n"
+    if isinstance(results, dict):
+        results = [results]
+    if not results:
+        return md + "(无收益数据)\n"
+    md += f"- 交易日数：{len(results)}\n\n"
+    md += "| 日期 | 策略收益 | 基准收益 | 超额收益 |\n"
+    md += "|------|----------|----------|----------|\n"
+    for row in results:
+        date = _research_time(_pick(row, "time", "date", "datetime"))
+        strat = _pick(row, "returns", "return", "algorithm_return", "algorithm_returns")
+        bench = _pick(row, "benchmark_returns", "benchmark_return")
+        try:
+            excess = float(strat) - float(bench)
+            excess_text = f"{excess:.6f}"
+        except (TypeError, ValueError):
+            excess_text = ""
+        md += f"| {date} | {strat} | {bench} | {excess_text} |\n"
+    return md
+
+
+def research_orders_to_md(orders):
+    md = "# 交易详情\n\n"
+    if isinstance(orders, dict):
+        orders = [orders]
+    if not orders:
+        return md + "(无交易数据)\n"
+    md += f"- 订单记录：{len(orders)}\n\n"
+    md += "| 时间 | 标的 | 方向 | 开平 | 数量 | 成交量 | 价格 | 手续费 | 状态 |\n"
+    md += "|------|------|------|------|------|--------|------|--------|------|\n"
+    for row in orders:
+        security = _pick(row, "security_name", "security", "stock")
+        md += (
+            f"| {_research_time(_pick(row, 'time', 'match_time', 'date'))} | {security} | "
+            f"{_pick(row, 'side', 'transaction')} | {_pick(row, 'action')} | "
+            f"{_pick(row, 'amount')} | {_pick(row, 'filled')} | {_pick(row, 'price')} | "
+            f"{_pick(row, 'commission')} | {_pick(row, 'status')} |\n"
+        )
+    return md
+
+
+def research_positions_to_md(positions):
+    md = "# 每日持仓与收益\n\n"
+    if isinstance(positions, dict):
+        positions = [positions]
+    if not positions:
+        return md + "(无持仓数据)\n"
+    by_date = {}
+    for row in positions:
+        date = _research_time(_pick(row, "time", "date", "datetime"))
+        by_date.setdefault(date, []).append(row)
+    md += f"- 持仓天数：{len(by_date)}\n\n"
+    for date in sorted(by_date):
+        md += f"## {date}\n\n"
+        md += "| 标的 | 数量 | 价格 | 当日盈亏 | 累计盈亏 | 成本价 | 方向 |\n"
+        md += "|------|------|------|----------|----------|--------|------|\n"
+        for row in by_date[date]:
+            security = _pick(row, "security_name", "security", "stock")
+            md += (
+                f"| {security} | {_pick(row, 'amount')} | {_pick(row, 'price')} | "
+                f"{_pick(row, 'daily_gains', 'dailyGains')} | {_pick(row, 'gains', 'gain')} | "
+                f"{_pick(row, 'avg_cost', 'avgCost')} | {_pick(row, 'side')} |\n"
+            )
+        md += "\n"
+    return md
+
+
+def research_risk_to_md(risk):
+    rows = []
+    if isinstance(risk, dict):
+        rows = [{"metric": key, "value": value} for key, value in risk.items()]
+    return _generic_rows_to_md("风险指标", rows)
+
+
+def research_period_risks_to_md(period_risks):
+    md = "# 分期风险指标\n\n"
+    if not isinstance(period_risks, dict) or not period_risks:
+        return md + "(无分期风险数据)\n"
+    for name, rows in period_risks.items():
+        md += f"## {name}\n\n"
+        md += _generic_rows_to_md(str(name), rows if isinstance(rows, list) else [rows]).split("\n\n", 1)[-1]
+        md += "\n"
+    return md
 
 
 def write_report_files(api_data, run_dir, report_dir, files_written):
@@ -487,6 +692,35 @@ def write_report_files(api_data, run_dir, report_dir, files_written):
             ("report/backtest_report.md", 1),
         ]
     )
+
+
+def write_report_files_for_research(api_data, meta, summary, report_dir):
+    os.makedirs(report_dir, exist_ok=True)
+    counts = api_data.get("counts", {})
+    partial = api_data.get("partial", {})
+
+    def line(key):
+        return f"| {key} | {summary.get(key, '')} |"
+
+    backtest_report = "# 回测数据汇总\n\n"
+    backtest_report += f"- 策略名称：{meta.get('strategy_name', '')}\n"
+    backtest_report += f"- 回测 ID：{meta.get('backtest_id', '')}\n"
+    backtest_report += f"- 区间：{meta.get('start_date_effective', '')} 至 {meta.get('end_date_effective', '')}\n"
+    backtest_report += "- 提取方式：聚宽研究环境 get_backtest()；详情页接口仅作补充。\n\n"
+    backtest_report += "## 核心指标\n\n| 指标 | 值 |\n| --- | --- |\n"
+    for key in ["策略收益", "策略年化收益", "基准收益", "超额收益", "最大回撤", "夏普比率", "阿尔法", "贝塔", "信息比率"]:
+        backtest_report += line(key) + "\n"
+    backtest_report += "\n## 数据覆盖\n\n| 数据 | 记录数 | 完整度 |\n| --- | ---: | --- |\n"
+    backtest_report += f"| 每日收益 | {counts.get('results', '')} | {'部分' if partial.get('results') else '完整'} |\n"
+    backtest_report += f"| 每日持仓&收益 | {counts.get('positions', '')} | {'部分' if partial.get('positions') else '完整'} |\n"
+    backtest_report += f"| 订单/交易 | {counts.get('orders', '')} | {'部分' if partial.get('orders') else '完整'} |\n"
+    backtest_report += f"| record 记录 | {counts.get('records', '')} | {'部分' if partial.get('records') else '完整'} |\n"
+    backtest_report += f"| 每日账户市值 | {counts.get('balances', '')} | {'部分' if partial.get('balances') else '完整'} |\n"
+    backtest_report += f"| 分期风险 | {counts.get('period_risk_tabs', '')} | {'部分' if partial.get('period_risks') else '完整'} |\n"
+    backtest_report += f"| 平台日志 |  | {'详情页接口部分' if partial.get('logs') else '研究 API 不提供'} |\n"
+
+    with open(os.path.join(report_dir, "backtest_report.md"), "w", encoding="utf-8") as file:
+        file.write(backtest_report)
 
 
 def _ensure_repo_on_path():
@@ -544,6 +778,9 @@ def save_api_data(api_json_path, run_dir, tabs_dir=None):
 
     with open(api_json_path, "r", encoding="utf-8") as file:
         api_data = json.load(file)
+
+    if api_data.get("metadata", {}).get("schema_version") == 3:
+        return save_research_bundle_data(api_json_path, api_data, run_dir, tabs_dir, report_dir)
 
     if api_data.get("metadata", {}).get("schema_version") == 2 or "risk_tabs" in api_data:
         return save_api_bundle_data(api_json_path, api_data, run_dir, tabs_dir, report_dir)
@@ -651,6 +888,75 @@ def save_api_bundle_data(api_json_path, api_data, run_dir, tabs_dir, report_dir)
         json.dump(index, file, ensure_ascii=False, indent=2)
 
     print(f"Saved {len(files_written)} API bundle files to {tabs_dir}")
+    for name, count in files_written:
+        print(f"  {name}: {count} records")
+    print(f"Created index file: {os.path.join(run_dir, 'all_data.json')}")
+    return {name: count for name, count in files_written}
+
+
+def save_research_bundle_data(api_json_path, api_data, run_dir, tabs_dir, report_dir):
+    """Research get_backtest() schema v3 bundle -> existing output contract."""
+    files_written = []
+    supplemental = api_data.get("supplemental_detail") or {}
+
+    outputs = {
+        "daily_returns.md": research_results_to_md(api_data.get("results", [])),
+        "transactioninfo.md": research_orders_to_md(api_data.get("orders", [])),
+        "positioninfo.md": research_positions_to_md(api_data.get("positions", [])),
+        "records.md": _generic_rows_to_md("Record 记录", api_data.get("records", [])),
+        "balances.md": _generic_rows_to_md("每日账户市值", api_data.get("balances", [])),
+        "risk.md": research_risk_to_md(api_data.get("risk", {})),
+        "period_risks.md": research_period_risks_to_md(api_data.get("period_risks", {})),
+        "profile.md": api_profile_to_md(supplemental.get("profile_text", "")),
+    }
+
+    logs_note = "# 策略日志\n\n"
+    logs_note += "- 主数据源为研究环境 get_backtest()，该 API 不提供平台日志。\n"
+    if supplemental.get("logs_count") not in (None, ""):
+        logs_note += f"- 详情页日志接口可读记录数：{supplemental.get('logs_count')}\n"
+    if supplemental.get("logs_partial"):
+        logs_note += "- 详情页日志接口返回 partial，上限通常为 1000 条。\n"
+    logs_note += "\n完整业务日志应通过策略侧 write_file() JSONL 方案产出。\n"
+    outputs["logs.md"] = logs_note
+
+    for filename, content in outputs.items():
+        with open(os.path.join(tabs_dir, filename), "w", encoding="utf-8") as file:
+            file.write(content)
+        key = filename.replace(".md", "")
+        count = 0
+        if key == "daily_returns":
+            count = len(api_data.get("results", []))
+        elif key == "transactioninfo":
+            count = len(api_data.get("orders", []))
+        elif key == "positioninfo":
+            count = len(api_data.get("positions", []))
+        elif key == "records":
+            count = len(api_data.get("records", []))
+        elif key == "balances":
+            count = len(api_data.get("balances", []))
+        elif key == "risk":
+            count = len(api_data.get("risk", {})) if isinstance(api_data.get("risk"), dict) else 0
+        elif key == "period_risks":
+            count = len(api_data.get("period_risks", {})) if isinstance(api_data.get("period_risks"), dict) else 0
+        else:
+            count = len(content)
+        files_written.append((filename, count))
+
+    metadata = metadata_from_research_bundle(api_data)
+    summary_metrics = summary_metrics_from_research_bundle(api_data)
+
+    with open(os.path.join(run_dir, "metadata.json"), "w", encoding="utf-8") as file:
+        json.dump(metadata, file, ensure_ascii=False, indent=2)
+    with open(os.path.join(run_dir, "summary_metrics.json"), "w", encoding="utf-8") as file:
+        json.dump(summary_metrics, file, ensure_ascii=False, indent=2)
+
+    write_report_files_for_research(api_data, metadata, summary_metrics, report_dir)
+
+    index = build_research_bundle_index(api_json_path, files_written, api_data)
+    with open(os.path.join(run_dir, "all_data.json"), "w", encoding="utf-8") as file:
+        json.dump(index, file, ensure_ascii=False, indent=2)
+
+    print(f"Saved {len(files_written)} research bundle files to {tabs_dir}")
     for name, count in files_written:
         print(f"  {name}: {count} records")
     print(f"Created index file: {os.path.join(run_dir, 'all_data.json')}")
@@ -783,6 +1089,7 @@ def build_api_index(api_json_path, files_written):
 
 def build_api_bundle_index(api_json_path, files_written, api_data):
     partial = api_data.get("partial", {})
+    meta = api_data.get("metadata", {})
 
     def is_partial(name):
         key = name.replace(".md", "")
@@ -802,6 +1109,13 @@ def build_api_bundle_index(api_json_path, files_written, api_data):
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "counts": api_data.get("counts", {}),
         "partial": partial,
+        "attempted_primary_extraction_method": meta.get("attempted_primary_extraction_method", ""),
+        "primary_extraction_method": meta.get("primary_extraction_method", meta.get("extraction_method", "")),
+        "fallback_extraction_method": meta.get("fallback_extraction_method", ""),
+        "research_downloaded": meta.get("research_downloaded", False),
+        "research_fetch_failed": meta.get("research_fetch_failed", False),
+        "research_fetch_error": meta.get("research_fetch_error", ""),
+        "detail_api_used": meta.get("detail_api_used", False),
         "tabs": {
             name.replace(".md", "").replace("report/", ""): {
                 "path": f"tabs_raw/{name}" if not name.startswith("report/") else name,
@@ -811,6 +1125,51 @@ def build_api_bundle_index(api_json_path, files_written, api_data):
             for name, count in files_written
         },
         "note": "Generated from one fetchExistingBacktestBundle() JSON payload; no JoinQuant export endpoint was confirmed or used.",
+    }
+
+
+def build_research_bundle_index(api_json_path, files_written, api_data):
+    partial = api_data.get("partial", {})
+    meta = api_data.get("metadata", {})
+
+    def is_partial(name):
+        key = name.replace(".md", "")
+        if key == "daily_returns":
+            return bool(partial.get("results"))
+        if key == "transactioninfo":
+            return bool(partial.get("orders"))
+        if key == "positioninfo":
+            return bool(partial.get("positions"))
+        if key == "records":
+            return bool(partial.get("records"))
+        if key == "balances":
+            return bool(partial.get("balances"))
+        if key == "period_risks":
+            return bool(partial.get("period_risks"))
+        if key == "logs":
+            return bool(partial.get("logs"))
+        return False
+
+    return {
+        "api_export_json": os.path.abspath(api_json_path),
+        "extraction_method": "research_bundle",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "counts": api_data.get("counts", {}),
+        "partial": partial,
+        "primary_extraction_method": meta.get("primary_extraction_method"),
+        "fallback_extraction_method": meta.get("fallback_extraction_method", ""),
+        "research_export_path": meta.get("research_export_path", ""),
+        "research_downloaded": meta.get("research_downloaded", False),
+        "detail_api_used": meta.get("detail_api_used", False),
+        "tabs": {
+            name.replace(".md", ""): {
+                "path": f"tabs_raw/{name}",
+                "partial": is_partial(name),
+                "record_count": count,
+            }
+            for name, count in files_written
+        },
+        "note": "Generated from JoinQuant research get_backtest() schema v3 bundle. Platform logs are not provided by get_backtest().",
     }
 
 

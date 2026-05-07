@@ -17,9 +17,11 @@
   - `report/strategy-analysis.md` — 策略分析（每次回测必须产出）
   - `report/performance-analysis.md` — 性能分析（每次回测必须产出）
   - `tabs_raw/` — 聚宽原始指标（收益、回撤、夏普、换手等）
+- `strategies/<name>/ab_experiments/<name>/report/` — A/B experiment delta reports
 - `docs/` / `docs/joinquant-data/` — 聚宽文档镜像与研究资料
 - `scripts/jq_automation/` — jq-auto 云端回测工具
 - `scripts/path_tools/` — 路径治理工具（aliases.py / refactor.py）
+- `.claude/skills/` — AI agent 技能，详见 ## Skills
 - `path_aliases.json` — 目录别名配置，新增脚本引用结果目录时须通过别名解析，不硬编码路径
 
 ## 工具入口
@@ -27,9 +29,20 @@
 - 聚宽 API 文档：`docs/joinquant-api.md`（离线，优先）| <https://www.joinquant.com/help/api/help#name:api>（在线）
 - 语法检查：`.\.venv\Scripts\python.exe -m py_compile <策略文件>`
 - 单元测试：`.\.venv\Scripts\python.exe -m pytest <策略>/tests -q`
-- 云端回测：`python -m scripts.jq-auto`（首次需在 Chrome 手动登录聚宽，后续工具自动复用登录态）
+- 云端回测：`python -m scripts.jq_automation`（首次需在 Chrome 手动登录聚宽，后续工具自动复用登录态）
+  子命令：`compile-check` / `upload` / `run` / `fetch` / `batch` / `ab expand|run|report`
 - 路径别名解析：`python -m scripts.path_tools.aliases resolve <别名> <参数>`
 - 路径引用校验：`python -m scripts.path_tools.refactor check`
+
+## Skills
+
+`.claude/skills/` 中的 AI agent 技能：
+
+- `jq-run` — 云端回测全流程（上传、编译、运行、抓取），消耗每日额度
+- `jq-analyze` — 本地分析回测结果（报告、批次对比、趋势跟踪、跨策略对比）
+- `jq-fix` — 本地修复策略代码，不启动云端回测
+- `jq-param-scan` — 参数扫描（生成网格 → 批量回测 → 对比报告），消耗额度
+- `jq-ab-test` — A/B 实验（设计校验 → 执行 → bootstrap 显著性检验），消耗额度
 
 ## 通用约定
 

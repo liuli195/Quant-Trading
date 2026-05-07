@@ -76,6 +76,8 @@ def extract_actual_minutes_from_bundle(bundle: dict[str, Any]) -> float | None:
     CPU-seconds consumed by the backtest.  We convert to minutes.
     """
     runtime = bundle.get("runtime", {})
+    if not runtime and isinstance(bundle.get("supplemental_detail"), dict):
+        runtime = bundle["supplemental_detail"].get("runtime", {})
     data = runtime.get("data", {}) if isinstance(runtime, dict) else {}
     need_seconds = data.get("needSeconds")
     if isinstance(need_seconds, (int, float)) and need_seconds > 0:
