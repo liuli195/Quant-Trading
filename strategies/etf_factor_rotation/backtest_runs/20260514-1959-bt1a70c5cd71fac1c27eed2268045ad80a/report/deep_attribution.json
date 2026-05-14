@@ -1,0 +1,874 @@
+{
+  "meta": {
+    "run_id": "20260514-1959-bt1a70c5cd71fac1c27eed2268045ad80a",
+    "strategy": "etf_factor_rotation",
+    "period": "2021-01-01 to 2026-04-30",
+    "capital": 100000,
+    "etfs": [
+      "人工智能ETF易方达(159819.XSHE)",
+      "纳指ETF(513100.XSHG)",
+      "黄金ETF(518880.XSHG)"
+    ],
+    "etf_codes": [
+      "159819.XSHE",
+      "513100.XSHG",
+      "518880.XSHG"
+    ]
+  },
+  "dimension_1_per_etf": {
+    "人工智能ETF易方达(159819.XSHE)": {
+      "short_name": "AI_ETF",
+      "code": "159819.XSHE",
+      "total_pnl": 22201.3,
+      "total_days_held": 607,
+      "unique_hold_days": 607,
+      "first_hold": "2021-01-11",
+      "last_hold": "2026-04-30",
+      "win_days": 305,
+      "loss_days": 290,
+      "win_rate": 0.5024711696869851,
+      "avg_daily_pnl": 36.575453047775945,
+      "max_daily_gain": 2763.0,
+      "max_daily_loss": -1554.8,
+      "total_positive_pnl": 106497.3,
+      "total_negative_pnl": -84296.0,
+      "pnl_ratio": 1.2633731137895037,
+      "total_trades": 121,
+      "open_trades": 58,
+      "close_trades": 63,
+      "total_fees": 177.07,
+      "factor_exposure": {
+        "trend_gates": {
+          "mean": 0.49264705882352944,
+          "std": 0.4999459313326345,
+          "median": 0.0,
+          "min": 0.0,
+          "max": 1.0,
+          "nonzero_ratio": 0.49264705882352944
+        },
+        "rp_weights": {
+          "mean": 0.14566592710062834,
+          "std": 0.19383343798704175,
+          "median": 0.0,
+          "min": 0.0,
+          "max": 1.0,
+          "nonzero_ratio": 0.49264705882352944
+        },
+        "momentum_scores": {
+          "mean": 0.35618872549019603,
+          "std": 0.389049842233828,
+          "median": 0.0,
+          "min": 0.0,
+          "max": 1.0,
+          "nonzero_ratio": 0.49264705882352944
+        },
+        "momentum_tilts": {
+          "mean": 0.4974111519607844,
+          "std": 0.5098537559950576,
+          "median": 0.0,
+          "min": 0.0,
+          "max": 1.1666666666666667,
+          "nonzero_ratio": 0.49264705882352944
+        },
+        "rsrs_tilts": {
+          "mean": 0.49976769469321003,
+          "std": 0.5272968140156944,
+          "median": 0.0,
+          "min": 0.0,
+          "max": 1.3,
+          "nonzero_ratio": 0.49264705882352944
+        },
+        "tilted_weights": {
+          "mean": 0.14883843271705577,
+          "std": 0.19963118134471597,
+          "median": 0.0,
+          "min": 0.0,
+          "max": 1.0,
+          "nonzero_ratio": 0.49264705882352944
+        },
+        "crowd_penalties": {
+          "mean": 0.8916324978181596,
+          "std": 0.2022815223493548,
+          "median": 1.0,
+          "min": 0.3,
+          "max": 1.0,
+          "nonzero_ratio": 1.0
+        },
+        "raw_weights": {
+          "mean": 0.12693546998404154,
+          "std": 0.19106664954656344,
+          "median": 0.0,
+          "min": 0.0,
+          "max": 1.0,
+          "nonzero_ratio": 0.49264705882352944
+        },
+        "final_weights": {
+          "mean": 0.07742236162068367,
+          "std": 0.09726659931237641,
+          "median": 0.0,
+          "min": 0.0,
+          "max": 0.4150701133778838,
+          "nonzero_ratio": 0.46691176470588236
+        }
+      }
+    },
+    "纳指ETF(513100.XSHG)": {
+      "short_name": "NASDAQ_ETF",
+      "code": "513100.XSHG",
+      "total_pnl": 32972.5,
+      "total_days_held": 801,
+      "unique_hold_days": 801,
+      "first_hold": "2021-01-04",
+      "last_hold": "2026-04-30",
+      "win_days": 421,
+      "loss_days": 353,
+      "win_rate": 0.5255930087390761,
+      "avg_daily_pnl": 41.164169787765296,
+      "max_daily_gain": 3077.2,
+      "max_daily_loss": -2197.0,
+      "total_positive_pnl": 140618.0,
+      "total_negative_pnl": -107645.5,
+      "pnl_ratio": 1.306306348152036,
+      "total_trades": 131,
+      "open_trades": 71,
+      "close_trades": 60,
+      "total_fees": 227.01999999999998,
+      "factor_exposure": {
+        "trend_gates": {
+          "mean": 0.6360294117647058,
+          "std": 0.48114031127618906,
+          "median": 1.0,
+          "min": 0.0,
+          "max": 1.0,
+          "nonzero_ratio": 0.6360294117647058
+        },
+        "rp_weights": {
+          "mean": 0.2756670976123728,
+          "std": 0.26965299229098477,
+          "median": 0.277577062475023,
+          "min": 0.0,
+          "max": 1.0,
+          "nonzero_ratio": 0.6360294117647058
+        },
+        "momentum_scores": {
+          "mean": 0.4875,
+          "std": 0.4028987591575816,
+          "median": 0.5666666666666667,
+          "min": 0.0,
+          "max": 1.0,
+          "nonzero_ratio": 0.6360294117647058
+        },
+        "momentum_tilts": {
+          "mean": 0.6462469362745098,
+          "std": 0.49405151812755627,
+          "median": 0.925,
+          "min": 0.0,
+          "max": 1.1875,
+          "nonzero_ratio": 0.6360294117647058
+        },
+        "rsrs_tilts": {
+          "mean": 0.6354331612503955,
+          "std": 0.5070606192712145,
+          "median": 0.7985143554835739,
+          "min": 0.0,
+          "max": 1.3,
+          "nonzero_ratio": 0.6360294117647058
+        },
+        "tilted_weights": {
+          "mean": 0.2857107176410494,
+          "std": 0.28748158966706344,
+          "median": 0.24864512384525372,
+          "min": 0.0,
+          "max": 1.0,
+          "nonzero_ratio": 0.6360294117647058
+        },
+        "crowd_penalties": {
+          "mean": 0.939125114575745,
+          "std": 0.12212761962483738,
+          "median": 1.0,
+          "min": 0.446359226359226,
+          "max": 1.0,
+          "nonzero_ratio": 1.0
+        },
+        "raw_weights": {
+          "mean": 0.25902796917418275,
+          "std": 0.2703472230332142,
+          "median": 0.22857585832471783,
+          "min": 0.0,
+          "max": 1.0,
+          "nonzero_ratio": 0.6360294117647058
+        },
+        "final_weights": {
+          "mean": 0.18324454432955872,
+          "std": 0.17636530794951363,
+          "median": 0.15220276762067142,
+          "min": 0.0,
+          "max": 0.6,
+          "nonzero_ratio": 0.625
+        }
+      }
+    },
+    "黄金ETF(518880.XSHG)": {
+      "short_name": "GOLD_ETF",
+      "code": "518880.XSHG",
+      "total_pnl": 48983.49999999999,
+      "total_days_held": 988,
+      "unique_hold_days": 988,
+      "first_hold": "2021-05-10",
+      "last_hold": "2026-03-27",
+      "win_days": 539,
+      "loss_days": 435,
+      "win_rate": 0.5455465587044535,
+      "avg_daily_pnl": 49.578441295546554,
+      "max_daily_gain": 2028.0,
+      "max_daily_loss": -3915.5,
+      "total_positive_pnl": 183606.5,
+      "total_negative_pnl": -134623.0,
+      "pnl_ratio": 1.3638568446699302,
+      "total_trades": 136,
+      "open_trades": 63,
+      "close_trades": 73,
+      "total_fees": 274.64,
+      "factor_exposure": {
+        "trend_gates": {
+          "mean": 0.7720588235294118,
+          "std": 0.41950446545870335,
+          "median": 1.0,
+          "min": 0.0,
+          "max": 1.0,
+          "nonzero_ratio": 0.7720588235294118
+        },
+        "rp_weights": {
+          "mean": 0.5088140341105283,
+          "std": 0.3339331201881428,
+          "median": 0.5635495362427124,
+          "min": 0.0,
+          "max": 1.0,
+          "nonzero_ratio": 0.7720588235294118
+        },
+        "momentum_scores": {
+          "mean": 0.567156862745098,
+          "std": 0.3636486824986007,
+          "median": 0.6,
+          "min": 0.0,
+          "max": 1.0,
+          "nonzero_ratio": 0.7720588235294118
+        },
+        "momentum_tilts": {
+          "mean": 0.7570772058823529,
+          "std": 0.4174058455179863,
+          "median": 0.95,
+          "min": 0.0,
+          "max": 1.1666666666666667,
+          "nonzero_ratio": 0.7720588235294118
+        },
+        "rsrs_tilts": {
+          "mean": 0.7650238761184096,
+          "std": 0.44994927750627506,
+          "median": 0.9650218234179353,
+          "min": 0.0,
+          "max": 1.3,
+          "nonzero_ratio": 0.7720588235294118
+        },
+        "tilted_weights": {
+          "mean": 0.4955979084654243,
+          "std": 0.3448340374964591,
+          "median": 0.5033689054770003,
+          "min": 0.0,
+          "max": 1.0,
+          "nonzero_ratio": 0.7720588235294118
+        },
+        "crowd_penalties": {
+          "mean": 0.8852574131618249,
+          "std": 0.1964379715538231,
+          "median": 1.0,
+          "min": 0.3,
+          "max": 1.0,
+          "nonzero_ratio": 1.0
+        },
+        "raw_weights": {
+          "mean": 0.41933802717430085,
+          "std": 0.31873600192026724,
+          "median": 0.4023793030536633,
+          "min": 0.0,
+          "max": 1.0,
+          "nonzero_ratio": 0.7720588235294118
+        },
+        "final_weights": {
+          "mean": 0.2991496853052618,
+          "std": 0.21227199230364874,
+          "median": 0.3116613701358662,
+          "min": 0.0,
+          "max": 0.6,
+          "nonzero_ratio": 0.7647058823529411
+        }
+      }
+    }
+  },
+  "dimension_2_per_day": {
+    "best_10_days": [
+      {
+        "date": "2025-11-20",
+        "strategy_return": 0.010769577654969442,
+        "benchmark_return": -0.005087709976273946,
+        "excess_return": 0.01585728763124339,
+        "total_daily_pnl": 2144.8,
+        "pnl_人工智能ETF易方达": 0.0,
+        "pnl_纳指ETF": 2399.8,
+        "pnl_黄金ETF": -255.0
+      },
+      {
+        "date": "2025-08-22",
+        "strategy_return": 0.012448957475124312,
+        "benchmark_return": 0.020971435942042538,
+        "excess_return": -0.008522478466918226,
+        "total_daily_pnl": 2164.7999999999997,
+        "pnl_人工智能ETF易方达": 2763.0,
+        "pnl_纳指ETF": -471.8,
+        "pnl_黄金ETF": -126.4
+      },
+      {
+        "date": "2025-02-05",
+        "strategy_return": 0.015314769565495379,
+        "benchmark_return": -0.005762362551355205,
+        "excess_return": 0.021077132116850583,
+        "total_daily_pnl": 2181.5,
+        "pnl_人工智能ETF易方达": 425.9,
+        "pnl_纳指ETF": 0.0,
+        "pnl_黄金ETF": 1755.6
+      },
+      {
+        "date": "2025-09-23",
+        "strategy_return": 0.011588408746194823,
+        "benchmark_return": -0.0006257230341429887,
+        "excess_return": 0.012214131780337811,
+        "total_daily_pnl": 2182.6,
+        "pnl_人工智能ETF易方达": 0.0,
+        "pnl_纳指ETF": 1403.6,
+        "pnl_黄金ETF": 779.0
+      },
+      {
+        "date": "2025-08-25",
+        "strategy_return": 0.015507198210275686,
+        "benchmark_return": 0.020836922778648237,
+        "excess_return": -0.005329724568372551,
+        "total_daily_pnl": 2231.0,
+        "pnl_人工智能ETF易方达": 1510.4,
+        "pnl_纳指ETF": 720.6,
+        "pnl_黄金ETF": 0.0
+      },
+      {
+        "date": "2025-08-13",
+        "strategy_return": 0.013793287167237045,
+        "benchmark_return": 0.00790390482687342,
+        "excess_return": 0.005889382340363625,
+        "total_daily_pnl": 2344.2,
+        "pnl_人工智能ETF易方达": 1641.6,
+        "pnl_纳指ETF": 606.6,
+        "pnl_黄金ETF": 96.0
+      },
+      {
+        "date": "2025-07-15",
+        "strategy_return": 0.01486112118809002,
+        "benchmark_return": 0.00034761460367627173,
+        "excess_return": 0.014513506584413749,
+        "total_daily_pnl": 2399.1000000000004,
+        "pnl_人工智能ETF易方达": 1713.8,
+        "pnl_纳指ETF": 702.5,
+        "pnl_黄金ETF": -17.2
+      },
+      {
+        "date": "2025-10-20",
+        "strategy_return": 0.014502981578866425,
+        "benchmark_return": 0.005313326102132976,
+        "excess_return": 0.00918965547673345,
+        "total_daily_pnl": 2447.2,
+        "pnl_人工智能ETF易方达": 0.0,
+        "pnl_纳指ETF": 3077.2,
+        "pnl_黄金ETF": -630.0
+      },
+      {
+        "date": "2026-01-12",
+        "strategy_return": 0.015870608675077724,
+        "benchmark_return": 0.006512693284052906,
+        "excess_return": 0.009357915391024818,
+        "total_daily_pnl": 2751.4,
+        "pnl_人工智能ETF易方达": 2214.9,
+        "pnl_纳指ETF": 0.0,
+        "pnl_黄金ETF": 536.5
+      },
+      {
+        "date": "2025-10-09",
+        "strategy_return": 0.022504454772340976,
+        "benchmark_return": 0.014822892311245894,
+        "excess_return": 0.007681562461095082,
+        "total_daily_pnl": 4197.8,
+        "pnl_人工智能ETF易方达": 0.0,
+        "pnl_纳指ETF": 2169.8,
+        "pnl_黄金ETF": 2028.0
+      }
+    ],
+    "worst_10_days": [
+      {
+        "date": "2026-03-23",
+        "strategy_return": -0.019029868488599666,
+        "benchmark_return": -0.03262978233564606,
+        "excess_return": 0.013599913847046396,
+        "total_daily_pnl": -3915.5,
+        "pnl_人工智能ETF易方达": 0.0,
+        "pnl_纳指ETF": 0.0,
+        "pnl_黄金ETF": -3915.5
+      },
+      {
+        "date": "2026-02-02",
+        "strategy_return": -0.015353816073536808,
+        "benchmark_return": -0.021324468242318373,
+        "excess_return": 0.005970652168781565,
+        "total_daily_pnl": -3247.1000000000004,
+        "pnl_人工智能ETF易方达": -1375.4,
+        "pnl_纳指ETF": 0.0,
+        "pnl_黄金ETF": -1871.7
+      },
+      {
+        "date": "2025-04-23",
+        "strategy_return": -0.01935126213345162,
+        "benchmark_return": 0.0007743755325451129,
+        "excess_return": -0.020125637665996732,
+        "total_daily_pnl": -3181.2,
+        "pnl_人工智能ETF易方达": 0.0,
+        "pnl_纳指ETF": 0.0,
+        "pnl_黄金ETF": -3181.2
+      },
+      {
+        "date": "2025-11-18",
+        "strategy_return": -0.013524727600073727,
+        "benchmark_return": -0.006493988487517255,
+        "excess_return": -0.007030739112556472,
+        "total_daily_pnl": -2722.0,
+        "pnl_人工智能ETF易方达": 0.0,
+        "pnl_纳指ETF": -2197.0,
+        "pnl_黄金ETF": -525.0
+      },
+      {
+        "date": "2025-11-14",
+        "strategy_return": -0.011912359658019955,
+        "benchmark_return": -0.01572370046595184,
+        "excess_return": 0.0038113408079318845,
+        "total_daily_pnl": -2443.8,
+        "pnl_人工智能ETF易方达": 0.0,
+        "pnl_纳指ETF": -2048.8,
+        "pnl_黄金ETF": -395.0
+      },
+      {
+        "date": "2025-11-21",
+        "strategy_return": -0.011769592681148744,
+        "benchmark_return": -0.024390352898410406,
+        "excess_return": 0.012620760217261662,
+        "total_daily_pnl": -2369.2,
+        "pnl_人工智能ETF易方达": 0.0,
+        "pnl_纳指ETF": -1994.2,
+        "pnl_黄金ETF": -375.0
+      },
+      {
+        "date": "2022-01-27",
+        "strategy_return": -0.023756178339510048,
+        "benchmark_return": -0.019614583930174345,
+        "excess_return": -0.004141594409335703,
+        "total_daily_pnl": -2366.0,
+        "pnl_人工智能ETF易方达": -1244.0,
+        "pnl_纳指ETF": 0.0,
+        "pnl_黄金ETF": -1122.0
+      },
+      {
+        "date": "2025-04-07",
+        "strategy_return": -0.0182417702429597,
+        "benchmark_return": -0.07045514967046229,
+        "excess_return": 0.05221337942750259,
+        "total_daily_pnl": -2300.2,
+        "pnl_人工智能ETF易方达": 0.0,
+        "pnl_纳指ETF": 0.0,
+        "pnl_黄金ETF": -2300.2
+      },
+      {
+        "date": "2024-07-25",
+        "strategy_return": -0.01582452739857576,
+        "benchmark_return": -0.005529274436321119,
+        "excess_return": -0.010295252962254642,
+        "total_daily_pnl": -2080.1000000000004,
+        "pnl_人工智能ETF易方达": -204.0,
+        "pnl_纳指ETF": -1061.9,
+        "pnl_黄金ETF": -814.2
+      },
+      {
+        "date": "2022-03-10",
+        "strategy_return": -0.01991665039114765,
+        "benchmark_return": 0.01573225123333377,
+        "excess_return": -0.03564890162448142,
+        "total_daily_pnl": -2041.0,
+        "pnl_人工智能ETF易方达": 0.0,
+        "pnl_纳指ETF": 0.0,
+        "pnl_黄金ETF": -2041.0
+      }
+    ],
+    "daily_count": 1289
+  },
+  "dimension_3_per_metric": {
+    "initial_capital": 100000,
+    "total_days": 1289,
+    "cumulative_return": 1.0966905591000025,
+    "annual_return": 0.15573985022803072,
+    "annual_volatility": 0.07991476501524178,
+    "sharpe_ratio": 1.9488244781590383,
+    "max_drawdown": -0.08093699824881012,
+    "max_drawdown_date": "2022-01-28",
+    "max_drawdown_peak": "2021-11-22",
+    "etf_pnl_decomposition": {
+      "人工智能ETF易方达": 21.31516465960619,
+      "纳指ETF": 31.656446547673568,
+      "黄金ETF": 47.028388792720236
+    },
+    "etf_pnl_stats": {
+      "人工智能ETF易方达": {
+        "total_pnl": 22201.3,
+        "positive_pnl": 106497.3,
+        "negative_pnl": -84296.0,
+        "daily_vol": 331.98535356584847,
+        "positive_days": 305,
+        "negative_days": 290,
+        "pnl_ratio": 1.2633731137895037,
+        "avg_positive_pnl": 349.1714754098361,
+        "avg_negative_pnl": -290.6758620689655
+      },
+      "纳指ETF": {
+        "total_pnl": 32972.5,
+        "positive_pnl": 140618.0,
+        "negative_pnl": -107645.5,
+        "daily_vol": 384.6944110712599,
+        "positive_days": 421,
+        "negative_days": 353,
+        "pnl_ratio": 1.306306348152036,
+        "avg_positive_pnl": 334.0095011876485,
+        "avg_negative_pnl": -304.9447592067989
+      },
+      "黄金ETF": {
+        "total_pnl": 48983.5,
+        "positive_pnl": 183606.5,
+        "negative_pnl": -134623.0,
+        "daily_vol": 441.02798682513367,
+        "positive_days": 539,
+        "negative_days": 435,
+        "pnl_ratio": 1.3638568446699302,
+        "avg_positive_pnl": 340.64285714285717,
+        "avg_negative_pnl": -309.47816091954024
+      }
+    }
+  },
+  "dimension_4_per_factor": {
+    "trend_gate": {
+      "AI_ETF": {
+        "gate_on_count": 134,
+        "gate_off_count": 138,
+        "gate_on_ratio": 0.49264705882352944,
+        "avg_forward_pnl_gate_on": 228.02611940298502,
+        "avg_forward_pnl_gate_off": 191.731884057971,
+        "total_forward_pnl_gate_on": 30555.499999999993,
+        "total_forward_pnl_gate_off": 26458.999999999996
+      },
+      "NASDAQ_ETF": {
+        "gate_on_count": 173,
+        "gate_off_count": 99,
+        "gate_on_ratio": 0.6360294117647058,
+        "avg_forward_pnl_gate_on": 215.0109826589595,
+        "avg_forward_pnl_gate_off": 200.17777777777778,
+        "total_forward_pnl_gate_on": 37196.899999999994,
+        "total_forward_pnl_gate_off": 19817.6
+      },
+      "GOLD_ETF": {
+        "gate_on_count": 210,
+        "gate_off_count": 62,
+        "gate_on_ratio": 0.7720588235294118,
+        "avg_forward_pnl_gate_on": 263.8304761904762,
+        "avg_forward_pnl_gate_off": 25.96935483870967,
+        "total_forward_pnl_gate_on": 55404.399999999994,
+        "total_forward_pnl_gate_off": 1610.0999999999995
+      }
+    },
+    "momentum_tilt": {
+      "AI_ETF": {
+        "active_signals": 134,
+        "score_forward_correlation": 0.05090366374930714,
+        "tilt_forward_correlation": 0.052830184205977355,
+        "avg_forward_low_momentum": 59.99361702127659,
+        "avg_forward_mid_momentum": 401.64680851063815,
+        "avg_forward_high_momentum": 221.46000000000004
+      },
+      "NASDAQ_ETF": {
+        "active_signals": 173,
+        "score_forward_correlation": -0.05269070401853376,
+        "tilt_forward_correlation": -0.04665708089281415,
+        "avg_forward_low_momentum": 156.02280701754387,
+        "avg_forward_mid_momentum": 446.68000000000006,
+        "avg_forward_high_momentum": 26.835714285714232
+      },
+      "GOLD_ETF": {
+        "active_signals": 210,
+        "score_forward_correlation": 0.0033038026481861664,
+        "tilt_forward_correlation": 0.0038954610781564273,
+        "avg_forward_low_momentum": 153.6533333333333,
+        "avg_forward_mid_momentum": 350.67123287671234,
+        "avg_forward_high_momentum": 294.8612903225806
+      }
+    },
+    "rsrs_tilt": {
+      "AI_ETF": {
+        "active_signals": 134,
+        "tilt_forward_correlation": 0.16438076913965544,
+        "avg_forward_low_rsrs": 140.28181818181818,
+        "avg_forward_mid_rsrs": 50.206521739130416,
+        "avg_forward_high_rsrs": 501.6727272727272
+      },
+      "NASDAQ_ETF": {
+        "active_signals": 173,
+        "tilt_forward_correlation": -0.07637933795189826,
+        "avg_forward_low_rsrs": 268.219298245614,
+        "avg_forward_mid_rsrs": 259.3050847457627,
+        "avg_forward_high_rsrs": 115.95438596491225
+      },
+      "GOLD_ETF": {
+        "active_signals": 210,
+        "tilt_forward_correlation": -0.023076718101338753,
+        "avg_forward_low_rsrs": 374.92173913043473,
+        "avg_forward_mid_rsrs": 199.99305555555554,
+        "avg_forward_high_rsrs": 219.3521739130434
+      }
+    },
+    "risk_parity": {
+      "AI_ETF": {
+        "avg_rp_weight": 0.14566592710062834,
+        "std_rp_weight": 0.19383343798704175,
+        "rp_weight_times_active": 134,
+        "avg_rp_when_active": 0.29568009083112623
+      },
+      "NASDAQ_ETF": {
+        "avg_rp_weight": 0.2756670976123728,
+        "std_rp_weight": 0.26965299229098477,
+        "rp_weight_times_active": 173,
+        "avg_rp_when_active": 0.4334187893096266
+      },
+      "GOLD_ETF": {
+        "avg_rp_weight": 0.5088140341105283,
+        "std_rp_weight": 0.3339331201881428,
+        "rp_weight_times_active": 210,
+        "avg_rp_when_active": 0.6590353203717318
+      }
+    },
+    "crowd_penalty": {
+      "AI_ETF": {
+        "penalized_count": 84,
+        "penalized_ratio": 0.3088235294117647,
+        "avg_penalty": 0.8916324978181596,
+        "min_penalty": 0.3,
+        "avg_forward_when_penalized": 384.59761904761905,
+        "avg_forward_when_not_penalized": 131.42712765957447
+      },
+      "NASDAQ_ETF": {
+        "penalized_count": 83,
+        "penalized_ratio": 0.30514705882352944,
+        "avg_penalty": 0.939125114575745,
+        "min_penalty": 0.446359226359226,
+        "avg_forward_when_penalized": -107.7132530120482,
+        "avg_forward_when_not_penalized": 348.96666666666664
+      },
+      "GOLD_ETF": {
+        "penalized_count": 95,
+        "penalized_ratio": 0.3492647058823529,
+        "avg_penalty": 0.8852574131618249,
+        "min_penalty": 0.3,
+        "avg_forward_when_penalized": 152.68842105263158,
+        "avg_forward_when_not_penalized": 240.16440677966096
+      }
+    },
+    "portfolio_vol_scale": {
+      "avg_vol_scale": 0.7606331210784473,
+      "std_vol_scale": 0.2319456270977561,
+      "min_vol_scale": 0.19539133056620167,
+      "max_vol_scale": 1.0,
+      "scaled_down_count": 199,
+      "scaled_down_ratio": 0.7316176470588235,
+      "vol_scale_forward_corr": 0.06170171701010625,
+      "avg_forward_low_scale": 85.5911111111111,
+      "avg_forward_mid_scale": 317.8717391304348,
+      "avg_forward_high_scale": 222.9677777777778
+    },
+    "factor_correlations": {
+      "momentum_scores_0": {
+        "momentum_scores_0": 1.0,
+        "rsrs_tilts_0": 0.908638339581851,
+        "crowd_penalties_0": -0.5827424794243304,
+        "trend_gates_0": 0.9290991633987781,
+        "momentum_scores_1": 0.008774338929157813,
+        "rsrs_tilts_1": 0.16698224480310056,
+        "crowd_penalties_1": -0.12024439906848781,
+        "trend_gates_1": 0.19272671242656786,
+        "momentum_scores_2": -0.16442065010689372,
+        "rsrs_tilts_2": 0.08731905154825119,
+        "crowd_penalties_2": -0.14998094419001998,
+        "trend_gates_2": 0.110011561584714
+      },
+      "rsrs_tilts_0": {
+        "momentum_scores_0": 0.908638339581851,
+        "rsrs_tilts_0": 1.0,
+        "crowd_penalties_0": -0.4446066440751767,
+        "trend_gates_0": 0.9618341138607908,
+        "momentum_scores_1": 0.0796503734765196,
+        "rsrs_tilts_1": 0.1698796143106031,
+        "crowd_penalties_1": -0.06832053876985135,
+        "trend_gates_1": 0.2194221870062567,
+        "momentum_scores_2": -0.13034558331606758,
+        "rsrs_tilts_2": 0.030820034018126205,
+        "crowd_penalties_2": -0.060877114574694254,
+        "trend_gates_2": 0.07808571412458844
+      },
+      "crowd_penalties_0": {
+        "momentum_scores_0": -0.5827424794243304,
+        "rsrs_tilts_0": -0.4446066440751767,
+        "crowd_penalties_0": 1.0,
+        "trend_gates_0": -0.43954205870405494,
+        "momentum_scores_1": -0.03221963603240039,
+        "rsrs_tilts_1": -0.1757253756687289,
+        "crowd_penalties_1": 0.20968671522657667,
+        "trend_gates_1": -0.23994471253755506,
+        "momentum_scores_2": -0.007455702548093229,
+        "rsrs_tilts_2": -0.26311124975777306,
+        "crowd_penalties_2": 0.3248598999268942,
+        "trend_gates_2": -0.25572175024879873
+      },
+      "trend_gates_0": {
+        "momentum_scores_0": 0.9290991633987781,
+        "rsrs_tilts_0": 0.9618341138607908,
+        "crowd_penalties_0": -0.43954205870405494,
+        "trend_gates_0": 1.0,
+        "momentum_scores_1": 0.09719227321082441,
+        "rsrs_tilts_1": 0.19821403918600422,
+        "crowd_penalties_1": -0.11622795597225302,
+        "trend_gates_1": 0.22577577471435545,
+        "momentum_scores_2": -0.1371533516638827,
+        "rsrs_tilts_2": 0.0751090827117898,
+        "crowd_penalties_2": -0.0919807992669148,
+        "trend_gates_2": 0.0796564662660603
+      },
+      "momentum_scores_1": {
+        "momentum_scores_0": 0.008774338929157813,
+        "rsrs_tilts_0": 0.0796503734765196,
+        "crowd_penalties_0": -0.03221963603240039,
+        "trend_gates_0": 0.09719227321082441,
+        "momentum_scores_1": 1.0,
+        "rsrs_tilts_1": 0.9129069954094887,
+        "crowd_penalties_1": -0.3744595129241466,
+        "trend_gates_1": 0.915320598539129,
+        "momentum_scores_2": -0.39032908952581463,
+        "rsrs_tilts_2": -0.13644430843504454,
+        "crowd_penalties_2": 0.15209674311961324,
+        "trend_gates_2": -0.10495325100174378
+      },
+      "rsrs_tilts_1": {
+        "momentum_scores_0": 0.16698224480310056,
+        "rsrs_tilts_0": 0.1698796143106031,
+        "crowd_penalties_0": -0.1757253756687289,
+        "trend_gates_0": 0.19821403918600422,
+        "momentum_scores_1": 0.9129069954094887,
+        "rsrs_tilts_1": 1.0,
+        "crowd_penalties_1": -0.4349608669949053,
+        "trend_gates_1": 0.9479917083580098,
+        "momentum_scores_2": -0.28824799517767014,
+        "rsrs_tilts_2": -0.05851780750868412,
+        "crowd_penalties_2": 0.05427488819572072,
+        "trend_gates_2": 0.02910984878103372
+      },
+      "crowd_penalties_1": {
+        "momentum_scores_0": -0.12024439906848781,
+        "rsrs_tilts_0": -0.06832053876985135,
+        "crowd_penalties_0": 0.20968671522657667,
+        "trend_gates_0": -0.11622795597225302,
+        "momentum_scores_1": -0.3744595129241466,
+        "rsrs_tilts_1": -0.4349608669949053,
+        "crowd_penalties_1": 1.0,
+        "trend_gates_1": -0.37685898131719214,
+        "momentum_scores_2": 0.08672535803542855,
+        "rsrs_tilts_2": -0.05813618541551285,
+        "crowd_penalties_2": 0.026273275607223413,
+        "trend_gates_2": -0.12732970317388279
+      },
+      "trend_gates_1": {
+        "momentum_scores_0": 0.19272671242656786,
+        "rsrs_tilts_0": 0.2194221870062567,
+        "crowd_penalties_0": -0.23994471253755506,
+        "trend_gates_0": 0.22577577471435545,
+        "momentum_scores_1": 0.915320598539129,
+        "rsrs_tilts_1": 0.9479917083580098,
+        "crowd_penalties_1": -0.37685898131719214,
+        "trend_gates_1": 1.0,
+        "momentum_scores_2": -0.2605856644653846,
+        "rsrs_tilts_2": 0.018215291951343807,
+        "crowd_penalties_2": -0.009783975571640543,
+        "trend_gates_2": 0.026116709962245112
+      },
+      "momentum_scores_2": {
+        "momentum_scores_0": -0.16442065010689372,
+        "rsrs_tilts_0": -0.13034558331606758,
+        "crowd_penalties_0": -0.007455702548093229,
+        "trend_gates_0": -0.1371533516638827,
+        "momentum_scores_1": -0.39032908952581463,
+        "rsrs_tilts_1": -0.28824799517767014,
+        "crowd_penalties_1": 0.08672535803542855,
+        "trend_gates_1": -0.2605856644653846,
+        "momentum_scores_2": 1.0,
+        "rsrs_tilts_2": 0.8390904464859902,
+        "crowd_penalties_2": -0.32430614509517525,
+        "trend_gates_2": 0.8474368997263086
+      },
+      "rsrs_tilts_2": {
+        "momentum_scores_0": 0.08731905154825119,
+        "rsrs_tilts_0": 0.030820034018126205,
+        "crowd_penalties_0": -0.26311124975777306,
+        "trend_gates_0": 0.0751090827117898,
+        "momentum_scores_1": -0.13644430843504454,
+        "rsrs_tilts_1": -0.05851780750868412,
+        "crowd_penalties_1": -0.05813618541551285,
+        "trend_gates_1": 0.018215291951343807,
+        "momentum_scores_2": 0.8390904464859902,
+        "rsrs_tilts_2": 1.0,
+        "crowd_penalties_2": -0.39060331953681326,
+        "trend_gates_2": 0.9238418420136428
+      },
+      "crowd_penalties_2": {
+        "momentum_scores_0": -0.14998094419001998,
+        "rsrs_tilts_0": -0.060877114574694254,
+        "crowd_penalties_0": 0.3248598999268942,
+        "trend_gates_0": -0.0919807992669148,
+        "momentum_scores_1": 0.15209674311961324,
+        "rsrs_tilts_1": 0.05427488819572072,
+        "crowd_penalties_1": 0.026273275607223413,
+        "trend_gates_1": -0.009783975571640543,
+        "momentum_scores_2": -0.32430614509517525,
+        "rsrs_tilts_2": -0.39060331953681326,
+        "crowd_penalties_2": 1.0,
+        "trend_gates_2": -0.3173842659536237
+      },
+      "trend_gates_2": {
+        "momentum_scores_0": 0.110011561584714,
+        "rsrs_tilts_0": 0.07808571412458844,
+        "crowd_penalties_0": -0.25572175024879873,
+        "trend_gates_0": 0.0796564662660603,
+        "momentum_scores_1": -0.10495325100174378,
+        "rsrs_tilts_1": 0.02910984878103372,
+        "crowd_penalties_1": -0.12732970317388279,
+        "trend_gates_1": 0.026116709962245112,
+        "momentum_scores_2": 0.8474368997263086,
+        "rsrs_tilts_2": 0.9238418420136428,
+        "crowd_penalties_2": -0.3173842659536237,
+        "trend_gates_2": 1.0
+      }
+    }
+  }
+}
