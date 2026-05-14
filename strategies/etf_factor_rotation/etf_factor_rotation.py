@@ -2,26 +2,29 @@ enable_profile()
 
 """
 ============================================================
-策略名称：ETF 多因子轮动策略（线性乘数版）
+策略名称：ETF 多因子轮动策略（相对倾斜版）
 策略类型：周线级别、场内基金、多因子动态配置
 适用标的：159819.XSHE、513100.XSHG、518880.XSHG（中文名运行时通过聚宽 API 读取）
 
 核心思想：
-  趋势门槛判断"能不能买"，动量排序决定"买谁"，风险平价分配基础仓位，
-  RSRS 线性修正和拥挤度线性惩罚在价格结构转弱或交易过热时平滑降仓，
-  组合波动率控制缩放总仓位。剩余仓位保留现金，不重新归一化到满仓。
+  趋势门槛判断"能不能买"，风险平价分配基础仓位，
+  动量和 RSRS 作为资产间相对倾斜信号调整权重分配（不改变组合总仓位），
+  拥挤度惩罚和组合波动率控制在过热或高波时平滑降仓。
+  剩余仓位保留现金，不重新归一化到满仓。
 
 模块分工：
   - 趋势门槛（硬过滤）：按 ETF 专属趋势均线以上才可入选，0/1 离散
-  - 动量选择（TopK）：多周期排名分数加权，选前 K 只
-  - 风险平价（逆波动率）：σ 越小权重越大，波动率归一化
-  - RSRS 修正（只减不加）：High~Low 回归 β 标准化 × R²，线性截断到 [0, 1]
+  - 风险平价（逆波动率）：所有趋势成立资产参与，σ 越小权重越大
+  - 动量倾斜（相对信号）：多周期排名分数去均值，clip 到 [TiltMin, TiltMax]
+  - RSRS 倾斜（相对信号）：High~Low 回归 β 标准化 × R² 去均值，clip 到 [TiltMin, TiltMax]
+  - 倾斜合成：RPWeight × MomentumTilt × RSRSTilt，活跃资产内重新归一化
   - 拥挤度惩罚（只减不加）：五指标分位数均值，超阈值线性打折
   - 组合波动率控制（只缩不放）：RawWeight 组合波动率超目标时等比缩放
 
 核心公式：
-  FinalWeight_i = RPWeight_i × TrendGate_i × RSRSMultiplier_i
-                × CrowdPenalty_i × PortfolioVolScale
+  TiltedWeight_i = normalize(RPWeight_i × MomentumTilt_i × RSRSTilt_i)
+  RawWeight_i = TiltedWeight_i × TrendGate_i × CrowdPenalty_i
+  FinalWeight_i = RawWeight_i × PortfolioVolScale
 
 调仓频率：每周开盘检查一次
 ============================================================
@@ -129,6 +132,11 @@ def snapshot_params():
         "RSRS_NegativeFullCut": g.RSRS_NegativeFullCut,
         "RSRSMinMultiplier": g.RSRSMinMultiplier,
         "RSRSMaxMultiplier": g.RSRSMaxMultiplier,
+        "MomentumTiltStrength": g.MomentumTiltStrength,
+        "MomentumTiltMin": g.MomentumTiltMin,
+        "MomentumTiltMax": g.MomentumTiltMax,
+        "RSRSTiltMin": g.RSRSTiltMin,
+        "RSRSTiltMax": g.RSRSTiltMax,
         "CrowdWindow": g.CrowdWindow,
         "CrowdRetShort": g.CrowdRetShort,
         "CrowdRetMid": g.CrowdRetMid,
@@ -189,6 +197,12 @@ def validate_params(params):
         errors.append("RSRS_M must be positive and RSRS_N must be > 1")
     if not (0 <= params["CrowdStart"] < params["CrowdEnd"] <= 1):
         errors.append("Crowd thresholds must satisfy 0 <= CrowdStart < CrowdEnd <= 1")
+    if params["MomentumTiltStrength"] < 0:
+        errors.append("MomentumTiltStrength must be >= 0")
+    if not (0 < params["MomentumTiltMin"] <= 1 <= params["MomentumTiltMax"]):
+        errors.append("Momentum tilt bounds must satisfy 0 < min <= 1 <= max")
+    if not (0 < params["RSRSTiltMin"] <= 1 <= params["RSRSTiltMax"]):
+        errors.append("RSRS tilt bounds must satisfy 0 < min <= 1 <= max")
     if len(params["etf_pool"]) != len(params["etf_names"]):
         errors.append("etf_pool and etf_names must have the same length")
     for etf, name in zip(params["etf_pool"], params["etf_names"]):
@@ -289,6 +303,15 @@ def set_parameter(context):
     g.RSRSMinMultiplier = 0.0
     g.RSRSMaxMultiplier = 1.3
 
+    # ---- 动量倾斜（资产间相对信号） ----
+    g.MomentumTiltStrength = 0.50
+    g.MomentumTiltMin = 0.70
+    g.MomentumTiltMax = 1.30
+
+    # ---- RSRS 倾斜（资产间相对信号） ----
+    g.RSRSTiltMin = 0.70
+    g.RSRSTiltMax = 1.30
+
     # ---- 拥挤度惩罚 ----
     g.CrowdWindow = 500
     g.CrowdRetShort = 20
@@ -345,22 +368,21 @@ def _log_step(name, cn_name, pool, values, fmt=".4f", etf_names=None):
 # ============================================================
 # compose_raw_weights — 权重合成
 # ============================================================
-def compose_raw_weights(rp_weights, trend_gates, selected, rsrs_multipliers, crowd_penalties):
+def compose_raw_weights(tilted_weights, trend_gates, crowd_penalties):
     """
     合成各模块输出为 RawWeight。
 
-    各输入数组长度均为 len(pool)。未入选资产权重为 0。
+    动量与 RSRS 已经体现在 TiltedWeight 中，不再作为独立乘数。
+    TrendGate 仍保留作为二次保护。不重新归一化。
     """
-    n = len(rp_weights)
+    n = len(tilted_weights)
     raw = np.zeros(n)
     for i in range(n):
-        if selected[i]:
-            raw[i] = (
-                rp_weights[i]
-                * trend_gates[i]
-                * rsrs_multipliers[i]
-                * crowd_penalties[i]
-            )
+        raw[i] = (
+            tilted_weights[i]
+            * trend_gates[i]
+            * crowd_penalties[i]
+        )
     return raw
 
 
@@ -368,11 +390,15 @@ def compose_raw_weights(rp_weights, trend_gates, selected, rsrs_multipliers, cro
 # weekly_check — 周频调仓主函数
 # ============================================================
 def weekly_check(context):
-    """每周开盘时执行一次完整的调仓流程。"""
+    """每周开盘时执行一次完整的调仓流程。
+
+    流程：TrendGate → RPWeight → MomentumScore → MomentumTilt
+         → RSRSTilt → TiltedWeight → CrowdPenalty
+         → PortfolioVolScale → FinalWeight → execute
+    """
     params = snapshot_params()
     pool = params["etf_pool"]
     etf_names = params["etf_names"]
-    n = len(pool)
 
     # 1. 拉取历史数据
     prices = get_history_data(context, pool, params)
@@ -381,57 +407,46 @@ def weekly_check(context):
     trend_gates = compute_trend_gates(prices, pool, params)
     _log_step("TrendGate", "趋势门槛", pool, trend_gates, fmt=".0f", etf_names=etf_names)
 
-    # 3. 筛选趋势成立资产，计算动量分数
+    # 3. 风险平价基础权重（所有趋势成立资产参与）
+    active_mask = [gate > 0 for gate in trend_gates]
+    rp_weights = compute_rp_weights(prices, pool, active_mask, params)
+    _log_step("RPWeight", "风险平价权重", pool, rp_weights, fmt=".4f", etf_names=etf_names)
+
+    # 4. 计算动量分数
     momentum_scores = compute_momentum_scores(prices, pool, trend_gates, params)
     _log_step("MomentumScore", "动量分数", pool, momentum_scores, fmt=".4f", etf_names=etf_names)
 
-    # 4. TopK 选择
-    selected = select_topk(momentum_scores, trend_gates, params)
-    _log_step(
-        "Selected",
-        "TopK入选",
-        pool,
-        [1.0 if s else 0.0 for s in selected],
-        fmt=".0f",
-        etf_names=etf_names,
-    )
+    # 5. 动量倾斜乘数
+    momentum_tilts = compute_momentum_tilt_multipliers(momentum_scores, trend_gates, params)
+    _log_step("MomentumTilt", "动量倾斜乘数", pool, momentum_tilts, fmt=".4f", etf_names=etf_names)
 
-    # 5. 风险平价基础权重
-    rp_weights = compute_rp_weights(prices, pool, selected, params)
-    _log_step("RPWeight", "风险平价权重", pool, rp_weights, fmt=".4f", etf_names=etf_names)
+    # 6. RSRS 倾斜乘数
+    rsrs_tilts = compute_rsrs_tilt_multipliers(prices, pool, trend_gates, params)
+    _log_step("RSRSTilt", "RSRS倾斜乘数", pool, rsrs_tilts, fmt=".4f", etf_names=etf_names)
 
-    # 6. RSRS 线性修正乘数
-    rsrs_multipliers = compute_rsrs_multipliers(prices, pool, params)
-    _log_step(
-        "RSRSMultiplier",
-        "RSRS修正乘数",
-        pool,
-        rsrs_multipliers,
-        fmt=".4f",
-        etf_names=etf_names,
-    )
+    # 7. 合成倾斜权重（动量 + RSRS 同时参与相对倾斜，活跃资产内重新归一化）
+    tilted_weights = apply_relative_tilts(rp_weights, trend_gates, momentum_tilts, rsrs_tilts)
+    _log_step("TiltedWeight", "倾斜合成权重", pool, tilted_weights, fmt=".4f", etf_names=etf_names)
 
-    # 7. 拥挤度线性惩罚乘数
+    # 8. 拥挤度线性惩罚乘数
     crowd_penalties = compute_crowd_penalties(prices, pool, params)
     _log_step("CrowdPenalty", "拥挤度惩罚", pool, crowd_penalties, fmt=".4f", etf_names=etf_names)
 
-    # 8. 合成 RawWeight
-    raw_weights = compose_raw_weights(
-        rp_weights, trend_gates, selected, rsrs_multipliers, crowd_penalties
-    )
+    # 9. 合成 RawWeight（不重新归一化）
+    raw_weights = compose_raw_weights(tilted_weights, trend_gates, crowd_penalties)
 
-    # 9. 组合波动率缩放
+    # 10. 组合波动率缩放
     portfolio_vol_scale = compute_portfolio_vol_scale(prices, pool, raw_weights, params)
     log.info("[组合波动率缩放] PortfolioVolScale=%.4f", portfolio_vol_scale)
 
-    # 10. 最终权重
+    # 11. 最终权重
     final_weights = raw_weights * portfolio_vol_scale
     _log_step("FinalWeight", "最终权重", pool, final_weights, fmt=".4f", etf_names=etf_names)
 
-    # 11. 应用交易约束
+    # 12. 应用交易约束
     final_weights = apply_weight_constraints(final_weights, params)
 
-    # 12. 执行调仓
+    # 13. 执行调仓
     execute_rebalance(context, pool, final_weights, params)
 
 
@@ -642,10 +657,11 @@ def select_topk(momentum_scores, trend_gates, params):
 # ============================================================
 # compute_rp_weights — 逆波动率风险平价
 # ============================================================
-def compute_rp_weights(prices, pool, selected, params):
+def compute_rp_weights(prices, pool, active_mask, params):
     """
-    对入选资产计算逆波动率风险平价权重。
+    对活跃资产计算逆波动率风险平价权重。
 
+    所有趋势成立资产均参与基础权重计算，不再受 TopK 限制。
     使用 get_history_data 预计算的 close_ret，避免重复 pct_change()。
 
     返回: np.array
@@ -656,13 +672,13 @@ def compute_rp_weights(prices, pool, selected, params):
     annual_factor = params["annual_factor"]
 
     weights = np.zeros(n)
-    selected_indices = [i for i in range(n) if selected[i]]
+    active_indices = [i for i in range(n) if active_mask[i]]
 
-    if not selected_indices:
+    if not active_indices:
         return weights
 
     vols = np.zeros(n)
-    for i in selected_indices:
+    for i in active_indices:
         etf = pool[i]
         if etf not in close_ret.columns:
             continue
@@ -675,7 +691,7 @@ def compute_rp_weights(prices, pool, selected, params):
                 vols[i] = 1e-8
 
     inverse_vols = np.zeros(n)
-    for i in selected_indices:
+    for i in active_indices:
         if vols[i] > 0:
             inverse_vols[i] = 1.0 / vols[i]
 
@@ -691,19 +707,33 @@ def compute_rp_weights(prices, pool, selected, params):
 # ============================================================
 def compute_rsrs_multipliers(prices, pool, params):
     """
-    对每只 ETF 计算 RSRS 截断线性乘数。
+    对每只 ETF 计算 RSRS 截断线性乘数（旧接口，保留兼容）。
 
-    步骤：
-    1. 向量化滚动窗口：过去 RSRS_N 日 High ~ Low 回归，得 β 和 R²
-       β = Cov(low, high) / Var(low)  —— OLS 斜率闭式解
-       R² = Cov² / (Var(low) × Var(high))  —— 即 Corr(low, high)²
-    2. 过去 RSRS_M 日 β 标准化，得 RSRS_Z
-    3. RSRS_Adj = RSRS_Z × R²
-    4. RSRSMultiplier = clip(1 + RSRS_Adj / NegativeFullCut, 0, 1)
+    委托 compute_rsrs_adjusted_scores 获取原始信号，
+    再按旧公式 clip(1 + RSRS_Adj / NegativeFullCut, Min, Max)。
 
-    只减仓，不加仓。使用 pandas 滚动窗口向量化替代逐日 lstsq 循环。
+    只减仓，不加仓。
+    """
+    rsrs_adj = compute_rsrs_adjusted_scores(prices, pool, params)
+    full_cut = params["RSRS_NegativeFullCut"]
+    n = len(pool)
 
-    返回: np.array
+    multipliers = np.ones(n)
+    for i in range(n):
+        raw_mult = 1.0 + rsrs_adj[i] / full_cut
+        multipliers[i] = np.clip(raw_mult, params["RSRSMinMultiplier"], params["RSRSMaxMultiplier"])
+
+    return multipliers
+
+
+# ============================================================
+# compute_rsrs_adjusted_scores — RSRS 原始结构信号
+# ============================================================
+def compute_rsrs_adjusted_scores(prices, pool, params):
+    """
+    计算每只 ETF 的 RSRS 原始调整信号：RSRSAdj_i = RSRS_Z_i × R2_i。
+
+    返回: np.array，数据不足时对应位置为 0。
     """
     high = prices['high']
     low = prices['low']
@@ -711,9 +741,8 @@ def compute_rsrs_multipliers(prices, pool, params):
 
     N = params["RSRS_N"]
     M = params["RSRS_M"]
-    full_cut = params["RSRS_NegativeFullCut"]
 
-    multipliers = np.ones(n)
+    scores = np.zeros(n)
 
     for i, etf in enumerate(pool):
         if etf not in high.columns or etf not in low.columns:
@@ -721,7 +750,6 @@ def compute_rsrs_multipliers(prices, pool, params):
         h = high[etf].dropna()
         l = low[etf].dropna()
 
-        # 对齐索引
         common_idx = h.index.intersection(l.index)
         h = h.loc[common_idx]
         l = l.loc[common_idx]
@@ -730,8 +758,6 @@ def compute_rsrs_multipliers(prices, pool, params):
         if len(h) < min_len:
             continue
 
-        # ---- 向量化滚动窗口：一次算完所有 β 和 R² ----
-        # pandas rolling + 闭式公式，替代逐日 for 循环 + lstsq
         h_roll = h.rolling(N)
         l_roll = l.rolling(N)
         cov_vals = h_roll.cov(l).dropna().values
@@ -741,7 +767,6 @@ def compute_rsrs_multipliers(prices, pool, params):
         betas = cov_vals / var_l_vals
         r2s = cov_vals ** 2 / (var_h_vals * var_l_vals)
 
-        # 边界守卫：低方差或数值异常时退化为默认值
         bad = (
             (var_l_vals < 1e-10) | (var_h_vals < 1e-10)
             | (~np.isfinite(betas)) | (~np.isfinite(r2s))
@@ -752,7 +777,6 @@ def compute_rsrs_multipliers(prices, pool, params):
         if len(betas) < M:
             continue
 
-        # ---- 取最近 M 个 β 做标准化 ----
         beta_series = betas[-M:]
         mean_beta = np.mean(beta_series)
         std_beta = np.std(beta_series)
@@ -762,15 +786,108 @@ def compute_rsrs_multipliers(prices, pool, params):
         else:
             rsrs_z = (beta_series[-1] - mean_beta) / std_beta
 
-        # 使用最近一期的 R²
         latest_r2 = r2s[-1]
-        rsrs_adj = rsrs_z * latest_r2
+        scores[i] = rsrs_z * latest_r2
 
-        # 截断线性乘数（只减不加）
-        raw_mult = 1.0 + rsrs_adj / full_cut
-        multipliers[i] = np.clip(raw_mult, params["RSRSMinMultiplier"], params["RSRSMaxMultiplier"])
+    return scores
 
-    return multipliers
+
+# ============================================================
+# compute_momentum_tilt_multipliers — 动量相对倾斜乘数
+# ============================================================
+def compute_momentum_tilt_multipliers(momentum_scores, trend_gates, params):
+    """
+    将动量分数转换为资产间相对倾斜乘数。
+
+    活跃资产围绕均值上下倾斜，非活跃资产返回 0。
+    倾斜公式：clip(1 + strength × (score_i - mean_active), min, max)
+    """
+    n = len(momentum_scores)
+    tilts = np.zeros(n)
+
+    active_indices = [i for i in range(n) if trend_gates[i] > 0]
+    if not active_indices:
+        return tilts
+
+    active_scores = momentum_scores[active_indices]
+    mean_score = np.mean(active_scores)
+
+    strength = params["MomentumTiltStrength"]
+    tilt_min = params["MomentumTiltMin"]
+    tilt_max = params["MomentumTiltMax"]
+
+    for i in active_indices:
+        edge = momentum_scores[i] - mean_score
+        raw_tilt = 1.0 + strength * edge
+        tilts[i] = np.clip(raw_tilt, tilt_min, tilt_max)
+
+    return tilts
+
+
+# ============================================================
+# compute_rsrs_tilt_multipliers — RSRS 相对倾斜乘数
+# ============================================================
+def compute_rsrs_tilt_multipliers(prices, pool, trend_gates, params):
+    """
+    计算 RSRS 原始结构信号，并转换为资产间相对倾斜乘数。
+
+    活跃资产围绕均值上下倾斜，非活跃资产返回 0。
+    倾斜公式：clip(1 + (RSRSAdj_i - mean_active) / NegativeFullCut, min, max)
+    """
+    rsrs_adj = compute_rsrs_adjusted_scores(prices, pool, params)
+    n = len(pool)
+    tilts = np.zeros(n)
+
+    active_indices = [i for i in range(n) if trend_gates[i] > 0]
+    if not active_indices:
+        return tilts
+
+    active_adj = rsrs_adj[active_indices]
+    mean_adj = np.mean(active_adj)
+
+    full_cut = params["RSRS_NegativeFullCut"]
+    tilt_min = params["RSRSTiltMin"]
+    tilt_max = params["RSRSTiltMax"]
+
+    for i in active_indices:
+        edge = rsrs_adj[i] - mean_adj
+        raw_tilt = 1.0 + edge / full_cut
+        tilts[i] = np.clip(raw_tilt, tilt_min, tilt_max)
+
+    return tilts
+
+
+# ============================================================
+# apply_relative_tilts — 倾斜权重合成与归一化
+# ============================================================
+def apply_relative_tilts(rp_weights, trend_gates, momentum_tilts, rsrs_tilts):
+    """
+    将风险平价基础权重、动量倾斜和 RSRS 倾斜合成，并在活跃资产内归一化。
+
+    tilted_raw_i = RPWeight_i × MomentumTilt_i × RSRSTilt_i
+    归一化到 sum(RPWeight_active)，非活跃资产权重为 0。
+    """
+    n = len(rp_weights)
+    tilted = np.zeros(n)
+
+    active_indices = [i for i in range(n) if trend_gates[i] > 0 and rp_weights[i] > 0]
+    if not active_indices:
+        return tilted
+
+    tilted_raw = np.zeros(n)
+    for i in active_indices:
+        tilted_raw[i] = rp_weights[i] * momentum_tilts[i] * rsrs_tilts[i]
+
+    total_raw = tilted_raw[active_indices].sum()
+    base_total = rp_weights[active_indices].sum()
+
+    if total_raw <= 0 or base_total <= 0:
+        return np.copy(rp_weights)
+
+    for i in active_indices:
+        tilted[i] = tilted_raw[i] / total_raw * base_total
+
+    return tilted
 
 
 # ============================================================
@@ -951,23 +1068,26 @@ def compute_portfolio_vol_scale(prices, pool, raw_weights, params):
 # ============================================================
 def apply_weight_constraints(final_weights, params):
     """
-    应用单资产最大仓位和最小有效仓位约束。
+    应用单资产最大仓位、最小有效仓位和总仓位上限约束。
 
-    不重新归一化。
+    总仓位约束在单资产约束之后应用，缩放后不重新归一化。
     """
     max_w = params["MaxWeight"]
     min_w = params["MinWeight"]
+    max_total = params["MaxTotalWeight"]
     n = len(final_weights)
 
     result = np.copy(final_weights)
 
     for i in range(n):
-        # 单资产最大仓位上限
         if result[i] > max_w:
             result[i] = max_w
-        # 最小有效仓位裁剪
         if result[i] < min_w:
             result[i] = 0.0
+
+    total = result.sum()
+    if total > max_total:
+        result = result * max_total / total
 
     return result
 

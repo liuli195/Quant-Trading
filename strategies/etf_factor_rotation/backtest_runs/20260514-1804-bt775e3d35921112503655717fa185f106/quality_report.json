@@ -1,0 +1,49 @@
+{
+  "run_id": "20260514-1804-bt775e3d35921112503655717fa185f106",
+  "strategy": "etf_factor_rotation",
+  "checked_at": "2026-05-14T18:30:37.189105",
+  "overall": "incomplete",
+  "checks": [
+    {
+      "name": "trading_days",
+      "passed": true,
+      "detail": "收益记录 1485 天 vs 预期 1342 天 (偏差 +10.7%)，可接受",
+      "severity": "warning"
+    },
+    {
+      "name": "log_completeness",
+      "passed": false,
+      "detail": "日志被截断：973 行未展开。完整日志需通过研究环境导出或云端页面查看。",
+      "severity": "error"
+    },
+    {
+      "name": "log_coverage",
+      "passed": false,
+      "detail": "日志 45 条，覆盖率仅 2%，严重不足",
+      "severity": "error"
+    },
+    {
+      "name": "field_integrity",
+      "passed": true,
+      "detail": "所有必选文件存在且非空（7 个文件）",
+      "severity": "error"
+    },
+    {
+      "name": "cross_source",
+      "passed": true,
+      "detail": "研究环境导出失败，仅详情页单一路径，跳过交叉验证",
+      "severity": "info"
+    },
+    {
+      "name": "empty_data",
+      "passed": true,
+      "detail": "回测数据正常：策略收益 109.67%",
+      "severity": "error"
+    }
+  ],
+  "missing_data": [
+    "full_logs"
+  ],
+  "summary": "总体: incomplete\n  PASS: trading_days\n  FAIL: log_completeness\n  FAIL: log_coverage\n  PASS: field_integrity\n  PASS: cross_source\n  PASS: empty_data",
+  "recommended_action": "repair"
+}

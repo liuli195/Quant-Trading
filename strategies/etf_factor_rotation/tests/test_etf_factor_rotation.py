@@ -101,6 +101,9 @@ class TestModuleLoading:
             'initialize', 'set_parameter', 'weekly_check',
             'get_history_data', 'compute_trend_gates', 'compute_momentum_scores',
             'select_topk', 'compute_rp_weights', 'compute_rsrs_multipliers',
+            'compute_rsrs_adjusted_scores',
+            'compute_momentum_tilt_multipliers', 'compute_rsrs_tilt_multipliers',
+            'apply_relative_tilts',
             'compute_crowd_penalties', 'percentile_rank',
             'compute_portfolio_vol_scale', 'apply_weight_constraints',
             'execute_rebalance', 'fund_code', 'format_etf_name',
@@ -325,6 +328,36 @@ class TestApplyWeightConstraints:
         weights = np.array([0.20, 0.30, 0.10])
         result = strategy.apply_weight_constraints(weights, params)
         assert sum(result) <= 1.0
+
+    def test_max_total_weight_cap(self, strategy, mock_g):
+        """总仓位超过 MaxTotalWeight 时等比缩放。"""
+        mock_g.MaxTotalWeight = 0.80
+        params = strategy.snapshot_params()
+        weights = np.array([0.60, 0.30, 0.10])
+        result = strategy.apply_weight_constraints(weights, params)
+        assert abs(sum(result) - 0.80) < 1e-10
+        # 等比缩放：每个权重乘以 0.8
+        assert abs(result[0] - 0.48) < 1e-10
+        assert abs(result[1] - 0.24) < 1e-10
+
+    def test_max_total_weight_no_effect_when_below(self, strategy, mock_g):
+        """总仓位未超过 MaxTotalWeight 时不缩放。"""
+        mock_g.MaxTotalWeight = 1.0
+        params = strategy.snapshot_params()
+        weights = np.array([0.30, 0.20, 0.10])
+        result = strategy.apply_weight_constraints(weights, params)
+        assert abs(sum(result) - 0.60) < 1e-10
+
+    def test_max_weight_and_max_total_both_apply(self, strategy, mock_g):
+        """MaxWeight 先裁剪，MaxTotalWeight 后缩放。"""
+        mock_g.MaxWeight = 0.40
+        mock_g.MaxTotalWeight = 0.60
+        params = strategy.snapshot_params()
+        weights = np.array([0.80, 0.20, 0.00])
+        result = strategy.apply_weight_constraints(weights, params)
+        # MaxWeight 裁剪：0.80 → 0.40，然后总仓位 0.40+0.20=0.60 == MaxTotalWeight
+        assert abs(sum(result) - 0.60) < 1e-10
+        assert abs(result[0] - 0.40) < 1e-10
 
 
 class TestSelectTopK:
@@ -874,6 +907,334 @@ class TestComputeRSRSMultipliers:
 
 
 # ============================================================
+# 6b. RSRS 原始调整信号测试
+# ============================================================
+class TestComputeRSRSAdjustedScores:
+    """测试 RSRS 原始调整信号（RSRSAdj = RSRS_Z × R²）。"""
+
+    def test_returns_array_of_correct_length(self, strategy, mock_g):
+        params = strategy.snapshot_params()
+        n_days = 800
+        rng = np.random.default_rng(42)
+        base = np.cumsum(rng.normal(0.0005, 0.015, n_days)) + 1.0
+        base = np.exp(base)
+        prices = {
+            'high': make_prices_dataframe({e: base * 1.01 for e in mock_g.etf_pool}),
+            'low': make_prices_dataframe({e: base * 0.99 for e in mock_g.etf_pool}),
+        }
+        scores = strategy.compute_rsrs_adjusted_scores(prices, mock_g.etf_pool, params)
+        assert len(scores) == 3
+
+    def test_insufficient_data_returns_zero(self, strategy, mock_g):
+        params = strategy.snapshot_params()
+        short_prices = make_linear_prices(n_days=50)
+        prices = {
+            'high': make_prices_dataframe({e: short_prices for e in mock_g.etf_pool}),
+            'low': make_prices_dataframe({e: short_prices * 0.99 for e in mock_g.etf_pool}),
+        }
+        scores = strategy.compute_rsrs_adjusted_scores(prices, mock_g.etf_pool, params)
+        assert all(s == 0.0 for s in scores)
+
+    def test_strong_up_trend_positive_scores(self, strategy, mock_g):
+        """强势上涨时 RSRS 原始信号应为正。"""
+        params = strategy.snapshot_params()
+        n_days = 800
+        base = np.arange(1.0, 1.0 + 0.003 * n_days, 0.003)[:n_days]
+        prices = {
+            'high': make_prices_dataframe({e: base * 1.02 for e in mock_g.etf_pool}),
+            'low': make_prices_dataframe({e: base * 0.98 for e in mock_g.etf_pool}),
+        }
+        scores = strategy.compute_rsrs_adjusted_scores(prices, mock_g.etf_pool, params)
+        assert all(s >= 0 for s in scores)
+
+    def test_constant_hilo_zero_variance_returns_zero(self, strategy, mock_g):
+        """常数 high/low → 零方差守卫后分数为 0。"""
+        params = strategy.snapshot_params()
+        n_days = 800
+        flat = make_constant_prices(1.0, n_days=n_days)
+        prices = {
+            'high': make_prices_dataframe({e: flat for e in mock_g.etf_pool}),
+            'low': make_prices_dataframe({e: flat for e in mock_g.etf_pool}),
+        }
+        scores = strategy.compute_rsrs_adjusted_scores(prices, mock_g.etf_pool, params)
+        assert all(s == 0.0 for s in scores)
+
+    def test_consistent_with_old_multipliers(self, strategy, mock_g):
+        """新函数应与旧 compute_rsrs_multipliers 共享一致的原始信号。"""
+        params = strategy.snapshot_params()
+        n_days = 800
+        rng = np.random.default_rng(42)
+        base = np.cumsum(rng.normal(0.0005, 0.015, n_days)) + 1.0
+        base = np.exp(base)
+        prices = {
+            'high': make_prices_dataframe({e: base * 1.01 for e in mock_g.etf_pool}),
+            'low': make_prices_dataframe({e: base * 0.99 for e in mock_g.etf_pool}),
+        }
+        old = strategy.compute_rsrs_multipliers(prices, mock_g.etf_pool, params)
+        scores = strategy.compute_rsrs_adjusted_scores(prices, mock_g.etf_pool, params)
+        # 旧乘数 = clip(1 + score / full_cut, min, max)
+        full_cut = params["RSRS_NegativeFullCut"]
+        for i in range(3):
+            expected = np.clip(1.0 + scores[i] / full_cut, params["RSRSMinMultiplier"], params["RSRSMaxMultiplier"])
+            assert abs(old[i] - expected) < 1e-10, f"Mismatch at index {i}: old={old[i]}, from_scores={expected}"
+
+
+# ============================================================
+# 6c. 动量倾斜乘数测试
+# ============================================================
+class TestComputeMomentumTiltMultipliers:
+    """测试动量分数转相对倾斜乘数。"""
+
+    def test_strong_momentum_gets_tilt_above_one(self, strategy, mock_g):
+        """动量强资产应得到 >1 的倾斜乘数。"""
+        params = strategy.snapshot_params()
+        scores = np.array([0.9, 0.5, 0.1])
+        gates = np.array([1.0, 1.0, 1.0])
+        tilts = strategy.compute_momentum_tilt_multipliers(scores, gates, params)
+        assert tilts[0] > 1.0
+        assert tilts[2] < 1.0
+
+    def test_weak_momentum_gets_tilt_below_one(self, strategy, mock_g):
+        """动量弱资产应得到 <1 的倾斜乘数。"""
+        params = strategy.snapshot_params()
+        scores = np.array([0.1, 0.5, 0.9])
+        gates = np.array([1.0, 1.0, 1.0])
+        tilts = strategy.compute_momentum_tilt_multipliers(scores, gates, params)
+        assert tilts[0] < 1.0
+
+    def test_score_at_mean_gets_tilt_one(self, strategy, mock_g):
+        """动量等于活跃资产均值时倾斜乘数为 1。"""
+        params = strategy.snapshot_params()
+        scores = np.array([0.5, 0.5, 0.5])
+        gates = np.array([1.0, 1.0, 1.0])
+        tilts = strategy.compute_momentum_tilt_multipliers(scores, gates, params)
+        for t in tilts:
+            assert abs(t - 1.0) < 1e-10
+
+    def test_inactive_assets_get_zero_tilt(self, strategy, mock_g):
+        """非活跃资产倾斜乘数为 0。"""
+        params = strategy.snapshot_params()
+        scores = np.array([0.9, 0.5, 0.1])
+        gates = np.array([1.0, 0.0, 1.0])
+        tilts = strategy.compute_momentum_tilt_multipliers(scores, gates, params)
+        assert tilts[1] == 0.0
+
+    def test_no_active_assets_returns_zeros(self, strategy, mock_g):
+        """无活跃资产时返回全 0。"""
+        params = strategy.snapshot_params()
+        scores = np.array([0.9, 0.5, 0.1])
+        gates = np.array([0.0, 0.0, 0.0])
+        tilts = strategy.compute_momentum_tilt_multipliers(scores, gates, params)
+        assert all(t == 0.0 for t in tilts)
+
+    def test_extreme_momentum_clipped_by_bounds(self, strategy, mock_g):
+        """极端动量差异被 TiltMin/TiltMax 截断。"""
+        params = strategy.snapshot_params()
+        mock_g.MomentumTiltStrength = 10.0  # 放大边缘
+        mock_g.MomentumTiltMin = 0.70
+        mock_g.MomentumTiltMax = 1.30
+        params = strategy.snapshot_params()
+        scores = np.array([0.99, 0.5, 0.01])
+        gates = np.array([1.0, 1.0, 1.0])
+        tilts = strategy.compute_momentum_tilt_multipliers(scores, gates, params)
+        assert tilts[0] == 1.30  # 被上限截断
+        assert tilts[2] == 0.70  # 被下限截断
+
+
+# ============================================================
+# 6d. RSRS 倾斜乘数测试
+# ============================================================
+class TestComputeRSRSTiltMultipliers:
+    """测试 RSRS 原始信号转相对倾斜乘数。"""
+
+    def test_returns_correct_length(self, strategy, mock_g):
+        params = strategy.snapshot_params()
+        n_days = 800
+        rng = np.random.default_rng(42)
+        base = np.cumsum(rng.normal(0.0005, 0.015, n_days)) + 1.0
+        base = np.exp(base)
+        prices = {
+            'high': make_prices_dataframe({e: base * 1.01 for e in mock_g.etf_pool}),
+            'low': make_prices_dataframe({e: base * 0.99 for e in mock_g.etf_pool}),
+        }
+        gates = np.array([1.0, 1.0, 1.0])
+        tilts = strategy.compute_rsrs_tilt_multipliers(prices, mock_g.etf_pool, gates, params)
+        assert len(tilts) == 3
+
+    def test_inactive_assets_get_zero_tilt(self, strategy, mock_g):
+        """非活跃资产 RSRS 倾斜乘数为 0。"""
+        params = strategy.snapshot_params()
+        n_days = 800
+        rng = np.random.default_rng(42)
+        base = np.cumsum(rng.normal(0.0005, 0.015, n_days)) + 1.0
+        base = np.exp(base)
+        prices = {
+            'high': make_prices_dataframe({e: base * 1.01 for e in mock_g.etf_pool}),
+            'low': make_prices_dataframe({e: base * 0.99 for e in mock_g.etf_pool}),
+        }
+        gates = np.array([1.0, 0.0, 1.0])
+        tilts = strategy.compute_rsrs_tilt_multipliers(prices, mock_g.etf_pool, gates, params)
+        assert tilts[1] == 0.0
+
+    def test_no_active_assets_returns_zeros(self, strategy, mock_g):
+        """无活跃资产时返回全 0。"""
+        params = strategy.snapshot_params()
+        n_days = 800
+        rng = np.random.default_rng(42)
+        base = np.cumsum(rng.normal(0.0005, 0.015, n_days)) + 1.0
+        base = np.exp(base)
+        prices = {
+            'high': make_prices_dataframe({e: base * 1.01 for e in mock_g.etf_pool}),
+            'low': make_prices_dataframe({e: base * 0.99 for e in mock_g.etf_pool}),
+        }
+        gates = np.array([0.0, 0.0, 0.0])
+        tilts = strategy.compute_rsrs_tilt_multipliers(prices, mock_g.etf_pool, gates, params)
+        assert all(t == 0.0 for t in tilts)
+
+    def test_identical_rsrs_adj_gets_neutral_tilt(self, strategy, mock_g):
+        """所有活跃资产 RSRS 原始信号相同时，倾斜乘数退化为 1。"""
+        params = strategy.snapshot_params()
+        n_days = 800
+        rng = np.random.default_rng(42)
+        base = np.cumsum(rng.normal(0.0005, 0.015, n_days)) + 1.0
+        base = np.exp(base)
+        # 三只 ETF 用相同的 high/low
+        prices = {
+            'high': make_prices_dataframe({e: base * 1.01 for e in mock_g.etf_pool}),
+            'low': make_prices_dataframe({e: base * 0.99 for e in mock_g.etf_pool}),
+        }
+        gates = np.array([1.0, 1.0, 1.0])
+        tilts = strategy.compute_rsrs_tilt_multipliers(prices, mock_g.etf_pool, gates, params)
+        for t in tilts:
+            assert abs(t - 1.0) < 1e-10
+
+    def test_insufficient_data_active_gets_neutral_tilt(self, strategy, mock_g):
+        """数据不足时活跃资产 RSRS_Adj 退化为 0 → 退化为中性倾斜。"""
+        params = strategy.snapshot_params()
+        short_prices = make_linear_prices(n_days=50)
+        prices = {
+            'high': make_prices_dataframe({e: short_prices for e in mock_g.etf_pool}),
+            'low': make_prices_dataframe({e: short_prices * 0.99 for e in mock_g.etf_pool}),
+        }
+        gates = np.array([1.0, 1.0, 1.0])
+        tilts = strategy.compute_rsrs_tilt_multipliers(prices, mock_g.etf_pool, gates, params)
+        for t in tilts:
+            assert abs(t - 1.0) < 1e-10
+
+    def test_extreme_rsrs_clipped_by_bounds(self, strategy, mock_g):
+        """极端 RSRS 差异被 RSRSTiltMin/RSRSTiltMax 截断。
+
+        使用极小 NegativeFullCut 放大边缘，验证边界生效。
+        """
+        mock_g.RSRS_NegativeFullCut = 0.01
+        mock_g.RSRSTiltMin = 0.70
+        mock_g.RSRSTiltMax = 1.30
+        mock_g.RSRS_N = 10
+        mock_g.RSRS_M = 50
+        params = strategy.snapshot_params()
+        n_days = 200
+        # ETF0: 上涨趋势 + High/Low 价差逐步扩大 → beta 上升趋势 → RSRS 偏高
+        # ETF2: 下跌趋势 + High/Low 价差逐步收窄 → beta 下降趋势 → RSRS 偏低
+        base = np.arange(1.0, 1.0 + 0.002 * n_days, 0.002)[:n_days]
+        spread_up = np.linspace(0.02, 0.08, n_days)
+        spread_down = np.linspace(0.08, 0.02, n_days)
+        spread_neutral = np.full(n_days, 0.04)
+        prices = {
+            'high': make_prices_dataframe({
+                '159819.XSHE': base * (1 + spread_up / 2),
+                '513100.XSHG': base * (1 + spread_neutral / 2),
+                '518880.XSHG': base * (1 + spread_down / 2),
+            }),
+            'low': make_prices_dataframe({
+                '159819.XSHE': base * (1 - spread_up / 2),
+                '513100.XSHG': base * (1 - spread_neutral / 2),
+                '518880.XSHG': base * (1 - spread_down / 2),
+            }),
+        }
+        gates = np.array([1.0, 1.0, 1.0])
+        tilts = strategy.compute_rsrs_tilt_multipliers(prices, mock_g.etf_pool, gates, params)
+        # 所有值应在边界内
+        for t in tilts:
+            assert 0.70 <= t <= 1.30, f"Tilt {t} outside bounds"
+        # 通过放大边缘后至少有一个值触及边界
+        at_boundary = any(abs(t - 0.70) < 1e-10 or abs(t - 1.30) < 1e-10 for t in tilts)
+        assert at_boundary, f"Expected at least one tilt at clip boundary, got {tilts}"
+
+
+# ============================================================
+# 6e. 倾斜合成测试
+# ============================================================
+class TestApplyRelativeTilts:
+    """测试 apply_relative_tilts 倾斜权重合成与归一化。"""
+
+    def test_neutral_tilts_preserve_rp_weights(self, strategy):
+        """动量与 RSRS 都为中性乘数时 TiltedWeight == RPWeight。"""
+        rp = np.array([0.6, 0.4, 0.0])
+        gates = np.array([1.0, 1.0, 0.0])
+        mom_tilts = np.array([1.0, 1.0, 0.0])
+        rsrs_tilts = np.array([1.0, 1.0, 0.0])
+        tilted = strategy.apply_relative_tilts(rp, gates, mom_tilts, rsrs_tilts)
+        assert abs(tilted[0] - 0.6) < 1e-10
+        assert abs(tilted[1] - 0.4) < 1e-10
+        assert tilted[2] == 0.0
+
+    def test_tilted_sum_equals_base_total(self, strategy):
+        """倾斜后活跃资产权重合计等于原始 sum(RPWeight_active)。"""
+        rp = np.array([0.5, 0.3, 0.2])
+        gates = np.array([1.0, 1.0, 1.0])
+        mom_tilts = np.array([1.2, 1.0, 0.8])
+        rsrs_tilts = np.array([1.0, 1.0, 1.0])
+        tilted = strategy.apply_relative_tilts(rp, gates, mom_tilts, rsrs_tilts)
+        assert abs(tilted.sum() - 1.0) < 1e-10
+
+    def test_inactive_assets_stay_zero(self, strategy):
+        """趋势不成立资产权重保持 0。"""
+        rp = np.array([0.6, 0.0, 0.4])
+        gates = np.array([1.0, 0.0, 1.0])
+        mom_tilts = np.array([1.2, 0.0, 0.8])
+        rsrs_tilts = np.array([1.1, 0.0, 0.9])
+        tilted = strategy.apply_relative_tilts(rp, gates, mom_tilts, rsrs_tilts)
+        assert tilted[1] == 0.0
+
+    def test_denominator_zero_falls_back_to_rp(self, strategy):
+        """tilted_raw 分母为 0 时回退原始 RPWeight。"""
+        rp = np.array([0.5, 0.5, 0.0])
+        gates = np.array([1.0, 1.0, 0.0])
+        mom_tilts = np.array([0.0, 0.0, 0.0])
+        rsrs_tilts = np.array([0.0, 0.0, 0.0])
+        tilted = strategy.apply_relative_tilts(rp, gates, mom_tilts, rsrs_tilts)
+        assert abs(tilted[0] - 0.5) < 1e-10
+        assert abs(tilted[1] - 0.5) < 1e-10
+
+    def test_strong_momentum_gets_higher_tilted_weight(self, strategy):
+        """强动量资产倾斜后相对权重上升。"""
+        rp = np.array([0.5, 0.5, 0.0])
+        gates = np.array([1.0, 1.0, 0.0])
+        mom_tilts = np.array([1.3, 0.7, 0.0])
+        rsrs_tilts = np.array([1.0, 1.0, 0.0])
+        tilted = strategy.apply_relative_tilts(rp, gates, mom_tilts, rsrs_tilts)
+        assert tilted[0] > rp[0]
+
+    def test_no_active_assets_returns_zeros(self, strategy):
+        """无活跃资产时返回全 0。"""
+        rp = np.array([0.0, 0.0, 0.0])
+        gates = np.array([0.0, 0.0, 0.0])
+        mom_tilts = np.array([0.0, 0.0, 0.0])
+        rsrs_tilts = np.array([0.0, 0.0, 0.0])
+        tilted = strategy.apply_relative_tilts(rp, gates, mom_tilts, rsrs_tilts)
+        assert all(t == 0.0 for t in tilted)
+
+    def test_single_active_asset_preserves_rp_weight(self, strategy):
+        """单个活跃资产时 TiltedWeight 应等于其 RPWeight。"""
+        rp = np.array([1.0, 0.0, 0.0])
+        gates = np.array([1.0, 0.0, 0.0])
+        mom_tilts = np.array([1.2, 0.0, 0.0])
+        rsrs_tilts = np.array([1.1, 0.0, 0.0])
+        tilted = strategy.apply_relative_tilts(rp, gates, mom_tilts, rsrs_tilts)
+        assert abs(tilted[0] - 1.0) < 1e-10
+
+
+# ============================================================
 # 7. 拥挤度惩罚测试
 # ============================================================
 class TestComputeCrowdPenalties:
@@ -1182,14 +1543,19 @@ class TestWeeklyCheckIntegration:
 
         strategy.weekly_check(context)
 
-        # 验证核心链路全部执行：TrendGate → Momentum → TopK → RP → RSRS → Crowd → VolScale → FinalWeight
+        # 验证核心链路全部执行：TrendGate → RPWeight → MomentumScore → MomentumTilt
+        #   → RSRSTilt → TiltedWeight → CrowdPenalty → PortfolioVolScale → FinalWeight
         log_text = str(strategy.log.info.call_args_list)
         expected_modules = [
-            'TrendGate', 'MomentumScore', 'Selected', 'RPWeight',
-            'RSRSMultiplier', 'CrowdPenalty', 'FinalWeight', 'PortfolioVolScale',
+            'TrendGate', 'RPWeight', 'MomentumScore', 'MomentumTilt',
+            'RSRSTilt', 'TiltedWeight', 'CrowdPenalty', 'FinalWeight', 'PortfolioVolScale',
         ]
         for mod in expected_modules:
             assert mod in log_text, f"Missing intermediate log for module: {mod}"
+        # 不再要求 Selected 出现在日志中
+        assert 'Selected' not in log_text, (
+            "Selected (TopK) should not appear in new main flow logs"
+        )
         # 上涨趋势数据应有至少一只通过趋势门槛 → 应有下单
         assert strategy.order_target_value.call_count >= 1, (
             "Expected at least one order when some trends pass"
@@ -1230,7 +1596,7 @@ class TestWeeklyCheckIntegration:
         # 验证中间步骤：趋势门槛全 0
         log_text = str(strategy.log.info.call_args_list)
         assert 'TrendGate' in log_text, "TrendGate log missing when all trends fail"
-        assert 'Selected' in log_text, "Selected log missing when all trends fail"
+        assert 'RPWeight' in log_text, "RPWeight log missing when all trends fail"
 
         # 全部趋势失效 → 已有持仓必须被清仓（target_value = 0）
         calls = strategy.order_target_value.call_args_list
@@ -1289,8 +1655,8 @@ class TestWeeklyCheckIntegration:
         # 验证完整链路日志
         log_text = str(strategy.log.info.call_args_list)
         expected_modules = [
-            'TrendGate', 'MomentumScore', 'Selected', 'RPWeight',
-            'RSRSMultiplier', 'CrowdPenalty', 'FinalWeight', 'PortfolioVolScale',
+            'TrendGate', 'RPWeight', 'MomentumScore', 'MomentumTilt',
+            'RSRSTilt', 'TiltedWeight', 'CrowdPenalty', 'FinalWeight', 'PortfolioVolScale',
         ]
         for mod in expected_modules:
             assert mod in log_text, f"Missing intermediate log for module: {mod}"
@@ -1796,6 +2162,8 @@ class TestSnapshotParams:
             "VolWindow", "annual_factor",
             "RSRS_N", "RSRS_M", "RSRS_NegativeFullCut",
             "RSRSMinMultiplier", "RSRSMaxMultiplier",
+            "MomentumTiltStrength", "MomentumTiltMin", "MomentumTiltMax",
+            "RSRSTiltMin", "RSRSTiltMax",
             "CrowdWindow", "CrowdRetShort", "CrowdRetMid",
             "AmountMAWindow", "DeviationMAWindow", "CrowdVolWindow",
             "CrowdStart", "CrowdEnd", "MinCrowdPenalty",
@@ -1929,6 +2297,48 @@ class TestValidateParams:
         with pytest.raises(ValueError, match="JoinQuant security code"):
             strategy.validate_params(params)
 
+    def test_momentum_tilt_strength_negative_raises(self, strategy, mock_g):
+        mock_g.MomentumTiltStrength = -1.0
+        params = strategy.snapshot_params()
+        with pytest.raises(ValueError, match="MomentumTiltStrength must be >= 0"):
+            strategy.validate_params(params)
+
+    def test_momentum_tilt_min_zero_raises(self, strategy, mock_g):
+        mock_g.MomentumTiltMin = 0.0
+        params = strategy.snapshot_params()
+        with pytest.raises(ValueError, match="Momentum tilt bounds"):
+            strategy.validate_params(params)
+
+    def test_momentum_tilt_min_gt_one_raises(self, strategy, mock_g):
+        mock_g.MomentumTiltMin = 1.5
+        params = strategy.snapshot_params()
+        with pytest.raises(ValueError, match="Momentum tilt bounds"):
+            strategy.validate_params(params)
+
+    def test_momentum_tilt_max_lt_one_raises(self, strategy, mock_g):
+        mock_g.MomentumTiltMax = 0.8
+        params = strategy.snapshot_params()
+        with pytest.raises(ValueError, match="Momentum tilt bounds"):
+            strategy.validate_params(params)
+
+    def test_rsrs_tilt_min_zero_raises(self, strategy, mock_g):
+        mock_g.RSRSTiltMin = 0.0
+        params = strategy.snapshot_params()
+        with pytest.raises(ValueError, match="RSRS tilt bounds"):
+            strategy.validate_params(params)
+
+    def test_rsrs_tilt_min_gt_one_raises(self, strategy, mock_g):
+        mock_g.RSRSTiltMin = 1.5
+        params = strategy.snapshot_params()
+        with pytest.raises(ValueError, match="RSRS tilt bounds"):
+            strategy.validate_params(params)
+
+    def test_rsrs_tilt_max_lt_one_raises(self, strategy, mock_g):
+        mock_g.RSRSTiltMax = 0.8
+        params = strategy.snapshot_params()
+        with pytest.raises(ValueError, match="RSRS tilt bounds"):
+            strategy.validate_params(params)
+
 
 class TestNormalizeFieldFrame:
     """测试 normalize_field_frame 数据归一化。"""
@@ -2027,62 +2437,52 @@ class TestComputeHistoryCount:
 
 
 class TestComposeRawWeights:
-    """测试 compose_raw_weights 权重合成。"""
+    """测试 compose_raw_weights 权重合成（新版三参数签名）。"""
 
     def test_normal_composition(self, strategy):
-        rp = np.array([0.6, 0.4, 0.0])
+        tilted = np.array([0.6, 0.4, 0.0])
         gates = np.array([1.0, 1.0, 0.0])
-        selected = [True, True, False]
-        rsrs = np.array([1.0, 0.8, 1.0])
         crowd = np.array([0.9, 1.0, 1.0])
 
-        raw = strategy.compose_raw_weights(rp, gates, selected, rsrs, crowd)
-        assert raw[0] == 0.6 * 1.0 * 1.0 * 0.9
-        assert raw[1] == 0.4 * 1.0 * 0.8 * 1.0
-        assert raw[2] == 0.0  # not selected
+        raw = strategy.compose_raw_weights(tilted, gates, crowd)
+        assert raw[0] == 0.6 * 1.0 * 0.9
+        assert raw[1] == 0.4 * 1.0 * 1.0
+        assert raw[2] == 0.0
 
-    def test_all_not_selected_returns_zeros(self, strategy):
-        rp = np.array([0.5, 0.3, 0.2])
-        gates = np.array([1.0, 1.0, 1.0])
-        selected = [False, False, False]
-        rsrs = np.array([1.0, 1.0, 1.0])
+    def test_all_trend_gates_zero_returns_zeros(self, strategy):
+        tilted = np.array([0.5, 0.3, 0.2])
+        gates = np.array([0.0, 0.0, 0.0])
         crowd = np.array([1.0, 1.0, 1.0])
 
-        raw = strategy.compose_raw_weights(rp, gates, selected, rsrs, crowd)
+        raw = strategy.compose_raw_weights(tilted, gates, crowd)
         assert all(r == 0.0 for r in raw)
 
-    def test_zero_multipliers_zero_weights(self, strategy):
-        rp = np.array([0.5, 0.5, 0.0])
+    def test_zero_crowd_penalties_zero_weights(self, strategy):
+        tilted = np.array([0.5, 0.5, 0.0])
         gates = np.array([1.0, 1.0, 0.0])
-        selected = [True, True, False]
-        rsrs = np.array([0.0, 0.0, 1.0])
-        crowd = np.array([1.0, 1.0, 1.0])
+        crowd = np.array([0.0, 0.0, 1.0])
 
-        raw = strategy.compose_raw_weights(rp, gates, selected, rsrs, crowd)
+        raw = strategy.compose_raw_weights(tilted, gates, crowd)
         assert raw[0] == 0.0
         assert raw[1] == 0.0
 
-    def test_partial_selection(self, strategy):
-        rp = np.array([0.7, 0.0, 0.3])
+    def test_partial_active(self, strategy):
+        tilted = np.array([0.7, 0.0, 0.3])
         gates = np.array([1.0, 0.0, 1.0])
-        selected = [True, False, True]
-        rsrs = np.array([1.0, 1.0, 0.5])
         crowd = np.array([1.0, 1.0, 1.0])
 
-        raw = strategy.compose_raw_weights(rp, gates, selected, rsrs, crowd)
-        assert raw[0] > 0
+        raw = strategy.compose_raw_weights(tilted, gates, crowd)
+        assert raw[0] == 0.7
         assert raw[1] == 0.0
-        assert raw[2] == 0.3 * 1.0 * 0.5 * 1.0
+        assert raw[2] == 0.3
 
-    def test_list_selected_accepted(self, strategy):
-        """selected 为 list[bool] 时也应正常工作。"""
-        rp = np.array([0.6, 0.4, 0.0])
-        gates = np.array([1.0, 1.0, 0.0])
-        selected = [True, True, False]  # list, not np.array
-        rsrs = np.array([1.0, 1.0, 1.0])
+    def test_list_gates_accepted(self, strategy):
+        """trend_gates 为 list 时也应正常工作。"""
+        tilted = np.array([0.6, 0.4, 0.0])
+        gates = [1.0, 1.0, 0.0]
         crowd = np.array([1.0, 1.0, 1.0])
 
-        raw = strategy.compose_raw_weights(rp, gates, selected, rsrs, crowd)
+        raw = strategy.compose_raw_weights(tilted, gates, crowd)
         assert raw[0] == 0.6
         assert raw[1] == 0.4
 
