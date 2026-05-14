@@ -478,7 +478,7 @@ def run_ab_experiment(args: Any, config: ABExperimentConfig, manifest_path: Path
 
     # We import these lazily to avoid circular imports at module level.
     from .browser import AutomationError, CompileFailed, JoinQuantBrowser
-    from .cli import _bundle_options, _fetch_backtest_data, _selected_result_source
+    from .cli import _allow_partial, _bundle_options, _fetch_backtest_data, _make_audit_token, _selected_result_source
     from .cli import _set_quota_status as cli_set_quota_status
 
     import asyncio
@@ -490,7 +490,9 @@ def run_ab_experiment(args: Any, config: ABExperimentConfig, manifest_path: Path
             CompileFailed=CompileFailed,
             _bundle_options=_bundle_options,
             _fetch_backtest_data=_fetch_backtest_data,
+            _make_audit_token=_make_audit_token,
             _selected_result_source=_selected_result_source,
+            _allow_partial=_allow_partial,
             cli_set_quota_status=cli_set_quota_status,
         )
     )
@@ -507,7 +509,9 @@ async def _ab_run_session(
     CompileFailed: Any,
     _bundle_options: Any,
     _fetch_backtest_data: Any,
+    _make_audit_token: Any,
     _selected_result_source: Any,
+    _allow_partial: Any,
     cli_set_quota_status: Any,
 ) -> int:
     """Core async session: one browser, one editor, sequential variant uploads."""
@@ -568,7 +572,8 @@ async def _ab_run_session(
 
                 # -- local compile --
                 compile_strategy(working_path)
-                upload_path = generate_upload_file(working_path)
+                audit_token = _make_audit_token(config.strategy, config.experiment_id, label)
+                upload_path = generate_upload_file(working_path, audit_token=audit_token)
                 code = upload_path.read_text(encoding="utf-8")
 
                 # -- daily quota check --
@@ -638,6 +643,9 @@ async def _ab_run_session(
                     "frequency": str(config.base.get("frequency") or "每天"),
                     "pyVersion": str(config.base.get("py_version") or "Python3"),
                     "resultSource": str(config.base.get("result_source") or "auto"),
+                    "auditToken": audit_token,
+                    "auditPath": f"jq_auto_audit/{audit_token}.jsonl",
+                    "allowPartial": _allow_partial(args, bool(config.base.get("allow_partial", False))),
                 }
                 fetched = await _fetch_backtest_data(
                     browser,
@@ -649,7 +657,13 @@ async def _ab_run_session(
                 )
 
                 if fetched.method in {"api", "research"}:
-                    run_dir = save_api_bundle(fetched.payload, strategy=config.strategy, run_id=run_id)
+                    run_dir = save_api_bundle(
+                        fetched.payload,
+                        strategy=config.strategy,
+                        run_id=run_id,
+                        detail_bundle=fetched.detail_payload,
+                        allow_partial=_allow_partial(args, bool(config.base.get("allow_partial", False))),
+                    )
                     actual_minutes = extract_actual_minutes_from_bundle(fetched.payload)
                 else:
                     run_dir = save_dom_tabs(fetched.payload, strategy=config.strategy, run_id=run_id)

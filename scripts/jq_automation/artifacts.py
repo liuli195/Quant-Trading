@@ -13,14 +13,31 @@ class ArtifactError(RuntimeError):
     """Raised when fetched browser data cannot be persisted."""
 
 
-def save_api_bundle(bundle: dict[str, Any], *, strategy: str, run_id: str) -> Path:
+def save_api_bundle(
+    bundle: dict[str, Any],
+    *,
+    strategy: str,
+    run_id: str,
+    detail_bundle: dict[str, Any] | None = None,
+    allow_partial: bool = False,
+) -> Path:
     run_dir = resolve_run_dir(strategy, run_id)
     tabs_dir = resolve_tabs_dir(strategy, run_id)
     api_path = run_dir / "api_export.json"
     api_path.write_text(json.dumps(bundle, ensure_ascii=False, indent=2), encoding="utf-8")
+    detail_path = None
+    if detail_bundle is not None:
+        detail_path = run_dir / "detail_api_export.json"
+        detail_path.write_text(json.dumps(detail_bundle, ensure_ascii=False, indent=2), encoding="utf-8")
 
     save_module = _load_save_backtest_data()
-    save_module.save_api_data(str(api_path), str(run_dir), tabs_dir=str(tabs_dir))
+    save_module.save_api_data(
+        str(api_path),
+        str(run_dir),
+        tabs_dir=str(tabs_dir),
+        detail_api_json_path=str(detail_path) if detail_path else None,
+        allow_partial=allow_partial,
+    )
     return run_dir
 
 

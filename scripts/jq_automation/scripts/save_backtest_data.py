@@ -18,6 +18,10 @@ from pathlib import Path
 
 
 PARTIAL_TABS = {"logs"}
+
+
+class IntegrityError(RuntimeError):
+    """Raised when strict backtest artifact completeness validation fails."""
 SYM_MAP = {
     "黄金ETF(518880.XSHG)": "黄金ETF(518880.XSHG)",
     "人工智能ETF易方达(159819.XSHE)": "人工智能ETF易方达(159819.XSHE)",
@@ -454,6 +458,8 @@ def metadata_from_api_bundle(api_data):
             "research_fetch_failed": bundle_meta.get("research_fetch_failed", False),
             "research_fetch_error": bundle_meta.get("research_fetch_error", ""),
             "detail_api_used": bundle_meta.get("detail_api_used", False),
+            "audit_token": bundle_meta.get("audit_token", ""),
+            "audit_path": bundle_meta.get("audit_path", ""),
         }
     )
     if bundle_meta.get("id_mismatch"):
@@ -483,6 +489,8 @@ def metadata_from_research_bundle(api_data):
             "frequency": bundle_meta.get("frequency", ""),
             "py_version": bundle_meta.get("py_version", ""),
             "internal_backtest_id": supplemental.get("internal_backtest_id", ""),
+            "audit_token": bundle_meta.get("audit_token", ""),
+            "audit_path": bundle_meta.get("audit_path", ""),
         }
     )
     return meta
@@ -768,7 +776,7 @@ def resolve_output_dirs(run_dir=None, strategy=None, run_id=None):
     return resolved_run_dir, tabs_dir, report_dir
 
 
-def save_api_data(api_json_path, run_dir, tabs_dir=None):
+def save_api_data(api_json_path, run_dir, tabs_dir=None, detail_api_json_path=None, allow_partial=False):
     """将 fetchAllBacktestData 或 fetchExistingBacktestBundle 输出的 JSON 落盘。"""
     os.makedirs(run_dir, exist_ok=True)
     tabs_dir = tabs_dir or os.path.join(run_dir, "tabs_raw")
@@ -780,10 +788,26 @@ def save_api_data(api_json_path, run_dir, tabs_dir=None):
         api_data = json.load(file)
 
     if api_data.get("metadata", {}).get("schema_version") == 3:
-        return save_research_bundle_data(api_json_path, api_data, run_dir, tabs_dir, report_dir)
+        return save_research_bundle_data(
+            api_json_path,
+            api_data,
+            run_dir,
+            tabs_dir,
+            report_dir,
+            detail_api_json_path=detail_api_json_path,
+            allow_partial=allow_partial,
+        )
 
     if api_data.get("metadata", {}).get("schema_version") == 2 or "risk_tabs" in api_data:
-        return save_api_bundle_data(api_json_path, api_data, run_dir, tabs_dir, report_dir)
+        return save_api_bundle_data(
+            api_json_path,
+            api_data,
+            run_dir,
+            tabs_dir,
+            report_dir,
+            detail_api_json_path=detail_api_json_path,
+            allow_partial=allow_partial,
+        )
 
     transactions = api_data.get("transactions", [])
     positions = api_data.get("positions", [])
@@ -828,7 +852,15 @@ def save_api_data(api_json_path, run_dir, tabs_dir=None):
     return {name: count for name, count in files_written}
 
 
-def save_api_bundle_data(api_json_path, api_data, run_dir, tabs_dir, report_dir):
+def save_api_bundle_data(
+    api_json_path,
+    api_data,
+    run_dir,
+    tabs_dir,
+    report_dir,
+    detail_api_json_path=None,
+    allow_partial=False,
+):
     """新版一次性 JS bundle → 现有输出契约。"""
     files_written = []
 
@@ -884,6 +916,16 @@ def save_api_bundle_data(api_json_path, api_data, run_dir, tabs_dir, report_dir)
     write_report_files(api_data, run_dir, report_dir, files_written)
 
     index = build_api_bundle_index(api_json_path, files_written, api_data)
+    integrity = finalize_integrity(
+        api_json_path,
+        api_data,
+        run_dir,
+        tabs_dir,
+        report_dir,
+        index,
+        detail_api_json_path=detail_api_json_path,
+        allow_partial=allow_partial,
+    )
     with open(os.path.join(run_dir, "all_data.json"), "w", encoding="utf-8") as file:
         json.dump(index, file, ensure_ascii=False, indent=2)
 
@@ -891,10 +933,22 @@ def save_api_bundle_data(api_json_path, api_data, run_dir, tabs_dir, report_dir)
     for name, count in files_written:
         print(f"  {name}: {count} records")
     print(f"Created index file: {os.path.join(run_dir, 'all_data.json')}")
+    if integrity["status"] != "complete":
+        print(f"Integrity status: {integrity['status']} ({len(integrity['issues'])} issue(s))")
+        if not allow_partial:
+            raise IntegrityError("; ".join(integrity["issues"]) or "backtest data integrity check failed")
     return {name: count for name, count in files_written}
 
 
-def save_research_bundle_data(api_json_path, api_data, run_dir, tabs_dir, report_dir):
+def save_research_bundle_data(
+    api_json_path,
+    api_data,
+    run_dir,
+    tabs_dir,
+    report_dir,
+    detail_api_json_path=None,
+    allow_partial=False,
+):
     """Research get_backtest() schema v3 bundle -> existing output contract."""
     files_written = []
     supplemental = api_data.get("supplemental_detail") or {}
@@ -918,6 +972,9 @@ def save_research_bundle_data(api_json_path, api_data, run_dir, tabs_dir, report
         logs_note += "- 详情页日志接口返回 partial，上限通常为 1000 条。\n"
     logs_note += "\n完整业务日志应通过策略侧 write_file() JSONL 方案产出。\n"
     outputs["logs.md"] = logs_note
+    audit_log_text = api_data.get("audit_log_text", "")
+    if audit_log_text:
+        outputs["audit_log.jsonl"] = audit_log_text if audit_log_text.endswith("\n") else audit_log_text + "\n"
 
     for filename, content in outputs.items():
         with open(os.path.join(tabs_dir, filename), "w", encoding="utf-8") as file:
@@ -938,6 +995,8 @@ def save_research_bundle_data(api_json_path, api_data, run_dir, tabs_dir, report
             count = len(api_data.get("risk", {})) if isinstance(api_data.get("risk"), dict) else 0
         elif key == "period_risks":
             count = len(api_data.get("period_risks", {})) if isinstance(api_data.get("period_risks"), dict) else 0
+        elif filename == "audit_log.jsonl":
+            count = len([line for line in content.splitlines() if line.strip()])
         else:
             count = len(content)
         files_written.append((filename, count))
@@ -953,6 +1012,16 @@ def save_research_bundle_data(api_json_path, api_data, run_dir, tabs_dir, report
     write_report_files_for_research(api_data, metadata, summary_metrics, report_dir)
 
     index = build_research_bundle_index(api_json_path, files_written, api_data)
+    integrity = finalize_integrity(
+        api_json_path,
+        api_data,
+        run_dir,
+        tabs_dir,
+        report_dir,
+        index,
+        detail_api_json_path=detail_api_json_path,
+        allow_partial=allow_partial,
+    )
     with open(os.path.join(run_dir, "all_data.json"), "w", encoding="utf-8") as file:
         json.dump(index, file, ensure_ascii=False, indent=2)
 
@@ -960,6 +1029,10 @@ def save_research_bundle_data(api_json_path, api_data, run_dir, tabs_dir, report
     for name, count in files_written:
         print(f"  {name}: {count} records")
     print(f"Created index file: {os.path.join(run_dir, 'all_data.json')}")
+    if integrity["status"] != "complete":
+        print(f"Integrity status: {integrity['status']} ({len(integrity['issues'])} issue(s))")
+        if not allow_partial:
+            raise IntegrityError("; ".join(integrity["issues"]) or "backtest data integrity check failed")
     return {name: count for name, count in files_written}
 
 
@@ -1087,12 +1160,277 @@ def build_api_index(api_json_path, files_written):
     }
 
 
+def finalize_integrity(
+    api_json_path,
+    api_data,
+    run_dir,
+    tabs_dir,
+    report_dir,
+    index,
+    *,
+    detail_api_json_path=None,
+    allow_partial=False,
+):
+    integrity = build_integrity_report(
+        api_json_path,
+        api_data,
+        run_dir,
+        tabs_dir,
+        detail_api_json_path=detail_api_json_path,
+    )
+    index["integrity_status"] = integrity["status"]
+    index["integrity_issues"] = integrity["issues"]
+    index["sources"] = integrity["sources"]
+    write_integrity_files(integrity, run_dir, report_dir)
+    integrity["allow_partial"] = bool(allow_partial)
+    return integrity
+
+
+def build_integrity_report(api_json_path, api_data, run_dir, tabs_dir, *, detail_api_json_path=None):
+    detail_path = detail_api_json_path
+    detail_data = None
+    if detail_path and os.path.exists(detail_path):
+        with open(detail_path, "r", encoding="utf-8") as file:
+            detail_data = json.load(file)
+    elif api_data.get("metadata", {}).get("schema_version") == 2 or "risk_tabs" in api_data:
+        detail_path = api_json_path
+        detail_data = api_data
+
+    checks = []
+
+    def add_check(name, required, ok, *, source="", count=None, partial=None, message=""):
+        status = "pass" if ok else ("fail" if required else "warn")
+        checks.append({
+            "name": name,
+            "required": bool(required),
+            "status": status,
+            "source": source,
+            "count": count,
+            "partial": partial,
+            "message": message,
+        })
+
+    schema = api_data.get("metadata", {}).get("schema_version")
+    meta = api_data.get("metadata", {})
+    partial = api_data.get("partial", {})
+    counts = api_data.get("counts", {})
+    is_research = schema == 3
+
+    add_check(
+        "research_bundle",
+        True,
+        is_research and meta.get("research_downloaded") is True and not meta.get("research_fetch_failed"),
+        source="api_export.json",
+        message="research get_backtest bundle is required",
+    )
+    add_check(
+        "detail_api_bundle",
+        True,
+        isinstance(detail_data, dict),
+        source=os.path.basename(detail_path) if detail_path else "",
+        message="detail API bundle is required",
+    )
+
+    add_check("metadata", True, os.path.isfile(os.path.join(run_dir, "metadata.json")), source="metadata.json")
+    add_check("summary_metrics", True, os.path.isfile(os.path.join(run_dir, "summary_metrics.json")), source="summary_metrics.json")
+
+    if is_research:
+        add_check(
+            "research_results",
+            True,
+            isinstance(api_data.get("results"), list) and counts.get("results", 0) > 0 and not partial.get("results"),
+            source="api_export.json",
+            count=counts.get("results"),
+            partial=partial.get("results"),
+        )
+        add_check(
+            "research_positions",
+            True,
+            isinstance(api_data.get("positions"), list) and not partial.get("positions"),
+            source="api_export.json",
+            count=counts.get("positions"),
+            partial=partial.get("positions"),
+        )
+        add_check(
+            "research_orders",
+            True,
+            isinstance(api_data.get("orders"), list) and not partial.get("orders"),
+            source="api_export.json",
+            count=counts.get("orders"),
+            partial=partial.get("orders"),
+        )
+        risk = api_data.get("risk")
+        add_check(
+            "research_risk",
+            True,
+            isinstance(risk, dict) and bool(risk) and "__error__" not in risk and not partial.get("risk"),
+            source="api_export.json",
+            count=len(risk) if isinstance(risk, dict) else 0,
+            partial=partial.get("risk"),
+        )
+
+    if isinstance(detail_data, dict):
+        detail_counts = detail_data.get("counts", {})
+        detail_partial = detail_data.get("partial", {})
+        add_check(
+            "detail_results",
+            True,
+            detail_counts.get("result_rows", 0) > 0 and not detail_partial.get("results"),
+            source=os.path.basename(detail_path),
+            count=detail_counts.get("result_rows"),
+            partial=detail_partial.get("results"),
+        )
+        add_check(
+            "detail_transactions",
+            True,
+            not detail_partial.get("transactions") and "transactions" in detail_counts,
+            source=os.path.basename(detail_path),
+            count=detail_counts.get("transactions"),
+            partial=detail_partial.get("transactions"),
+        )
+        add_check(
+            "detail_positions",
+            True,
+            detail_counts.get("positions", 0) > 0 and not detail_partial.get("positions"),
+            source=os.path.basename(detail_path),
+            count=detail_counts.get("positions"),
+            partial=detail_partial.get("positions"),
+        )
+        add_check(
+            "detail_risk_tabs",
+            True,
+            detail_counts.get("risk_rows", 0) > 0,
+            source=os.path.basename(detail_path),
+            count=detail_counts.get("risk_rows"),
+        )
+        add_check(
+            "platform_logs",
+            False,
+            not detail_partial.get("logs"),
+            source=os.path.basename(detail_path),
+            count=detail_counts.get("logs"),
+            partial=detail_partial.get("logs"),
+            message="platform logs may be partial; audit_log is canonical",
+        )
+
+    audit_result = validate_audit_log(api_data.get("audit_log_text", ""))
+    add_check(
+        "audit_log",
+        True,
+        audit_result["valid"],
+        source="tabs_raw/audit_log.jsonl",
+        count=audit_result["count"],
+        partial=not audit_result["valid"],
+        message="; ".join(audit_result["issues"]),
+    )
+
+    issues = [
+        f"{item['name']}: {item['message'] or item['status']}"
+        for item in checks
+        if item["required"] and item["status"] != "pass"
+    ]
+    status = "complete" if not issues else "incomplete"
+    return {
+        "status": status,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "issues": issues,
+        "checks": checks,
+        "sources": {
+            "research": {
+                "path": "api_export.json",
+                "present": is_research,
+                "method": meta.get("extraction_method", ""),
+            },
+            "detail_api": {
+                "path": os.path.basename(detail_path) if detail_path else "",
+                "present": isinstance(detail_data, dict),
+            },
+            "audit_log": {
+                "path": "tabs_raw/audit_log.jsonl",
+                "present": bool(api_data.get("audit_log_text", "")),
+                "count": audit_result["count"],
+            },
+            "platform_logs": {
+                "path": "tabs_raw/logs.md",
+                "partial": bool((detail_data or api_data).get("partial", {}).get("logs")) if isinstance(detail_data or api_data, dict) else None,
+            },
+        },
+    }
+
+
+def validate_audit_log(text):
+    rows = []
+    issues = []
+    raw_lines = [line for line in str(text or "").splitlines() if line.strip()]
+    if not raw_lines:
+        return {"valid": False, "count": 0, "issues": ["audit log is missing"]}
+    for idx, line in enumerate(raw_lines, start=1):
+        try:
+            row = json.loads(line)
+        except Exception as exc:
+            issues.append(f"line {idx} is not valid JSON: {exc}")
+            continue
+        rows.append(row)
+    seqs = [row.get("seq") for row in rows]
+    expected = list(range(1, len(rows) + 1))
+    if seqs != expected:
+        issues.append("seq values are not continuous from 1")
+    events = {row.get("event") for row in rows}
+    if "run_start" not in events:
+        issues.append("run_start event missing")
+    if "run_end" not in events:
+        issues.append("run_end event missing")
+    return {"valid": not issues, "count": len(rows), "issues": issues}
+
+
+def write_integrity_files(integrity, run_dir, report_dir):
+    with open(os.path.join(run_dir, "integrity.json"), "w", encoding="utf-8") as file:
+        json.dump(integrity, file, ensure_ascii=False, indent=2)
+    lines = [
+        "# 数据完整性报告",
+        "",
+        f"- 状态：{integrity['status']}",
+        f"- 生成时间：{integrity['generated_at']}",
+        "",
+        "## 问题",
+    ]
+    if integrity["issues"]:
+        lines.extend(f"- {issue}" for issue in integrity["issues"])
+    else:
+        lines.append("- 无")
+    lines.extend([
+        "",
+        "## 检查项",
+        "",
+        "| 检查项 | 必须 | 状态 | 来源 | 记录数 | partial | 说明 |",
+        "| --- | --- | --- | --- | ---: | --- | --- |",
+    ])
+    for item in integrity["checks"]:
+        lines.append(
+            "| {name} | {required} | {status} | {source} | {count} | {partial} | {message} |".format(
+                name=item["name"],
+                required="是" if item["required"] else "否",
+                status=item["status"],
+                source=item.get("source", ""),
+                count="" if item.get("count") is None else item.get("count"),
+                partial="" if item.get("partial") is None else item.get("partial"),
+                message=str(item.get("message", "")).replace("|", "\\|"),
+            )
+        )
+    with open(os.path.join(report_dir, "data-integrity.md"), "w", encoding="utf-8") as file:
+        file.write("\n".join(lines) + "\n")
+
+
+def _tab_key(filename):
+    return filename.replace(".md", "").replace(".jsonl", "").replace("report/", "")
+
+
 def build_api_bundle_index(api_json_path, files_written, api_data):
     partial = api_data.get("partial", {})
     meta = api_data.get("metadata", {})
 
     def is_partial(name):
-        key = name.replace(".md", "")
+        key = _tab_key(name)
         if key == "logs":
             return bool(partial.get("logs"))
         if key == "daily_returns":
@@ -1117,7 +1455,7 @@ def build_api_bundle_index(api_json_path, files_written, api_data):
         "research_fetch_error": meta.get("research_fetch_error", ""),
         "detail_api_used": meta.get("detail_api_used", False),
         "tabs": {
-            name.replace(".md", "").replace("report/", ""): {
+            _tab_key(name): {
                 "path": f"tabs_raw/{name}" if not name.startswith("report/") else name,
                 "partial": is_partial(name),
                 "record_count": count,
@@ -1133,7 +1471,7 @@ def build_research_bundle_index(api_json_path, files_written, api_data):
     meta = api_data.get("metadata", {})
 
     def is_partial(name):
-        key = name.replace(".md", "")
+        key = _tab_key(name)
         if key == "daily_returns":
             return bool(partial.get("results"))
         if key == "transactioninfo":
@@ -1162,7 +1500,7 @@ def build_research_bundle_index(api_json_path, files_written, api_data):
         "research_downloaded": meta.get("research_downloaded", False),
         "detail_api_used": meta.get("detail_api_used", False),
         "tabs": {
-            name.replace(".md", ""): {
+            _tab_key(name): {
                 "path": f"tabs_raw/{name}",
                 "partial": is_partial(name),
                 "record_count": count,
@@ -1214,6 +1552,8 @@ def build_parser():
     )
     parser.add_argument("run_dir", nargs="?", help="Legacy output run directory.")
     parser.add_argument("--api", dest="api_json", help="API export JSON path.")
+    parser.add_argument("--detail-api-json", help="Optional detail API export JSON path for integrity checks.")
+    parser.add_argument("--allow-partial", action="store_true", help="Write incomplete artifacts without failing.")
     parser.add_argument("--strategy", help="Strategy alias variable used by path_aliases.json.")
     parser.add_argument("--run-id", help="Run id alias variable used by path_aliases.json.")
     return parser
@@ -1233,7 +1573,13 @@ def main(argv=None):
                 strategy=args.strategy,
                 run_id=args.run_id,
             )
-            save_api_data(args.api_json, run_dir, tabs_dir=tabs_dir)
+            save_api_data(
+                args.api_json,
+                run_dir,
+                tabs_dir=tabs_dir,
+                detail_api_json_path=args.detail_api_json,
+                allow_partial=args.allow_partial,
+            )
             return 0
 
         if not args.input_json:

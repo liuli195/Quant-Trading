@@ -64,6 +64,7 @@ def strategy():
     module.FixedSlippage = Mock(return_value=Mock())
     module.get_price = MagicMock()
     module.order_target_value = MagicMock()
+    module.write_file = MagicMock()
     _security_names = {
         '159819.XSHE': '人工智能ETF易方达',
         '513100.XSHG': '纳指ETF',
@@ -194,6 +195,9 @@ def mock_g(strategy):
         benchmark='000300.XSHG',
         use_real_price=True,
         fq_mode='pre',
+        audit_token='test-token',
+        audit_path='jq_auto_audit/test-token.jsonl',
+        audit_seq=0,
     )
     return strategy.g
 
@@ -207,6 +211,7 @@ def _auto_reset_mocks(strategy):
     yield
     strategy.get_price.reset_mock(return_value=True)
     strategy.order_target_value.reset_mock(return_value=True)
+    strategy.write_file.reset_mock()
     _security_names = {
         '159819.XSHE': '人工智能ETF易方达',
         '513100.XSHG': '纳指ETF',

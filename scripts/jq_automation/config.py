@@ -40,6 +40,7 @@ class ScenarioConfig:
     estimated_minutes: float = 0.0
     run_id: str | None = None
     result_source: str = "auto"
+    allow_partial: bool = False
     params_base: dict[str, Any] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
 
@@ -75,6 +76,7 @@ class ScenarioConfig:
             estimated_minutes=self.estimated_minutes,
             run_id=run_id or self.run_id,
             result_source=self.result_source,
+            allow_partial=self.allow_partial,
             params_base={**self.params_base, **run_spec.params_diff},
             raw={**self.raw, "_run_label": run_spec.label, "_run_params_diff": run_spec.params_diff},
         )
@@ -123,6 +125,7 @@ class ScenarioConfig:
             estimated_minutes=_parse_optional_float("estimated_minutes", estimated_raw),
             run_id=_none_or_str(data.get("run_id")),
             result_source=_normalize_result_source(str(data.get("result_source") or "auto")),
+            allow_partial=_parse_bool(data.get("allow_partial"), default=False),
             params_base=_dictify(data.get("params_base")),
             raw=dict(data),
         )
@@ -256,6 +259,19 @@ def _parse_optional_float(name: str, value: Any) -> float:
         return float(str(value).replace(",", ""))
     except (TypeError, ValueError) as exc:
         raise ConfigError(f"{name} must be numeric") from exc
+
+
+def _parse_bool(value: Any, *, default: bool = False) -> bool:
+    if value in (None, ""):
+        return default
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "y", "on"}:
+        return True
+    if text in {"0", "false", "no", "n", "off"}:
+        return False
+    raise ConfigError(f"boolean value expected, got {value!r}")
 
 
 def _infer_strategy_name(strategy_file: Path) -> str:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 import py_compile
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -33,7 +34,12 @@ def compile_strategy(strategy_file: str | Path) -> CompileResult:
     return CompileResult(strategy_file=path, ok=True, message="py_compile passed")
 
 
-def generate_upload_file(strategy_file: str | Path, output_path: str | Path | None = None) -> Path:
+def generate_upload_file(
+    strategy_file: str | Path,
+    output_path: str | Path | None = None,
+    *,
+    audit_token: str | None = None,
+) -> Path:
     source = Path(strategy_file).resolve()
     if not source.is_file():
         raise LocalCheckError(f"Strategy file does not exist: {source}")
@@ -41,8 +47,20 @@ def generate_upload_file(strategy_file: str | Path, output_path: str | Path | No
 
     strip_comments = _load_strip_comments()
     stripped = strip_comments(source.read_text(encoding="utf-8"))
+    if audit_token:
+        stripped = inject_audit_token(stripped, audit_token)
     target.write_text(stripped, encoding="utf-8")
     return target
+
+
+def inject_audit_token(code: str, audit_token: str) -> str:
+    """Inject the per-cloud-run audit token into upload-ready strategy code."""
+    safe_token = str(audit_token)
+    assignment = f"JQ_AUTO_AUDIT_TOKEN = {safe_token!r}"
+    pattern = r"(?m)^JQ_AUTO_AUDIT_TOKEN\s*=\s*['\"][^'\"]*['\"]\s*$"
+    if re.search(pattern, code):
+        return re.sub(pattern, assignment, code, count=1)
+    return assignment + "\n" + code
 
 
 def apply_params_overrides(strategy_file: str | Path, overrides: dict[str, Any]) -> Path:

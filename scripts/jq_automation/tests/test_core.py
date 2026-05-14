@@ -406,6 +406,8 @@ class CoreTests(unittest.TestCase):
                 str(run_dir / "api_export.json"),
                 str(run_dir),
                 tabs_dir=str(tabs_dir),
+                detail_api_json_path=None,
+                allow_partial=False,
             )
 
 
@@ -428,6 +430,25 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(opts["startDate"], "2026-04-01")
         self.assertEqual(opts["capital"], 100000)
         self.assertEqual(opts["resultSource"], "auto")
+        self.assertFalse(opts["allowPartial"])
+
+    def test_generate_upload_file_injects_audit_token(self) -> None:
+        from scripts.jq_automation.local import generate_upload_file
+
+        with tempfile.TemporaryDirectory() as tmp:
+            strategy_file = Path(tmp) / "strategy.py"
+            strategy_file.write_text(
+                'JQ_AUTO_AUDIT_TOKEN = "manual"\n'
+                "def initialize(context):\n"
+                "    pass\n",
+                encoding="utf-8",
+            )
+
+            upload_path = generate_upload_file(strategy_file, audit_token="audit-123")
+            rewritten = upload_path.read_text(encoding="utf-8")
+
+        self.assertIn("JQ_AUTO_AUDIT_TOKEN = 'audit-123'", rewritten)
+        self.assertNotIn('"manual"', rewritten)
 
     def test_research_script_contains_all_get_backtest_methods(self) -> None:
         from scripts.jq_automation.research import ResearchFetchOptions, build_research_export_script
@@ -468,6 +489,10 @@ class CoreTests(unittest.TestCase):
         self.assertIn("specs && specs.kernelspecs", _EXECUTE_RESEARCH_SCRIPT_JS)
         self.assertIn('ctype.includes("text/html")', _READ_RESEARCH_FILE_JS)
         self.assertIn("continue;", _READ_RESEARCH_FILE_JS)
+        self.assertIn('path.match(/^\\/hub\\/user\\/([^\\/?#]+)/)', _EXECUTE_RESEARCH_SCRIPT_JS)
+        self.assertIn('path.replace(/^\\/hub\\/user\\//, "/user/")', _EXECUTE_RESEARCH_SCRIPT_JS)
+        self.assertIn('path.replace(/^\\/hub\\/user\\//, "/user/")', _READ_RESEARCH_FILE_JS)
+        self.assertIn('window.PageConfig.getOption("baseUrl")', _EXECUTE_RESEARCH_SCRIPT_JS)
 
     def test_research_context_selects_joinquant_research_iframe(self) -> None:
         from scripts.jq_automation.research import _research_context
@@ -556,16 +581,39 @@ class CoreTests(unittest.TestCase):
                 "period_risks": {"alpha": [{"date": "2026-01", "1month": 0.1}]},
                 "balances": [{"time": "2026-01-01", "total_value": 100000}],
                 "supplemental_detail": {"logs_partial": True, "logs_count": 1000, "profile_text": ""},
-                "counts": {"results": 1, "positions": 1, "orders": 1, "records": 1, "balances": 1, "period_risk_tabs": 1},
-                "partial": {"logs": True},
+                "counts": {"results": 1, "positions": 1, "orders": 1, "records": 1, "balances": 1, "period_risk_tabs": 1, "audit_log_lines": 2},
+                "partial": {"logs": True, "audit_log": False},
+                "audit_log_text": (
+                    '{"seq": 1, "event": "run_start"}\n'
+                    '{"seq": 2, "event": "run_end"}\n'
+                ),
             }
             api_path.write_text(json.dumps(api_data, ensure_ascii=False), encoding="utf-8")
+            detail_path = run_dir / "detail_api_export.json"
+            detail_data = {
+                "metadata": {"schema_version": 2, "extraction_method": "joinquant_detail_readonly_api"},
+                "counts": {"result_rows": 1, "transactions": 1, "positions": 1, "risk_rows": 1, "logs": 1000},
+                "partial": {"results": False, "transactions": False, "positions": False, "logs": True},
+                "transactions": {"rows": [{"date": "2026-01-01"}]},
+                "positions": {"rows": [{"date": "2026-01-01"}]},
+                "result_rows": [{"date": "2026-01-01"}],
+                "risk_tabs": {"alpha": {"rows": [{"date": "2026-01"}]}},
+            }
+            detail_path.write_text(json.dumps(detail_data, ensure_ascii=False), encoding="utf-8")
 
-            save.save_api_data(str(api_path), str(run_dir), tabs_dir=str(tabs_dir))
+            save.save_api_data(
+                str(api_path),
+                str(run_dir),
+                tabs_dir=str(tabs_dir),
+                detail_api_json_path=str(detail_path),
+            )
 
             self.assertTrue((tabs_dir / "daily_returns.md").is_file())
             self.assertTrue((tabs_dir / "transactioninfo.md").is_file())
             self.assertTrue((tabs_dir / "records.md").is_file())
+            self.assertTrue((tabs_dir / "audit_log.jsonl").is_file())
+            self.assertTrue((run_dir / "integrity.json").is_file())
+            self.assertTrue((run_dir / "report" / "data-integrity.md").is_file())
             meta = json.loads((run_dir / "metadata.json").read_text(encoding="utf-8"))
             self.assertEqual(meta["primary_extraction_method"], "joinquant_research_get_backtest")
             summary = json.loads((run_dir / "summary_metrics.json").read_text(encoding="utf-8"))
@@ -573,6 +621,7 @@ class CoreTests(unittest.TestCase):
             index = json.loads((run_dir / "all_data.json").read_text(encoding="utf-8"))
             self.assertEqual(index["extraction_method"], "research_bundle")
             self.assertTrue(index["tabs"]["logs"]["partial"])
+            self.assertEqual(index["integrity_status"], "complete")
 
     def test_metadata_from_api_bundle_preserves_internal_id_and_mismatch(self) -> None:
         save = _load_save_backtest_data()
@@ -618,6 +667,93 @@ class CoreTests(unittest.TestCase):
         meta2 = save.metadata_from_api_bundle(bundle_no_mismatch)
         self.assertEqual(meta2["backtest_id"], "same-id")
         self.assertNotIn("id_mismatch", meta2)
+
+    def test_integrity_gate_fails_without_audit_log(self) -> None:
+        save = _load_save_backtest_data()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp) / "run"
+            tabs_dir = run_dir / "tabs_raw"
+            run_dir.mkdir()
+            tabs_dir.mkdir()
+            api_path = run_dir / "api_export.json"
+            detail_path = run_dir / "detail_api_export.json"
+            api_data = {
+                "metadata": {
+                    "schema_version": 3,
+                    "extraction_method": "joinquant_research_get_backtest",
+                    "primary_extraction_method": "joinquant_research_get_backtest",
+                    "research_downloaded": True,
+                },
+                "results": [{"time": "2026-01-01"}],
+                "positions": [],
+                "orders": [],
+                "risk": {"algorithm_return": 0.1},
+                "period_risks": {},
+                "balances": [],
+                "counts": {"results": 1, "positions": 0, "orders": 0, "period_risk_tabs": 0},
+                "partial": {},
+                "audit_log_text": "",
+            }
+            detail_data = {
+                "metadata": {"schema_version": 2},
+                "counts": {"result_rows": 1, "transactions": 0, "positions": 1, "risk_rows": 1},
+                "partial": {"results": False, "transactions": False, "positions": False, "logs": True},
+                "risk_tabs": {"alpha": {"rows": [{"date": "2026-01"}]}},
+            }
+            api_path.write_text(json.dumps(api_data), encoding="utf-8")
+            detail_path.write_text(json.dumps(detail_data), encoding="utf-8")
+
+            with self.assertRaisesRegex(save.IntegrityError, "audit_log"):
+                save.save_api_data(
+                    str(api_path),
+                    str(run_dir),
+                    tabs_dir=str(tabs_dir),
+                    detail_api_json_path=str(detail_path),
+                )
+
+            integrity = json.loads((run_dir / "integrity.json").read_text(encoding="utf-8"))
+            self.assertEqual(integrity["status"], "incomplete")
+
+    def test_allow_partial_writes_incomplete_artifacts_without_raising(self) -> None:
+        save = _load_save_backtest_data()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp) / "run"
+            tabs_dir = run_dir / "tabs_raw"
+            run_dir.mkdir()
+            tabs_dir.mkdir()
+            api_path = run_dir / "api_export.json"
+            api_data = {
+                "metadata": {"schema_version": 2, "extraction_method": "joinquant_detail_readonly_api"},
+                "counts": {"result_rows": 1, "transactions": 0, "positions": 1, "risk_rows": 1, "logs": 1000},
+                "partial": {"results": False, "transactions": False, "positions": False, "logs": True},
+                "transactions": {"rows": []},
+                "positions": {"rows": [{"date": "2026-01-01"}]},
+                "result_rows": [{"date": "2026-01-01"}],
+                "risk_tabs": {"alpha": {"rows": [{"date": "2026-01"}]}},
+                "logs": {"rows": []},
+                "error_logs": {"rows": []},
+            }
+            api_path.write_text(json.dumps(api_data), encoding="utf-8")
+
+            save.save_api_data(str(api_path), str(run_dir), tabs_dir=str(tabs_dir), allow_partial=True)
+
+            index = json.loads((run_dir / "all_data.json").read_text(encoding="utf-8"))
+            self.assertEqual(index["integrity_status"], "incomplete")
+
+    def test_validate_audit_log_rejects_bad_json_and_seq_gap(self) -> None:
+        save = _load_save_backtest_data()
+
+        result = save.validate_audit_log(
+            '{"seq": 1, "event": "run_start"}\n'
+            '{"seq": 3, "event": "run_end"}\n'
+            'not-json\n'
+        )
+
+        self.assertFalse(result["valid"])
+        self.assertTrue(any("seq" in issue for issue in result["issues"]))
+        self.assertTrue(any("JSON" in issue for issue in result["issues"]))
 
     def test_build_api_bundle_index_respects_partial_results(self) -> None:
         save = _load_save_backtest_data()

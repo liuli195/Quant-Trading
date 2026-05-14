@@ -30,6 +30,9 @@ enable_profile()
 ============================================================
 """
 
+import json
+from datetime import date, datetime
+
 import numpy as np
 import pandas as pd
 
@@ -43,6 +46,9 @@ FIELD_MAP = {
     "low": "low",
     "amount": "money",
 }
+
+JQ_AUTO_AUDIT_TOKEN = "manual"
+JQ_AUTO_AUDIT_DIR = "jq_auto_audit"
 
 
 def fund_code(security):
@@ -101,6 +107,64 @@ def load_etf_display_names(pool, fallback_names=None):
     return names
 
 
+def _audit_jsonable(value):
+    """Convert strategy/runtime values to JSON-safe audit payloads."""
+    if value is None or isinstance(value, (str, bool, int, float)):
+        return value
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    try:
+        if isinstance(value, np.generic):
+            return _audit_jsonable(value.item())
+        if isinstance(value, np.ndarray):
+            return [_audit_jsonable(item) for item in value.tolist()]
+    except Exception:
+        pass
+    try:
+        if isinstance(value, pd.Timestamp):
+            return value.isoformat()
+        if isinstance(value, (pd.Series, pd.Index)):
+            return [_audit_jsonable(item) for item in value.tolist()]
+        if isinstance(value, pd.DataFrame):
+            return [
+                {str(k): _audit_jsonable(v) for k, v in row.items()}
+                for row in value.reset_index().to_dict(orient="records")
+            ]
+    except Exception:
+        pass
+    if isinstance(value, dict):
+        return {str(k): _audit_jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_audit_jsonable(item) for item in value]
+    return str(value)
+
+
+def _context_time_fields(context):
+    result = {}
+    for name in ("current_dt", "previous_date"):
+        value = getattr(context, name, None) if context is not None else None
+        if value is not None:
+            result[name] = _audit_jsonable(value)
+    return result
+
+
+def audit_event(event, context=None, **payload):
+    """Write one complete business-audit event to JoinQuant research storage."""
+    path = getattr(g, "audit_path", "")
+    if not path:
+        return
+    seq = getattr(g, "audit_seq", 0) + 1
+    g.audit_seq = seq
+    row = {
+        "seq": seq,
+        "event": event,
+        "audit_token": getattr(g, "audit_token", ""),
+    }
+    row.update(_context_time_fields(context))
+    row.update({key: _audit_jsonable(value) for key, value in payload.items()})
+    write_file(path, json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n", append=True)
+
+
 # ============================================================
 # snapshot_params — 参数快照
 # ============================================================
@@ -156,6 +220,8 @@ def snapshot_params():
         "use_real_price": g.use_real_price,
         "fq_mode": g.fq_mode,
         "history_buffer": g.history_buffer,
+        "audit_token": getattr(g, "audit_token", ""),
+        "audit_path": getattr(g, "audit_path", ""),
     }
 
 
@@ -236,6 +302,8 @@ def initialize(context):
     """
     set_parameter(context)
     validate_params(snapshot_params())
+    write_file(g.audit_path, "", append=False)
+    audit_event("run_start", context, params=snapshot_params())
     set_option('use_real_price', g.use_real_price)
     set_option("avoid_future_data", True)
 
@@ -257,6 +325,17 @@ def initialize(context):
         weekday=1,
         time='open',
         reference_security='000300.XSHG'
+    )
+
+
+def on_strategy_end(context):
+    """Record the final audit marker used by local completeness checks."""
+    portfolio = getattr(context, "portfolio", None)
+    audit_event(
+        "run_end",
+        context,
+        total_value=getattr(portfolio, "total_value", None),
+        cash=getattr(portfolio, "cash", None),
     )
 
 
@@ -347,6 +426,9 @@ def set_parameter(context):
     ) + 50
     g.history_buffer = 100
     g.benchmark = '000300.XSHG'
+    g.audit_token = JQ_AUTO_AUDIT_TOKEN
+    g.audit_path = "%s/%s.jsonl" % (JQ_AUTO_AUDIT_DIR, g.audit_token)
+    g.audit_seq = 0
 
 
 # ============================================================
@@ -444,7 +526,26 @@ def weekly_check(context):
     _log_step("FinalWeight", "最终权重", pool, final_weights, fmt=".4f", etf_names=etf_names)
 
     # 12. 应用交易约束
+    final_weights_before_constraints = np.copy(final_weights)
     final_weights = apply_weight_constraints(final_weights, params)
+    audit_event(
+        "rebalance_signals",
+        context,
+        pool=pool,
+        etf_names=etf_names,
+        params=params,
+        trend_gates=trend_gates,
+        rp_weights=rp_weights,
+        momentum_scores=momentum_scores,
+        momentum_tilts=momentum_tilts,
+        rsrs_tilts=rsrs_tilts,
+        tilted_weights=tilted_weights,
+        crowd_penalties=crowd_penalties,
+        raw_weights=raw_weights,
+        portfolio_vol_scale=portfolio_vol_scale,
+        final_weights_before_constraints=final_weights_before_constraints,
+        final_weights=final_weights,
+    )
 
     # 13. 执行调仓
     execute_rebalance(context, pool, final_weights, params)
@@ -1115,16 +1216,47 @@ def execute_rebalance(context, pool, final_weights, params):
 
         # 如果目标权重为 0 且当前仓位为 0，跳过
         if final_weights[i] == 0 and current_weight == 0:
+            audit_event(
+                "rebalance_order",
+                context,
+                action="skip_zero_target_zero_position",
+                etf=etf,
+                etf_name=etf_name,
+                target_weight=final_weights[i],
+                current_weight=current_weight,
+                target_value=target_value,
+            )
             continue
 
         # 最小调仓阈值
         if abs(final_weights[i] - current_weight) < params["RebalanceThreshold"]:
+            audit_event(
+                "rebalance_order",
+                context,
+                action="skip_threshold",
+                etf=etf,
+                etf_name=etf_name,
+                target_weight=final_weights[i],
+                current_weight=current_weight,
+                target_value=target_value,
+                rebalance_threshold=params["RebalanceThreshold"],
+            )
             continue
 
         # 停牌检查
         data = current_data[etf]
         if data.paused:
             log.warning("skip paused ETF: %s security=%s", etf_name, etf)
+            audit_event(
+                "rebalance_order",
+                context,
+                action="skip_paused",
+                etf=etf,
+                etf_name=etf_name,
+                target_weight=final_weights[i],
+                current_weight=current_weight,
+                target_value=target_value,
+            )
             continue
 
         order_obj = order_target_value(etf, target_value)
@@ -1133,8 +1265,29 @@ def execute_rebalance(context, pool, final_weights, params):
                 "order failed: %s security=%s target_value=%.2f target_weight=%.4f current_weight=%.4f",
                 etf_name, etf, target_value, final_weights[i], current_weight
             )
+            audit_event(
+                "rebalance_order",
+                context,
+                action="order_failed",
+                etf=etf,
+                etf_name=etf_name,
+                target_weight=final_weights[i],
+                current_weight=current_weight,
+                target_value=target_value,
+            )
         else:
             log.info(
                 "order sent: %s security=%s target_weight=%.4f current_weight=%.4f target_value=%.2f",
                 etf_name, etf, final_weights[i], current_weight, target_value
+            )
+            audit_event(
+                "rebalance_order",
+                context,
+                action="order_sent",
+                etf=etf,
+                etf_name=etf_name,
+                target_weight=final_weights[i],
+                current_weight=current_weight,
+                target_value=target_value,
+                order=order_obj,
             )

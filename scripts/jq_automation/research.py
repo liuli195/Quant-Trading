@@ -27,6 +27,8 @@ class ResearchFetchOptions:
     frequency: str = ""
     py_version: str = ""
     export_path: str = ""
+    audit_token: str = ""
+    audit_path: str = ""
 
     @classmethod
     def from_mapping(cls, options: dict[str, Any]) -> "ResearchFetchOptions":
@@ -36,6 +38,10 @@ class ResearchFetchOptions:
         if not export_path and backtest_id:
             safe_id = "".join(ch for ch in backtest_id if ch.isalnum() or ch in "_-") or "unknown"
             export_path = f"jq_auto_exports/research_backtest_{safe_id}.json"
+        audit_token = str(options.get("auditToken") or options.get("audit_token") or "")
+        audit_path = str(options.get("auditPath") or options.get("audit_path") or "")
+        if audit_token and not audit_path:
+            audit_path = f"jq_auto_audit/{audit_token}.jsonl"
         return cls(
             backtest_id=backtest_id,
             strategy=strategy,
@@ -46,6 +52,8 @@ class ResearchFetchOptions:
             frequency=str(options.get("frequency") or ""),
             py_version=str(options.get("pyVersion") or options.get("py_version") or ""),
             export_path=export_path,
+            audit_token=audit_token,
+            audit_path=audit_path,
         )
 
 
@@ -106,12 +114,22 @@ class ResearchBacktestFetcher:
                 f"{message or exec_result}"
             )
 
-        raw_text = await ResearchFileClient(research_context).read_text(fetch_options.export_path)
+        file_client = ResearchFileClient(research_context)
+        raw_text = await file_client.read_text(fetch_options.export_path)
+        audit_log_text = ""
+        audit_log_error = ""
+        if fetch_options.audit_path:
+            try:
+                audit_log_text = await file_client.read_text(fetch_options.audit_path)
+            except Exception as exc:
+                audit_log_error = str(exc)
         bundle = normalize_research_bundle(
             json.loads(raw_text),
             fetch_options=fetch_options,
             supplemental_detail=supplemental_detail or {},
             execution_meta=exec_result,
+            audit_log_text=audit_log_text,
+            audit_log_error=audit_log_error,
         )
         return bundle
 
@@ -122,6 +140,8 @@ def normalize_research_bundle(
     fetch_options: ResearchFetchOptions | None = None,
     supplemental_detail: dict[str, Any] | None = None,
     execution_meta: dict[str, Any] | None = None,
+    audit_log_text: str = "",
+    audit_log_error: str = "",
 ) -> dict[str, Any]:
     """Normalize research output to schema v3."""
     options = fetch_options or ResearchFetchOptions.from_mapping(raw.get("metadata") or {})
@@ -143,6 +163,8 @@ def normalize_research_bundle(
             "research_export_path": meta.get("research_export_path") or options.export_path,
             "research_downloaded": True,
             "detail_api_used": bool(supplemental_detail),
+            "audit_token": meta.get("audit_token") or options.audit_token,
+            "audit_path": meta.get("audit_path") or options.audit_path,
         }
     )
 
@@ -153,6 +175,12 @@ def normalize_research_bundle(
             "kernel_id": execution_meta.get("kernelId"),
             "stdout_tail": execution_meta.get("stdout", "")[-2000:],
         }
+    source_errors = {
+        key: value.get("__error__")
+        for key in ("results", "positions", "orders", "records", "risk", "period_risks", "balances")
+        for value in [raw.get(key)]
+        if isinstance(value, dict) and value.get("__error__")
+    }
 
     return {
         "metadata": meta,
@@ -171,17 +199,22 @@ def normalize_research_bundle(
             "records": len(_ensure_list(raw.get("records"))),
             "balances": len(_ensure_list(raw.get("balances"))),
             "period_risk_tabs": len(_ensure_dict(raw.get("period_risks"))),
+            "audit_log_lines": len([line for line in str(audit_log_text or "").splitlines() if line.strip()]),
         },
         "partial": {
-            "results": False,
-            "positions": False,
-            "orders": False,
-            "records": False,
-            "risk": False,
-            "period_risks": False,
-            "balances": False,
+            "results": "results" in source_errors,
+            "positions": "positions" in source_errors,
+            "orders": "orders" in source_errors,
+            "records": "records" in source_errors,
+            "risk": "risk" in source_errors,
+            "period_risks": "period_risks" in source_errors,
+            "balances": "balances" in source_errors,
             "logs": bool(supplement.get("logs_partial")),
+            "audit_log": bool(audit_log_error or not audit_log_text),
         },
+        "source_errors": source_errors,
+        "audit_log_text": str(audit_log_text or ""),
+        "audit_log_error": str(audit_log_error or ""),
     }
 
 
@@ -203,6 +236,8 @@ def build_research_export_script(options: ResearchFetchOptions) -> str:
         "research_export_path": options.export_path,
         "research_downloaded": False,
         "detail_api_used": False,
+        "audit_token": options.audit_token,
+        "audit_path": options.audit_path,
     }
     metadata_json = json.dumps(metadata, ensure_ascii=False)
     return f"""
@@ -351,6 +386,14 @@ async ({ path }) => {
     return base;
   }
 
+  function addHubUserCandidates(bases, rawPath) {
+    const path = String(rawPath || "");
+    const match = path.match(/^\/hub\/user\/([^\/?#]+)/);
+    if (!match) return;
+    bases.add(normalizeBase(`/user/${match[1]}/`));
+    bases.add(normalizeBase(path.replace(/^\/hub\/user\//, "/user/").replace(/\/$/, "")));
+  }
+
   function discoverBases() {
     const bases = new Set(["/"]);
     try {
@@ -360,13 +403,33 @@ async ({ path }) => {
         bases.add(normalizeBase(cfg.baseUrl || cfg.base_url || cfg.base_url_path || ""));
       }
     } catch (_) {}
-    const parts = location.pathname.split("/");
+    try {
+      const bodyBase = document.body && document.body.getAttribute("data-base-url");
+      if (bodyBase) bases.add(normalizeBase(bodyBase));
+    } catch (_) {}
+    try {
+      if (window.PageConfig && typeof window.PageConfig.getOption === "function") {
+        const pageBase = window.PageConfig.getOption("baseUrl");
+        if (pageBase) bases.add(normalizeBase(pageBase));
+      }
+    } catch (_) {}
+    try {
+      const serverSettings = window.jupyterapp
+        && window.jupyterapp.serviceManager
+        && window.jupyterapp.serviceManager.serverSettings;
+      if (serverSettings && serverSettings.baseUrl) {
+        bases.add(normalizeBase(serverSettings.baseUrl));
+      }
+    } catch (_) {}
+    const path = location.pathname || "/";
+    addHubUserCandidates(bases, path);
+    const parts = path.split("/");
     const markers = ["tree", "lab", "notebooks", "files", "edit"];
     for (const marker of markers) {
       const idx = parts.indexOf(marker);
       if (idx > 0) bases.add(normalizeBase(parts.slice(0, idx).join("/")));
     }
-    bases.add(normalizeBase(location.pathname.replace(/\/$/, "")));
+    bases.add(normalizeBase(path.replace(/\/$/, "")));
     return [...bases];
   }
 
@@ -423,6 +486,14 @@ async ({ code }) => {
     return base;
   }
 
+  function addHubUserCandidates(bases, rawPath) {
+    const path = String(rawPath || "");
+    const match = path.match(/^\/hub\/user\/([^\/?#]+)/);
+    if (!match) return;
+    bases.add(normalizeBase(`/user/${match[1]}/`));
+    bases.add(normalizeBase(path.replace(/^\/hub\/user\//, "/user/").replace(/\/$/, "")));
+  }
+
   function discoverBases() {
     const bases = new Set(["/"]);
     try {
@@ -432,13 +503,33 @@ async ({ code }) => {
         bases.add(normalizeBase(cfg.baseUrl || cfg.base_url || cfg.base_url_path || ""));
       }
     } catch (_) {}
-    const parts = location.pathname.split("/");
+    try {
+      const bodyBase = document.body && document.body.getAttribute("data-base-url");
+      if (bodyBase) bases.add(normalizeBase(bodyBase));
+    } catch (_) {}
+    try {
+      if (window.PageConfig && typeof window.PageConfig.getOption === "function") {
+        const pageBase = window.PageConfig.getOption("baseUrl");
+        if (pageBase) bases.add(normalizeBase(pageBase));
+      }
+    } catch (_) {}
+    try {
+      const serverSettings = window.jupyterapp
+        && window.jupyterapp.serviceManager
+        && window.jupyterapp.serviceManager.serverSettings;
+      if (serverSettings && serverSettings.baseUrl) {
+        bases.add(normalizeBase(serverSettings.baseUrl));
+      }
+    } catch (_) {}
+    const path = location.pathname || "/";
+    addHubUserCandidates(bases, path);
+    const parts = path.split("/");
     const markers = ["tree", "lab", "notebooks", "files", "edit"];
     for (const marker of markers) {
       const idx = parts.indexOf(marker);
       if (idx > 0) bases.add(normalizeBase(parts.slice(0, idx).join("/")));
     }
-    bases.add(normalizeBase(location.pathname.replace(/\/$/, "")));
+    bases.add(normalizeBase(path.replace(/\/$/, "")));
     return [...bases];
   }
 

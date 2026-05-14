@@ -8,6 +8,7 @@ ETF 多因子轮动策略 — 单元测试
   - 集成测试（weekly_check 完整流程）
 """
 
+import json
 import math
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch, call
@@ -277,6 +278,35 @@ class TestInitialize:
         assert len(strategy.g.etf_pool) >= 1
         assert len(strategy.g.etf_pool) == len(strategy.g.etf_names)
         assert 1 <= strategy.g.TopK <= len(strategy.g.etf_pool)
+
+    def test_initialize_writes_run_start_audit_event(self, strategy):
+        """initialize 应清空本次审计文件并写入 run_start。"""
+        context = SimpleNamespace()
+        context.portfolio = strategy._mock_portfolio
+        strategy.initialize(context)
+
+        assert strategy.write_file.call_args_list[0][0][0].startswith("jq_auto_audit/")
+        assert strategy.write_file.call_args_list[0][0][1] == ""
+        assert strategy.write_file.call_args_list[0][1]["append"] is False
+        event_line = strategy.write_file.call_args_list[1][0][1]
+        event = json.loads(event_line)
+        assert event["event"] == "run_start"
+        assert event["seq"] == 1
+        assert event["audit_token"] == strategy.JQ_AUTO_AUDIT_TOKEN
+
+    def test_on_strategy_end_writes_run_end_audit_event(self, strategy, mock_g):
+        """on_strategy_end 应写入完整性门禁需要的 run_end。"""
+        context = SimpleNamespace()
+        context.portfolio = strategy._mock_portfolio
+        context.portfolio.total_value = 123456.0
+        context.portfolio.cash = 789.0
+
+        strategy.on_strategy_end(context)
+
+        event = json.loads(strategy.write_file.call_args[0][1])
+        assert event["event"] == "run_end"
+        assert event["total_value"] == 123456.0
+        assert event["cash"] == 789.0
 
 
 # ============================================================
@@ -1560,6 +1590,19 @@ class TestWeeklyCheckIntegration:
         assert strategy.order_target_value.call_count >= 1, (
             "Expected at least one order when some trends pass"
         )
+        audit_events = [
+            json.loads(call_args[0][1])
+            for call_args in strategy.write_file.call_args_list
+        ]
+        signal_events = [event for event in audit_events if event["event"] == "rebalance_signals"]
+        assert len(signal_events) == 1
+        signal_event = signal_events[0]
+        for key in [
+            "trend_gates", "rp_weights", "momentum_scores", "momentum_tilts",
+            "rsrs_tilts", "tilted_weights", "crowd_penalties", "raw_weights",
+            "portfolio_vol_scale", "final_weights",
+        ]:
+            assert key in signal_event
 
     def test_all_trend_gates_zero_goes_to_cash(self, strategy, mock_g):
         """全部资产不通过趋势门槛时，不执行任何买入。"""
@@ -2060,6 +2103,29 @@ class TestExecuteRebalance:
         assert 'target_weight' in combined
         assert 'current_weight' in combined
         assert 'target_value' in combined
+
+    def test_execute_rebalance_writes_order_audit_events(self, strategy, mock_g):
+        """执行层每个下单/跳过分支都应写结构化审计事件。"""
+        params = strategy.snapshot_params()
+        strategy.get_current_data.return_value = _make_current_data()
+        strategy.order_target_value.return_value = MagicMock()
+        context = self._make_context(strategy, {
+            '159819.XSHE': (5000, 2.0),
+        })
+
+        final_weights = [0.4, 0.0, 0.0]
+        strategy.execute_rebalance(context, mock_g.etf_pool, final_weights, params)
+
+        events = [
+            json.loads(call_args[0][1])
+            for call_args in strategy.write_file.call_args_list
+        ]
+        actions = [event.get("action") for event in events if event["event"] == "rebalance_order"]
+        assert "order_sent" in actions
+        assert "skip_zero_target_zero_position" in actions
+        sent = next(event for event in events if event.get("action") == "order_sent")
+        assert sent["etf"] == "159819.XSHE"
+        assert sent["target_weight"] == 0.4
 
     def test_weight_below_threshold_skips(self, strategy, mock_g):
         """权重偏离小于 RebalanceThreshold 时不执行下单。"""

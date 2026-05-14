@@ -4,7 +4,9 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import sys
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -56,6 +58,7 @@ def _compile_date_range(end_date_cap: str | None = None) -> tuple[str, str]:
 class FetchedBacktestData:
     method: str
     payload: dict[str, Any]
+    detail_payload: dict[str, Any] | None = None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -70,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         # Catch AB test errors and GitVersionError even if abtest module cannot
         # be imported (the ab subcommand handler will have already imported them).
         name = type(exc).__name__
-        if name in ("ABConfigError", "ABExpandError", "ABReportError", "GitVersionError"):
+        if name in ("ABConfigError", "ABExpandError", "ABReportError", "GitVersionError", "IntegrityError"):
             print(f"error: {exc}", file=sys.stderr)
             return 2
         raise
@@ -97,6 +100,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("scenario_config")
     run_parser.add_argument("--yes", action="store_true", help="Confirm this run was manually approved.")
     run_parser.add_argument("--backtest-timeout", type=int, default=180, help="Formal backtest wait timeout in seconds.")
+    add_allow_partial_arg(run_parser)
     add_result_source_arg(run_parser)
     add_browser_args(run_parser)
     run_parser.set_defaults(func=cmd_run)
@@ -112,6 +116,9 @@ def build_parser() -> argparse.ArgumentParser:
     fetch_parser.add_argument("--frequency", default="每天")
     fetch_parser.add_argument("--py-version", default="Python3")
     fetch_parser.add_argument("--backtest-timeout", type=int, default=180)
+    fetch_parser.add_argument("--audit-token")
+    fetch_parser.add_argument("--audit-path")
+    add_allow_partial_arg(fetch_parser)
     add_result_source_arg(fetch_parser)
     add_browser_args(fetch_parser)
     fetch_parser.set_defaults(func=cmd_fetch)
@@ -121,6 +128,7 @@ def build_parser() -> argparse.ArgumentParser:
     batch_parser.add_argument("--scenario", action="append", help="Limit to one scenario id; can be repeated.")
     batch_parser.add_argument("--yes", action="store_true", help="Confirm this batch was manually approved.")
     batch_parser.add_argument("--backtest-timeout", type=int, default=180)
+    add_allow_partial_arg(batch_parser)
     add_result_source_arg(batch_parser)
     add_browser_args(batch_parser)
     batch_parser.set_defaults(func=cmd_batch)
@@ -138,6 +146,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("ab_config")
     run_parser.add_argument("--yes", action="store_true")
     run_parser.add_argument("--backtest-timeout", type=int, default=180)
+    add_allow_partial_arg(run_parser)
     add_result_source_arg(run_parser)
     add_browser_args(run_parser)
     run_parser.set_defaults(func=cmd_ab_run)
@@ -163,6 +172,14 @@ def add_result_source_arg(parser: argparse.ArgumentParser) -> None:
         choices=("auto", "research", "detail"),
         default=None,
         help="Backtest result source: auto (research then detail fallback), research, or detail.",
+    )
+
+
+def add_allow_partial_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--allow-partial",
+        action="store_true",
+        help="Persist incomplete artifacts instead of failing the run integrity gate.",
     )
 
 
@@ -332,7 +349,8 @@ async def _run_scenario(
     manifest_label: str | None = None,
 ) -> int:
     compile_strategy(config.strategy_file)
-    upload_path = generate_upload_file(config.strategy_file)
+    audit_token = _make_audit_token(config.strategy, config.scenario_id)
+    upload_path = generate_upload_file(config.strategy_file, audit_token=audit_token)
     code = upload_path.read_text(encoding="utf-8")
 
     ledger_path = ledger_path_for()
@@ -394,16 +412,24 @@ async def _run_scenario(
             )
             save_ledger(ledger, ledger_path)
             await browser.wait_backtest_complete(timeout_ms=args.backtest_timeout * 1000)
+            fetch_options = _bundle_options(config, audit_token=audit_token)
+            fetch_options["allowPartial"] = _allow_partial(args, config.allow_partial)
             fetched = await _fetch_backtest_data(
                 browser,
-                _bundle_options(config),
+                fetch_options,
                 result_source=_selected_result_source(args, config.result_source),
             )
             if not run_id:
                 backtest_id = browser.current_backtest_id() or fetched.payload.get("metadata", {}).get("backtest_id", "")
                 run_id = config.run_id or make_run_id(backtest_id)
             if fetched.method in {"api", "research"}:
-                run_dir = save_api_bundle(fetched.payload, strategy=config.strategy, run_id=run_id)
+                run_dir = save_api_bundle(
+                    fetched.payload,
+                    strategy=config.strategy,
+                    run_id=run_id,
+                    detail_bundle=fetched.detail_payload,
+                    allow_partial=_allow_partial(args, config.allow_partial),
+                )
                 actual_minutes = extract_actual_minutes_from_bundle(fetched.payload)
             else:
                 run_dir = save_dom_tabs(fetched.payload, strategy=config.strategy, run_id=run_id)
@@ -454,7 +480,14 @@ async def _fetch_existing(args: argparse.Namespace) -> int:
             "capital": args.capital,
             "frequency": args.frequency,
             "pyVersion": args.py_version,
+            "allowPartial": bool(args.allow_partial),
         }
+        audit_token = args.audit_token or ""
+        if audit_token:
+            options["auditToken"] = audit_token
+            options["auditPath"] = f"jq_auto_audit/{audit_token}.jsonl"
+        if args.audit_path:
+            options["auditPath"] = args.audit_path
         fetched = await _fetch_backtest_data(
             browser,
             options,
@@ -463,7 +496,13 @@ async def _fetch_existing(args: argparse.Namespace) -> int:
         if not args.run_id:
             run_id = make_run_id(browser.current_backtest_id() or fetched.payload.get("metadata", {}).get("backtest_id", backtest_id))
         if fetched.method in {"api", "research"}:
-            run_dir = save_api_bundle(fetched.payload, strategy=args.strategy, run_id=run_id)
+            run_dir = save_api_bundle(
+                fetched.payload,
+                strategy=args.strategy,
+                run_id=run_id,
+                detail_bundle=fetched.detail_payload,
+                allow_partial=bool(args.allow_partial),
+            )
         else:
             run_dir = save_dom_tabs(fetched.payload, strategy=args.strategy, run_id=run_id)
     print(f"Saved existing backtest artifacts: {run_dir}")
@@ -474,8 +513,29 @@ async def _fetch_with_dom_fallback(browser: JoinQuantBrowser, options: dict[str,
     try:
         return FetchedBacktestData(method="api", payload=await browser.fetch_api_bundle(options))
     except Exception as exc:
+        if not options.get("allowPartial"):
+            raise
         print(f"API bundle failed, falling back to DOM tabs: {exc}", file=sys.stderr)
         return FetchedBacktestData(method="dom", payload=await browser.collect_dom_tabs())
+
+
+def _supplemental_from_detail_bundle(detail_payload: dict[str, Any]) -> dict[str, Any]:
+    metadata = detail_payload.get("metadata", {}) if isinstance(detail_payload, dict) else {}
+    counts = detail_payload.get("counts", {}) if isinstance(detail_payload, dict) else {}
+    partial = detail_payload.get("partial", {}) if isinstance(detail_payload, dict) else {}
+    error_logs = detail_payload.get("error_logs", {}) if isinstance(detail_payload, dict) else {}
+    return {
+        "detail_api_used": True,
+        "detail_backtest_id": metadata.get("backtest_id", ""),
+        "internal_backtest_id": metadata.get("internal_backtest_id", ""),
+        "runtime": detail_payload.get("runtime"),
+        "source": detail_payload.get("source"),
+        "profile_text": detail_payload.get("profile_text", ""),
+        "logs_partial": bool(partial.get("logs")),
+        "logs_count": counts.get("logs"),
+        "error_logs_partial": bool(error_logs.get("partial", False)),
+        "error_logs_count": counts.get("error_logs"),
+    }
 
 
 async def _fetch_backtest_data(
@@ -489,8 +549,10 @@ async def _fetch_backtest_data(
 
     backtest_id = browser.current_backtest_id() or str(options.get("backtestId") or options.get("backtest_id") or "")
     supplemental_detail: dict[str, Any] = {}
+    detail_payload: dict[str, Any] | None = None
     try:
-        supplemental_detail = await browser.fetch_detail_supplemental({**options, "backtestId": backtest_id})
+        detail_payload = await browser.fetch_api_bundle({**options, "backtestId": backtest_id})
+        supplemental_detail = _supplemental_from_detail_bundle(detail_payload)
     except Exception as exc:
         supplemental_detail = {"detail_api_used": False, "detail_supplemental_error": str(exc)}
 
@@ -502,13 +564,16 @@ async def _fetch_backtest_data(
             {**options, "backtestId": backtest_id},
             supplemental_detail=supplemental_detail,
         )
-        return FetchedBacktestData(method="research", payload=payload)
+        return FetchedBacktestData(method="research", payload=payload, detail_payload=detail_payload)
     except Exception as exc:
         if result_source == "research":
             raise ResearchFetchError(str(exc)) from exc
         print(f"Research bundle failed, falling back to detail API/DOM: {exc}", file=sys.stderr)
-        await browser.open_backtest_detail(backtest_id)
-        fallback = await _fetch_with_dom_fallback(browser, options)
+        if detail_payload is not None:
+            fallback = FetchedBacktestData(method="api", payload=detail_payload)
+        else:
+            await browser.open_backtest_detail(backtest_id)
+            fallback = await _fetch_with_dom_fallback(browser, options)
         _annotate_research_fallback(fallback.payload, fallback.method, exc)
         return fallback
 
@@ -530,8 +595,8 @@ def _annotate_research_fallback(payload: dict[str, Any], method: str, exc: Excep
     metadata["detail_api_used"] = method == "api"
 
 
-def _bundle_options(config: ScenarioConfig) -> dict[str, Any]:
-    return {
+def _bundle_options(config: ScenarioConfig, *, audit_token: str | None = None) -> dict[str, Any]:
+    options = {
         "strategy": config.strategy,
         "strategyName": config.strategy_name or config.strategy,
         "startDate": config.start_date,
@@ -540,12 +605,27 @@ def _bundle_options(config: ScenarioConfig) -> dict[str, Any]:
         "frequency": config.frequency,
         "pyVersion": config.py_version,
         "resultSource": config.result_source,
+        "allowPartial": config.allow_partial,
     }
+    if audit_token:
+        options["auditToken"] = audit_token
+        options["auditPath"] = f"jq_auto_audit/{audit_token}.jsonl"
+    return options
 
 
 def _selected_result_source(args: argparse.Namespace, config_value: str | None = None) -> str:
     value = getattr(args, "result_source", None) or config_value or "auto"
     return str(value).lower()
+
+
+def _allow_partial(args: argparse.Namespace, config_value: bool | None = None) -> bool:
+    return bool(getattr(args, "allow_partial", False) or config_value)
+
+
+def _make_audit_token(*parts: str) -> str:
+    raw = "-".join(part for part in parts if part)
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", raw).strip("-") or "run"
+    return f"{safe}-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8]}"
 
 
 def _config_manifest_path(config: ScenarioConfig) -> Path | None:
