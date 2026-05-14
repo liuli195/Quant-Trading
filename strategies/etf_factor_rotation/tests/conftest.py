@@ -153,6 +153,7 @@ def mock_g(strategy):
             '黄金ETF(518880.XSHG)',
         ],
         MA_long=120,
+        MA_long_by_etf=[20, 40, 100],
         MomShort=20,
         MomMid=60,
         MomLong=120,

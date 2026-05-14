@@ -12,7 +12,7 @@ enable_profile()
   组合波动率控制缩放总仓位。剩余仓位保留现金，不重新归一化到满仓。
 
 模块分工：
-  - 趋势门槛（硬过滤）：120 日均线以上才可入选，0/1 离散
+  - 趋势门槛（硬过滤）：按 ETF 专属趋势均线以上才可入选，0/1 离散
   - 动量选择（TopK）：多周期排名分数加权，选前 K 只
   - 风险平价（逆波动率）：σ 越小权重越大，波动率归一化
   - RSRS 修正（只减不加）：High~Low 回归 β 标准化 × R²，线性截断到 [0, 1]
@@ -114,6 +114,7 @@ def snapshot_params():
         "etf_names": etf_names,
         "benchmark": g.benchmark,
         "MA_long": g.MA_long,
+        "MA_long_by_etf": None if g.MA_long_by_etf is None else list(g.MA_long_by_etf),
         "MomShort": g.MomShort,
         "MomMid": g.MomMid,
         "MomLong": g.MomLong,
@@ -161,6 +162,19 @@ def validate_params(params):
     """
     errors = []
 
+    if params["MA_long"] <= 0:
+        errors.append("MA_long must be positive")
+    ma_long_by_etf = params.get("MA_long_by_etf")
+    if ma_long_by_etf is not None:
+        if not isinstance(ma_long_by_etf, (list, tuple)):
+            errors.append("MA_long_by_etf must be a list or tuple when provided")
+        else:
+            if len(ma_long_by_etf) != len(params["etf_pool"]):
+                errors.append("MA_long_by_etf length must match etf_pool")
+            for window in ma_long_by_etf:
+                if not isinstance(window, (int, float)) or window <= 0:
+                    errors.append("MA_long_by_etf values must be positive")
+                    break
     if abs(params["w20"] + params["w60"] + params["w120"] - 1.0) > 1e-8:
         errors.append("momentum weights must sum to 1")
     if params["TopK"] < 1:
@@ -183,6 +197,14 @@ def validate_params(params):
 
     if errors:
         raise ValueError("; ".join(errors))
+
+
+def resolve_ma_long_windows(params):
+    """返回与 etf_pool 对齐的趋势均线窗口。"""
+    ma_long_by_etf = params.get("MA_long_by_etf")
+    if ma_long_by_etf is None:
+        return [params["MA_long"]] * len(params["etf_pool"])
+    return list(ma_long_by_etf)
 
 
 # ============================================================
@@ -245,6 +267,7 @@ def set_parameter(context):
 
     # ---- 趋势门槛 ----
     g.MA_long = 120
+    g.MA_long_by_etf = [20, 40, 100]
 
     # ---- 动量选择 ----
     g.MomShort = 20
@@ -294,8 +317,9 @@ def set_parameter(context):
     # 故默认关闭复权。参考 FQ comparison: R2/backtest_runs/*/report/fq-comparison.md
     g.use_real_price = False
     g.fq_mode = None        # 不复权（场内基金默认）
+    ma_long_max = max(g.MA_long_by_etf) if g.MA_long_by_etf else g.MA_long
     g.live_days = max(
-        g.MA_long, g.MomLong, g.RSRS_M,
+        ma_long_max, g.MomLong, g.RSRS_M,
         g.CrowdWindow, g.PortfolioVolWindow
     ) + 50
     g.history_buffer = 100
@@ -446,7 +470,7 @@ def compute_history_count(params):
       - buffer 用于容忍停牌、缺失值、上市初期数据不足
     """
     requirements = [
-        params["MA_long"],
+        max(resolve_ma_long_windows(params)),
         max(params["MomShort"], params["MomMid"], params["MomLong"]) + 1,
         params["VolWindow"] + 1,
         params["RSRS_M"] + params["RSRS_N"] - 1,
@@ -524,17 +548,18 @@ def get_history_data(context, pool, params):
 # ============================================================
 def compute_trend_gates(prices, pool, params):
     """
-    使用 120 日均线判断趋势方向。
+    使用趋势均线判断方向，支持按 ETF 分别设置窗口。
 
     返回: list[float]，1.0 表示通过，0.0 表示剔除
     """
     close = prices['close']
-    ma_window = params["MA_long"]
+    ma_windows = resolve_ma_long_windows(params)
 
     gates = np.zeros(len(pool))
     for i, etf in enumerate(pool):
         if etf not in close.columns:
             continue
+        ma_window = ma_windows[i]
         series = close[etf].dropna()
         if len(series) < ma_window:
             continue

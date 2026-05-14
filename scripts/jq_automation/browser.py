@@ -82,12 +82,20 @@ class JoinQuantBrowser:
         if self.context:
             # Persist cookies to storage state file before closing
             try:
-                cookies = await self.context.cookies()
-                state = {"cookies": cookies}
-                self._storage_state_path.write_text(
-                    __import__("json").dumps(state, ensure_ascii=False, indent=2),
-                    encoding="utf-8",
-                )
+                current_url = self.page.url if self.page else ""
+                if _is_login_url(current_url):
+                    logger.warning(
+                        "Skip persisting JoinQuant storage state from login page: user_data_dir=%s url=%s",
+                        self.user_data_dir,
+                        current_url,
+                    )
+                else:
+                    cookies = await self.context.cookies()
+                    state = {"cookies": cookies}
+                    self._storage_state_path.write_text(
+                        __import__("json").dumps(state, ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
             except Exception:
                 pass
             await self.context.close()
@@ -441,30 +449,36 @@ class JoinQuantBrowser:
 
     async def _ensure_not_login_page(self) -> None:
         page = self._require_page()
-        if "login" not in page.url.lower():
+        if not _is_login_url(page.url):
             return
         if self.headless:
             raise AutomationError(
                 "JoinQuant login is required. "
-                "Run once without --headless to log in interactively, then retry."
+                "Run once without --headless to log in interactively, then retry. "
+                f"user_data_dir={self.user_data_dir}"
             )
         # Non-headless mode: wait for the user to log in
-        print("聚宽登录页面已打开，请在浏览器中完成登录...")
+        print(f"聚宽登录页面已打开，请在浏览器中完成登录... user_data_dir={self.user_data_dir}")
         try:
             await page.wait_for_url(
-                lambda url: "login" not in url.lower(),
+                lambda url: not _is_login_url(str(url)),
                 timeout=300_000,
             )
             print("登录完成，继续自动化流程...")
         except Exception:
             raise AutomationError(
-                "Timed out waiting for JoinQuant login. Please log in and retry."
+                "Timed out waiting for JoinQuant login. "
+                f"user_data_dir={self.user_data_dir} final_url={page.url}"
             )
 
     def _require_page(self):
         if self.page is None:
             raise AutomationError("Browser page is not initialized")
         return self.page
+
+
+def _is_login_url(url: str) -> bool:
+    return "login" in str(url).lower()
 
 
 async def wait_for_compile_completion(

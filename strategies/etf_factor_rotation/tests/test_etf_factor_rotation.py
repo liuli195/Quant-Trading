@@ -122,6 +122,7 @@ class TestSetParameter:
         assert len(g.etf_pool) == len(g.etf_names)
         assert 1 <= g.TopK <= len(g.etf_pool)
         assert g.MA_long > 0
+        assert g.MA_long_by_etf == [20, 40, 100]
         assert g.TargetVol > 0
         assert 0 < g.MaxWeight <= g.MaxTotalWeight <= 1
         for etf, name in zip(g.etf_pool, g.etf_names):
@@ -372,10 +373,11 @@ class TestSelectTopK:
 # 3. 趋势门槛测试
 # ============================================================
 class TestComputeTrendGates:
-    """测试 120 日均线趋势过滤。"""
+    """测试趋势均线过滤。"""
 
     def test_price_above_ma_passes(self, strategy, mock_g):
         mock_g.MA_long = 5
+        mock_g.MA_long_by_etf = None
         params = strategy.snapshot_params()
         n_days = 20
         prices_above = np.arange(1.0, 1.0 + 0.02 * n_days, 0.02)[:n_days]
@@ -392,6 +394,7 @@ class TestComputeTrendGates:
 
     def test_price_below_ma_fails(self, strategy, mock_g):
         mock_g.MA_long = 5
+        mock_g.MA_long_by_etf = None
         params = strategy.snapshot_params()
         n_days = 20
         prices_down = np.arange(2.0, 2.0 - 0.02 * n_days, -0.02)[:n_days]
@@ -406,6 +409,7 @@ class TestComputeTrendGates:
 
     def test_insufficient_data_returns_zero(self, strategy, mock_g):
         mock_g.MA_long = 120
+        mock_g.MA_long_by_etf = None
         params = strategy.snapshot_params()
         short_prices = make_linear_prices(n_days=50)
         close = {
@@ -420,6 +424,7 @@ class TestComputeTrendGates:
     def test_price_equals_ma_fails(self, strategy, mock_g):
         """current_close == ma（恰好等于）时严格不通过趋势门槛。"""
         mock_g.MA_long = 5
+        mock_g.MA_long_by_etf = None
         params = strategy.snapshot_params()
         n_days = 10
         flat = make_constant_prices(1.0, n_days=n_days)
@@ -431,6 +436,7 @@ class TestComputeTrendGates:
     def test_data_exactly_equals_ma_window(self, strategy, mock_g):
         """len(series) == MA_long 刚好满足条件时正常计算不抛异常。"""
         mock_g.MA_long = 5
+        mock_g.MA_long_by_etf = None
         params = strategy.snapshot_params()
         up = make_linear_prices(start=1.0, step=0.02, n_days=5)
         close = {e: up for e in mock_g.etf_pool}
@@ -441,6 +447,7 @@ class TestComputeTrendGates:
     def test_etf_not_in_close_columns_returns_zero(self, strategy, mock_g):
         """ETF 不在 close.columns 时 trend_gate 保持 0，不抛异常。"""
         mock_g.MA_long = 5
+        mock_g.MA_long_by_etf = None
         params = strategy.snapshot_params()
         n_days = 20
         up = make_linear_prices(start=1.0, step=0.02, n_days=n_days)
@@ -458,11 +465,25 @@ class TestComputeTrendGates:
     def test_empty_close_dataframe_no_crash(self, strategy, mock_g):
         """close DataFrame 为空时所有 gate 为 0，不崩溃。"""
         mock_g.MA_long = 5
+        mock_g.MA_long_by_etf = None
         params = strategy.snapshot_params()
         empty_close = pd.DataFrame()
         prices = {'close': empty_close}
         gates = strategy.compute_trend_gates(prices, mock_g.etf_pool, params)
         assert all(g == 0.0 for g in gates)
+
+    def test_ma_long_by_etf_uses_per_asset_windows(self, strategy, mock_g):
+        mock_g.MA_long = 120
+        mock_g.MA_long_by_etf = [3, 5, 8]
+        params = strategy.snapshot_params()
+        close = {
+            '159819.XSHE': [1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+            '513100.XSHG': [1, 1, 1, 1, 2, 2, 2, 2, 2, 1.5],
+            '518880.XSHG': [1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+        }
+        prices = {'close': make_prices_dataframe(close)}
+        gates = strategy.compute_trend_gates(prices, mock_g.etf_pool, params)
+        assert gates.tolist() == [1.0, 0.0, 1.0]
 
 
 # ============================================================
@@ -1770,7 +1791,7 @@ class TestSnapshotParams:
         params = strategy.snapshot_params()
         required = [
             "etf_pool", "etf_names", "benchmark",
-            "MA_long", "MomShort", "MomMid", "MomLong",
+            "MA_long", "MA_long_by_etf", "MomShort", "MomMid", "MomLong",
             "w20", "w60", "w120", "TopK",
             "VolWindow", "annual_factor",
             "RSRS_N", "RSRS_M", "RSRS_NegativeFullCut",
@@ -1788,6 +1809,7 @@ class TestSnapshotParams:
     def test_snapshot_values_match_g(self, strategy, mock_g):
         params = strategy.snapshot_params()
         assert params["MA_long"] == mock_g.MA_long
+        assert params["MA_long_by_etf"] == mock_g.MA_long_by_etf
         assert params["TopK"] == mock_g.TopK
         assert params["TargetVol"] == mock_g.TargetVol
         assert params["fq_mode"] == mock_g.fq_mode
@@ -1799,6 +1821,12 @@ class TestSnapshotParams:
         # 修改快照不应影响 g
         params["etf_pool"].append("999999.XSHG")
         assert len(mock_g.etf_pool) == 3
+
+    def test_snapshot_ma_long_by_etf_is_copy(self, strategy, mock_g):
+        mock_g.MA_long_by_etf = [20, 40, 100]
+        params = strategy.snapshot_params()
+        params["MA_long_by_etf"][0] = 60
+        assert mock_g.MA_long_by_etf == [20, 40, 100]
 
     def test_snapshot_upgrades_short_fund_codes(self, strategy, mock_g):
         mock_g.etf_names = ['人工智能ETF易方达(159819)', '纳指ETF', '黄金ETF(518880)']
@@ -1831,6 +1859,24 @@ class TestValidateParams:
         mock_g.w120 = 0.5
         params = strategy.snapshot_params()
         with pytest.raises(ValueError, match="momentum weights must sum to 1"):
+            strategy.validate_params(params)
+
+    def test_ma_long_not_positive_raises(self, strategy, mock_g):
+        mock_g.MA_long = 0
+        params = strategy.snapshot_params()
+        with pytest.raises(ValueError, match="MA_long must be positive"):
+            strategy.validate_params(params)
+
+    def test_ma_long_by_etf_length_mismatch_raises(self, strategy, mock_g):
+        mock_g.MA_long_by_etf = [20, 40]
+        params = strategy.snapshot_params()
+        with pytest.raises(ValueError, match="MA_long_by_etf length must match etf_pool"):
+            strategy.validate_params(params)
+
+    def test_ma_long_by_etf_nonpositive_raises(self, strategy, mock_g):
+        mock_g.MA_long_by_etf = [20, 0, 100]
+        params = strategy.snapshot_params()
+        with pytest.raises(ValueError, match="MA_long_by_etf values must be positive"):
             strategy.validate_params(params)
 
     def test_topk_less_than_one_raises(self, strategy, mock_g):
@@ -1947,6 +1993,22 @@ class TestComputeHistoryCount:
         count = strategy.compute_history_count(params)
         expected = 617 + 50
         assert count == expected
+
+    def test_uses_largest_ma_long_by_etf(self, strategy, mock_g):
+        mock_g.MA_long = 20
+        mock_g.MA_long_by_etf = [10, 250, 30]
+        mock_g.MomShort = 5
+        mock_g.MomMid = 10
+        mock_g.MomLong = 20
+        mock_g.VolWindow = 10
+        mock_g.RSRS_N = 3
+        mock_g.RSRS_M = 10
+        mock_g.CrowdWindow = 30
+        mock_g.PortfolioVolWindow = 10
+        mock_g.history_buffer = 7
+        params = strategy.snapshot_params()
+        count = strategy.compute_history_count(params)
+        assert count == 250 + 7
 
     def test_with_small_windows(self, strategy, mock_g):
         mock_g.MA_long = 10

@@ -736,6 +736,62 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(captured_payload.get("py_version"), "Python3")
         self.assertEqual(captured_payload.get("capital"), 100000)
 
+    def test_browser_exit_skips_storage_state_on_login_page(self) -> None:
+        from scripts.jq_automation.browser import JoinQuantBrowser
+
+        class FakeContext:
+            async def cookies(self):
+                return [{"name": "token", "value": "new"}]
+
+            async def close(self):
+                return None
+
+        class FakePage:
+            url = "https://www.joinquant.com/user/login/index"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "storage_state.json"
+            path.write_text(json.dumps({"cookies": [{"name": "token", "value": "old"}]}), encoding="utf-8")
+            browser = JoinQuantBrowser.__new__(JoinQuantBrowser)
+            browser.user_data_dir = Path(tmp)
+            browser.context = FakeContext()
+            browser.page = FakePage()
+            browser._playwright = None
+
+            asyncio.run(browser.__aexit__())
+
+            self.assertEqual(
+                json.loads(path.read_text(encoding="utf-8")),
+                {"cookies": [{"name": "token", "value": "old"}]},
+            )
+
+    def test_browser_exit_persists_storage_state_off_login_page(self) -> None:
+        from scripts.jq_automation.browser import JoinQuantBrowser
+
+        class FakeContext:
+            async def cookies(self):
+                return [{"name": "token", "value": "new"}]
+
+            async def close(self):
+                return None
+
+        class FakePage:
+            url = "https://www.joinquant.com/algorithm/index/list"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            browser = JoinQuantBrowser.__new__(JoinQuantBrowser)
+            browser.user_data_dir = Path(tmp)
+            browser.context = FakeContext()
+            browser.page = FakePage()
+            browser._playwright = None
+
+            asyncio.run(browser.__aexit__())
+
+            self.assertEqual(
+                json.loads((Path(tmp) / "storage_state.json").read_text(encoding="utf-8")),
+                {"cookies": [{"name": "token", "value": "new"}]},
+            )
+
     def test_expand_runs_preserves_non_sweep_params_diff(self) -> None:
         """非 sweep 场景的 params_diff 应被保留在 RunSpec 中。"""
         config = ScenarioConfig.from_mapping(
