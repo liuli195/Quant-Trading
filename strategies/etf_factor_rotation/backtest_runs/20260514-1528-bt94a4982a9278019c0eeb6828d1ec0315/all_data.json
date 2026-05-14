@@ -1,0 +1,110 @@
+{
+  "api_export_json": "D:\\My Project\\Quant Trading\\strategies\\etf_factor_rotation\\backtest_runs\\20260514-1528-bt94a4982a9278019c0eeb6828d1ec0315\\api_export.json",
+  "extraction_method": "api_bundle",
+  "generated_at": "2026-05-14T07:29:53.427137+00:00",
+  "counts": {
+    "transactions": 399,
+    "positions": 3551,
+    "logs": 1000,
+    "error_logs": 0,
+    "result_rows": 1485,
+    "result_pages": 2,
+    "risk_rows": 640
+  },
+  "partial": {
+    "transactions": false,
+    "positions": false,
+    "logs": true,
+    "results": false
+  },
+  "attempted_primary_extraction_method": "joinquant_research_get_backtest",
+  "primary_extraction_method": "joinquant_detail_readonly_api",
+  "fallback_extraction_method": "joinquant_detail_readonly_api",
+  "research_downloaded": false,
+  "research_fetch_failed": true,
+  "research_fetch_error": "JoinQuant research script execution failed: No Jupyter API base found. /: not a Jupyter kernelspecs response: {\"code\":4,\"msg\":\"缺失必要的通用参数\"}; /hub/user/59895147282/: Unexpected token '<', \"\n\n\n<!DOCTYPE \"... is not valid JSON",
+  "detail_api_used": true,
+  "tabs": {
+    "transactioninfo": {
+      "path": "tabs_raw/transactioninfo.md",
+      "partial": false,
+      "record_count": 399
+    },
+    "positioninfo": {
+      "path": "tabs_raw/positioninfo.md",
+      "partial": false,
+      "record_count": 3551
+    },
+    "daily_returns": {
+      "path": "tabs_raw/daily_returns.md",
+      "partial": false,
+      "record_count": 1485
+    },
+    "logs": {
+      "path": "tabs_raw/logs.md",
+      "partial": true,
+      "record_count": 1000
+    },
+    "profile": {
+      "path": "tabs_raw/profile.md",
+      "partial": false,
+      "record_count": 3948
+    },
+    "algorithm_period_return": {
+      "path": "tabs_raw/algorithm_period_return.md",
+      "partial": false,
+      "record_count": 64
+    },
+    "benchmark_period_return": {
+      "path": "tabs_raw/benchmark_period_return.md",
+      "partial": false,
+      "record_count": 64
+    },
+    "alpha": {
+      "path": "tabs_raw/alpha.md",
+      "partial": false,
+      "record_count": 64
+    },
+    "beta": {
+      "path": "tabs_raw/beta.md",
+      "partial": false,
+      "record_count": 64
+    },
+    "sharpe": {
+      "path": "tabs_raw/sharpe.md",
+      "partial": false,
+      "record_count": 64
+    },
+    "sortino": {
+      "path": "tabs_raw/sortino.md",
+      "partial": false,
+      "record_count": 64
+    },
+    "information": {
+      "path": "tabs_raw/information.md",
+      "partial": false,
+      "record_count": 64
+    },
+    "algo_volatility": {
+      "path": "tabs_raw/algo_volatility.md",
+      "partial": false,
+      "record_count": 64
+    },
+    "benchmark_volatility": {
+      "path": "tabs_raw/benchmark_volatility.md",
+      "partial": false,
+      "record_count": 64
+    },
+    "max_drawdown": {
+      "path": "tabs_raw/max_drawdown.md",
+      "partial": false,
+      "record_count": 64
+    },
+    "backtest_report": {
+      "path": "report/backtest_report.md",
+      "partial": false,
+      "record_count": 1
+    }
+  },
+  "note": "Generated from one fetchExistingBacktestBundle() JSON payload; no JoinQuant export endpoint was confirmed or used."
+}

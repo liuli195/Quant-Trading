@@ -1,0 +1,35 @@
+{
+  "strategy_file": "d:/My Project/Quant Trading/strategies/etf_factor_rotation/etf_factor_rotation.py",
+  "strategy": "etf_factor_rotation",
+  "scenario_id": "s01-etf-ma-mix-confirmation",
+  "start_date": "2021-01-01",
+  "end_date": "2026-04-30",
+  "capital": 100000,
+  "frequency": "1d",
+  "py_version": "Python3",
+  "batch_id": "20260514-etf-ma-mixed-confirmation",
+  "estimated_minutes": 6,
+  "sweep": {
+    "strategy": "list",
+    "combinations": [
+      {
+        "label": "AI20_NQ40_Gold100",
+        "params": {
+          "MA_long_by_etf": [20, 40, 100]
+        }
+      },
+      {
+        "label": "AI100_NQ40_Gold100",
+        "params": {
+          "MA_long_by_etf": [100, 40, 100]
+        }
+      },
+      {
+        "label": "AI120_NQ40_Gold100",
+        "params": {
+          "MA_long_by_etf": [120, 40, 100]
+        }
+      }
+    ]
+  }
+}
