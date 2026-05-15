@@ -1,0 +1,69 @@
+{
+  "experiment_id": "gold-crowd-ab",
+  "strategy": "etf_factor_rotation",
+  "batch_id": "20260515-gold-crowd-ab",
+  "baseline": "gold-baseline",
+  "controls": ["gold-baseline"],
+  "base": {
+    "code_source": {
+      "type": "git",
+      "ref": "main",
+      "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+    },
+    "start_date": "2021-01-01",
+    "end_date": "2026-04-30",
+    "capital": 100000,
+    "estimated_minutes": 6,
+    "frequency": "1d",
+    "py_version": "Python3"
+  },
+  "variants": [
+    {
+      "label": "gold-baseline",
+      "role": "control",
+      "params_mode": "params_diff",
+      "params_diff": {},
+      "note": "当前默认：全局 CrowdStart=0.60, CrowdEnd=0.95, MinCrowdPenalty=0.30"
+    },
+    {
+      "label": "gold-start-080",
+      "role": "variant",
+      "params_mode": "params_diff",
+      "params_diff": {
+        "CrowdStart_by_etf": [0.60, 0.60, 0.80],
+        "CrowdEnd_by_etf": [0.95, 0.95, 0.95],
+        "MinCrowdPenalty_by_etf": [0.30, 0.30, 0.30]
+      },
+      "note": "阈值假说：黄金 CrowdStart=0.80（惩罚率 35%→约12%），AI/纳指保持不变"
+    },
+    {
+      "label": "gold-neutralized",
+      "role": "variant",
+      "params_mode": "params_diff",
+      "params_diff": {
+        "CrowdStart_by_etf": [0.60, 0.60, 0.99],
+        "CrowdEnd_by_etf": [0.95, 0.95, 0.999]
+      },
+      "note": "阈值假说（最强版）：黄金 CrowdStart=0.99 实质上禁用惩罚，AI/纳指不变"
+    },
+    {
+      "label": "gold-calc-longwin",
+      "role": "variant",
+      "params_mode": "params_diff",
+      "params_diff": {
+        "CrowdRetShort_by_etf": [20, 20, 40],
+        "CrowdRetMid_by_etf": [60, 60, 90]
+      },
+      "note": "计算规则假说：黄金 ret20→40, ret60→90，延长收益率窗口减少牛市误判，阈值保持全局默认"
+    }
+  ],
+  "metrics": [
+    { "key": "annual_return", "direction": "maximize" },
+    { "key": "excess_return", "direction": "maximize" },
+    { "key": "max_drawdown", "direction": "minimize" },
+    { "key": "sharpe", "direction": "maximize" },
+    { "key": "volatility", "direction": "minimize" },
+    { "key": "win_ratio", "direction": "maximize" },
+    { "key": "information_ratio", "direction": "maximize" }
+  ]
+}

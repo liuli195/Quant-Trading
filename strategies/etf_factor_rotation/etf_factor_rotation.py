@@ -210,6 +210,11 @@ def snapshot_params():
         "CrowdStart": g.CrowdStart,
         "CrowdEnd": g.CrowdEnd,
         "MinCrowdPenalty": g.MinCrowdPenalty,
+        "CrowdStart_by_etf": None if g.CrowdStart_by_etf is None else list(g.CrowdStart_by_etf),
+        "CrowdEnd_by_etf": None if g.CrowdEnd_by_etf is None else list(g.CrowdEnd_by_etf),
+        "MinCrowdPenalty_by_etf": None if g.MinCrowdPenalty_by_etf is None else list(g.MinCrowdPenalty_by_etf),
+        "CrowdRetShort_by_etf": None if g.CrowdRetShort_by_etf is None else list(g.CrowdRetShort_by_etf),
+        "CrowdRetMid_by_etf": None if g.CrowdRetMid_by_etf is None else list(g.CrowdRetMid_by_etf),
         "PortfolioVolWindow": g.PortfolioVolWindow,
         "TargetVol": g.TargetVol,
         "MaxPortfolioVolScale": g.MaxPortfolioVolScale,
@@ -263,6 +268,31 @@ def validate_params(params):
         errors.append("RSRS_M must be positive and RSRS_N must be > 1")
     if not (0 <= params["CrowdStart"] < params["CrowdEnd"] <= 1):
         errors.append("Crowd thresholds must satisfy 0 <= CrowdStart < CrowdEnd <= 1")
+    for per_etf_name in ("CrowdStart_by_etf", "CrowdEnd_by_etf", "MinCrowdPenalty_by_etf",
+                         "CrowdRetShort_by_etf", "CrowdRetMid_by_etf"):
+        per_etf_val = params.get(per_etf_name)
+        if per_etf_val is not None:
+            if not isinstance(per_etf_val, (list, tuple)):
+                errors.append("%s must be a list or tuple when provided" % per_etf_name)
+            elif len(per_etf_val) != len(params["etf_pool"]):
+                errors.append("%s length must match etf_pool" % per_etf_name)
+    starts_etf = params.get("CrowdStart_by_etf")
+    ends_etf = params.get("CrowdEnd_by_etf")
+    if starts_etf is not None and ends_etf is not None:
+        for idx, (s, e) in enumerate(zip(starts_etf, ends_etf)):
+            if not (0 <= s < e <= 1):
+                errors.append("CrowdStart_by_etf[%d]=%s must satisfy 0 <= start < end <= 1, got end=%s" % (idx, s, e))
+                break
+    elif starts_etf is not None:
+        for idx, s in enumerate(starts_etf):
+            if not (0 <= s < params["CrowdEnd"] <= 1):
+                errors.append("CrowdStart_by_etf[%d]=%s must satisfy 0 <= start < CrowdEnd=%s" % (idx, s, params["CrowdEnd"]))
+                break
+    elif ends_etf is not None:
+        for idx, e in enumerate(ends_etf):
+            if not (params["CrowdStart"] < e <= 1):
+                errors.append("CrowdEnd_by_etf[%d]=%s must satisfy CrowdStart=%s < end <= 1" % (idx, e, params["CrowdStart"]))
+                break
     if params["MomentumTiltStrength"] < 0:
         errors.append("MomentumTiltStrength must be >= 0")
     if not (0 < params["MomentumTiltMin"] <= 1 <= params["MomentumTiltMax"]):
@@ -285,6 +315,28 @@ def resolve_ma_long_windows(params):
     if ma_long_by_etf is None:
         return [params["MA_long"]] * len(params["etf_pool"])
     return list(ma_long_by_etf)
+
+
+def resolve_crowd_thresholds(params):
+    """返回与 etf_pool 对齐的 (CrowdStart, CrowdEnd, MinCrowdPenalty) 三元组列表。"""
+    n = len(params["etf_pool"])
+    starts = params.get("CrowdStart_by_etf")
+    starts = list(starts) if starts is not None else [params["CrowdStart"]] * n
+    ends = params.get("CrowdEnd_by_etf")
+    ends = list(ends) if ends is not None else [params["CrowdEnd"]] * n
+    mins = params.get("MinCrowdPenalty_by_etf")
+    mins = list(mins) if mins is not None else [params["MinCrowdPenalty"]] * n
+    return list(zip(starts, ends, mins))
+
+
+def resolve_crowd_ret_windows(params):
+    """返回与 etf_pool 对齐的 (CrowdRetShort, CrowdRetMid) 二元组列表。"""
+    n = len(params["etf_pool"])
+    shorts = params.get("CrowdRetShort_by_etf")
+    shorts = list(shorts) if shorts is not None else [params["CrowdRetShort"]] * n
+    mids = params.get("CrowdRetMid_by_etf")
+    mids = list(mids) if mids is not None else [params["CrowdRetMid"]] * n
+    return list(zip(shorts, mids))
 
 
 # ============================================================
@@ -401,6 +453,11 @@ def set_parameter(context):
     g.CrowdStart = 0.60
     g.CrowdEnd = 0.95
     g.MinCrowdPenalty = 0.30
+    g.CrowdStart_by_etf = None       # 列表或 None，None 时使用全局 CrowdStart
+    g.CrowdEnd_by_etf = None         # 列表或 None，None 时使用全局 CrowdEnd
+    g.MinCrowdPenalty_by_etf = None  # 列表或 None，None 时使用全局 MinCrowdPenalty
+    g.CrowdRetShort_by_etf = None    # 列表或 None，None 时使用全局 CrowdRetShort
+    g.CrowdRetMid_by_etf = None      # 列表或 None，None 时使用全局 CrowdRetMid
 
     # ---- 组合波动率控制 ----
     g.PortfolioVolWindow = 60
@@ -1010,9 +1067,8 @@ def compute_crowd_penalties(prices, pool, params):
     n = len(pool)
 
     crowd_window = params["CrowdWindow"]
-    start = params["CrowdStart"]
-    end = params["CrowdEnd"]
-    min_penalty = params["MinCrowdPenalty"]
+    thresholds = resolve_crowd_thresholds(params)    # [(start, end, min_penalty), ...]
+    ret_windows = resolve_crowd_ret_windows(params)  # [(short, mid), ...]
 
     penalties = np.ones(n)
 
@@ -1030,11 +1086,17 @@ def compute_crowd_penalties(prices, pool, params):
     # ---- DataFrame 级批量计算：一次算完所有 ETF 的指标 ----
     close_recent = close[eligible_etfs].iloc[-crowd_window:]
 
-    # 1) 20日涨幅
-    ret20_df = close_recent / close_recent.shift(params["CrowdRetShort"]) - 1
-
-    # 2) 60日涨幅
-    ret60_df = close_recent / close_recent.shift(params["CrowdRetMid"]) - 1
+    # 1-2) 短/中期涨幅（按 per-ETF 窗口预计算，避免重复 shift）
+    ret_short_map = {}
+    ret_mid_map = {}
+    for i, etf in enumerate(pool):
+        if etf not in eligible_etfs:
+            continue
+        short_w, mid_w = ret_windows[i]
+        if short_w not in ret_short_map:
+            ret_short_map[short_w] = close_recent / close_recent.shift(short_w) - 1
+        if mid_w not in ret_mid_map:
+            ret_mid_map[mid_w] = close_recent / close_recent.shift(mid_w) - 1
 
     # 3) 成交额 MA20（仅对有 amount 数据的 ETF）
     eligible_amount_cols = [e for e in eligible_etfs if e in amount.columns]
@@ -1060,13 +1122,15 @@ def compute_crowd_penalties(prices, pool, params):
 
         indicators = []
 
-        # ret20
-        col20 = ret20_df[etf].dropna()
-        indicators.append(percentile_rank(col20.iloc[-1], col20) if len(col20) > 1 else 0.5)
+        # ret short (per-ETF window)
+        short_w = ret_windows[i][0]
+        col_short = ret_short_map[short_w][etf].dropna()
+        indicators.append(percentile_rank(col_short.iloc[-1], col_short) if len(col_short) > 1 else 0.5)
 
-        # ret60
-        col60 = ret60_df[etf].dropna()
-        indicators.append(percentile_rank(col60.iloc[-1], col60) if len(col60) > 1 else 0.5)
+        # ret mid (per-ETF window)
+        mid_w = ret_windows[i][1]
+        col_mid = ret_mid_map[mid_w][etf].dropna()
+        indicators.append(percentile_rank(col_mid.iloc[-1], col_mid) if len(col_mid) > 1 else 0.5)
 
         # amt_ma20
         if amt_ma20_df is not None and etf in amt_ma20_df.columns:
@@ -1085,13 +1149,14 @@ def compute_crowd_penalties(prices, pool, params):
 
         crowd_score = np.mean(indicators)
 
-        if crowd_score <= start:
+        etf_start, etf_end, etf_min = thresholds[i]
+        if crowd_score <= etf_start:
             penalty = 1.0
-        elif crowd_score >= end:
-            penalty = min_penalty
+        elif crowd_score >= etf_end:
+            penalty = etf_min
         else:
-            penalty = 1.0 - (crowd_score - start) / (end - start) * (1.0 - min_penalty)
-            penalty = max(min_penalty, min(1.0, penalty))
+            penalty = 1.0 - (crowd_score - etf_start) / (etf_end - etf_start) * (1.0 - etf_min)
+            penalty = max(etf_min, min(1.0, penalty))
 
         penalties[i] = penalty
 

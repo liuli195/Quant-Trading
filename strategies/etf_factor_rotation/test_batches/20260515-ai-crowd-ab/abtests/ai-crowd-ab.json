@@ -1,0 +1,69 @@
+{
+  "experiment_id": "ai-crowd-ab",
+  "strategy": "etf_factor_rotation",
+  "batch_id": "20260515-ai-crowd-ab",
+  "baseline": "ai-baseline",
+  "controls": ["ai-baseline"],
+  "base": {
+    "code_source": {
+      "type": "git",
+      "ref": "main",
+      "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+    },
+    "start_date": "2021-01-01",
+    "end_date": "2026-04-30",
+    "capital": 100000,
+    "estimated_minutes": 6,
+    "frequency": "1d",
+    "py_version": "Python3"
+  },
+  "variants": [
+    {
+      "label": "ai-baseline",
+      "role": "control",
+      "params_mode": "params_diff",
+      "params_diff": {},
+      "note": "当前默认：全局 CrowdStart=0.60, CrowdEnd=0.95, MinCrowdPenalty=0.30"
+    },
+    {
+      "label": "ai-start-075",
+      "role": "variant",
+      "params_mode": "params_diff",
+      "params_diff": {
+        "CrowdStart_by_etf": [0.75, 0.60, 0.60],
+        "CrowdEnd_by_etf": [0.95, 0.95, 0.95],
+        "MinCrowdPenalty_by_etf": [0.30, 0.30, 0.30]
+      },
+      "note": "阈值假说：AI CrowdStart=0.75（惩罚率 31%→约18%），减少过早触发但保留长期保护"
+    },
+    {
+      "label": "ai-neutralized",
+      "role": "variant",
+      "params_mode": "params_diff",
+      "params_diff": {
+        "CrowdStart_by_etf": [0.99, 0.60, 0.60],
+        "CrowdEnd_by_etf": [0.999, 0.95, 0.95]
+      },
+      "note": "关键诊断：完全取消 AI 惩罚。如果 40日 CrowdDiff 从 -188.8 大幅恶化，证明惩罚的长期价值是真实的"
+    },
+    {
+      "label": "ai-calc-longwin",
+      "role": "variant",
+      "params_mode": "params_diff",
+      "params_diff": {
+        "CrowdRetShort_by_etf": [40, 20, 20],
+        "CrowdRetMid_by_etf": [90, 60, 60]
+      },
+      "note": "计算规则假说：AI ret20→40, ret60→90，测试延长窗口能否改善短中窗口的时机问题"
+    }
+  ],
+  "metrics": [
+    { "key": "annual_return", "direction": "maximize" },
+    { "key": "excess_return", "direction": "maximize" },
+    { "key": "max_drawdown", "direction": "minimize" },
+    { "key": "sharpe", "direction": "maximize" },
+    { "key": "volatility", "direction": "minimize" },
+    { "key": "win_ratio", "direction": "maximize" },
+    { "key": "information_ratio", "direction": "maximize" }
+  ]
+}
