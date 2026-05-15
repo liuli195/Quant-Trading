@@ -453,7 +453,7 @@ def set_parameter(context):
     g.CrowdStart = 0.60
     g.CrowdEnd = 0.95
     g.MinCrowdPenalty = 0.30
-    g.CrowdStart_by_etf = None       # 列表或 None，None 时使用全局 CrowdStart
+    g.CrowdStart_by_etf = [0.60, 0.60, 0.80]  # AI=0.60, 纳指=0.60, 黄金=0.80（AB 验证：2026-05-15）
     g.CrowdEnd_by_etf = None         # 列表或 None，None 时使用全局 CrowdEnd
     g.MinCrowdPenalty_by_etf = None  # 列表或 None，None 时使用全局 MinCrowdPenalty
     g.CrowdRetShort_by_etf = None    # 列表或 None，None 时使用全局 CrowdRetShort
