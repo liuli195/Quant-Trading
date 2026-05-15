@@ -1,0 +1,155 @@
+{
+  "ab_experiments": {
+    "ai-crowd-ab": {
+      "status": "completed",
+      "baseline": "ai-baseline",
+      "controls": [
+        "ai-baseline"
+      ],
+      "config_hash": "sha256:95ddfc72633bb3ab4e0deb857d7f9f27e2d7c62d2f0e7a38eda8ae0749d92636",
+      "variants": [
+        {
+          "label": "ai-baseline",
+          "scenario_id": "ab-ai-crowd-ab-ai-baseline",
+          "run_label": "ai-baseline",
+          "run_id": "20260515-2100-bt852ee6d4016248c77c11386f2f6a7245",
+          "role": "control",
+          "is_baseline": true,
+          "upload_index": 1,
+          "code_source": {
+            "type": "git",
+            "ref": "main",
+            "commit": "3a80e04b76e0a73c543e2482cf4a14a837d32381",
+            "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+          },
+          "params_mode": "params_diff",
+          "params_diff": {},
+          "scan_source": null,
+          "uploaded_code_sha256": "sha256:5fd46c92f507b47a2d297e799a1ed0c711de99fe519e6465ccffabf985fbe204",
+          "backtest_id": "852ee6d4016248c77c11386f2f6a7245",
+          "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=852ee6d4016248c77c11386f2f6a7245",
+          "status": "completed"
+        },
+        {
+          "label": "ai-start-075",
+          "scenario_id": "ab-ai-crowd-ab-ai-start-075",
+          "run_label": "ai-start-075",
+          "run_id": "20260515-2102-bt5d8807c600e004cf70f4c4b31a1b28ac",
+          "role": "variant",
+          "is_baseline": false,
+          "upload_index": 2,
+          "code_source": {
+            "type": "git",
+            "ref": "main",
+            "commit": "3a80e04b76e0a73c543e2482cf4a14a837d32381",
+            "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+          },
+          "params_mode": "params_diff",
+          "params_diff": {
+            "CrowdStart_by_etf": [
+              0.75,
+              0.6,
+              0.6
+            ],
+            "CrowdEnd_by_etf": [
+              0.95,
+              0.95,
+              0.95
+            ],
+            "MinCrowdPenalty_by_etf": [
+              0.3,
+              0.3,
+              0.3
+            ]
+          },
+          "scan_source": null,
+          "uploaded_code_sha256": "sha256:c4c55d62118b07eb3b4338c9f9f8c33fb83a13492ac0609386ac09091541ea78",
+          "backtest_id": "5d8807c600e004cf70f4c4b31a1b28ac",
+          "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=5d8807c600e004cf70f4c4b31a1b28ac",
+          "status": "completed"
+        },
+        {
+          "label": "ai-neutralized",
+          "scenario_id": "ab-ai-crowd-ab-ai-neutralized",
+          "run_label": "ai-neutralized",
+          "run_id": "20260515-2105-bt6fb6670169c26ae89dd2902eba243fff",
+          "role": "variant",
+          "is_baseline": false,
+          "upload_index": 3,
+          "code_source": {
+            "type": "git",
+            "ref": "main",
+            "commit": "3a80e04b76e0a73c543e2482cf4a14a837d32381",
+            "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+          },
+          "params_mode": "params_diff",
+          "params_diff": {
+            "CrowdStart_by_etf": [
+              0.99,
+              0.6,
+              0.6
+            ],
+            "CrowdEnd_by_etf": [
+              0.999,
+              0.95,
+              0.95
+            ]
+          },
+          "scan_source": null,
+          "uploaded_code_sha256": "sha256:86e2ec08150b72e903dbf71f20c763692d639e3f299f229da37b884bd4e41e9d",
+          "backtest_id": "6fb6670169c26ae89dd2902eba243fff",
+          "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=6fb6670169c26ae89dd2902eba243fff",
+          "status": "completed"
+        },
+        {
+          "label": "ai-calc-longwin",
+          "scenario_id": "ab-ai-crowd-ab-ai-calc-longwin",
+          "run_label": "ai-calc-longwin",
+          "run_id": "20260515-2107-bt157c5e16bdd7a47cb327a70b75b69da4",
+          "role": "variant",
+          "is_baseline": false,
+          "upload_index": 4,
+          "code_source": {
+            "type": "git",
+            "ref": "main",
+            "commit": "3a80e04b76e0a73c543e2482cf4a14a837d32381",
+            "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+          },
+          "params_mode": "params_diff",
+          "params_diff": {
+            "CrowdRetShort_by_etf": [
+              40,
+              20,
+              20
+            ],
+            "CrowdRetMid_by_etf": [
+              90,
+              60,
+              60
+            ]
+          },
+          "scan_source": null,
+          "uploaded_code_sha256": "sha256:495ff04735ba8dccfe61c83f9aa4c6dadadcb748de2ab54f1b8679af0330caeb",
+          "backtest_id": "157c5e16bdd7a47cb327a70b75b69da4",
+          "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=157c5e16bdd7a47cb327a70b75b69da4",
+          "status": "completed"
+        }
+      ],
+      "upload_session": {
+        "session_started_at": "2026-05-15T20:59:57",
+        "session_finished_at": "2026-05-15T21:09:37",
+        "strategy_name": "etf_factor_rotation",
+        "edit_url": null,
+        "candidate_order": [
+          "ai-baseline",
+          "ai-start-075",
+          "ai-neutralized",
+          "ai-calc-longwin"
+        ]
+      }
+    }
+  },
+  "batch_id": "20260515-ai-crowd-ab",
+  "strategy": "etf_factor_rotation",
+  "updated": "2026-05-15T21:09:37"
+}

@@ -1,0 +1,122 @@
+{
+  "status": "completed",
+  "baseline": "gold-baseline",
+  "controls": [
+    "gold-baseline"
+  ],
+  "generated_at": "2026-05-15T20:59:38",
+  "variants": [
+    {
+      "label": "gold-baseline",
+      "role": "control",
+      "is_baseline": true,
+      "metrics": {
+        "sharpe": 1.437,
+        "annual_return": 0.15439999999999998,
+        "max_drawdown": 0.0809,
+        "excess_return": 1.2729000000000001,
+        "actual_minutes": 1.538
+      },
+      "metadata": {
+        "backtest_id": "7636c4788d821690fd90b281dee7e913",
+        "backtest_url": "",
+        "strategy_name": "etf_factor_rotation",
+        "start_date": "2021-01-01",
+        "end_date": "2026-04-30",
+        "capital": 100000,
+        "params_snapshot": {},
+        "extraction_method": "joinquant_research_get_backtest"
+      },
+      "artifacts_present": {
+        "has_backtest_report": true,
+        "has_strategy_analysis": false,
+        "has_performance_analysis": false
+      },
+      "issues": []
+    },
+    {
+      "label": "gold-start-080",
+      "role": "variant",
+      "is_baseline": false,
+      "metrics": {
+        "sharpe": 1.447,
+        "annual_return": 0.1576,
+        "max_drawdown": 0.0809,
+        "excess_return": 1.305,
+        "actual_minutes": 1.5688333333333333
+      },
+      "metadata": {
+        "backtest_id": "e8e07662646ef6b56f453ea15c7d959d",
+        "backtest_url": "",
+        "strategy_name": "etf_factor_rotation",
+        "start_date": "2021-01-01",
+        "end_date": "2026-04-30",
+        "capital": 100000,
+        "params_snapshot": {},
+        "extraction_method": "joinquant_research_get_backtest"
+      },
+      "artifacts_present": {
+        "has_backtest_report": true,
+        "has_strategy_analysis": false,
+        "has_performance_analysis": false
+      },
+      "issues": []
+    },
+    {
+      "label": "gold-neutralized",
+      "role": "variant",
+      "is_baseline": false,
+      "metrics": {
+        "sharpe": 1.389,
+        "annual_return": 0.157,
+        "max_drawdown": 0.0809,
+        "excess_return": 1.2991,
+        "actual_minutes": 1.9711666666666665
+      },
+      "metadata": {
+        "backtest_id": "72abfe3d501669b91a4b3d3a0fd5b49b",
+        "backtest_url": "",
+        "strategy_name": "etf_factor_rotation",
+        "start_date": "2021-01-01",
+        "end_date": "2026-04-30",
+        "capital": 100000,
+        "params_snapshot": {},
+        "extraction_method": "joinquant_research_get_backtest"
+      },
+      "artifacts_present": {
+        "has_backtest_report": true,
+        "has_strategy_analysis": false,
+        "has_performance_analysis": false
+      },
+      "issues": []
+    },
+    {
+      "label": "gold-calc-longwin",
+      "role": "variant",
+      "is_baseline": false,
+      "metrics": {
+        "sharpe": 1.414,
+        "annual_return": 0.15289999999999998,
+        "max_drawdown": 0.0809,
+        "excess_return": 1.2572,
+        "actual_minutes": 1.5696666666666668
+      },
+      "metadata": {
+        "backtest_id": "3e11aaf64867aa42e8644d88dfe0a4e3",
+        "backtest_url": "",
+        "strategy_name": "etf_factor_rotation",
+        "start_date": "2021-01-01",
+        "end_date": "2026-04-30",
+        "capital": 100000,
+        "params_snapshot": {},
+        "extraction_method": "joinquant_research_get_backtest"
+      },
+      "artifacts_present": {
+        "has_backtest_report": true,
+        "has_strategy_analysis": false,
+        "has_performance_analysis": false
+      },
+      "issues": []
+    }
+  ]
+}

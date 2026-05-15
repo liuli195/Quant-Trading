@@ -1,0 +1,27 @@
+{
+  "strategy_file": "D:\\My Project\\Quant Trading\\.local\\jq-automation\\ab\\gold-crowd-ab\\gold-neutralized_source.py",
+  "scenario_id": "ab-gold-crowd-ab-gold-neutralized",
+  "start_date": "2021-01-01",
+  "end_date": "2026-04-30",
+  "capital": 100000,
+  "frequency": "1d",
+  "py_version": "Python3",
+  "estimated_minutes": 6.0,
+  "batch_id": "20260515-gold-crowd-ab",
+  "strategy": "etf_factor_rotation",
+  "params_diff": {
+    "CrowdStart_by_etf": [
+      0.6,
+      0.6,
+      0.99
+    ],
+    "CrowdEnd_by_etf": [
+      0.95,
+      0.95,
+      0.999
+    ]
+  },
+  "_params_mode": "params_diff",
+  "_scan_source": null,
+  "_experiment_id": "gold-crowd-ab"
+}

@@ -4,6 +4,7 @@
 - **回测窗口**: 2021-01-01 → 2026-04-30
 - **变体总数**: 8 个（黄金 4 + AI 4）
 - **数据完整性**: 全部变体包含完整 research bundle + audit_log（1090 条/变体）
+- **产物状态**: 8 个变体均已补充 strategy-analysis.md 与 performance-analysis.md（jq-analyze fix-missing 补产），另含稳健性验证报告 [robustness-verification.md](../backtest_runs/20260515-2051-bte8e07662646ef6b56f453ea15c7d959d/report/robustness-verification.md) <!-- pathref: backtest_report_dir(strategy=etf_factor_rotation, run_id=20260515-2051-bte8e07662646ef6b56f453ea15c7d959d)/robustness-verification.md -->
 - **分析深度**: 标准 AB 指标 + 多窗口 CrowdDiff + Bootstrap CI95 + 子周期稳定性
 
 ---
@@ -43,7 +44,6 @@
 
 | 变体 | 时期 | 5d Diff | 40d Diff | 惩罚率 |
 |------|------|--------:|---------:|-------:|
-| gold-baseline | 2021-2023 | +177.3 | +912.3 | 3.9% |
 | gold-baseline | 2021-2023 | -28.0 | +179.3 | 11.8% |
 | gold-baseline | 2024-2026 | -88.6 | -1970.3 | 67.5% |
 | gold-start-080 | 2021-2023 | +177.3 | +912.3 | 3.9% |
@@ -55,11 +55,13 @@
 
 证据链：
 1. 标准指标全面改善（Sharpe +0.7%，年化收益 +0.32pp），最大回撤不变
-2. 多窗口 CrowdDiff 从"全线正向"翻转为"全线负向"——提阈值后，剩余的惩罚触发点（惩罚率 35%→12%）方向正确了，证明 0.60-0.80 区间的惩罚是误杀
+2. 多窗口 CrowdDiff 从"全线正向"翻转为"全线负向"——提阈值后，剩余的惩罚触发点（惩罚率 35%→12%）方向正确了，现有结果支持将阈值上调到 0.80，原 0.60-0.80 区间惩罚方向不合理
 3. 纳指 CrowdDiff 在 gold-start-080 中与 baseline 几乎一致（-202 vs -193 at 5d, -1176 vs -1119 at 40d），哨兵校验通过：黄金参数变更未造成权重溢出
-4. 子周期 2021-2023 惩罚率极低（3.9%），说明黄金在该时期极少进入高拥挤状态。核心改善期在 2024-2026（黄金牛市期），该时期 baseline 惩罚率 67.5% → gold-start-080 降至 23.7%，减少了约 44pp 的误触发
+4. 子周期 2021-2023 惩罚率极低（3.9%），说明黄金在该时期极少进入高拥挤状态。核心改善期在 2024-2026（黄金牛市期），该时期 baseline 惩罚率 67.5% → gold-start-080 降至 23.7%，可能减少了约 44pp 的过早惩罚
 5. 不采用 gold-neutralized（Sharpe -3.3%）——证明完全取消惩罚有害，top 20% 的极端拥挤信号仍有保护价值
 6. 不采用 gold-calc-longwin（Sharpe -1.6%）——延长收益窗口使分数钝化，失去了捕获真正拥挤的能力
+
+**限制条件**：黄金采用结论基于 AB 层面的点估计优势（Sharpe +0.7%、年化收益 +0.32pp），CrowdDiff 的多窗口 CI95 全部包含 0，且惩罚样本仅 32-33 个事件，尚未形成统计显著性证据。CrowdDiff 仅作方向性佐证，不构成独立证明。
 
 **待观察项**：2021-2023 子周期样本量小（惩罚率 3.9%），Gold CrowdDiff 在该时期的 sign 为正但样本极稀疏。建议 2026 年底复盘时重新检查黄金 CrowdDiff 是否在更长的样本中保持负向。
 
@@ -90,7 +92,7 @@
 **ai-neutralized**（CrowdStart=0.99，惩罚率 0%）：
 - 无惩罚触发事件，无法计算 CrowdDiff
 - 惩罚的完全缺失导致 Sharpe 从 1.437 降至 1.340（-6.8%）
-- 这本身就是最强的 CrowdDiff 证据：**取消 AI 惩罚的代价是惨重的**
+- 这从策略层面验证了 AI 惩罚的功能价值：**取消 AI 惩罚对整体表现有显著负面影响**（Sharpe -6.8%）。但该对比说明的是"AI 惩罚作为一个策略模块有价值"，不能单独证明 40 日均值回归机制的真实存在——ai-neutralized 同时消除了所有惩罚触发，无法区分不同窗口的惩罚贡献
 
 ### 2.3 子周期稳定性（AI ETF）
 
@@ -106,13 +108,13 @@ AI 子周期特征：2021-2023 惩罚率 17.1%（罕见），2024-2026 惩罚率
 **保留当前参数（CrowdStart=0.60），不做修改。**
 
 证据链：
-1. 所有变体（提高阈值、取消惩罚、延长窗口）全部输给 baseline——当前 0.60 是已验证最优值
+1. 所有变体（提高阈值、取消惩罚、延长窗口）全部输给 baseline——当前 0.60 是已测方案中最好的
 2. ai-neutralized 的 Sharpe 暴跌 6.8%（最大退化），证实归因报告中 40 日 -188.8 的惩罚价值是真实存在的——不是噪音，是真正的长期拥挤均值回归
 3. AI 的 CrowdDiff 展示的是"短痛换长益"模式：5/10/20 日窗口惩罚态 P&L 更高（短期减仓过早），但 40 日窗口翻转（惩罚态 P&L 更低，长期减仓正确）。当前 0.60 的阈值所在位置恰好是这种权衡的最优点
 4. 2021-2023 子周期中 AI 惩罚很少（17.1%），说明 AI 的拥挤信号集中在后段。如果要降低前段误判而不牺牲后段保护，需要比简单阈值调整更复杂的手段（如动态阈值、条件惩罚），超出当前实验范围
 5. 纳指哨兵校验通过：AI 中性化时纳指的 CrowdDiff 未出现异常变化
 
-**策略含义**：AI 拥挤度惩罚是"半有效"的——它有时过早减仓（短期代价），但长期维度上正确（40 日保护）。当前 0.60 的阈值是一个合理的折中点。任何简单调参都只会恶化这个权衡，而非改善它。
+**策略含义**：AI 拥挤度惩罚是"半有效"的——它有时过早减仓（短期代价），但长期维度上正确（40 日保护）。当前 0.60 的阈值是一个合理的折中点。在已测方案范围内，简单调参方向都未能改善这个权衡。
 
 ---
 
@@ -161,14 +163,16 @@ g.CrowdStart_by_etf = [0.60, 0.60, 0.80]
 
 4. **无需联合验证实验**：`gold-start-080` 的参数 `[0.60, 0.60, 0.80]` 已经同时包含 AI 不变 + 黄金提阈值。AI 的最优参数恰好是 baseline（0.60），因此 gold-start-080 本身就等价于联合最优。
 
+5. **strategy-analysis 与 performance-analysis 已补产**：本批次 8 个变体已通过 jq-analyze fix-missing 补齐 strategy-analysis.md 与 performance-analysis.md（共 16 份）。另新增 [稳健性验证报告](../backtest_runs/20260515-2051-bte8e07662646ef6b56f453ea15c7d959d/report/robustness-verification.md) <!-- pathref: backtest_report_dir(strategy=etf_factor_rotation, run_id=20260515-2051-bte8e07662646ef6b56f453ea15c7d959d)/robustness-verification.md -->（配对 block bootstrap + 滚动子样本 + 年度分解），核心发现：日频 bootstrap CI95 含 0（p=0.296），滚动 Sharpe 胜率 47%（variant 在多数滚动窗口未占优），年度层面 3/6 年改善。稳健性结论降调为"方向性支持，非统计证实"。
+
 ---
 
 ## 附录：数据索引
 
 | 实验 | AB 对比报告 | 多窗口验证报告 | JSON 摘要 |
 |------|-----------|--------------|----------|
-| 黄金 | [ab-gold-crowd-ab-comparison.md](../test_batches/20260515-gold-crowd-ab/report/ab-gold-crowd-ab-comparison.md) | [crowd-window-check.md](../test_batches/20260515-gold-crowd-ab/report/crowd-window-check.md) | [ab-gold-crowd-ab-summary.json](../test_batches/20260515-gold-crowd-ab/report/ab-gold-crowd-ab-summary.json) |
-| AI | [ab-ai-crowd-ab-comparison.md](../test_batches/20260515-ai-crowd-ab/report/ab-ai-crowd-ab-comparison.md) | [crowd-window-check.md](../test_batches/20260515-ai-crowd-ab/report/crowd-window-check.md) | [ab-ai-crowd-ab-summary.json](../test_batches/20260515-ai-crowd-ab/report/ab-ai-crowd-ab-summary.json) |
+| 黄金 | [ab-gold-crowd-ab-comparison.md](../test_batches/20260515-gold-crowd-ab/report/ab-gold-crowd-ab-comparison.md) <!-- pathref: test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260515-gold-crowd-ab)/ab-gold-crowd-ab-comparison.md --> | [crowd-window-check.md](../test_batches/20260515-gold-crowd-ab/report/crowd-window-check.md) <!-- pathref: test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260515-gold-crowd-ab)/crowd-window-check.md --> | [ab-gold-crowd-ab-summary.json](../test_batches/20260515-gold-crowd-ab/report/ab-gold-crowd-ab-summary.json) <!-- pathref: test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260515-gold-crowd-ab)/ab-gold-crowd-ab-summary.json --> |
+| AI | [ab-ai-crowd-ab-comparison.md](../test_batches/20260515-ai-crowd-ab/report/ab-ai-crowd-ab-comparison.md) <!-- pathref: test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260515-ai-crowd-ab)/ab-ai-crowd-ab-comparison.md --> | [crowd-window-check.md](../test_batches/20260515-ai-crowd-ab/report/crowd-window-check.md) <!-- pathref: test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260515-ai-crowd-ab)/crowd-window-check.md --> | [ab-ai-crowd-ab-summary.json](../test_batches/20260515-ai-crowd-ab/report/ab-ai-crowd-ab-summary.json) <!-- pathref: test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260515-ai-crowd-ab)/ab-ai-crowd-ab-summary.json --> |
 
 | 变体 | Run ID |
 |------|--------|

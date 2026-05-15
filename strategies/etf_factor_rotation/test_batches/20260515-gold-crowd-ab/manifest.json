@@ -1,0 +1,155 @@
+{
+  "ab_experiments": {
+    "gold-crowd-ab": {
+      "status": "completed",
+      "baseline": "gold-baseline",
+      "controls": [
+        "gold-baseline"
+      ],
+      "config_hash": "sha256:79f51cff135763ea255be2eef65d89222c300e95828e95795d6f470a3e540522",
+      "variants": [
+        {
+          "label": "gold-baseline",
+          "scenario_id": "ab-gold-crowd-ab-gold-baseline",
+          "run_label": "gold-baseline",
+          "run_id": "20260515-2049-bt7636c4788d821690fd90b281dee7e913",
+          "role": "control",
+          "is_baseline": true,
+          "upload_index": 1,
+          "code_source": {
+            "type": "git",
+            "ref": "main",
+            "commit": "3a80e04b76e0a73c543e2482cf4a14a837d32381",
+            "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+          },
+          "params_mode": "params_diff",
+          "params_diff": {},
+          "scan_source": null,
+          "uploaded_code_sha256": "sha256:94f4d3c079da066956fb5b828ac1f66a352748e14ed7442f1325887655c8e8a3",
+          "backtest_id": "7636c4788d821690fd90b281dee7e913",
+          "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=7636c4788d821690fd90b281dee7e913",
+          "status": "completed"
+        },
+        {
+          "label": "gold-start-080",
+          "scenario_id": "ab-gold-crowd-ab-gold-start-080",
+          "run_label": "gold-start-080",
+          "run_id": "20260515-2051-bte8e07662646ef6b56f453ea15c7d959d",
+          "role": "variant",
+          "is_baseline": false,
+          "upload_index": 2,
+          "code_source": {
+            "type": "git",
+            "ref": "main",
+            "commit": "3a80e04b76e0a73c543e2482cf4a14a837d32381",
+            "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+          },
+          "params_mode": "params_diff",
+          "params_diff": {
+            "CrowdStart_by_etf": [
+              0.6,
+              0.6,
+              0.8
+            ],
+            "CrowdEnd_by_etf": [
+              0.95,
+              0.95,
+              0.95
+            ],
+            "MinCrowdPenalty_by_etf": [
+              0.3,
+              0.3,
+              0.3
+            ]
+          },
+          "scan_source": null,
+          "uploaded_code_sha256": "sha256:c70653bfb13fed9b66deeedaeb3cad256677ee11a3858f31dc030589d9dbf97d",
+          "backtest_id": "e8e07662646ef6b56f453ea15c7d959d",
+          "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=e8e07662646ef6b56f453ea15c7d959d",
+          "status": "completed"
+        },
+        {
+          "label": "gold-neutralized",
+          "scenario_id": "ab-gold-crowd-ab-gold-neutralized",
+          "run_label": "gold-neutralized",
+          "run_id": "20260515-2054-bt72abfe3d501669b91a4b3d3a0fd5b49b",
+          "role": "variant",
+          "is_baseline": false,
+          "upload_index": 3,
+          "code_source": {
+            "type": "git",
+            "ref": "main",
+            "commit": "3a80e04b76e0a73c543e2482cf4a14a837d32381",
+            "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+          },
+          "params_mode": "params_diff",
+          "params_diff": {
+            "CrowdStart_by_etf": [
+              0.6,
+              0.6,
+              0.99
+            ],
+            "CrowdEnd_by_etf": [
+              0.95,
+              0.95,
+              0.999
+            ]
+          },
+          "scan_source": null,
+          "uploaded_code_sha256": "sha256:3c4cf9aa914e6269568c9156942a8203deb3512f3c960de8cc22c5cdff0d7095",
+          "backtest_id": "72abfe3d501669b91a4b3d3a0fd5b49b",
+          "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=72abfe3d501669b91a4b3d3a0fd5b49b",
+          "status": "completed"
+        },
+        {
+          "label": "gold-calc-longwin",
+          "scenario_id": "ab-gold-crowd-ab-gold-calc-longwin",
+          "run_label": "gold-calc-longwin",
+          "run_id": "20260515-2056-bt3e11aaf64867aa42e8644d88dfe0a4e3",
+          "role": "variant",
+          "is_baseline": false,
+          "upload_index": 4,
+          "code_source": {
+            "type": "git",
+            "ref": "main",
+            "commit": "3a80e04b76e0a73c543e2482cf4a14a837d32381",
+            "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+          },
+          "params_mode": "params_diff",
+          "params_diff": {
+            "CrowdRetShort_by_etf": [
+              20,
+              20,
+              40
+            ],
+            "CrowdRetMid_by_etf": [
+              60,
+              60,
+              90
+            ]
+          },
+          "scan_source": null,
+          "uploaded_code_sha256": "sha256:bc04c6332798be2cd36a553d67d770c87d246ef7ec19842187bcece109afd1f6",
+          "backtest_id": "3e11aaf64867aa42e8644d88dfe0a4e3",
+          "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=3e11aaf64867aa42e8644d88dfe0a4e3",
+          "status": "completed"
+        }
+      ],
+      "upload_session": {
+        "session_started_at": "2026-05-15T20:48:54",
+        "session_finished_at": "2026-05-15T20:59:01",
+        "strategy_name": "etf_factor_rotation",
+        "edit_url": null,
+        "candidate_order": [
+          "gold-baseline",
+          "gold-start-080",
+          "gold-neutralized",
+          "gold-calc-longwin"
+        ]
+      }
+    }
+  },
+  "batch_id": "20260515-gold-crowd-ab",
+  "strategy": "etf_factor_rotation",
+  "updated": "2026-05-15T20:59:01"
+}

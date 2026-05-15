@@ -1,0 +1,27 @@
+{
+  "strategy_file": "D:\\My Project\\Quant Trading\\.local\\jq-automation\\ab\\ai-crowd-ab\\ai-calc-longwin_source.py",
+  "scenario_id": "ab-ai-crowd-ab-ai-calc-longwin",
+  "start_date": "2021-01-01",
+  "end_date": "2026-04-30",
+  "capital": 100000,
+  "frequency": "1d",
+  "py_version": "Python3",
+  "estimated_minutes": 6.0,
+  "batch_id": "20260515-ai-crowd-ab",
+  "strategy": "etf_factor_rotation",
+  "params_diff": {
+    "CrowdRetShort_by_etf": [
+      40,
+      20,
+      20
+    ],
+    "CrowdRetMid_by_etf": [
+      90,
+      60,
+      60
+    ]
+  },
+  "_params_mode": "params_diff",
+  "_scan_source": null,
+  "_experiment_id": "ai-crowd-ab"
+}
