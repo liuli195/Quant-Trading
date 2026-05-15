@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "project": "etf_window_research",
+  "run_id": "2026-05-15-baseline",
+  "generated_at": "2026-05-15",
+  "inputs": {
+    "raw_data": "strategies/etf_factor_rotation/reports/window_heterogeneity/inputs/raw/etf_window_research_prices.json",
+    "audit_log": "strategies/etf_factor_rotation/backtest_runs/20260514-1959-bt1a70c5cd71fac1c27eed2268045ad80a/tabs_raw/audit_log.jsonl"
+  },
+  "artifacts": {
+    "reports": [
+      "data_integrity.md",
+      "default_signal_difference_note.md",
+      "default_signal_reproduction.md",
+      "robustness_check.md",
+      "window-heterogeneity-validation-report.md"
+    ],
+    "tables": [
+      "best_window_summary.csv",
+      "bootstrap_summary.csv",
+      "default_signal_reproduction.csv",
+      "factor_window_grid.csv",
+      "holdout_validation.csv",
+      "pooled_vs_etf_specific.csv",
+      "segment_stability.csv"
+    ],
+    "curves": [
+      "crowd_amount.csv",
+      "crowd_deviation.csv",
+      "crowd_ret_mid.csv",
+      "crowd_ret_short.csv",
+      "crowd_volatility.csv",
+      "momentum_return.csv",
+      "trend_gate.csv"
+    ]
+  }
+}

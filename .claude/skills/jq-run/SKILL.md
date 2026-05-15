@@ -16,8 +16,11 @@ description: 执行 JoinQuant 云端回测流程。用于上传本地 Python 策
 | `jq-auto run <场景配置.json> [--yes]` | 完整自动化：上传、编译、设置参数、启动回测、等待完成、抓取、落盘 |
 | `jq-auto fetch <回测URL或ID> --strategy <策略名>` | 只读抓取已有回测详情 |
 | `jq-auto batch <manifest.json> [--scenario <场景ID>] [--yes]` | 批量运行 manifest 中的待处理场景 |
+| `jq-auto ab expand <实验配置.json>` | 展开 A/B 实验设计，生成分支策略和场景配置 |
+| `jq-auto ab run <实验目录> [--yes]` | 执行 A/B 实验的所有场景回测 |
+| `jq-auto ab report <实验目录>` | 生成 A/B 实验 delta 归因报告（含 bootstrap 显著性检验） |
 
-浏览器参数（upload/run/fetch/batch 通用）：`--headless`、`--slow-mo <毫秒>`、`--user-data-dir <路径>`
+浏览器参数（upload/run/fetch/batch/ab 通用）：`--headless`、`--slow-mo <毫秒>`、`--user-data-dir <路径>`
 
 ## 流程
 

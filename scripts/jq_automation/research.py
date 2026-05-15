@@ -430,7 +430,13 @@ async ({ path }) => {
       if (idx > 0) bases.add(normalizeBase(parts.slice(0, idx).join("/")));
     }
     bases.add(normalizeBase(path.replace(/\/$/, "")));
-    return [...bases];
+    return [...bases].sort((left, right) => basePriority(left) - basePriority(right));
+  }
+
+  function basePriority(base) {
+    if (base.includes("/user/") && !base.includes("/hub/user/")) return 0;
+    if (base.includes("/hub/user/")) return 1;
+    return 2;
   }
 
   for (const base of discoverBases()) {
@@ -530,7 +536,13 @@ async ({ code }) => {
       if (idx > 0) bases.add(normalizeBase(parts.slice(0, idx).join("/")));
     }
     bases.add(normalizeBase(path.replace(/\/$/, "")));
-    return [...bases];
+    return [...bases].sort((left, right) => basePriority(left) - basePriority(right));
+  }
+
+  function basePriority(base) {
+    if (base.includes("/user/") && !base.includes("/hub/user/")) return 0;
+    if (base.includes("/hub/user/")) return 1;
+    return 2;
   }
 
   async function apiFetch(base, endpoint, options = {}) {
@@ -550,19 +562,22 @@ async ({ code }) => {
     return response.status === 204 ? null : response.json();
   }
 
-  async function findApiBase() {
+  async function findApiBases() {
+    const found = [];
     const errors = [];
     for (const base of discoverBases()) {
       try {
         const specs = await apiFetch(base, "kernelspecs");
         if (specs && specs.kernelspecs) {
-          return { base };
+          found.push(base);
+          continue;
         }
         throw new Error(`not a Jupyter kernelspecs response: ${JSON.stringify(specs).slice(0, 200)}`);
       } catch (error) {
         errors.push(`${base}: ${error.message}`);
       }
     }
+    if (found.length) return found;
     throw new Error(`No Jupyter API base found. ${errors.join("; ")}`);
   }
 
@@ -645,13 +660,26 @@ async ({ code }) => {
 
   let kernelId = "";
   try {
-    const found = await findApiBase();
-    const apiBase = found.base;
+    const apiBases = await findApiBases();
+    let apiBase = "";
+    let kernel = null;
+    for (const candidate of apiBases) {
+      try {
+        log.push(`apiBaseCandidate=${candidate}`);
+        kernel = await apiFetch(candidate, "kernels", {
+          method: "POST",
+          body: JSON.stringify({ name: "python3" }),
+        });
+        apiBase = candidate;
+        break;
+      } catch (error) {
+        log.push(`kernelCreateFailed ${candidate}: ${error.message}`);
+      }
+    }
+    if (!kernel || !apiBase) {
+      throw new Error(`No Jupyter API base accepted kernel creation. ${log.join("; ")}`);
+    }
     log.push(`apiBase=${apiBase}`);
-    const kernel = await apiFetch(apiBase, "kernels", {
-      method: "POST",
-      body: JSON.stringify({ name: "python3" }),
-    });
     kernelId = kernel.id;
     if (!kernelId) {
       throw new Error(`Jupyter kernel did not return an id: ${JSON.stringify(kernel).slice(0, 200)}`);

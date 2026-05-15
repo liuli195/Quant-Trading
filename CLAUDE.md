@@ -21,6 +21,7 @@
 - `docs/` / `docs/joinquant-data/` — 聚宽文档镜像与研究资料
 - `scripts/jq_automation/` — jq-auto 云端回测工具
 - `scripts/path_tools/` — 路径治理工具（aliases.py / refactor.py）
+- `scripts/etf_window_research/` — ETF 时间窗异质性研究工具
 - `.claude/skills/` — AI agent 技能，详见 ## Skills
 - `path_aliases.json` — 目录别名配置，新增脚本引用结果目录时须通过别名解析，不硬编码路径
 
@@ -31,8 +32,9 @@
 - 单元测试：`.\.venv\Scripts\python.exe -m pytest <策略>/tests -q`
 - 云端回测：`python -m scripts.jq_automation`（首次需在 Chrome 手动登录聚宽，后续工具自动复用登录态）
   子命令：`compile-check` / `upload` / `run` / `fetch` / `batch` / `ab expand|run|report`
-- 路径别名解析：`python -m scripts.path_tools.aliases resolve <别名> <参数>`
-- 路径引用校验：`python -m scripts.path_tools.refactor check`
+- 路径别名解析：`python -m scripts.path_tools.aliases resolve <别名> <key=value...>`；`list` 列出所有别名
+- 路径引用校验：`python -m scripts.path_tools.refactor check`；其他子命令：`rewrite-md` / `replace` / `move` / `rewrite`
+- ETF 窗异质性研究：`python -m scripts.etf_window_research.cli`（子命令：`export-script`、`fetch`、`analyze`）
 
 ## Skills
 
@@ -63,6 +65,7 @@
   - **函数**：输入、输出、关键副作用
   - **关键语句**：复杂计算、风控裁剪、边界处理
 - 研究结论、参数变更理由写入分析文档，不留在代码注释里。
+- **reports 命名约定**：报告文件使用 ISO 日期前缀 `YYYY-MM-DD-<topic>.md`，便于排序和追溯。
 
 ### 提交前检查
 
@@ -71,6 +74,7 @@
 ## 重要约束
 
 - 策略代码**仅能在聚宽云端运行**，本地不可执行完整策略。
-- 本地 Python 命令必须通过 `.\.venv\Scripts\python.exe`，不使用系统 Python。
+- 本地 Python 命令必须通过 `.\.venv\Scripts\python.exe`，不使用系统 Python。Codex 环境中须提权执行，否则可能无法访问 `.venv`。
 - Markdown 内部文件引用采用双轨格式（可点击路径 + `pathref` 注释），确保机器可校验。
 - 每次执行任务后记得清理临时产物。
+- 所有回答和输出使用简体中文。

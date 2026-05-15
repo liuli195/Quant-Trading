@@ -10,6 +10,16 @@
     "strategy_dir": "{strategies}/{strategy}",
     "strategy_tests": "{strategy_dir}/tests",
     "strategy_reports": "{strategy_dir}/reports",
+    "strategy_research_project": "{strategy_reports}/{project}",
+    "strategy_research_project_docs": "{strategy_research_project}/docs",
+    "strategy_research_project_inputs": "{strategy_research_project}/inputs",
+    "strategy_research_project_raw_inputs": "{strategy_research_project_inputs}/raw",
+    "strategy_research_project_exports": "{strategy_research_project}/exports",
+    "strategy_research_project_runs": "{strategy_research_project}/runs",
+    "strategy_research_run": "{strategy_research_project_runs}/{run_id}",
+    "strategy_research_run_reports": "{strategy_research_run}/reports",
+    "strategy_research_run_tables": "{strategy_research_run}/tables",
+    "strategy_research_run_curves": "{strategy_research_run}/curves",
     "backtest_runs": "{strategy_dir}/backtest_runs",
     "backtest_run": "{backtest_runs}/{run_id}",
     "backtest_report_dir": "{backtest_run}/report",
@@ -29,6 +39,9 @@
     "jq_ab_test_skill": "{skills}/jq-ab-test",
     "joinquant_data": "{docs}/joinquant-data",
     "joinquant_quota_ledger": "{joinquant_data}/quota_ledger",
-    "quant_reports": "{docs}/Quant_Reports"
+    "quant_reports": "{docs}/Quant_Reports",
+    "ab_experiments": "{strategy_dir}/ab_experiments",
+    "ab_experiment": "{ab_experiments}/{experiment_id}",
+    "ab_experiment_report": "{ab_experiment}/report"
   }
 }
