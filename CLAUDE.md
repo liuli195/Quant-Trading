@@ -2,90 +2,59 @@
 
 ## 背景
 
-本项目是基于 Python 的 A 股/场内基金量化交易策略仓库，交易与回测环境为 **聚宽 (JoinQuant)**。
-策略代码仅在聚宽云端可运行；本地负责编写、静态检查、单元测试、文档维护、回测结果分析。
-
-## 结构
-
-- `strategies/<name>/<name>.py` — 策略代码
-- `strategies/<name>/tests/` — pytest 本地单元测试
-- `strategies/<name>/reports/` — 专题分析报告
-- `strategies/<name>/test_batches/<batch_id>/scenarios/<scenario_id>/` — 批量测试场景
-- `strategies/<name>/backtest_runs/<run_id>/` — 单次回测产物
-  - `metadata.json` / `summary_metrics.json` — 运行元数据与汇总指标
-  - `report/backtest_report.md` — 回测数据汇总
-  - `report/strategy-analysis.md` — 策略分析（每次回测必须产出）
-  - `report/performance-analysis.md` — 性能分析（每次回测必须产出）
-  - `tabs_raw/` — 聚宽原始指标（收益、回撤、夏普、换手等）
-- `strategies/<name>/ab_experiments/<name>/report/` — A/B experiment delta reports
-- `docs/` / `docs/joinquant-data/` — 聚宽文档镜像与研究资料
-- `scripts/tools/jq_automation/` — jq-auto 云端回测工具
-- `scripts/tools/path_tools/` — 路径治理工具（aliases.py / refactor.py）
-- `scripts/research/etf_window_research/` — ETF 时间窗异质性研究工具
-- `scripts/research/platform/` — 本地优先研究平台核心（缓存、候选漏斗、插件契约）
-- `scripts/research/research_core/` — 共享研究库（指标、日历、布局、价格、报告）
-- `scripts/research/momentum_tilt_research/` — 动量倾斜研究工具
-- `scripts/research/cash_decomposition/` — 现金拆解与利用率研究工具
-- `research_datasets/` — 仓库级研究数据快照（原件、Parquet、摘要视图）
-- `scripts/archive/` — 归档脚本（不再活跃使用但保留备查）
-- `.claude/skills/` — AI agent 技能，详见 ## Skills
-- `path_aliases.json` — 目录别名配置，新增脚本引用结果目录时须通过别名解析，不硬编码路径
-
-## 工具入口
-
-- 聚宽 API 文档：`docs/joinquant-api.md`（离线，优先）| <https://www.joinquant.com/help/api/help#name:api>（在线）
-- 语法检查：`.\.venv\Scripts\python.exe -m py_compile <策略文件>`
-- 单元测试：`.\.venv\Scripts\python.exe -m pytest <策略>/tests -q`
-- 云端回测：`python -m scripts.tools.jq_automation`（首次需在 Chrome 手动登录聚宽，后续工具自动复用登录态）
-  子命令：`compile-check` / `upload` / `run` / `fetch` / `batch` / `ab expand|run|report`
-- 路径别名解析：`python -m scripts.tools.path_tools.aliases resolve <别名> <key=value...>`；`list` 列出所有别名
-- 路径引用校验：`python -m scripts.tools.path_tools.refactor check`；其他子命令：`rewrite-md` / `replace` / `move` / `rewrite`
-- 本地优先研究平台：`python -m scripts.research.cli`（子命令：`init`、`run`、`promote`、`resume`、`handoff-cloud`、`status`；模板：`factor_scan` / `parameter_followup` / `robustness_check` / `generic`）
-- 研究数据集管理：`python -m scripts.research.datasets`（子命令：`import-price-json`、`import-audit-log`、`inspect`）
-- ETF 窗异质性研究：`python -m scripts.research.etf_window_research.cli`（子命令：`export-script`、`fetch`、`analyze`）
-- 动量倾斜研究：`python -m scripts.research.momentum_tilt_research.cli`（子命令：`replay-calibrate`、`analyze`、`ab-plan`、`cloud-robustness`）
-- 现金拆解分析：`python -c "from scripts.research.cash_decomposition.analysis import decompose_from_dataset; ..."`（纯函数库，读 Parquet 主存储计算四层现金归因）
-
-## Skills
-
-`.claude/skills/` 中的 AI agent 技能：
-
-- `jq-run` — 云端回测全流程（上传、编译、运行、抓取），消耗每日额度
-- `jq-analyze` — 本地分析回测结果（报告、批次对比、趋势跟踪、跨策略对比）
-- `jq-fix` — 本地修复策略代码，不启动云端回测
-- `jq-param-scan` — 参数扫描（生成网格 → 批量回测 → 对比报告），消耗额度
-- `jq-ab-test` — A/B 实验（设计校验 → 执行 → bootstrap 显著性检验），消耗额度
-- `jq-research` — 本地优先研究总入口（判断 `local_exact` / `local_replayable` / `cloud_only` → 选模板（含 `generic` 通用模板）→ 本地快筛 / 诊断 → shortlist 精筛 → 委托云端确认）
-
-## 通用约定
-
-### 开发流程
-本地修改 → 语法/单测校验 → 云端回测 → 分析结果 → 模拟交易。
-
-### 策略代码规范
-
-- **生命周期**：`initialize` 集中完成环境选项、参数初始化、费用/滑点设置、定时任务注册；`handle_data` 或 `run_daily/run_weekly` 实现调仓主逻辑。
-- **参数管理**：统一在 `initialize` 中集中定义，避免魔法数字，命名体现含义与单位。
-- **数据与性能**：先筛选后计算，优先批量接口与向量化，缓存可复用数据，处理停牌、缺失值、上市时长不足等边界。
-- **风控与执行**：明确仓位上下限与调仓步长；记录关键风控参数（最大回撤、换手、仓位漂移）；下单前后记录目标权重与实际成交偏差。
-
-### 注释与文档
-
-- 注释解释"为什么"，不逐行翻译代码；推荐三层结构：
-  - **模块头**：策略思想、适用标的、核心公式与约束
-  - **函数**：输入、输出、关键副作用
-  - **关键语句**：复杂计算、风控裁剪、边界处理
-- 研究结论、参数变更理由写入分析文档，不留在代码注释里。
-- **reports 命名约定**：报告文件使用 ISO 日期前缀 `YYYY-MM-DD-<topic>.md`，便于排序和追溯。
-
-### 提交前检查
-
-语法/单测通过、无未来函数、参数一致、分析文档同步。
+本项目是 A 股/场内基金量化交易策略仓库，回测与交易环境为 **聚宽 (JoinQuant)**。
+策略仅在聚宽云端运行；本地负责编写、静态检查、单测、本地研究、文档与分析。
 
 ## 重要约束
 
 - 策略代码**仅能在聚宽云端运行**，本地不可执行完整策略。
-- 本地 Python 命令必须通过 `.\.venv\Scripts\python.exe`，不使用系统 Python。Codex 环境中须提权执行，否则可能无法访问 `.venv`。
+- 本地 Python 命令必须通过 `.\.venv\Scripts\python.exe`，不使用系统 Python。
 - Markdown 内部文件引用采用双轨格式（可点击路径 + `pathref` 注释），确保机器可校验。
-- 每次执行任务后记得清理临时产物。
+- 每次任务后清理临时产物。
 - 所有回答和输出使用简体中文。
+
+## 开发约定
+
+- **开发流程**：本地修改 → 语法/单测校验 → 本地研究 → 云端回测 → 分析结果。
+- **代码规范**：`initialize` 集中配置与注册，`handle_data`/`run_daily` 实现调仓。参数集中定义、避免魔法数字。先筛选后计算、优先批量向量化、处理停牌缺失等边界。明确仓位上下限与风控参数。
+- **注释规范**：解释"为什么"而非逐行翻译；推荐三层（模块头/函数/关键语句）。研究结论写入分析文档，不留在代码注释。报告使用 `<topic>_YYYY/MM/DD.md` 命名。
+- **提交检查**：语法/单测通过、无未来函数、参数一致、分析文档同步。
+
+## 日常命令
+
+```powershell
+# 语法检查
+.\.venv\Scripts\python.exe -m py_compile strategies\<s>\<s>.py
+# 单元测试
+.\.venv\Scripts\python.exe -m pytest strategies\<s>\tests -q
+# 云端回测（完整参考: scripts/tools/jq_automation/README.md）
+python -m scripts.tools.jq_automation compile-check|upload|run|fetch|batch|ab
+# 路径引用校验
+python -m scripts.tools.path_tools.refactor check
+# 本地研究（完整参考: docs/research-workflow.md）
+python -m scripts.research.cli init|run|promote|resume|handoff-cloud|status
+```
+
+## Skills
+
+`.claude/skills/` 中的 AI agent 技能：`jq-run`、`jq-analyze`、`jq-fix`、`jq-param-scan`、`jq-ab-test`、`jq-research`。
+每个技能有独立的 `SKILL.md`，包含完整指令与约束。
+
+## 目录速查
+
+- `strategies/<name>/` — 策略代码、测试、报告、回测产物、A/B 实验
+- `scripts/tools/` — jq_automation（云端回测）、path_tools（路径治理）
+- `scripts/research/` — 本地研究 CLI 与专项工具
+- `docs/` — 聚宽 API 镜像、研究流程、环境说明
+- `.claude/skills/` — AI agent 技能定义
+- 目录路径统一通过 `path_aliases.json` 的别名解析，禁止硬编码。
+
+## 详细文档索引
+
+| 文档 | 路径 |
+| ---- | ---- |
+| 云端回测完整参考（命令签名、参数表、schema、错误索引） | [jq_automation/README.md](scripts/tools/jq_automation/README.md) |
+| 路径别名与重构工具说明 | [path_tools/README.md](scripts/tools/path_tools/README.md) |
+| 本地优先研究流程与命令行示例 | [docs/research-workflow.md](docs/research-workflow.md) |
+| 本地 Python 环境约定与修复 | [docs/local-python-env.md](docs/local-python-env.md) |
+| 聚宽 API 文档 | [docs/joinquant-api.md](docs/joinquant-api.md)（离线优先） \| [在线 API](https://www.joinquant.com/help/api/help#name:api) |

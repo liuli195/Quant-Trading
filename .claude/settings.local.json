@@ -285,7 +285,26 @@
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m py_compile scripts\\\\research\\\\platform\\\\datasets.py)",
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m py_compile scripts\\\\research\\\\datasets.py)",
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.research.datasets import-audit-log \"strategies\\\\etf_factor_rotation\\\\backtest_runs\\\\20260517-1724-bt580e16e5a3f1bf99d197cea88889da1a\\\\tabs_raw\\\\audit_log.jsonl\" --dataset-id etf_factor_rotation_baseline_audit)",
-      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe _run_phase0.py)"
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe _run_phase0.py)",
+      "Bash(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.research.datasets --help)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.research.datasets --help)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -c \"from scripts.research.cash_decomposition.analysis import decompose_from_dataset; print\\('import OK'\\)\")",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.research.datasets inspect etf_factor_rotation_baseline_audit 2026-05-17T17-36-27Z_56361cf8a32e)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -c \"from scripts.research.cash_decomposition.analysis import decompose_from_dataset; df, summary = decompose_from_dataset\\('etf_factor_rotation_baseline_audit', '2026-05-17T17-36-27Z_56361cf8a32e'\\); print\\('n_signals:', summary['n_signals']\\); print\\('avg_position:', summary['avg_position']\\); print\\('avg_total_cash:', summary['avg_total_cash']\\); print\\('identity_holds:', summary['identity_holds']\\); print\\('cash_by_source:', summary['cash_by_source']\\)\")",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -c \"from scripts.research.cash_decomposition.analysis import decompose_from_dataset, yearly_summary, position_quantile_breakdown; df, s = decompose_from_dataset\\('etf_factor_rotation_baseline_audit', '2026-05-17T17-36-27Z_56361cf8a32e'\\); ys = yearly_summary\\(df\\); print\\('=== yearly_summary ==='\\); print\\(ys.to_string\\(\\)\\); print\\(\\); pb = position_quantile_breakdown\\(df\\); print\\('=== position_quantile_breakdown \\(first 10 rows\\) ==='\\); print\\(pb.head\\(10\\).to_string\\(\\)\\)\")",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.research.datasets import-audit-log --help)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.archive.convert_html_to_md --help)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.research.etf_window_research.cli --help)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.research.momentum_tilt_research --help)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.research.etf_window_research.cli export-script --help)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.research.etf_window_research.cli fetch --help)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.research.etf_window_research.cli analyze --help)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.research.momentum_tilt_research replay-calibrate --help)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.research.momentum_tilt_research analyze --help)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.research.momentum_tilt_research ab-plan --help)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.research.momentum_tilt_research cloud-robustness --help)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.research.cli --help)",
+      "PowerShell(\\(Get-Content \"d:\\\\My Project\\\\Quant Trading\\\\CLAUDE.md\" | Measure-Object -Line\\).Lines)"
     ],
     "additionalDirectories": [
       "d:\\My Project\\Quant Trading\\.claude\\skills\\jq-param-scan"
