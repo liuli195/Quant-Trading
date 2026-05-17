@@ -41,3 +41,15 @@
 1. 若需要继续推进，优先补 **真正的留出验证** 或后续模拟交易窗口，而不是在同一历史样本上继续细扫 `0.20 / 0.30`。
 2. 后续若再做参数确认，建议把 `0.25` 作为主候选，`0.35` 作为邻近对照，保留 `0.50` 为正式 baseline。
 3. 非线性高端弱化暂时降级为备选分支，不进入下一轮默认主线。
+
+## 补充验证：`linear-035`
+
+后续补做了 `linear-035` 的稳健性验证，详见 [2026-05-17-momentum-strength-035-robustness-and-platform-validation.md](2026-05-17-momentum-strength-035-robustness-and-platform-validation.md) <!-- pathref: strategy_reports(strategy=etf_factor_rotation)/2026-05-17-momentum-strength-035-robustness-and-platform-validation.md -->。
+
+新增结果没有改变本轮主结论：
+
+- `linear-035` 相对 baseline 的 Sharpe `1.447 -> 1.459`，年化 `15.76% -> 15.85%`
+- 但配对 bootstrap CI95 仍覆盖 `0`，滚动 `252` 日 Sharpe 胜率仅 `45.8%`
+- 年度 Sharpe 改善达到 `4/6`，但改善仍主要来自黄金，且 leave-one-out 未通过
+
+因此，`0.35` 同样只能保留为观察候选，不能写回正式默认值。

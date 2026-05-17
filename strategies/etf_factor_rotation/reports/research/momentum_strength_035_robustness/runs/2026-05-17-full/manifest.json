@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "project": "momentum_strength_035_robustness",
+  "strategy": "etf_factor_rotation",
+  "run_id": "2026-05-17-full",
+  "mode": "full",
+  "plugin": "robustness_check",
+  "source_run_id": "2026-05-17-fast",
+  "datasets": [],
+  "inputs": {
+    "baseline_returns": "strategies\\etf_factor_rotation\\backtest_runs\\20260517-1724-bt580e16e5a3f1bf99d197cea88889da1a\\tabs_raw\\daily_returns.md",
+    "variants": [
+      {
+        "label": "linear-035",
+        "returns": "strategies\\etf_factor_rotation\\backtest_runs\\20260517-1731-btbe2e525c63caec09d9355836a69f8676\\tabs_raw\\daily_returns.md"
+      }
+    ]
+  },
+  "capabilities": {
+    "local_capabilities": [
+      "paired_bootstrap",
+      "rolling_windows",
+      "yearly_decomposition"
+    ],
+    "replayable_params": [],
+    "required_exports": [
+      "daily_returns"
+    ],
+    "unsupported_changes": [
+      "new_strategy_discovery"
+    ],
+    "fidelity_level": "local_exact"
+  },
+  "feature_cache": {
+    "cache_key": "68531047cabf7ec9b82b11d77dbd43f75268a843c33f48812c46b0cfad52e6bc",
+    "cache_hit": true,
+    "cold_build_seconds": 0.0
+  },
+  "runtime_seconds": 0.06645419999949809,
+  "artifacts": {
+    "reports": [],
+    "tables": [
+      "benchmark.json",
+      "cloud_candidates.csv",
+      "discarded_candidates.csv",
+      "full_candidate_review.csv",
+      "full_decision.json",
+      "shortlist.csv"
+    ],
+    "curves": [],
+    "checkpoints": []
+  }
+}

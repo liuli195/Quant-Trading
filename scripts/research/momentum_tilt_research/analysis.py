@@ -65,6 +65,7 @@ def default_raw_price_path() -> Path:
         / "strategies"
         / STRATEGY
         / "reports"
+        / "research"
         / "window_heterogeneity"
         / "inputs"
         / "raw"

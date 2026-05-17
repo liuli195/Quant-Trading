@@ -10,6 +10,7 @@ from scripts.research.momentum_tilt_research.analysis import (
     build_response_curve,
     build_response_samples,
     build_zone_summary,
+    default_raw_price_path,
     evaluate_phase1_gate,
     evaluate_phase2_gate,
 )
@@ -136,3 +137,15 @@ def test_ab_plan_writes_manifest_and_config(tmp_path) -> None:
     assert _cmd_ab_plan(Args()) == 0
     assert (tmp_path / "batch" / "manifest.json").exists()
     assert (tmp_path / "batch" / "abtests" / "momentum-strength-confirmation.json").exists()
+
+
+def test_default_raw_price_path_points_to_research_tree() -> None:
+    path = default_raw_price_path()
+    assert path.parts[-6:] == (
+        "reports",
+        "research",
+        "window_heterogeneity",
+        "inputs",
+        "raw",
+        "etf_window_research_prices.json",
+    )
