@@ -4,7 +4,8 @@
     "docs": "docs",
     "strategies": "strategies",
     "skills": ".claude/skills",
-    "scripts": "scripts"
+    "scripts": "scripts",
+    "research_datasets": "research_datasets"
   },
   "aliases": {
     "strategy_dir": "{strategies}/{strategy}",
@@ -20,6 +21,11 @@
     "strategy_research_run_reports": "{strategy_research_run}/reports",
     "strategy_research_run_tables": "{strategy_research_run}/tables",
     "strategy_research_run_curves": "{strategy_research_run}/curves",
+    "strategy_research_run_checkpoints": "{strategy_research_run}/checkpoints",
+    "strategy_research_project_manifest": "{strategy_research_project}/project.json",
+    "strategy_research_run_status": "{strategy_research_run}/status.json",
+    "research_dataset": "{research_datasets}/{dataset_id}",
+    "research_dataset_snapshot": "{research_dataset}/{snapshot_id}",
     "backtest_runs": "{strategy_dir}/backtest_runs",
     "backtest_run": "{backtest_runs}/{run_id}",
     "backtest_report_dir": "{backtest_run}/report",
@@ -37,6 +43,7 @@
     "jq_run_skill": "{skills}/jq-run",
     "jq_param_scan_skill": "{skills}/jq-param-scan",
     "jq_ab_test_skill": "{skills}/jq-ab-test",
+    "jq_research_skill": "{skills}/jq-research",
     "joinquant_data": "{docs}/joinquant-data",
     "joinquant_quota_ledger": "{joinquant_data}/quota_ledger",
     "ab_experiments": "{strategy_dir}/ab_experiments",

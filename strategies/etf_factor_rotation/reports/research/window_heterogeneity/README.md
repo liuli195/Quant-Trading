@@ -32,6 +32,17 @@
 ## 推荐命令
 
 ```powershell
+.\.venv\Scripts\python.exe -m scripts.research.cli run `
+  --project-dir strategies\etf_factor_rotation\reports\research\window_heterogeneity `
+  --run-id 2026-05-17-fast `
+  --mode fast
+
+.\.venv\Scripts\python.exe -m scripts.research.cli promote `
+  --project-dir strategies\etf_factor_rotation\reports\research\window_heterogeneity `
+  --fast-run-id 2026-05-17-fast `
+  --full-run-id 2026-05-17-full `
+  --top-k 10
+
 .\.venv\Scripts\python.exe -m scripts.etf_window_research.cli export-script `
   --project-dir strategies\etf_factor_rotation\reports\window_heterogeneity
 

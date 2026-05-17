@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "strategy": "etf_factor_rotation",
+  "project": "window_heterogeneity",
+  "template": "factor_scan",
+  "plugin": "factor_scan",
+  "datasets": [],
+  "inputs": {
+    "raw_data": "strategies/etf_factor_rotation/reports/research/window_heterogeneity/inputs/raw/etf_window_research_prices.json"
+  },
+  "runtime": {
+    "fast_top_k": 20,
+    "cloud_top_k": 3,
+    "fast_mode_slo_seconds": 3.0,
+    "full_mode_slo_seconds": 30.0
+  }
+}

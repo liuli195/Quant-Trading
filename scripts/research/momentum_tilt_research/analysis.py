@@ -52,7 +52,7 @@ from .spec import (
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    return Path(__file__).resolve().parents[3]
 
 
 def default_project_dir() -> Path:

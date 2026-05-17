@@ -69,9 +69,17 @@ class ResearchRunLayout:
         return self.root / "curves"
 
     @property
+    def checkpoints_dir(self) -> Path:
+        return self.root / "checkpoints"
+
+    @property
     def manifest_path(self) -> Path:
         return self.root / "manifest.json"
 
+    @property
+    def status_path(self) -> Path:
+        return self.root / "status.json"
+
     def ensure_dirs(self) -> None:
-        for directory in (self.reports_dir, self.tables_dir, self.curves_dir):
+        for directory in (self.reports_dir, self.tables_dir, self.curves_dir, self.checkpoints_dir):
             directory.mkdir(parents=True, exist_ok=True)

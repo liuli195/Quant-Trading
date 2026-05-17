@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "strategy": "etf_factor_rotation",
+  "project": "momentum_tilt",
+  "template": "parameter_followup",
+  "plugin": "parameter_followup",
+  "datasets": [],
+  "inputs": {
+    "adapter": "momentum_tilt",
+    "raw_data": "strategies/etf_factor_rotation/reports/research/window_heterogeneity/inputs/raw/etf_window_research_prices.json",
+    "audit_log": "strategies/etf_factor_rotation/backtest_runs/20260517-1611-bt9b67f2f9a034bb7d3d7a044cf3e0d4e9/tabs_raw/audit_log.jsonl",
+    "baseline_returns": "strategies/etf_factor_rotation/backtest_runs/20260517-1611-bt9b67f2f9a034bb7d3d7a044cf3e0d4e9/tabs_raw/daily_returns.md",
+    "variants": [
+      {
+        "label": "linear-050",
+        "strength": 0.5
+      },
+      {
+        "label": "linear-045",
+        "strength": 0.45
+      },
+      {
+        "label": "linear-040",
+        "strength": 0.4
+      },
+      {
+        "label": "linear-035",
+        "strength": 0.35
+      },
+      {
+        "label": "linear-025",
+        "strength": 0.25
+      },
+      {
+        "label": "plateau-090",
+        "strength": 0.5,
+        "shape": "plateau",
+        "extreme_start": 0.9,
+        "extreme_cap": 1.0
+      }
+    ]
+  },
+  "runtime": {
+    "fast_top_k": 20,
+    "cloud_top_k": 3,
+    "fast_mode_slo_seconds": 3.0,
+    "full_mode_slo_seconds": 30.0
+  }
+}

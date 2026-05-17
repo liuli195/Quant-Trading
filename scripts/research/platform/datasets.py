@@ -1,0 +1,260 @@
+"""Repository-level immutable dataset snapshots."""
+
+from __future__ import annotations
+
+import gzip
+import hashlib
+import json
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+
+from scripts.research.research_core.prices import PriceFrames, load_price_bundle
+
+
+class DatasetError(RuntimeError):
+    """Raised when a dataset snapshot cannot be loaded or created."""
+
+
+@dataclass(frozen=True)
+class DatasetSnapshot:
+    """One immutable dataset snapshot."""
+
+    root: Path
+    metadata: dict[str, Any]
+
+    @property
+    def dataset_id(self) -> str:
+        return str(self.metadata["dataset_id"])
+
+    @property
+    def snapshot_id(self) -> str:
+        return str(self.metadata["snapshot_id"])
+
+    @property
+    def fingerprint(self) -> str:
+        return str(self.metadata["fingerprint"])
+
+    @property
+    def raw_path(self) -> Path:
+        return self.root / self.metadata["files"]["raw"]
+
+    @property
+    def parquet_path(self) -> Path:
+        return self.root / self.metadata["files"]["canonical"]
+
+
+def _datasets_root(root: str | Path = "research_datasets") -> Path:
+    return Path(root)
+
+
+def sha256_bytes(payload: bytes) -> str:
+    return hashlib.sha256(payload).hexdigest()
+
+
+def normalize_joinquant_price_payload(payload: dict[str, Any]) -> pd.DataFrame:
+    """Normalize the repository's JoinQuant price JSON into long-form rows."""
+
+    rows: list[dict[str, Any]] = []
+    for symbol, records in payload.get("prices", {}).items():
+        for record in records:
+            rows.append(
+                {
+                    "date": pd.Timestamp(record["date"]).normalize(),
+                    "symbol": symbol,
+                    "close": record.get("close"),
+                    "high": record.get("high"),
+                    "low": record.get("low"),
+                    "money": record.get("money"),
+                }
+            )
+    frame = pd.DataFrame(rows)
+    if frame.empty:
+        return frame
+    return frame.sort_values(["date", "symbol"]).reset_index(drop=True)
+
+
+def _profile(frame: pd.DataFrame) -> dict[str, Any]:
+    return {
+        "row_count": int(len(frame)),
+        "date_range": [
+            "" if frame.empty else str(frame["date"].min().date()),
+            "" if frame.empty else str(frame["date"].max().date()),
+        ],
+        "symbols": [] if frame.empty else sorted(frame["symbol"].dropna().unique().tolist()),
+        "null_summary": {column: int(frame[column].isna().sum()) for column in frame.columns},
+    }
+
+
+def _render_schema(frame: pd.DataFrame) -> str:
+    rows = ["| 字段 | dtype |", "| --- | --- |"]
+    rows.extend(f"| {column} | {dtype} |" for column, dtype in frame.dtypes.items())
+    return "\n".join(["# 数据字段", "", *rows, ""])
+
+
+def _render_profile(profile: dict[str, Any]) -> str:
+    rows = [
+        "# 数据概览",
+        "",
+        f"- **行数**: `{profile['row_count']}`",
+        f"- **日期范围**: `{profile['date_range'][0]} ~ {profile['date_range'][1]}`",
+        f"- **标的数**: `{len(profile['symbols'])}`",
+        "",
+        "| 字段 | 缺失值 |",
+        "| --- | ---: |",
+    ]
+    rows.extend(f"| {field} | {count} |" for field, count in profile["null_summary"].items())
+    rows.append("")
+    return "\n".join(rows)
+
+
+def _render_readme(metadata: dict[str, Any]) -> str:
+    return "\n".join(
+        [
+            f"# {metadata['dataset_id']}",
+            "",
+            f"- **snapshot**: `{metadata['snapshot_id']}`",
+            f"- **fingerprint**: `{metadata['fingerprint']}`",
+            f"- **来源**: `{metadata['source']['kind']}`",
+            f"- **行数**: `{metadata['row_count']}`",
+            f"- **日期范围**: `{metadata['date_range'][0]} ~ {metadata['date_range'][1]}`",
+            "",
+            "优先阅读 `views/profile.md`、`views/schema.md` 与 `views/sample.csv`；",
+            "程序读取请使用 `data/data.parquet`。",
+            "",
+        ]
+    )
+
+
+def import_joinquant_price_json(
+    source: str | Path,
+    *,
+    dataset_id: str,
+    datasets_root: str | Path = "research_datasets",
+    snapshot_id: str | None = None,
+) -> DatasetSnapshot:
+    """Create one immutable price-dataset snapshot from a JoinQuant JSON export."""
+
+    source_path = Path(source)
+    raw_bytes = source_path.read_bytes()
+    payload = json.loads(raw_bytes.decode("utf-8"))
+    frame = normalize_joinquant_price_payload(payload)
+    if frame.empty:
+        raise DatasetError("normalized dataset is empty")
+
+    fingerprint = f"sha256:{sha256_bytes(raw_bytes)}"
+    generated_snapshot = snapshot_id or (
+        datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ") + "_" + fingerprint.split(":", 1)[1][:12]
+    )
+    root = _datasets_root(datasets_root) / dataset_id / generated_snapshot
+    if root.exists():
+        raise DatasetError(f"dataset snapshot already exists: {root}")
+    for directory in (root / "raw", root / "data", root / "views"):
+        directory.mkdir(parents=True, exist_ok=True)
+
+    (root / "raw" / "source.json.gz").write_bytes(gzip.compress(raw_bytes, compresslevel=9))
+    try:
+        frame.to_parquet(root / "data" / "data.parquet", index=False, compression="zstd")
+    except ImportError as exc:  # pragma: no cover - depends on optional runtime dependency.
+        raise DatasetError("Parquet support requires pyarrow; install requirements.txt first") from exc
+
+    profile = _profile(frame)
+    metadata = {
+        "schema_version": 1,
+        "dataset_id": dataset_id,
+        "snapshot_id": generated_snapshot,
+        "fingerprint": fingerprint,
+        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "source": {"kind": "joinquant_price_json", "path": source_path.as_posix()},
+        "storage": {"canonical": "parquet", "compression": "zstd", "raw": "json.gz"},
+        "primary_keys": ["date", "symbol"],
+        "columns": list(frame.columns),
+        "dtypes": {column: str(dtype) for column, dtype in frame.dtypes.items()},
+        **profile,
+        "files": {
+            "raw": "raw/source.json.gz",
+            "canonical": "data/data.parquet",
+            "sample": "views/sample.csv",
+            "profile_json": "views/profile.json",
+        },
+    }
+    (root / "dataset.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+    (root / "README.md").write_text(_render_readme(metadata), encoding="utf-8")
+    (root / "views" / "schema.md").write_text(_render_schema(frame), encoding="utf-8")
+    (root / "views" / "profile.md").write_text(_render_profile(profile), encoding="utf-8")
+    (root / "views" / "profile.json").write_text(json.dumps(profile, ensure_ascii=False, indent=2), encoding="utf-8")
+    frame.head(20).to_csv(root / "views" / "sample.csv", index=False)
+    _update_catalog(_datasets_root(datasets_root))
+    return DatasetSnapshot(root=root, metadata=metadata)
+
+
+def _update_catalog(root: Path) -> None:
+    rows: list[dict[str, Any]] = []
+    if root.exists():
+        for metadata_path in root.glob("*/*/dataset.json"):
+            rows.append(json.loads(metadata_path.read_text(encoding="utf-8")))
+    root.mkdir(parents=True, exist_ok=True)
+    catalog = [
+        {
+            "dataset_id": row["dataset_id"],
+            "snapshot_id": row["snapshot_id"],
+            "fingerprint": row["fingerprint"],
+            "row_count": row["row_count"],
+            "date_range": row["date_range"],
+        }
+        for row in sorted(rows, key=lambda item: (item["dataset_id"], item["snapshot_id"]))
+    ]
+    (root / "catalog.json").write_text(json.dumps(catalog, ensure_ascii=False, indent=2), encoding="utf-8")
+    lines = ["# 研究数据目录", "", "| dataset_id | snapshot_id | row_count | date_range |", "| --- | --- | ---: | --- |"]
+    lines.extend(
+        f"| {item['dataset_id']} | {item['snapshot_id']} | {item['row_count']} | "
+        f"{item['date_range'][0]} ~ {item['date_range'][1]} |"
+        for item in catalog
+    )
+    lines.append("")
+    (root / "catalog.md").write_text("\n".join(lines), encoding="utf-8")
+
+
+def load_snapshot(
+    dataset_id: str,
+    snapshot_id: str,
+    *,
+    datasets_root: str | Path = "research_datasets",
+) -> DatasetSnapshot:
+    root = _datasets_root(datasets_root) / dataset_id / snapshot_id
+    metadata_path = root / "dataset.json"
+    if not metadata_path.is_file():
+        raise DatasetError(f"dataset snapshot not found: {metadata_path}")
+    return DatasetSnapshot(root=root, metadata=json.loads(metadata_path.read_text(encoding="utf-8")))
+
+
+def load_price_frames(snapshot: DatasetSnapshot, codes: tuple[str, ...] | None = None) -> PriceFrames:
+    """Load price frames from Parquet, falling back to preserved raw JSON."""
+
+    if snapshot.parquet_path.is_file():
+        try:
+            frame = pd.read_parquet(snapshot.parquet_path)
+            frame["date"] = pd.to_datetime(frame["date"]).dt.normalize()
+            selected_codes = tuple(codes or sorted(frame["symbol"].unique()))
+            calendar = pd.DatetimeIndex(sorted(frame["date"].unique()))
+
+            def pivot(field: str) -> pd.DataFrame:
+                return (
+                    frame.pivot(index="date", columns="symbol", values=field)
+                    .reindex(index=calendar, columns=list(selected_codes))
+                    .sort_index()
+                )
+
+            return PriceFrames(
+                close=pivot("close"),
+                high=pivot("high"),
+                low=pivot("low"),
+                money=pivot("money"),
+                calendar=calendar,
+            )
+        except ImportError:
+            pass
+    return load_price_bundle(snapshot.raw_path, codes=codes)
