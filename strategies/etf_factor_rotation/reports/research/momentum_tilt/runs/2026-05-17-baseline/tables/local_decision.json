@@ -1,0 +1,10 @@
+{
+  "ab_ready": true,
+  "phase1_passed": true,
+  "replay_passed": true,
+  "phase2_passed": true,
+  "phase2_reason": "candidate_found",
+  "best_linear_variant": "linear-025",
+  "shape_stage_ready": false,
+  "best_midpoint_variant": null
+}

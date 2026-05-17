@@ -1,0 +1,67 @@
+{
+  "experiment_id": "momentum-strength-confirmation",
+  "strategy": "etf_factor_rotation",
+  "batch_id": "20260517-momentum-strength-confirmation",
+  "baseline": "baseline-linear-050",
+  "controls": [
+    "baseline-linear-050"
+  ],
+  "base": {
+    "code_source": {
+      "type": "git",
+      "ref": "main",
+      "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+    },
+    "start_date": "2021-01-01",
+    "end_date": "2026-04-30",
+    "capital": 100000,
+    "estimated_minutes": 6,
+    "frequency": "1d",
+    "py_version": "Python3"
+  },
+  "variants": [
+    {
+      "label": "baseline-linear-050",
+      "role": "control",
+      "params_mode": "params_diff",
+      "params_diff": {},
+      "note": "当前正式线性动量倾斜。"
+    },
+    {
+      "label": "linear-045",
+      "role": "variant",
+      "params_mode": "params_diff",
+      "params_diff": {
+        "MomentumTiltStrength": 0.45
+      },
+      "note": "线性动量倾斜强度确认。"
+    },
+    {
+      "label": "linear-040",
+      "role": "variant",
+      "params_mode": "params_diff",
+      "params_diff": {
+        "MomentumTiltStrength": 0.4
+      },
+      "note": "线性动量倾斜强度确认。"
+    },
+    {
+      "label": "linear-035",
+      "role": "variant",
+      "params_mode": "params_diff",
+      "params_diff": {
+        "MomentumTiltStrength": 0.35
+      },
+      "note": "线性动量倾斜强度确认。"
+    },
+    {
+      "label": "linear-025",
+      "role": "variant",
+      "params_mode": "params_diff",
+      "params_diff": {
+        "MomentumTiltStrength": 0.25
+      },
+      "note": "线性动量倾斜强度确认。"
+    }
+  ]
+}

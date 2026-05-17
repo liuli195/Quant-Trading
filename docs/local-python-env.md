@@ -49,7 +49,7 @@ py -3.12 -m venv --upgrade .venv
 路径引用检查：
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.path_tools.refactor check
+.\.venv\Scripts\python.exe -m scripts.tools.path_tools.refactor check
 ```
 
 ## 依赖说明

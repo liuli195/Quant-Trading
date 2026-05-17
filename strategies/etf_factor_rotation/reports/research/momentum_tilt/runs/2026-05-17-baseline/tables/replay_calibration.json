@@ -1,0 +1,64 @@
+{
+  "passed": true,
+  "baseline_path_pass": true,
+  "known_variant_pass": true,
+  "relative_order_pass": true,
+  "direction_pass": true,
+  "baseline_cloud": {
+    "annual_return": 0.1576,
+    "sharpe": 1.447,
+    "max_drawdown": -0.0809
+  },
+  "baseline_local_raw": {
+    "total_return": 1.1263161494999974,
+    "annual_return": 0.15891442712486414,
+    "volatility": 0.08156755901060456,
+    "sharpe": 1.8493795461067806,
+    "max_drawdown": -0.08093699824881018
+  },
+  "baseline_local": {
+    "total_return": 1.1263161494999974,
+    "annual_return": 0.1576,
+    "volatility": 0.08156755901060456,
+    "sharpe": 1.447,
+    "max_drawdown": -0.0809
+  },
+  "linear_025_local_raw": {
+    "total_return": 1.139896061804758,
+    "annual_return": 0.16035772262649917,
+    "volatility": 0.08127971080481385,
+    "sharpe": 1.8709630698905024,
+    "max_drawdown": -0.0810569977804737
+  },
+  "linear_025_local": {
+    "total_return": 1.139896061804758,
+    "annual_return": 0.159043295501635,
+    "volatility": 0.08127971080481385,
+    "sharpe": 1.468583523783722,
+    "max_drawdown": -0.08101999953166353
+  },
+  "extreme_090_local_raw": {
+    "total_return": 1.137811060627913,
+    "annual_return": 0.16013660496879822,
+    "volatility": 0.08126085876086835,
+    "sharpe": 1.86903043131348,
+    "max_drawdown": -0.08054038482044534
+  },
+  "extreme_090_local": {
+    "total_return": 1.137811060627913,
+    "annual_return": 0.15882217784393407,
+    "volatility": 0.08126085876086835,
+    "sharpe": 1.4666508852066995,
+    "max_drawdown": -0.08050338657163517
+  },
+  "linear_025_cloud": {
+    "annual_return": 0.1591,
+    "sharpe": 1.469,
+    "max_drawdown": -0.0809
+  },
+  "extreme_090_cloud": {
+    "annual_return": 0.1585,
+    "sharpe": 1.464,
+    "max_drawdown": -0.08
+  }
+}

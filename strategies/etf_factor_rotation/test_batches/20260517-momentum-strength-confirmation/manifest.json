@@ -1,0 +1,151 @@
+{
+  "batch_id": "20260517-momentum-strength-confirmation",
+  "strategy": "etf_factor_rotation",
+  "created": "2026-05-17T00:00:00",
+  "status": "pending",
+  "scenarios": {},
+  "ab_experiments": {
+    "momentum-strength-confirmation": {
+      "status": "completed",
+      "baseline": "baseline-linear-050",
+      "controls": [
+        "baseline-linear-050"
+      ],
+      "config_hash": "sha256:ecb7802bedb44c6b18fb0395bacbb6682f58927ae2698dd3a825fe81d6cb3bf1",
+      "variants": [
+        {
+          "label": "baseline-linear-050",
+          "scenario_id": "ab-momentum-strength-confirmation-baseline-linear-050",
+          "run_label": "baseline-linear-050",
+          "run_id": "20260517-1724-bt580e16e5a3f1bf99d197cea88889da1a",
+          "role": "control",
+          "is_baseline": true,
+          "upload_index": 1,
+          "code_source": {
+            "type": "git",
+            "ref": "main",
+            "commit": "457bc7fea285880940825735ed96064168f4f087",
+            "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+          },
+          "params_mode": "params_diff",
+          "params_diff": {},
+          "scan_source": null,
+          "uploaded_code_sha256": "sha256:1d641a56583899e236899b4785aceb395258b44f0f016a2520b847fdd11f478c",
+          "backtest_id": "580e16e5a3f1bf99d197cea88889da1a",
+          "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=580e16e5a3f1bf99d197cea88889da1a",
+          "status": "completed"
+        },
+        {
+          "label": "linear-045",
+          "scenario_id": "ab-momentum-strength-confirmation-linear-045",
+          "run_label": "linear-045",
+          "run_id": "20260517-1726-bta2d755cf006abe1aac853e65803acf70",
+          "role": "variant",
+          "is_baseline": false,
+          "upload_index": 2,
+          "code_source": {
+            "type": "git",
+            "ref": "main",
+            "commit": "457bc7fea285880940825735ed96064168f4f087",
+            "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+          },
+          "params_mode": "params_diff",
+          "params_diff": {
+            "MomentumTiltStrength": 0.45
+          },
+          "scan_source": null,
+          "uploaded_code_sha256": "sha256:552d1e9adaf33064ed178a50fb7df2d5e06f771d55ec3ac4aa02f39446e142bd",
+          "backtest_id": "a2d755cf006abe1aac853e65803acf70",
+          "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=a2d755cf006abe1aac853e65803acf70",
+          "status": "completed"
+        },
+        {
+          "label": "linear-040",
+          "scenario_id": "ab-momentum-strength-confirmation-linear-040",
+          "run_label": "linear-040",
+          "run_id": "20260517-1729-bt2405ba5c36f5774b229998b57b1d400e",
+          "role": "variant",
+          "is_baseline": false,
+          "upload_index": 3,
+          "code_source": {
+            "type": "git",
+            "ref": "main",
+            "commit": "457bc7fea285880940825735ed96064168f4f087",
+            "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+          },
+          "params_mode": "params_diff",
+          "params_diff": {
+            "MomentumTiltStrength": 0.4
+          },
+          "scan_source": null,
+          "uploaded_code_sha256": "sha256:5f7b127ef66d698622d2d4ddd8702fdd0b911351d0a681a72cd41991579bc2cd",
+          "backtest_id": "2405ba5c36f5774b229998b57b1d400e",
+          "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=2405ba5c36f5774b229998b57b1d400e",
+          "status": "completed"
+        },
+        {
+          "label": "linear-035",
+          "scenario_id": "ab-momentum-strength-confirmation-linear-035",
+          "run_label": "linear-035",
+          "run_id": "20260517-1731-btbe2e525c63caec09d9355836a69f8676",
+          "role": "variant",
+          "is_baseline": false,
+          "upload_index": 4,
+          "code_source": {
+            "type": "git",
+            "ref": "main",
+            "commit": "457bc7fea285880940825735ed96064168f4f087",
+            "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+          },
+          "params_mode": "params_diff",
+          "params_diff": {
+            "MomentumTiltStrength": 0.35
+          },
+          "scan_source": null,
+          "uploaded_code_sha256": "sha256:435533297e2462141391fa0eee8ee7ceb944810b4f32522e5f93e178712b8d16",
+          "backtest_id": "be2e525c63caec09d9355836a69f8676",
+          "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=be2e525c63caec09d9355836a69f8676",
+          "status": "completed"
+        },
+        {
+          "label": "linear-025",
+          "scenario_id": "ab-momentum-strength-confirmation-linear-025",
+          "run_label": "linear-025",
+          "run_id": "20260517-1734-bt19cd602c6a77e0878d1aec4a60c9f3d8",
+          "role": "variant",
+          "is_baseline": false,
+          "upload_index": 5,
+          "code_source": {
+            "type": "git",
+            "ref": "main",
+            "commit": "457bc7fea285880940825735ed96064168f4f087",
+            "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+          },
+          "params_mode": "params_diff",
+          "params_diff": {
+            "MomentumTiltStrength": 0.25
+          },
+          "scan_source": null,
+          "uploaded_code_sha256": "sha256:476d4ee642365752da56a924e935f0b16c369e3a8bc211408cccb8c63478e53c",
+          "backtest_id": "19cd602c6a77e0878d1aec4a60c9f3d8",
+          "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=19cd602c6a77e0878d1aec4a60c9f3d8",
+          "status": "completed"
+        }
+      ],
+      "upload_session": {
+        "session_started_at": "2026-05-17T17:24:07",
+        "session_finished_at": "2026-05-17T17:36:12",
+        "strategy_name": "etf_factor_rotation",
+        "edit_url": null,
+        "candidate_order": [
+          "baseline-linear-050",
+          "linear-045",
+          "linear-040",
+          "linear-035",
+          "linear-025"
+        ]
+      }
+    }
+  },
+  "updated": "2026-05-17T17:36:12"
+}

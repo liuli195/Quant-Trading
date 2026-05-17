@@ -1015,6 +1015,14 @@ class TestComputeRSRSAdjustedScores:
 class TestComputeMomentumTiltMultipliers:
     """测试动量分数转相对倾斜乘数。"""
 
+    def test_default_rule_keeps_linear_tilts(self, strategy, mock_g):
+        """默认关闭极端高动量弱化时，保持原线性映射。"""
+        params = strategy.snapshot_params()
+        scores = np.array([0.9, 0.5, 0.1])
+        gates = np.array([1.0, 1.0, 1.0])
+        tilts = strategy.compute_momentum_tilt_multipliers(scores, gates, params)
+        assert np.allclose(tilts, np.array([1.2, 1.0, 0.8]))
+
     def test_strong_momentum_gets_tilt_above_one(self, strategy, mock_g):
         """动量强资产应得到 >1 的倾斜乘数。"""
         params = strategy.snapshot_params()
@@ -1069,6 +1077,48 @@ class TestComputeMomentumTiltMultipliers:
         tilts = strategy.compute_momentum_tilt_multipliers(scores, gates, params)
         assert tilts[0] == 1.30  # 被上限截断
         assert tilts[2] == 0.70  # 被下限截断
+
+    def test_score_below_extreme_threshold_keeps_linear_tilt(self, strategy, mock_g):
+        """低于极端阈值的高动量资产仍保留线性增强。"""
+        mock_g.MomentumExtremeScoreStart = 0.90
+        mock_g.MomentumExtremeTiltCap = 1.00
+        params = strategy.snapshot_params()
+        scores = np.array([0.85, 0.50, 0.15])
+        gates = np.array([1.0, 1.0, 1.0])
+        tilts = strategy.compute_momentum_tilt_multipliers(scores, gates, params)
+        assert abs(tilts[0] - 1.175) < 1e-10
+
+    def test_extreme_score_caps_high_tilt(self, strategy, mock_g):
+        """达到极端阈值且原本高于 cap 时，应被压回 cap。"""
+        mock_g.MomentumExtremeScoreStart = 0.90
+        mock_g.MomentumExtremeTiltCap = 1.00
+        params = strategy.snapshot_params()
+        scores = np.array([0.95, 0.50, 0.05])
+        gates = np.array([1.0, 1.0, 1.0])
+        tilts = strategy.compute_momentum_tilt_multipliers(scores, gates, params)
+        assert tilts[0] == 1.00
+
+    def test_extreme_score_below_cap_is_unchanged(self, strategy, mock_g):
+        """命中阈值但原倾斜未超过 cap 时，不额外改动。"""
+        mock_g.MomentumExtremeScoreStart = 0.50
+        mock_g.MomentumExtremeTiltCap = 1.20
+        params = strategy.snapshot_params()
+        scores = np.array([0.50, 0.40, 0.30])
+        gates = np.array([1.0, 1.0, 1.0])
+        tilts = strategy.compute_momentum_tilt_multipliers(scores, gates, params)
+        assert abs(tilts[0] - 1.05) < 1e-10
+
+    def test_single_active_asset_keeps_neutral_tilt(self, strategy, mock_g):
+        """单活跃资产时即使命中阈值，也保持中性倾斜。"""
+        mock_g.MomentumExtremeScoreStart = 0.90
+        mock_g.MomentumExtremeTiltCap = 1.00
+        params = strategy.snapshot_params()
+        scores = np.array([1.0, 0.0, 0.0])
+        gates = np.array([1.0, 0.0, 0.0])
+        tilts = strategy.compute_momentum_tilt_multipliers(scores, gates, params)
+        assert tilts[0] == 1.0
+        assert tilts[1] == 0.0
+        assert tilts[2] == 0.0
 
 
 # ============================================================
@@ -2229,6 +2279,7 @@ class TestSnapshotParams:
             "RSRS_N", "RSRS_M", "RSRS_NegativeFullCut",
             "RSRSMinMultiplier", "RSRSMaxMultiplier",
             "MomentumTiltStrength", "MomentumTiltMin", "MomentumTiltMax",
+            "MomentumExtremeScoreStart", "MomentumExtremeTiltCap",
             "RSRSTiltMin", "RSRSTiltMax",
             "CrowdWindow", "CrowdRetShort", "CrowdRetMid",
             "AmountMAWindow", "DeviationMAWindow", "CrowdVolWindow",
@@ -2385,6 +2436,35 @@ class TestValidateParams:
         mock_g.MomentumTiltMax = 0.8
         params = strategy.snapshot_params()
         with pytest.raises(ValueError, match="Momentum tilt bounds"):
+            strategy.validate_params(params)
+
+    def test_momentum_extreme_score_start_none_is_valid(self, strategy, mock_g):
+        mock_g.MomentumExtremeScoreStart = None
+        params = strategy.snapshot_params()
+        strategy.validate_params(params)
+
+    def test_momentum_extreme_score_start_zero_raises(self, strategy, mock_g):
+        mock_g.MomentumExtremeScoreStart = 0.0
+        params = strategy.snapshot_params()
+        with pytest.raises(ValueError, match="MomentumExtremeScoreStart"):
+            strategy.validate_params(params)
+
+    def test_momentum_extreme_score_start_gt_one_raises(self, strategy, mock_g):
+        mock_g.MomentumExtremeScoreStart = 1.1
+        params = strategy.snapshot_params()
+        with pytest.raises(ValueError, match="MomentumExtremeScoreStart"):
+            strategy.validate_params(params)
+
+    def test_momentum_extreme_tilt_cap_lt_one_raises(self, strategy, mock_g):
+        mock_g.MomentumExtremeTiltCap = 0.9
+        params = strategy.snapshot_params()
+        with pytest.raises(ValueError, match="MomentumExtremeTiltCap"):
+            strategy.validate_params(params)
+
+    def test_momentum_extreme_tilt_cap_gt_tilt_max_raises(self, strategy, mock_g):
+        mock_g.MomentumExtremeTiltCap = 1.4
+        params = strategy.snapshot_params()
+        with pytest.raises(ValueError, match="MomentumExtremeTiltCap"):
             strategy.validate_params(params)
 
     def test_rsrs_tilt_min_zero_raises(self, strategy, mock_g):

@@ -1,0 +1,43 @@
+{
+  "strategy_file": "d:/My Project/Quant Trading/strategies/etf_factor_rotation/etf_factor_rotation.py",
+  "strategy": "etf_factor_rotation",
+  "scenario_id": "s01-momentum-extreme-worktree",
+  "start_date": "2021-01-01",
+  "end_date": "2026-04-30",
+  "capital": 100000,
+  "frequency": "1d",
+  "py_version": "Python3",
+  "batch_id": "20260517-momentum-extreme-ab",
+  "estimated_minutes": 6,
+  "result_source": "auto",
+  "allow_partial": false,
+  "sweep": {
+    "strategy": "list",
+    "combinations": [
+      {
+        "label": "baseline-linear",
+        "params": {}
+      },
+      {
+        "label": "extreme-neutral-090",
+        "params": {
+          "MomentumExtremeScoreStart": 0.9,
+          "MomentumExtremeTiltCap": 1.0
+        }
+      },
+      {
+        "label": "extreme-neutral-085",
+        "params": {
+          "MomentumExtremeScoreStart": 0.85,
+          "MomentumExtremeTiltCap": 1.0
+        }
+      },
+      {
+        "label": "linear-weak",
+        "params": {
+          "MomentumTiltStrength": 0.25
+        }
+      }
+    ]
+  }
+}

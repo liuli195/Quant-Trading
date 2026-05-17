@@ -38,4 +38,4 @@ description: 端到端 A/B 实验设计、执行与分析。用于比较策略�
 - 不直接操作浏览器，回测执行全部委托 `jq-run`。
 - 统计显著性使用 1000 次自助法 bootstrap。
 - 报告可给出变体优劣判断及采纳建议，用户决定是否修改代码。
-- 配置格式见 `scripts/jq_automation/abtest.py` 的 `ABConfig`。
+- 配置格式见 `scripts/tools/jq_automation/abtest.py` 的 `ABConfig`。

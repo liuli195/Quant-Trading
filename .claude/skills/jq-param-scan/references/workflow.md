@@ -1,38 +1,38 @@
-# JQ Param Scan 流程
+﻿# JQ Param Scan 娴佺▼
 
-## 阶段一：配置生成
+## 闃舵涓€锛氶厤缃敓鎴?
 
-1. 从用户描述中提取：参数名、值列表或范围+步长、策略文件路径。
-2. 生成 `ScenarioConfig` sweep 配置：
-   - `sweep.strategy` = `"grid"`（多参数正交）或 `"list"`（单参数枚举）
-   - `sweep.dimensions` 定义参数维度
-3. 将配置写入 `strategies/<strategy>/test_batches/<batch_id>/scenario.json`。
+1. 浠庣敤鎴锋弿杩颁腑鎻愬彇锛氬弬鏁板悕銆佸€煎垪琛ㄦ垨鑼冨洿+姝ラ暱銆佺瓥鐣ユ枃浠惰矾寰勩€?
+2. 鐢熸垚 `ScenarioConfig` sweep 閰嶇疆锛?
+   - `sweep.strategy` = `"grid"`锛堝鍙傛暟姝ｄ氦锛夋垨 `"list"`锛堝崟鍙傛暟鏋氫妇锛?
+   - `sweep.dimensions` 瀹氫箟鍙傛暟缁村害
+3. 灏嗛厤缃啓鍏?`strategies/<strategy>/test_batches/<batch_id>/scenario.json`銆?
 
-## 阶段二：计划展示
+## 闃舵浜岋細璁″垝灞曠ず
 
-计算并展示：
+璁＄畻骞跺睍绀猴細
 
-- 参数组合数 = 各维度水平数的乘积
-- 预估单次回测耗时（基于历史数据估算）
-- 总耗时 = 组合数 × 单次耗时
-- 当日剩余额度
-- 确认提示：`--yes` 表示已确认
+- 鍙傛暟缁勫悎鏁?= 鍚勭淮搴︽按骞虫暟鐨勪箻绉?
+- 棰勪及鍗曟鍥炴祴鑰楁椂锛堝熀浜庡巻鍙叉暟鎹及绠楋級
+- 鎬昏€楁椂 = 缁勫悎鏁?脳 鍗曟鑰楁椂
+- 褰撴棩鍓╀綑棰濆害
+- 纭鎻愮ず锛歚--yes` 琛ㄧず宸茬‘璁?
 
-## 阶段三：批量执行
+## 闃舵涓夛細鎵归噺鎵ц
 
-委托 `jq-run batch`：
+濮旀墭 `jq-run batch`锛?
 
 ```bash
-python -m scripts.jq_automation batch <manifest.json> --yes
+python -m scripts.tools.jq_automation batch <manifest.json> --yes
 ```
 
-## 阶段四：分析报告
+## 闃舵鍥涳細鍒嗘瀽鎶ュ憡
 
-1. 委托 `jq-analyze` 生成批次对比。
-2. 按 [param-scan-report.md](../templates/param-scan-report.md) 模板生成深度分析。
+1. 濮旀墭 `jq-analyze` 鐢熸垚鎵规瀵规瘮銆?
+2. 鎸?[param-scan-report.md](../templates/param-scan-report.md) 妯℃澘鐢熸垚娣卞害鍒嗘瀽銆?
 
-## 报告要求
+## 鎶ュ憡瑕佹眰
 
-每一章必须包含数据来源引用（具体 run_id 或 summary_metrics.json）。
-数值引用精确到 2 位小数。
-报告格式见 [param-scan-report.md](../templates/param-scan-report.md) 模板。
+姣忎竴绔犲繀椤诲寘鍚暟鎹潵婧愬紩鐢紙鍏蜂綋 run_id 鎴?summary_metrics.json锛夈€?
+鏁板€煎紩鐢ㄧ簿纭埌 2 浣嶅皬鏁般€?
+鎶ュ憡鏍煎紡瑙?[param-scan-report.md](../templates/param-scan-report.md) 妯℃澘銆?

@@ -1,0 +1,18 @@
+{
+  "strategy_file": "D:\\My Project\\Quant Trading\\.local\\jq-automation\\ab\\momentum-strength-confirmation\\linear-035_source.py",
+  "scenario_id": "ab-momentum-strength-confirmation-linear-035",
+  "start_date": "2021-01-01",
+  "end_date": "2026-04-30",
+  "capital": 100000,
+  "frequency": "1d",
+  "py_version": "Python3",
+  "estimated_minutes": 6.0,
+  "batch_id": "20260517-momentum-strength-confirmation",
+  "strategy": "etf_factor_rotation",
+  "params_diff": {
+    "MomentumTiltStrength": 0.35
+  },
+  "_params_mode": "params_diff",
+  "_scan_source": null,
+  "_experiment_id": "momentum-strength-confirmation"
+}

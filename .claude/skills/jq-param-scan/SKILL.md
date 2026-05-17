@@ -14,7 +14,7 @@ description: 参数扫描端到端自动化。用于根据口头描述生成扫�
 ## 流程
 
 1. 解析用户需求生成参数网格。
-2. 生成扫描场景配置文件（格式见 `scripts/jq_automation/config.py` 的 `ScenarioConfig`，`sweep.strategy=grid|list`）。
+2. 生成扫描场景配置文件（格式见 `scripts/tools/jq_automation/config.py` 的 `ScenarioConfig`，`sweep.strategy=grid|list`）。
 3. 展示计划：参数组合数、预估单次耗时、总耗时、剩余额度。等待用户确认。
 4. 委托 `jq-run batch` 执行。
 5. 委托 `jq-analyze` 生成批次对比。

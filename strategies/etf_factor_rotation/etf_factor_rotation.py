@@ -15,7 +15,8 @@ enable_profile()
 模块分工：
   - 趋势门槛（硬过滤）：按 ETF 专属趋势均线以上才可入选，0/1 离散
   - 风险平价（逆波动率）：所有趋势成立资产参与，σ 越小权重越大
-  - 动量倾斜（相对信号）：多周期排名分数去均值，clip 到 [TiltMin, TiltMax]
+  - 动量倾斜（相对信号）：多周期排名分数去均值，clip 到 [TiltMin, TiltMax]；
+    可选将极端高分资产的动量倾斜压回中性
   - RSRS 倾斜（相对信号）：High~Low 回归 β 标准化 × R² 去均值，clip 到 [TiltMin, TiltMax]
   - 倾斜合成：RPWeight × MomentumTilt × RSRSTilt，活跃资产内重新归一化
   - 拥挤度惩罚（只减不加）：五指标分位数均值，超阈值线性打折
@@ -199,6 +200,8 @@ def snapshot_params():
         "MomentumTiltStrength": g.MomentumTiltStrength,
         "MomentumTiltMin": g.MomentumTiltMin,
         "MomentumTiltMax": g.MomentumTiltMax,
+        "MomentumExtremeScoreStart": g.MomentumExtremeScoreStart,
+        "MomentumExtremeTiltCap": g.MomentumExtremeTiltCap,
         "RSRSTiltMin": g.RSRSTiltMin,
         "RSRSTiltMax": g.RSRSTiltMax,
         "CrowdWindow": g.CrowdWindow,
@@ -297,6 +300,11 @@ def validate_params(params):
         errors.append("MomentumTiltStrength must be >= 0")
     if not (0 < params["MomentumTiltMin"] <= 1 <= params["MomentumTiltMax"]):
         errors.append("Momentum tilt bounds must satisfy 0 < min <= 1 <= max")
+    extreme_start = params["MomentumExtremeScoreStart"]
+    if extreme_start is not None and not (0 < extreme_start <= 1):
+        errors.append("MomentumExtremeScoreStart must be None or satisfy 0 < start <= 1")
+    if not (1 <= params["MomentumExtremeTiltCap"] <= params["MomentumTiltMax"]):
+        errors.append("MomentumExtremeTiltCap must satisfy 1 <= cap <= MomentumTiltMax")
     if not (0 < params["RSRSTiltMin"] <= 1 <= params["RSRSTiltMax"]):
         errors.append("RSRS tilt bounds must satisfy 0 < min <= 1 <= max")
     if len(params["etf_pool"]) != len(params["etf_names"]):
@@ -438,6 +446,8 @@ def set_parameter(context):
     g.MomentumTiltStrength = 0.50
     g.MomentumTiltMin = 0.70
     g.MomentumTiltMax = 1.30
+    g.MomentumExtremeScoreStart = None
+    g.MomentumExtremeTiltCap = 1.00
 
     # ---- RSRS 倾斜（资产间相对信号） ----
     g.RSRSTiltMin = 0.70
@@ -959,6 +969,7 @@ def compute_momentum_tilt_multipliers(momentum_scores, trend_gates, params):
 
     活跃资产围绕均值上下倾斜，非活跃资产返回 0。
     倾斜公式：clip(1 + strength × (score_i - mean_active), min, max)
+    若启用极端高动量弱化，则 score_i 达到阈值后再将高位倾斜压到 cap。
     """
     n = len(momentum_scores)
     tilts = np.zeros(n)
@@ -973,11 +984,16 @@ def compute_momentum_tilt_multipliers(momentum_scores, trend_gates, params):
     strength = params["MomentumTiltStrength"]
     tilt_min = params["MomentumTiltMin"]
     tilt_max = params["MomentumTiltMax"]
+    extreme_start = params["MomentumExtremeScoreStart"]
+    extreme_cap = params["MomentumExtremeTiltCap"]
 
     for i in active_indices:
         edge = momentum_scores[i] - mean_score
         raw_tilt = 1.0 + strength * edge
-        tilts[i] = np.clip(raw_tilt, tilt_min, tilt_max)
+        tilt = np.clip(raw_tilt, tilt_min, tilt_max)
+        if extreme_start is not None and momentum_scores[i] >= extreme_start:
+            tilt = min(tilt, extreme_cap)
+        tilts[i] = tilt
 
     return tilts
 

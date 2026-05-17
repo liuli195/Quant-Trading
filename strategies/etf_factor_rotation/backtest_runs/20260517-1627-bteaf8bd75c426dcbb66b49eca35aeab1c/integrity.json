@@ -1,0 +1,153 @@
+{
+  "status": "complete",
+  "generated_at": "2026-05-17T08:29:30.400780+00:00",
+  "issues": [],
+  "checks": [
+    {
+      "name": "research_bundle",
+      "required": true,
+      "status": "pass",
+      "source": "api_export.json",
+      "count": null,
+      "partial": null,
+      "message": "research get_backtest bundle is required"
+    },
+    {
+      "name": "detail_api_bundle",
+      "required": true,
+      "status": "pass",
+      "source": "detail_api_export.json",
+      "count": null,
+      "partial": null,
+      "message": "detail API bundle is required"
+    },
+    {
+      "name": "metadata",
+      "required": true,
+      "status": "pass",
+      "source": "metadata.json",
+      "count": null,
+      "partial": null,
+      "message": ""
+    },
+    {
+      "name": "summary_metrics",
+      "required": true,
+      "status": "pass",
+      "source": "summary_metrics.json",
+      "count": null,
+      "partial": null,
+      "message": ""
+    },
+    {
+      "name": "research_results",
+      "required": true,
+      "status": "pass",
+      "source": "api_export.json",
+      "count": 1289,
+      "partial": false,
+      "message": ""
+    },
+    {
+      "name": "research_positions",
+      "required": true,
+      "status": "pass",
+      "source": "api_export.json",
+      "count": 2385,
+      "partial": false,
+      "message": ""
+    },
+    {
+      "name": "research_orders",
+      "required": true,
+      "status": "pass",
+      "source": "api_export.json",
+      "count": 384,
+      "partial": false,
+      "message": ""
+    },
+    {
+      "name": "research_risk",
+      "required": true,
+      "status": "pass",
+      "source": "api_export.json",
+      "count": 31,
+      "partial": false,
+      "message": ""
+    },
+    {
+      "name": "detail_results",
+      "required": true,
+      "status": "pass",
+      "source": "detail_api_export.json",
+      "count": 1485,
+      "partial": false,
+      "message": ""
+    },
+    {
+      "name": "detail_transactions",
+      "required": true,
+      "status": "pass",
+      "source": "detail_api_export.json",
+      "count": 384,
+      "partial": false,
+      "message": ""
+    },
+    {
+      "name": "detail_positions",
+      "required": true,
+      "status": "pass",
+      "source": "detail_api_export.json",
+      "count": 3674,
+      "partial": false,
+      "message": ""
+    },
+    {
+      "name": "detail_risk_tabs",
+      "required": true,
+      "status": "pass",
+      "source": "detail_api_export.json",
+      "count": 640,
+      "partial": null,
+      "message": ""
+    },
+    {
+      "name": "platform_logs",
+      "required": false,
+      "status": "warn",
+      "source": "detail_api_export.json",
+      "count": 1000,
+      "partial": true,
+      "message": "platform logs may be partial; audit_log is canonical"
+    },
+    {
+      "name": "audit_log",
+      "required": true,
+      "status": "pass",
+      "source": "tabs_raw/audit_log.jsonl",
+      "count": 1090,
+      "partial": false,
+      "message": ""
+    }
+  ],
+  "sources": {
+    "research": {
+      "path": "api_export.json",
+      "present": true,
+      "method": "joinquant_research_get_backtest"
+    },
+    "detail_api": {
+      "path": "detail_api_export.json",
+      "present": true
+    },
+    "audit_log": {
+      "path": "tabs_raw/audit_log.jsonl",
+      "present": true,
+      "count": 1090
+    },
+    "platform_logs": {
+      "path": "tabs_raw/logs.md",
+      "partial": true
+    }
+  }
+}

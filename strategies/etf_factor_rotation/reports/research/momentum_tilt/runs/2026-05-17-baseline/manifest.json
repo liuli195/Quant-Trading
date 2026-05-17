@@ -1,0 +1,25 @@
+{
+  "strategy": "etf_factor_rotation",
+  "run_id": "2026-05-17-baseline",
+  "score_start": "2021-01-01",
+  "score_end": "2026-04-30",
+  "inputs": {
+    "raw_price_path": "D:/My Project/Quant Trading/strategies/etf_factor_rotation/reports/window_heterogeneity/inputs/raw/etf_window_research_prices.json",
+    "audit_log_path": "D:/My Project/Quant Trading/strategies/etf_factor_rotation/backtest_runs/20260517-1611-bt9b67f2f9a034bb7d3d7a044cf3e0d4e9/tabs_raw/audit_log.jsonl",
+    "baseline_returns_path": "D:/My Project/Quant Trading/strategies/etf_factor_rotation/backtest_runs/20260517-1611-bt9b67f2f9a034bb7d3d7a044cf3e0d4e9/tabs_raw/daily_returns.md"
+  },
+  "outputs": [
+    "reports/baseline_snapshot.md",
+    "reports/sample_split.md",
+    "reports/momentum_response_curve.md",
+    "reports/replay_calibration.md",
+    "reports/momentum_shape_candidate_summary.md",
+    "reports/momentum-next-stage-decision.md",
+    "tables/momentum_response_curve.csv",
+    "tables/momentum_zone_summary.csv",
+    "tables/replay_calibration.json",
+    "tables/momentum_strength_scan.csv",
+    "tables/momentum_shape_candidates.csv",
+    "tables/local_decision.json"
+  ]
+}

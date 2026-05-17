@@ -1,0 +1,47 @@
+{
+  "batch_id": "20260517-momentum-extreme-ab",
+  "strategy": "etf_factor_rotation",
+  "created": "2026-05-17T00:00:00",
+  "status": "completed",
+  "scenarios": {
+    "s01-momentum-extreme-worktree": {
+      "status": "completed",
+      "runs": [
+        {
+          "run_id": "20260517-1611-bt9b67f2f9a034bb7d3d7a044cf3e0d4e9",
+          "label": "baseline-linear",
+          "params_diff": {},
+          "status": "completed",
+          "note": "正式回测已完成；本次因 research bundle 不可用，仅保留 detail API 标准产物。"
+        },
+        {
+          "label": "extreme-neutral-090",
+          "params_diff": {
+            "MomentumExtremeScoreStart": 0.9,
+            "MomentumExtremeTiltCap": 1.0
+          },
+          "status": "completed",
+          "run_id": "20260517-1624-btac3499f8d6b8bf0f5ee81147b6bd0da1"
+        },
+        {
+          "label": "extreme-neutral-085",
+          "params_diff": {
+            "MomentumExtremeScoreStart": 0.85,
+            "MomentumExtremeTiltCap": 1.0
+          },
+          "status": "completed",
+          "run_id": "20260517-1627-bteaf8bd75c426dcbb66b49eca35aeab1c"
+        },
+        {
+          "label": "linear-weak",
+          "params_diff": {
+            "MomentumTiltStrength": 0.25
+          },
+          "status": "completed",
+          "run_id": "20260517-1629-bt13a13155cdf761ba85550d3987fd22c4"
+        }
+      ]
+    }
+  },
+  "updated": "2026-05-17T16:31:52"
+}

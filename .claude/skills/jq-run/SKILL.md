@@ -26,7 +26,7 @@ description: 执行 JoinQuant 云端回测流程。用于上传本地 Python 策
 
 1. 根据用户意图选择子命令。
 2. 正式回测前，先输出计划：场景、区间、预计耗时、剩余额度。
-3. 执行 `jq-auto` 命令（虚拟环境路径：`.\.venv\Scripts\python.exe -m scripts.jq_automation`）。
+3. 执行 `jq-auto` 命令（虚拟环境路径：`.\.venv\Scripts\python.exe -m scripts.tools.jq_automation`）。
 4. 结果自动落盘到 `strategies/<strategy>/backtest_runs/<run_id>/`。
 5. 如属批次，manifest 自动更新。
 
@@ -36,4 +36,4 @@ description: 执行 JoinQuant 云端回测流程。用于上传本地 Python 策
 - 每日云端额度 60 分钟保护。
 - 编译失败或策略问题交给 `jq-fix`。
 - 报告和多场景对比交给 `jq-analyze`。
-- 场景配置文件格式见 `scripts/jq_automation/config.py` 中的 `ScenarioConfig`。
+- 场景配置文件格式见 `scripts/tools/jq_automation/config.py` 中的 `ScenarioConfig`。

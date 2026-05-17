@@ -172,6 +172,8 @@ def mock_g(strategy):
         MomentumTiltStrength=0.50,
         MomentumTiltMin=0.70,
         MomentumTiltMax=1.30,
+        MomentumExtremeScoreStart=None,
+        MomentumExtremeTiltCap=1.00,
         RSRSTiltMin=0.70,
         RSRSTiltMax=1.30,
         CrowdWindow=500,

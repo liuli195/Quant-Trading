@@ -19,9 +19,12 @@
   - `tabs_raw/` — 聚宽原始指标（收益、回撤、夏普、换手等）
 - `strategies/<name>/ab_experiments/<name>/report/` — A/B experiment delta reports
 - `docs/` / `docs/joinquant-data/` — 聚宽文档镜像与研究资料
-- `scripts/jq_automation/` — jq-auto 云端回测工具
-- `scripts/path_tools/` — 路径治理工具（aliases.py / refactor.py）
-- `scripts/etf_window_research/` — ETF 时间窗异质性研究工具
+- `scripts/tools/jq_automation/` — jq-auto 云端回测工具
+- `scripts/tools/path_tools/` — 路径治理工具（aliases.py / refactor.py）
+- `scripts/research/etf_window_research/` — ETF 时间窗异质性研究工具
+- `scripts/research/research_core/` — 共享研究库（指标、日历、布局、价格、报告）
+- `scripts/research/momentum_tilt_research/` — 动量倾斜研究工具
+- `scripts/archive/` — 归档脚本（不再活跃使用但保留备查）
 - `.claude/skills/` — AI agent 技能，详见 ## Skills
 - `path_aliases.json` — 目录别名配置，新增脚本引用结果目录时须通过别名解析，不硬编码路径
 
@@ -30,11 +33,12 @@
 - 聚宽 API 文档：`docs/joinquant-api.md`（离线，优先）| <https://www.joinquant.com/help/api/help#name:api>（在线）
 - 语法检查：`.\.venv\Scripts\python.exe -m py_compile <策略文件>`
 - 单元测试：`.\.venv\Scripts\python.exe -m pytest <策略>/tests -q`
-- 云端回测：`python -m scripts.jq_automation`（首次需在 Chrome 手动登录聚宽，后续工具自动复用登录态）
+- 云端回测：`python -m scripts.tools.jq_automation`（首次需在 Chrome 手动登录聚宽，后续工具自动复用登录态）
   子命令：`compile-check` / `upload` / `run` / `fetch` / `batch` / `ab expand|run|report`
-- 路径别名解析：`python -m scripts.path_tools.aliases resolve <别名> <key=value...>`；`list` 列出所有别名
-- 路径引用校验：`python -m scripts.path_tools.refactor check`；其他子命令：`rewrite-md` / `replace` / `move` / `rewrite`
-- ETF 窗异质性研究：`python -m scripts.etf_window_research.cli`（子命令：`export-script`、`fetch`、`analyze`）
+- 路径别名解析：`python -m scripts.tools.path_tools.aliases resolve <别名> <key=value...>`；`list` 列出所有别名
+- 路径引用校验：`python -m scripts.tools.path_tools.refactor check`；其他子命令：`rewrite-md` / `replace` / `move` / `rewrite`
+- ETF 窗异质性研究：`python -m scripts.research.etf_window_research.cli`（子命令：`export-script`、`fetch`、`analyze`）
+- 动量倾斜研究：`python -m scripts.research.momentum_tilt_research.cli`（子命令：`analyze`、`ab-plan`）
 
 ## Skills
 
