@@ -5,11 +5,21 @@ from __future__ import annotations
 import argparse
 import json
 
-from .platform.datasets import import_joinquant_price_json, load_snapshot
+from .platform.datasets import import_joinquant_price_json, import_audit_log_jsonl, load_snapshot
 
 
 def _cmd_import(args: argparse.Namespace) -> int:
     snapshot = import_joinquant_price_json(
+        args.source,
+        dataset_id=args.dataset_id,
+        snapshot_id=args.snapshot_id,
+    )
+    print(snapshot.root)
+    return 0
+
+
+def _cmd_import_audit(args: argparse.Namespace) -> int:
+    snapshot = import_audit_log_jsonl(
         args.source,
         dataset_id=args.dataset_id,
         snapshot_id=args.snapshot_id,
@@ -33,6 +43,12 @@ def build_parser() -> argparse.ArgumentParser:
     import_parser.add_argument("--dataset-id", required=True)
     import_parser.add_argument("--snapshot-id")
     import_parser.set_defaults(func=_cmd_import)
+
+    audit_import = subparsers.add_parser("import-audit-log", help="import one JoinQuant audit log JSONL file")
+    audit_import.add_argument("source")
+    audit_import.add_argument("--dataset-id", required=True)
+    audit_import.add_argument("--snapshot-id")
+    audit_import.set_defaults(func=_cmd_import_audit)
 
     inspect = subparsers.add_parser("inspect", help="print dataset metadata")
     inspect.add_argument("dataset_id")

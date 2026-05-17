@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "run_id": "2026-05-17-phase0-baseline",
+  "dataset_id": "etf_factor_rotation_baseline_audit",
+  "snapshot_id": "2026-05-17T17-36-27Z_56361cf8a32e",
+  "n_signals": 272,
+  "avg_position": 0.5716,
+  "avg_total_cash": 0.4284,
+  "identity_holds": true,
+  "generated_at": "2026-05-18T01:43:12"
+}

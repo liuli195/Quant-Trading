@@ -44,6 +44,7 @@
     "jq_param_scan_skill": "{skills}/jq-param-scan",
     "jq_ab_test_skill": "{skills}/jq-ab-test",
     "jq_research_skill": "{skills}/jq-research",
+    "cash_decomposition_scripts": "{scripts}/research/cash_decomposition",
     "joinquant_data": "{docs}/joinquant-data",
     "joinquant_quota_ledger": "{joinquant_data}/quota_ledger",
     "ab_experiments": "{strategy_dir}/ab_experiments",

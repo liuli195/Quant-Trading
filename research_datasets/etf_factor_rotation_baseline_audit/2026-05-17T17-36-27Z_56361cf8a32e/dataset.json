@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "dataset_id": "etf_factor_rotation_baseline_audit",
+  "snapshot_id": "2026-05-17T17-36-27Z_56361cf8a32e",
+  "fingerprint": "sha256:56361cf8a32ebdc6163cdb5c2f648285ab1a8ed8ff24373e9758b302e2dc047c",
+  "created_at": "2026-05-17T17:36:27+00:00",
+  "source": {
+    "kind": "joinquant_audit_log_jsonl",
+    "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1724-bt580e16e5a3f1bf99d197cea88889da1a/tabs_raw/audit_log.jsonl"
+  },
+  "storage": {
+    "canonical": "parquet",
+    "compression": "zstd",
+    "raw": "jsonl.gz"
+  },
+  "row_count": 272,
+  "columns": [
+    "date",
+    "trend_gates_0",
+    "trend_gates_1",
+    "trend_gates_2",
+    "rp_weights_0",
+    "rp_weights_1",
+    "rp_weights_2",
+    "momentum_scores_0",
+    "momentum_scores_1",
+    "momentum_scores_2",
+    "momentum_tilts_0",
+    "momentum_tilts_1",
+    "momentum_tilts_2",
+    "rsrs_tilts_0",
+    "rsrs_tilts_1",
+    "rsrs_tilts_2",
+    "tilted_weights_0",
+    "tilted_weights_1",
+    "tilted_weights_2",
+    "crowd_penalties_0",
+    "crowd_penalties_1",
+    "crowd_penalties_2",
+    "raw_weights_0",
+    "raw_weights_1",
+    "raw_weights_2",
+    "final_weights_before_constraints_0",
+    "final_weights_before_constraints_1",
+    "final_weights_before_constraints_2",
+    "final_weights_0",
+    "final_weights_1",
+    "final_weights_2",
+    "portfolio_vol_scale",
+    "n_active"
+  ],
+  "etf_pool": [
+    "159819.XSHE",
+    "513100.XSHG",
+    "518880.XSHG"
+  ],
+  "date_range": [
+    "2021-01-01",
+    "2026-04-30"
+  ],
+  "total_events": 1090,
+  "event_counts": {
+    "run_start": 1,
+    "rebalance_signals": 272,
+    "rebalance_order": 816,
+    "run_end": 1
+  },
+  "params_snapshot": {
+    "etf_pool": [
+      "159819.XSHE",
+      "513100.XSHG",
+      "518880.XSHG"
+    ],
+    "benchmark": "000300.XSHG",
+    "current_dt": "2021-01-01T00:00:00"
+  },
+  "files": {
+    "raw": "raw/audit_log.jsonl.gz",
+    "canonical": "data/data.parquet",
+    "profile_json": "views/profile.json"
+  }
+}

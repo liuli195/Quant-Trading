@@ -22,6 +22,7 @@ DEFAULT_TEMPLATES = {
     "factor_scan": "factor_scan",
     "parameter_followup": "parameter_followup",
     "robustness_check": "robustness_check",
+    "generic": "generic",
 }
 
 

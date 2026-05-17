@@ -258,3 +258,174 @@ def load_price_frames(snapshot: DatasetSnapshot, codes: tuple[str, ...] | None =
         except ImportError:
             pass
     return load_price_bundle(snapshot.raw_path, codes=codes)
+
+
+def import_audit_log_jsonl(
+    source: str | Path,
+    *,
+    dataset_id: str,
+    datasets_root: str | Path = "research_datasets",
+    snapshot_id: str | None = None,
+) -> DatasetSnapshot:
+    """Create an immutable dataset snapshot from a JoinQuant audit_log.jsonl."""
+
+    source_path = Path(source)
+    raw_bytes = source_path.read_bytes()
+    fingerprint = f"sha256:{sha256_bytes(raw_bytes)}"
+
+    lines = [l for l in raw_bytes.decode("utf-8").splitlines() if l.strip()]
+    total_lines = len(lines)
+    event_counts: dict[str, int] = {}
+    dates: list[str] = []
+    params_snapshot: dict[str, Any] = {}
+
+    for line in lines:
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        event_type = str(ev.get("event", "unknown"))
+        event_counts[event_type] = event_counts.get(event_type, 0) + 1
+        if ev.get("event") == "run_start" and not params_snapshot:
+            params_snapshot = {
+                "etf_pool": ev.get("params", {}).get("etf_pool", []),
+                "benchmark": ev.get("params", {}).get("benchmark"),
+                "current_dt": ev.get("current_dt"),
+            }
+        dt = ev.get("current_dt", "")
+        if dt:
+            dates.append(dt[:10])
+
+    generated_snapshot = snapshot_id or (
+        datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
+        + "_"
+        + fingerprint.split(":", 1)[1][:12]
+    )
+    root = _datasets_root(datasets_root) / dataset_id / generated_snapshot
+    if root.exists():
+        raise DatasetError(f"dataset snapshot already exists: {root}")
+    for directory in (root / "raw", root / "data", root / "views"):
+        directory.mkdir(parents=True, exist_ok=True)
+
+    (root / "raw" / "audit_log.jsonl.gz").write_bytes(gzip.compress(raw_bytes, compresslevel=9))
+
+    # 归一化为 Parquet 主存储（从 rebalance_signals 事件中提取标量 + 数组展平）
+    parquet_row_count = 0
+    etf_pool = params_snapshot.get("etf_pool", [])
+    n_etf = len(etf_pool)
+    if n_etf > 0:
+        signal_rows = []
+        for line in lines:
+            try:
+                ev = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if ev.get("event") != "rebalance_signals":
+                continue
+            row = {"date": pd.Timestamp(ev.get("current_dt", "")).date()}
+            array_fields = [
+                "trend_gates", "rp_weights", "momentum_scores", "momentum_tilts",
+                "rsrs_tilts", "tilted_weights", "crowd_penalties", "raw_weights",
+                "final_weights_before_constraints", "final_weights",
+            ]
+            for field in array_fields:
+                arr = ev.get(field, [])
+                for i in range(n_etf):
+                    row[f"{field}_{i}"] = float(arr[i]) if i < len(arr) else 0.0
+            row["portfolio_vol_scale"] = float(ev.get("portfolio_vol_scale", 1.0))
+            row["n_active"] = int(sum(1 for g in ev.get("trend_gates", []) if g > 0))
+            signal_rows.append(row)
+        if signal_rows:
+            frame = pd.DataFrame(signal_rows)
+            frame.to_parquet(root / "data" / "data.parquet", index=False, compression="zstd")
+            parquet_row_count = int(len(frame))
+
+    date_range = [min(dates), max(dates)] if dates else ["", ""]
+    metadata = {
+        "schema_version": 1,
+        "dataset_id": dataset_id,
+        "snapshot_id": generated_snapshot,
+        "fingerprint": fingerprint,
+        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "source": {"kind": "joinquant_audit_log_jsonl", "path": source_path.as_posix()},
+        "storage": {"canonical": "parquet", "compression": "zstd", "raw": "jsonl.gz"},
+        "row_count": parquet_row_count or total_lines,
+        "columns": [] if parquet_row_count == 0 else list(frame.columns),
+        "etf_pool": etf_pool,
+        "date_range": date_range,
+        "total_events": total_lines,
+        "event_counts": event_counts,
+        "params_snapshot": params_snapshot,
+        "files": {
+            "raw": "raw/audit_log.jsonl.gz",
+            "canonical": "data/data.parquet",
+            "profile_json": "views/profile.json",
+        },
+    }
+    (root / "dataset.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+    (root / "README.md").write_text(
+        "\n".join([
+            f"# {dataset_id}",
+            "",
+            f"- **snapshot**: `{generated_snapshot}`",
+            f"- **fingerprint**: `{fingerprint}`",
+            f"- **来源**: joinquant_audit_log_jsonl",
+            f"- **事件总数**: `{total_lines}`",
+            f"- **ETF 池**: {params_snapshot.get('etf_pool', [])}",
+        ] + (["", f"- **日期范围**: `{date_range[0]} ~ {date_range[1]}`"] if date_range[0] else []) + [""]),
+        encoding="utf-8",
+    )
+
+    # views/profile.md
+    profile = [f"# 审计日志概览\n\n- **事件总数**: `{total_lines}`"]
+    if date_range[0]:
+        profile.append(f"- **日期范围**: `{date_range[0]} ~ {date_range[1]}`")
+    profile.append("\n## 事件类型分布\n\n| 事件类型 | 数量 |\n| --- | ---: |")
+    for et, cnt in sorted(event_counts.items(), key=lambda x: x[1], reverse=True):
+        profile.append(f"| {et} | {cnt} |")
+    (root / "views" / "profile.md").write_text("\n".join(profile), encoding="utf-8")
+
+    # views/schema.md
+    (root / "views" / "schema.md").write_text(
+        "\n".join([
+            "# 审计日志字段",
+            "",
+            "每行一个 JSON 事件，字段随 `event` 类型变化。",
+            "",
+            "## 公共字段",
+            "| 字段 | 类型 | 说明 |",
+            "| --- | --- | --- |",
+            "| `seq` | int | 事件序号 |",
+            "| `event` | str | run_start / rebalance_signals / rebalance_order / run_end |",
+            "| `audit_token` | str | 审计令牌 |",
+            "| `current_dt` | str | 当前时间 |",
+            "| `previous_date` | str | 上一交易日 |",
+            "",
+            "## rebalance_signals 特有字段",
+            "| 字段 | 类型 |",
+            "| --- | --- |",
+            "| `trend_gates` | list[float] |",
+            "| `rp_weights` | list[float] |",
+            "| `tilted_weights` | list[float] |",
+            "| `crowd_penalties` | list[float] |",
+            "| `raw_weights` | list[float] |",
+            "| `portfolio_vol_scale` | float |",
+            "| `final_weights_before_constraints` | list[float] |",
+            "| `final_weights` | list[float] |",
+            "",
+        ]),
+        encoding="utf-8",
+    )
+
+    (root / "views" / "profile.json").write_text(
+        json.dumps({
+            "total_events": total_lines,
+            "date_range": date_range,
+            "event_counts": event_counts,
+            "params_snapshot": params_snapshot,
+        }, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    _update_catalog(_datasets_root(datasets_root))
+    return DatasetSnapshot(root=root, metadata=metadata)

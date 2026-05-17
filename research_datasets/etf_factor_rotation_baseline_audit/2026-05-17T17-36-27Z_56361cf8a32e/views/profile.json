@@ -1,0 +1,22 @@
+{
+  "total_events": 1090,
+  "date_range": [
+    "2021-01-01",
+    "2026-04-30"
+  ],
+  "event_counts": {
+    "run_start": 1,
+    "rebalance_signals": 272,
+    "rebalance_order": 816,
+    "run_end": 1
+  },
+  "params_snapshot": {
+    "etf_pool": [
+      "159819.XSHE",
+      "513100.XSHG",
+      "518880.XSHG"
+    ],
+    "benchmark": "000300.XSHG",
+    "current_dt": "2021-01-01T00:00:00"
+  }
+}

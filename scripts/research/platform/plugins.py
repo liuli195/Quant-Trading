@@ -445,10 +445,92 @@ class RobustnessCheckPlugin:
         }
 
 
+class GenericPlugin:
+    """Minimal scaffolding plugin for diagnostic / exploratory research.
+
+    Provides the standard project skeleton and data-contract infrastructure
+    without imposing any candidate-funnel workflow.  Actual analysis logic
+    lives in standalone modules and writes results into ``runs/<run_id>/``.
+    """
+
+    name = "generic"
+    template = "generic"
+    code_version = "generic:v1"
+    capabilities = PluginCapabilities(
+        local_capabilities=("diagnostic", "data_exploration", "project_scaffolding"),
+        replayable_params=(),
+        required_exports=(),
+        unsupported_changes=(),
+        fidelity_level=FidelityLevel.LOCAL_EXACT,
+    )
+
+    def build_feature_spec(self, project: dict[str, Any]) -> dict[str, Any]:
+        return {"plugin": self.name, "datasets": project.get("datasets", [])}
+
+    def dataset_fingerprint(self, project: dict[str, Any]) -> str:
+        datasets = project.get("datasets") or []
+        if datasets:
+            parts = [f"{d['dataset_id']}/{d['snapshot_id']}" for d in datasets]
+            return f"generic:{'+'.join(parts)}"
+        return "generic:no-datasets"
+
+    def build_features(self, project: dict[str, Any]) -> dict[str, Any]:
+        return {"project": project, "datasets": project.get("datasets", [])}
+
+    def run_fast(self, context: ResearchRunContext, features: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "grid": pd.DataFrame({"status": ["ok"]}),
+            "funnel": CandidateFunnel(
+                ranked=pd.DataFrame(),
+                discarded=pd.DataFrame(),
+                shortlist=pd.DataFrame(),
+                cloud_candidates=pd.DataFrame(),
+            ),
+            "decision": {
+                "mode": "fast",
+                "template": "generic",
+                "message": "Generic project scaffolded. Run custom analysis scripts for diagnostics.",
+            },
+        }
+
+    def run_full(
+        self,
+        context: ResearchRunContext,
+        features: dict[str, Any],
+        shortlist: pd.DataFrame,
+    ) -> dict[str, Any]:
+        return {
+            "reviewed": pd.DataFrame(),
+            "funnel": CandidateFunnel(
+                ranked=pd.DataFrame(),
+                discarded=pd.DataFrame(),
+                shortlist=pd.DataFrame(),
+                cloud_candidates=pd.DataFrame(),
+            ),
+            "decision": {
+                "mode": "full",
+                "template": "generic",
+                "message": "Generic full mode — no built-in analysis. Use standalone modules.",
+            },
+        }
+
+    def build_cloud_handoff(
+        self,
+        context: ResearchRunContext,
+        cloud_candidates: pd.DataFrame,
+    ) -> dict[str, Any] | None:
+        return {
+            "status": "not_applicable",
+            "reason": "generic_template_no_handoff",
+            "commands": [],
+        }
+
+
 BUILTIN_PLUGINS = {
     FactorScanPlugin.name: FactorScanPlugin(),
     ParameterFollowupPlugin.name: ParameterFollowupPlugin(),
     RobustnessCheckPlugin.name: RobustnessCheckPlugin(),
+    GenericPlugin.name: GenericPlugin(),
 }
 
 

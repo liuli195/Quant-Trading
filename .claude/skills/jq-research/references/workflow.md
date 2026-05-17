@@ -17,6 +17,7 @@
    - `cloud_candidates.csv`
    - `full_decision.json`
 6. 只有 `cloud_candidates` 非空，才进入云端交接。
+7. 若使用 `generic` 模板，不经过候选漏斗。研究产出直接写入 `runs/<run_id>/`，分析逻辑由独立模块完成。
 
 ## 委托关系
 

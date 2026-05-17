@@ -25,6 +25,7 @@
 - `scripts/research/platform/` — 本地优先研究平台核心（缓存、候选漏斗、插件契约）
 - `scripts/research/research_core/` — 共享研究库（指标、日历、布局、价格、报告）
 - `scripts/research/momentum_tilt_research/` — 动量倾斜研究工具
+- `scripts/research/cash_decomposition/` — 现金拆解与利用率研究工具
 - `research_datasets/` — 仓库级研究数据快照（原件、Parquet、摘要视图）
 - `scripts/archive/` — 归档脚本（不再活跃使用但保留备查）
 - `.claude/skills/` — AI agent 技能，详见 ## Skills
@@ -39,10 +40,11 @@
   子命令：`compile-check` / `upload` / `run` / `fetch` / `batch` / `ab expand|run|report`
 - 路径别名解析：`python -m scripts.tools.path_tools.aliases resolve <别名> <key=value...>`；`list` 列出所有别名
 - 路径引用校验：`python -m scripts.tools.path_tools.refactor check`；其他子命令：`rewrite-md` / `replace` / `move` / `rewrite`
-- 本地优先研究平台：`python -m scripts.research.cli`（子命令：`init`、`run`、`promote`、`resume`、`handoff-cloud`、`status`）
-- 研究数据集管理：`python -m scripts.research.datasets`（子命令：`import-price-json`、`inspect`）
+- 本地优先研究平台：`python -m scripts.research.cli`（子命令：`init`、`run`、`promote`、`resume`、`handoff-cloud`、`status`；模板：`factor_scan` / `parameter_followup` / `robustness_check` / `generic`）
+- 研究数据集管理：`python -m scripts.research.datasets`（子命令：`import-price-json`、`import-audit-log`、`inspect`）
 - ETF 窗异质性研究：`python -m scripts.research.etf_window_research.cli`（子命令：`export-script`、`fetch`、`analyze`）
 - 动量倾斜研究：`python -m scripts.research.momentum_tilt_research.cli`（子命令：`replay-calibrate`、`analyze`、`ab-plan`、`cloud-robustness`）
+- 现金拆解分析：`python -c "from scripts.research.cash_decomposition.analysis import decompose_from_dataset; ..."`（纯函数库，读 Parquet 主存储计算四层现金归因）
 
 ## Skills
 
@@ -53,7 +55,7 @@
 - `jq-fix` — 本地修复策略代码，不启动云端回测
 - `jq-param-scan` — 参数扫描（生成网格 → 批量回测 → 对比报告），消耗额度
 - `jq-ab-test` — A/B 实验（设计校验 → 执行 → bootstrap 显著性检验），消耗额度
-- `jq-research` — 本地优先研究总入口（判断 `local_exact` / `local_replayable` / `cloud_only` → 选模板 → 本地快筛 → shortlist 精筛 → 委托云端确认）
+- `jq-research` — 本地优先研究总入口（判断 `local_exact` / `local_replayable` / `cloud_only` → 选模板（含 `generic` 通用模板）→ 本地快筛 / 诊断 → shortlist 精筛 → 委托云端确认）
 
 ## 通用约定
 

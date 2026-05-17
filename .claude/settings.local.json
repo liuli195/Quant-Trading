@@ -275,7 +275,17 @@
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest scripts/research/research_core/tests -q -x --tb=short 2>&1)",
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest strategies/etf_factor_rotation/tests -q -x --tb=short 2>&1)",
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.tools.path_tools.aliases list 2>&1)",
-      "PowerShell(Remove-Item -Recurse -Force \"strategies/demo_strategy\" -ErrorAction Stop; git check-ignore \"strategies/demo_strategy/\" 2>&1; \"Removed. Check gitignore: exit=$LASTEXITCODE\")"
+      "PowerShell(Remove-Item -Recurse -Force \"strategies/demo_strategy\" -ErrorAction Stop; git check-ignore \"strategies/demo_strategy/\" 2>&1; \"Removed. Check gitignore: exit=$LASTEXITCODE\")",
+      "Bash([ -f \"$dir/audit_log.jsonl\" ])",
+      "Bash(python -c \"print\\(sum\\(1 for _ in open\\(r'd:/My Project/Quant Trading/strategies/etf_factor_rotation/backtest_runs/20260517-1734-bt19cd602c6a77e0878d1aec4a60c9f3d8/tabs_raw/audit_log.jsonl','r',encoding='utf-8'\\)\\)\\)\")",
+      "Bash(python -c ' *)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m py_compile scripts\\\\research\\\\platform\\\\plugins.py)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m py_compile scripts\\\\research\\\\platform\\\\engine.py)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m py_compile scripts\\\\research\\\\cli.py)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m py_compile scripts\\\\research\\\\platform\\\\datasets.py)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m py_compile scripts\\\\research\\\\datasets.py)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.research.datasets import-audit-log \"strategies\\\\etf_factor_rotation\\\\backtest_runs\\\\20260517-1724-bt580e16e5a3f1bf99d197cea88889da1a\\\\tabs_raw\\\\audit_log.jsonl\" --dataset-id etf_factor_rotation_baseline_audit)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe _run_phase0.py)"
     ],
     "additionalDirectories": [
       "d:\\My Project\\Quant Trading\\.claude\\skills\\jq-param-scan"
