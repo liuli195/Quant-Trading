@@ -9,6 +9,8 @@ import sys
 
 PROTECTED_BRANCHES = {"main", "master"}
 BYPASS_ENV = "ALLOW_PROTECTED_BRANCH_PUSH"
+REF_UPDATE_BYPASS_ENV = "ALLOW_MAIN_REF_UPDATE"
+REF_UPDATE_REASON_ENV = "MAIN_REF_UPDATE_REASON"
 
 
 def check_pre_push_input(input_text: str, *, environ: dict[str, str] | None = None) -> list[str]:
@@ -30,6 +32,32 @@ def check_pre_push_input(input_text: str, *, environ: dict[str, str] | None = No
     return sorted(set(violations))
 
 
+def check_reference_transaction_input(input_text: str, *, environ: dict[str, str] | None = None) -> list[str]:
+    """Return protected local branch ref updates from Git reference-transaction stdin."""
+
+    violations = _protected_branches_from_reference_transaction(input_text)
+    if not violations:
+        return []
+
+    env = environ if environ is not None else os.environ
+    if env.get(REF_UPDATE_BYPASS_ENV) == "1" and env.get(REF_UPDATE_REASON_ENV, "").strip():
+        return []
+    return violations
+
+
+def _protected_branches_from_reference_transaction(input_text: str) -> list[str]:
+    violations: list[str] = []
+    for line in input_text.splitlines():
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+        _old_sha, _new_sha, ref = parts[:3]
+        branch = _branch_from_ref(ref)
+        if branch in PROTECTED_BRANCHES:
+            violations.append(branch)
+    return sorted(set(violations))
+
+
 def _branch_from_ref(ref: str) -> str | None:
     prefix = "refs/heads/"
     if not ref.startswith(prefix):
@@ -42,6 +70,11 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     pre_push = subparsers.add_parser("pre-push", help="validate Git pre-push refs from stdin")
     pre_push.set_defaults(func=_cmd_pre_push)
+    reference_transaction = subparsers.add_parser(
+        "reference-transaction",
+        help="validate local protected branch ref updates from stdin",
+    )
+    reference_transaction.set_defaults(func=_cmd_reference_transaction)
     return parser
 
 
@@ -60,6 +93,27 @@ def _cmd_pre_push(_args: argparse.Namespace) -> int:
         ),
         file=sys.stderr,
     )
+    return 1
+
+
+def _cmd_reference_transaction(_args: argparse.Namespace) -> int:
+    input_text = sys.stdin.read()
+    violations = check_reference_transaction_input(input_text)
+    if not violations:
+        return 0
+
+    branches = ", ".join(violations)
+    message = [
+        f"error: local update to protected branch blocked: {branches}",
+        "Do not merge feature branches into main/master locally; open a PR instead.",
+        (
+            f"Audited sync/break-glass bypass: set {REF_UPDATE_BYPASS_ENV}=1 and "
+            f"{REF_UPDATE_REASON_ENV}=<reason> for this command."
+        ),
+    ]
+    if os.environ.get(REF_UPDATE_BYPASS_ENV) == "1" and not os.environ.get(REF_UPDATE_REASON_ENV, "").strip():
+        message.insert(1, f"error: {REF_UPDATE_REASON_ENV} is required when {REF_UPDATE_BYPASS_ENV}=1")
+    print("\n".join(message), file=sys.stderr)
     return 1
 
 

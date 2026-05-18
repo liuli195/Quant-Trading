@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from scripts.research.governance.branch_protection import check_pre_push_input
+from scripts.research.governance.branch_protection import check_pre_push_input, check_reference_transaction_input
 from scripts.research.governance.pr_review_evidence import validate_pr_body
 from scripts.research.governance.rules import run_audit
 from scripts.research.registry import default_tool_registry
@@ -87,7 +87,8 @@ def _write_minimal_repo(root: Path) -> None:
     (root / "CLAUDE.md").write_text(
         "scripts.research.cli scripts.research.datasets scripts.research.variants "
         "scripts.research.governance scripts.research.governance gate scripts.research.registry "
-        "docs/rules/index.md docs/adr/ pr-governance-review",
+        "docs/rules/index.md docs/adr/ pr-governance-review "
+        "所有进入主干的改动必须通过 PR 禁止本地合并主干",
         encoding="utf-8",
     )
     (root / "AGENTS.md").write_text(
@@ -112,6 +113,17 @@ def _write_minimal_repo(root: Path) -> None:
         ),
         encoding="utf-8",
     )
+    (root / ".githooks/reference-transaction").write_text(
+        "\n".join(
+            [
+                "STATE=${1:-}",
+                'if [ "$STATE" = "prepared" ]; then',
+                "python -m scripts.research.governance.branch_protection reference-transaction",
+                "fi",
+            ]
+        ),
+        encoding="utf-8",
+    )
     (root / ".github/workflows/research-governance.yml").write_text(
         "on:\n  schedule:\n    - cron: '0 2 * * 1'\nsteps:\n"
         "  - run: python -m scripts.research.governance gate\n"
@@ -120,6 +132,14 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / "scripts/research/governance/README.md").write_text(
         "docs/rules/index.md docs/adr scripts.research.governance gate\n",
+        encoding="utf-8",
+    )
+    (root / "docs/rules/ai-agents.md").write_text(
+        "所有进入主干的改动必须通过 PR\n禁止本地合并主干\n",
+        encoding="utf-8",
+    )
+    (root / "docs/rules/governance.md").write_text(
+        ".githooks/reference-transaction ALLOW_MAIN_REF_UPDATE MAIN_REF_UPDATE_REASON\n",
         encoding="utf-8",
     )
     (root / "CODEOWNERS").write_text(
@@ -464,6 +484,44 @@ def test_governance_audit_flags_pre_push_without_lfs_handoff(tmp_path) -> None:
     )
 
 
+def test_governance_audit_flags_missing_reference_transaction_hook(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/reference-transaction").unlink()
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "reference-transaction" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_reference_transaction_without_branch_protection(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/reference-transaction").write_text("exit 0\n", encoding="utf-8")
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "local branch protection" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_claude_without_pr_main_merge_rule(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / "CLAUDE.md").write_text(
+        "scripts.research.cli scripts.research.datasets scripts.research.variants "
+        "scripts.research.governance scripts.research.governance gate scripts.research.registry "
+        "docs/rules/index.md docs/adr/ pr-governance-review",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "禁止本地合并主干" in finding.message
+        for finding in report.findings
+    )
+
+
 def test_pre_push_branch_protection_blocks_main() -> None:
     violations = check_pre_push_input(
         "refs/heads/topic abc123 refs/heads/main def456\n",
@@ -484,6 +542,41 @@ def test_pre_push_branch_protection_allows_explicit_bypass() -> None:
     violations = check_pre_push_input(
         "refs/heads/topic abc123 refs/heads/main def456\n",
         environ={"ALLOW_PROTECTED_BRANCH_PUSH": "1"},
+    )
+    assert violations == []
+
+
+def test_reference_transaction_branch_protection_blocks_main_update() -> None:
+    violations = check_reference_transaction_input(
+        "0" * 40 + " " + "1" * 40 + " refs/heads/main\n",
+        environ={},
+    )
+    assert violations == ["main"]
+
+
+def test_reference_transaction_branch_protection_allows_feature_update() -> None:
+    violations = check_reference_transaction_input(
+        "0" * 40 + " " + "1" * 40 + " refs/heads/fix/topic\n",
+        environ={},
+    )
+    assert violations == []
+
+
+def test_reference_transaction_branch_protection_requires_bypass_reason() -> None:
+    violations = check_reference_transaction_input(
+        "0" * 40 + " " + "1" * 40 + " refs/heads/main\n",
+        environ={"ALLOW_MAIN_REF_UPDATE": "1"},
+    )
+    assert violations == ["main"]
+
+
+def test_reference_transaction_branch_protection_allows_audited_bypass() -> None:
+    violations = check_reference_transaction_input(
+        "0" * 40 + " " + "1" * 40 + " refs/heads/main\n",
+        environ={
+            "ALLOW_MAIN_REF_UPDATE": "1",
+            "MAIN_REF_UPDATE_REASON": "sync origin/main after PR merge",
+        },
     )
     assert violations == []
 

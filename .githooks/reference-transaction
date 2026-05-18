@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+
+STATE="${1:-}"
+
+if [ "$STATE" = "prepared" ]; then
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".githooks/run-python.ps1" \
+    -m scripts.research.governance.branch_protection reference-transaction
+fi

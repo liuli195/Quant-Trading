@@ -10,8 +10,10 @@
 - AI 助手统一以本文件为入口；仓库级规则正文见 [docs/rules/index.md](docs/rules/index.md) <!-- pathref: docs/rules/index.md -->，重大治理决策见 [docs/adr](docs/adr) <!-- pathref: docs/adr -->。
 - 策略代码**仅能在聚宽云端运行**，本地不可执行完整策略。
 - AI助手禁止在主分支(main) 上进行任何修改和编辑操作，必须切专用分支进行修改。
+- 所有进入主干的改动必须通过 PR；“合并到主干”默认表示准备或创建 PR，不表示执行本地 `git merge`。
+- 禁止本地合并主干：AI 助手不得执行 `git switch main` 后再 `git merge` / `git reset` 到功能分支提交。
 - 本地 Python 命令必须通过 `.\.venv\Scripts\python.exe`，不使用系统 Python。
-- 本地 Git hook 必须启用：`git config core.hooksPath .githooks`，确保提交和推送触发治理门禁。
+- 本地 Git hook 必须启用：`git config core.hooksPath .githooks`，确保提交、推送和本地主干 ref 更新触发治理门禁。
 - Markdown 内部文件引用采用双轨格式（可点击路径 + `pathref` 注释），确保机器可校验。
 - 每次任务后清理临时产物。
 - 所有回答和输出使用简体中文。
@@ -58,6 +60,8 @@ git config core.hooksPath .githooks
 ## Agents
 
 `.claude/agents/pr-governance-review.md` 是独立评审治理 Agent。进入主干前，PR 必须填入该 Agent 的通过结论，并通过 CI 的 `pr-review-evidence` 检查。
+
+本地 `main` 只用于同步 `origin/main`。如需在 PR 合并后同步本地主干，必须使用带审计说明的显式绕过：`ALLOW_MAIN_REF_UPDATE=1` 与 `MAIN_REF_UPDATE_REASON=<reason>`。
 
 ## 目录速查
 

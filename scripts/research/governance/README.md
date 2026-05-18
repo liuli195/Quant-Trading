@@ -10,9 +10,9 @@
 ```
 
 `gate` is the enforced entry for hooks and CI. It runs governance audit plus
-the pathref checker. The tracked hooks are `.githooks/pre-commit` and
-`.githooks/pre-push`. They are not active just because the files exist; enable
-them in each local checkout with:
+the pathref checker. The tracked hooks are `.githooks/pre-commit`,
+`.githooks/pre-push`, and `.githooks/reference-transaction`. They are not active
+just because the files exist; enable them in each local checkout with:
 
 ```powershell
 git config core.hooksPath .githooks
@@ -33,6 +33,16 @@ It blocks direct pushes to `main` / `master` when remote rulesets are unavailabl
 reruns the full governance gate before push, and preserves the Git LFS hook.
 The shell hooks call `.githooks/run-python.ps1` so Git for Windows can reliably
 use the repository venv from hook context.
+
+`.githooks/reference-transaction` blocks local updates to `refs/heads/main` and
+`refs/heads/master`, including accidental local `git merge` or `git reset` into
+the protected branch. After a PR has already merged remotely, local main sync is
+an audited break-glass action and must set both environment variables:
+
+```powershell
+$env:ALLOW_MAIN_REF_UPDATE="1"
+$env:MAIN_REF_UPDATE_REASON="sync origin/main after PR merge"
+```
 
 GitHub `main` must also enforce the same policy with branch protection or a
 ruleset:

@@ -10,6 +10,8 @@
 - 本地仓库必须设置 `git config core.hooksPath .githooks`，不能只提交 hook 文件。
 - `.githooks/pre-push` 必须调用 `scripts.research.governance.branch_protection pre-push` 和 `scripts.research.governance gate`，并保留 Git LFS pre-push 转交。
 - 在远端 rulesets 不生效的私有仓库中，`.githooks/pre-push` 必须本地阻断推送到 `main` / `master`。
+- `.githooks/reference-transaction` 必须本地阻断 `refs/heads/main` / `refs/heads/master` 更新，防止绕过 PR 的本地 `git merge`、`git reset` 或分支指针改写。
+- 同步本地 `main` 到已通过 PR 的 `origin/main` 时，必须显式设置 `ALLOW_MAIN_REF_UPDATE=1` 和 `MAIN_REF_UPDATE_REASON=<reason>`，并保留审计说明。
 - GitHub `main` 必须配置 branch protection 或 ruleset：Require pull request、Require status checks（`Research Governance / governance` 与 `Research Governance / pr-review-evidence`）、Require review from Code Owners、Block force pushes。
 - waiver 必须登记 `id`、`rule_id`、`path`、`reason`、`owner`、`approved_by`、`expires_at`、`migration_plan`。
 - 过期 waiver、无 owner、无批准人、无迁移计划的 waiver 必须阻断。
