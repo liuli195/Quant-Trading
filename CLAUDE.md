@@ -10,6 +10,7 @@
 - AI 助手统一以本文件为入口；仓库级规则正文见 [docs/rules/index.md](docs/rules/index.md) <!-- pathref: docs/rules/index.md -->，重大治理决策见 [docs/adr](docs/adr) <!-- pathref: docs/adr -->。
 - 策略代码**仅能在聚宽云端运行**，本地不可执行完整策略。
 - 本地 Python 命令必须通过 `.\.venv\Scripts\python.exe`，不使用系统 Python。
+- 本地 Git hook 必须启用：`git config core.hooksPath .githooks`，确保提交和推送触发治理门禁。
 - Markdown 内部文件引用采用双轨格式（可点击路径 + `pathref` 注释），确保机器可校验。
 - 每次任务后清理临时产物。
 - 所有回答和输出使用简体中文。
@@ -44,6 +45,8 @@
 .\.venv\Scripts\python.exe -m scripts.research.registry.tool_registry list|validate
 .\.venv\Scripts\python.exe -m scripts.research.governance audit
 .\.venv\Scripts\python.exe -m scripts.research.governance gate
+# 启用本地治理 hooks
+git config core.hooksPath .githooks
 ```
 
 ## Skills

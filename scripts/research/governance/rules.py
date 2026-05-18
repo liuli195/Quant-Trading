@@ -163,6 +163,10 @@ def _audit_claude_and_skills(root: Path) -> list[AuditFinding]:
 
 def _audit_governance_gate(root: Path) -> list[AuditFinding]:
     findings: list[AuditFinding] = []
+    hook_python = root / ".githooks" / "run-python.ps1"
+    if not hook_python.is_file():
+        findings.append(AuditFinding("governance_gate", "error", ".githooks/run-python.ps1 missing"))
+
     hook = root / ".githooks" / "pre-commit"
     if not hook.is_file():
         findings.append(AuditFinding("governance_gate", "error", ".githooks/pre-commit missing"))
@@ -178,6 +182,10 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         text = pre_push.read_text(encoding="utf-8", errors="ignore")
         if "scripts.research.governance.branch_protection pre-push" not in text:
             findings.append(AuditFinding("governance_gate", "error", "pre-push hook missing branch protection gate"))
+        if "scripts.research.governance gate" not in text:
+            findings.append(AuditFinding("governance_gate", "error", "pre-push hook missing governance gate"))
+        if "git lfs pre-push" not in text:
+            findings.append(AuditFinding("governance_gate", "error", "pre-push hook missing Git LFS handoff"))
 
     workflow = root / ".github" / "workflows" / "research-governance.yml"
     if not workflow.is_file():

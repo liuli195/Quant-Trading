@@ -1,9 +1,17 @@
 #!/bin/sh
 set -eu
 
-PYTHON_CMD="${PYTHON:-.venv/Scripts/python.exe}"
-if [ ! -x "$PYTHON_CMD" ]; then
-  PYTHON_CMD="python"
-fi
+PRE_PUSH_INPUT="$(cat)"
 
-"$PYTHON_CMD" -m scripts.research.governance.branch_protection pre-push
+printf '%s\n' "$PRE_PUSH_INPUT" | powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".githooks/run-python.ps1" \
+  -m scripts.research.governance.branch_protection pre-push
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".githooks/run-python.ps1" \
+  -m scripts.research.governance gate
+
+if [ "${SKIP_GIT_LFS_PRE_PUSH:-}" != "1" ]; then
+  command -v git-lfs >/dev/null 2>&1 || {
+    printf >&2 "\n%s\n\n" "This repository uses Git LFS but 'git-lfs' was not found on your path."
+    exit 2
+  }
+  printf '%s\n' "$PRE_PUSH_INPUT" | git lfs pre-push "$@"
+fi

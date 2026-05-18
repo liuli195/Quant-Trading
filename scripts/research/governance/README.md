@@ -11,24 +11,41 @@
 
 `gate` is the enforced entry for hooks and CI. It runs governance audit plus
 the pathref checker. The tracked hooks are `.githooks/pre-commit` and
-`.githooks/pre-push`; enable them with:
+`.githooks/pre-push`. They are not active just because the files exist; enable
+them in each local checkout with:
 
 ```powershell
 git config core.hooksPath .githooks
+git config --get core.hooksPath
 ```
 
-`.githooks/pre-push` calls:
+The second command must print `.githooks`.
+
+`.githooks/pre-push` calls all required push gates before handing off to Git LFS:
 
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.research.governance.branch_protection pre-push
+.\.venv\Scripts\python.exe -m scripts.research.governance gate
+git lfs pre-push
 ```
 
-It blocks direct pushes to `main` / `master` when remote rulesets are unavailable.
+It blocks direct pushes to `main` / `master` when remote rulesets are unavailable,
+reruns the full governance gate before push, and preserves the Git LFS hook.
+The shell hooks call `.githooks/run-python.ps1` so Git for Windows can reliably
+use the repository venv from hook context.
+
+GitHub `main` must also enforce the same policy with branch protection or a
+ruleset:
+
+- require pull request before merging;
+- require status check `Research Governance / governance`;
+- require review from Code Owners;
+- block force pushes.
 
 审计范围：
 
 - 仓库级规则文档 [docs/rules/index.md](../../../docs/rules/index.md) <!-- pathref: docs/rules/index.md --> 是否存在，ADR 目录 [docs/adr](../../../docs/adr) <!-- pathref: docs/adr --> 是否连续编号。
-- `.githooks/pre-push` 是否仍调用代码化主干保护门禁。
+- `.githooks/pre-push` 是否仍调用代码化主干保护门禁、完整 gate 和 Git LFS 转交。
 - `CODEOWNERS` 是否覆盖关键治理路径，`.github/pull_request_template.md` 是否包含规则同步、检查、waiver 和证据项。
 - `docs/exceptions/active-waivers.yaml` 中的 waiver 是否有 owner、批准人、过期时间和迁移计划。
 - 工具是否登记在中央 registry。

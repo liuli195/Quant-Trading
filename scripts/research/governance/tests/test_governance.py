@@ -96,8 +96,18 @@ def _write_minimal_repo(root: Path) -> None:
         "python -m scripts.research.governance gate\n",
         encoding="utf-8",
     )
+    (root / ".githooks/run-python.ps1").write_text(
+        "& .venv\\Scripts\\python.exe @args\n",
+        encoding="utf-8",
+    )
     (root / ".githooks/pre-push").write_text(
-        "python -m scripts.research.governance.branch_protection pre-push\n",
+        "\n".join(
+            [
+                "python -m scripts.research.governance.branch_protection pre-push",
+                "python -m scripts.research.governance gate",
+                "git lfs pre-push",
+            ]
+        ),
         encoding="utf-8",
     )
     (root / ".github/workflows/research-governance.yml").write_text(
@@ -368,6 +378,47 @@ def test_governance_audit_flags_missing_pre_push_branch_protection(tmp_path) -> 
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(finding.rule_id == "governance_gate" and "pre-push" in finding.message for finding in report.findings)
+
+
+def test_governance_audit_flags_missing_hook_python_wrapper(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/run-python.ps1").unlink()
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "run-python.ps1" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_pre_push_without_gate(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/pre-push").write_text(
+        "python -m scripts.research.governance.branch_protection pre-push\n"
+        "git lfs pre-push\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "pre-push hook missing governance gate" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_pre_push_without_lfs_handoff(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/pre-push").write_text(
+        "python -m scripts.research.governance.branch_protection pre-push\n"
+        "python -m scripts.research.governance gate\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "Git LFS handoff" in finding.message
+        for finding in report.findings
+    )
 
 
 def test_pre_push_branch_protection_blocks_main() -> None:
