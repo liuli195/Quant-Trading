@@ -36,7 +36,7 @@ def _synthetic_frames() -> PriceFrames:
         },
         index=calendar,
     )
-    return PriceFrames(close=close, high=close, low=close, money=close, calendar=calendar)
+    return PriceFrames(open=close, close=close, high=close, low=close, money=close, calendar=calendar)
 
 
 def _event(signal_date: str, previous_date: str, scores: list[float]) -> dict:

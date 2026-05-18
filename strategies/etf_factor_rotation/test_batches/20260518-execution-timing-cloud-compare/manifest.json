@@ -1,0 +1,38 @@
+{
+  "batch_id": "20260518-execution-timing-cloud-compare",
+  "strategy": "etf_factor_rotation",
+  "created": "2026-05-18T00:00:00",
+  "status": "pending",
+  "scenarios": {
+    "s01-execution-timing-worktree": {
+      "status": "completed",
+      "runs": [
+        {
+          "run_id": "20260518-2112-btad92e9f81ce38a61c4c2bc96f313e182",
+          "label": "baseline",
+          "params_diff": {
+            "ExecutionTimingMode": "baseline"
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260518-2115-bte20c289b37c62e437e71790dd58e2293",
+          "label": "logic-2-delay-only",
+          "params_diff": {
+            "ExecutionTimingMode": "logic-2-delay-only"
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260518-2117-bt5f9c36b58a30b48ee51e916b7fa0576c",
+          "label": "logic-3-live-like",
+          "params_diff": {
+            "ExecutionTimingMode": "logic-3-live-like"
+          },
+          "status": "completed"
+        }
+      ]
+    }
+  },
+  "updated": "2026-05-18T21:20:03"
+}

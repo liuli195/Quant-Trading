@@ -1,0 +1,7 @@
+{
+  "status": "blocked",
+  "needs_cloud_confirmation": false,
+  "reasons": [
+    "missing_open_prices"
+  ]
+}

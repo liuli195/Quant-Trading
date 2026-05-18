@@ -1,0 +1,19 @@
+{
+  "status": "ok",
+  "usable_for_decision": true,
+  "weeks": 272,
+  "baseline_recompute_max_abs_error": 3.2296760266170566e-09,
+  "changed_weeks": 236,
+  "changed_week_ratio": 0.8676470588235294,
+  "topk_order_change_count": 83,
+  "state_change_count": 11,
+  "l1_distance_mean": 0.1126779773660832,
+  "l1_distance_median": 0.044724636233469714,
+  "l1_distance_p90": 0.3329642111559669,
+  "module_change_counts": {
+    "TrendGate": 55,
+    "MomentumScore": 112,
+    "CrowdPenalty": 153,
+    "PortfolioVolScale": 220
+  }
+}

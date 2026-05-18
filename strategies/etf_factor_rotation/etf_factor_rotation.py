@@ -50,6 +50,11 @@ FIELD_MAP = {
 
 JQ_AUTO_AUDIT_TOKEN = "manual"
 JQ_AUTO_AUDIT_DIR = "jq_auto_audit"
+EXECUTION_TIMING_MODES = (
+    "baseline",
+    "logic-2-delay-only",
+    "logic-3-live-like",
+)
 
 
 def fund_code(security):
@@ -225,6 +230,7 @@ def snapshot_params():
         "MinWeight": g.MinWeight,
         "RebalanceThreshold": g.RebalanceThreshold,
         "MaxTotalWeight": g.MaxTotalWeight,
+        "ExecutionTimingMode": g.ExecutionTimingMode,
         "use_real_price": g.use_real_price,
         "fq_mode": g.fq_mode,
         "history_buffer": g.history_buffer,
@@ -307,6 +313,8 @@ def validate_params(params):
         errors.append("MomentumExtremeTiltCap must satisfy 1 <= cap <= MomentumTiltMax")
     if not (0 < params["RSRSTiltMin"] <= 1 <= params["RSRSTiltMax"]):
         errors.append("RSRS tilt bounds must satisfy 0 < min <= 1 <= max")
+    if params["ExecutionTimingMode"] not in EXECUTION_TIMING_MODES:
+        errors.append("ExecutionTimingMode must be one of %s" % (EXECUTION_TIMING_MODES,))
     if len(params["etf_pool"]) != len(params["etf_names"]):
         errors.append("etf_pool and etf_names must have the same length")
     for etf, name in zip(params["etf_pool"], params["etf_names"]):
@@ -380,12 +388,37 @@ def initialize(context):
 
     set_slippage(FixedSlippage(0.0), type='fund')
 
-    run_weekly(
-        weekly_check,
-        weekday=1,
-        time='open',
-        reference_security='000300.XSHG'
-    )
+    if g.ExecutionTimingMode == "baseline":
+        run_weekly(
+            weekly_check,
+            weekday=1,
+            time='open',
+            reference_security='000300.XSHG'
+        )
+    elif g.ExecutionTimingMode == "logic-2-delay-only":
+        run_weekly(
+            prepare_delay_only_rebalance,
+            weekday=1,
+            time='open',
+            reference_security='000300.XSHG'
+        )
+        run_daily(
+            execute_pending_rebalance,
+            time='open',
+            reference_security='000300.XSHG'
+        )
+    else:
+        run_weekly(
+            mark_live_like_signal_day,
+            weekday=1,
+            time='open',
+            reference_security='000300.XSHG'
+        )
+        run_daily(
+            execute_live_like_rebalance,
+            time='open',
+            reference_security='000300.XSHG'
+        )
 
 
 def on_strategy_end(context):
@@ -479,6 +512,7 @@ def set_parameter(context):
     g.MinWeight = 0.05
     g.RebalanceThreshold = 0.03
     g.MaxTotalWeight = 1.0
+    g.ExecutionTimingMode = "baseline"
 
     # ---- 数据与基准 ----
     # 复权模式：fq='pre' 在 FQ A/B 对比测试中证实对场内基金会
@@ -496,6 +530,8 @@ def set_parameter(context):
     g.audit_token = JQ_AUTO_AUDIT_TOKEN
     g.audit_path = "%s/%s.jsonl" % (JQ_AUTO_AUDIT_DIR, g.audit_token)
     g.audit_seq = 0
+    g.pending_rebalances = []
+    g.pending_live_like_signal_days = []
 
 
 # ============================================================
@@ -538,12 +574,20 @@ def compose_raw_weights(tilted_weights, trend_gates, crowd_penalties):
 # ============================================================
 # weekly_check — 周频调仓主函数
 # ============================================================
-def weekly_check(context):
-    """每周开盘时执行一次完整的调仓流程。
+def _context_trade_date(context):
+    """返回当前任务对应的自然日。"""
+    current_dt = getattr(context, "current_dt", None)
+    if current_dt is not None and hasattr(current_dt, "date"):
+        return current_dt.date()
+    return current_dt
+
+
+def build_rebalance_plan(context):
+    """生成一次调仓所需的完整信号快照，但不直接下单。
 
     流程：TrendGate → RPWeight → MomentumScore → MomentumTilt
          → RSRSTilt → TiltedWeight → CrowdPenalty
-         → PortfolioVolScale → FinalWeight → execute
+         → PortfolioVolScale → FinalWeight
     """
     params = snapshot_params()
     pool = params["etf_pool"]
@@ -612,10 +656,127 @@ def weekly_check(context):
         portfolio_vol_scale=portfolio_vol_scale,
         final_weights_before_constraints=final_weights_before_constraints,
         final_weights=final_weights,
+        execution_timing_mode=params["ExecutionTimingMode"],
+        asof_date=getattr(context, "previous_date", None),
+        trade_date=_context_trade_date(context),
     )
 
-    # 13. 执行调仓
-    execute_rebalance(context, pool, final_weights, params)
+    return {
+        "pool": pool,
+        "final_weights": final_weights,
+        "params": params,
+        "asof_date": getattr(context, "previous_date", None),
+        "prepared_date": _context_trade_date(context),
+    }
+
+
+def weekly_check(context):
+    """每周开盘时生成信号并立即执行调仓。"""
+    plan = build_rebalance_plan(context)
+    execute_rebalance(context, plan["pool"], plan["final_weights"], plan["params"])
+
+
+def prepare_delay_only_rebalance(context):
+    """按 baseline 口径先生成信号，延后到下一交易日开盘执行。"""
+    plan = build_rebalance_plan(context)
+    g.pending_rebalances.append(plan)
+    audit_event(
+        "rebalance_prepared",
+        context,
+        execution_timing_mode=plan["params"]["ExecutionTimingMode"],
+        asof_date=plan["asof_date"],
+        prepared_date=plan["prepared_date"],
+        final_weights=plan["final_weights"],
+    )
+
+
+def execute_pending_rebalance(context):
+    """执行 logic-2 中已缓存、且至少延后一交易日的调仓。"""
+    queue = getattr(g, "pending_rebalances", [])
+    if not queue:
+        return
+
+    pending = queue[0]
+    trade_date = _context_trade_date(context)
+    prepared_date = pending.get("prepared_date")
+    if trade_date is None or prepared_date is None or trade_date <= prepared_date:
+        audit_event(
+            "pending_rebalance_wait",
+            context,
+            execution_timing_mode=pending["params"]["ExecutionTimingMode"],
+            asof_date=pending.get("asof_date"),
+            prepared_date=prepared_date,
+            trade_date=trade_date,
+        )
+        return
+
+    audit_event(
+        "pending_rebalance_execute",
+        context,
+        execution_timing_mode=pending["params"]["ExecutionTimingMode"],
+        asof_date=pending.get("asof_date"),
+        prepared_date=prepared_date,
+        trade_date=trade_date,
+        final_weights=pending["final_weights"],
+    )
+    execute_rebalance(context, pending["pool"], pending["final_weights"], pending["params"])
+    g.pending_rebalances.pop(0)
+
+
+def mark_live_like_signal_day(context):
+    """记录本周首个交易日，供下一交易日开盘生成并执行 logic-3 信号。"""
+    signal_date = _context_trade_date(context)
+    g.pending_live_like_signal_days.append(signal_date)
+    audit_event(
+        "live_like_signal_marked",
+        context,
+        execution_timing_mode=snapshot_params()["ExecutionTimingMode"],
+        signal_date=signal_date,
+    )
+
+
+def execute_live_like_rebalance(context):
+    """在首个交易日之后的下一交易日开盘，生成并执行 logic-3 信号。"""
+    queue = getattr(g, "pending_live_like_signal_days", [])
+    if not queue:
+        return
+
+    signal_date = queue[0]
+    trade_date = _context_trade_date(context)
+    if trade_date is None or signal_date is None or trade_date <= signal_date:
+        audit_event(
+            "live_like_wait",
+            context,
+            execution_timing_mode=snapshot_params()["ExecutionTimingMode"],
+            signal_date=signal_date,
+            trade_date=trade_date,
+        )
+        return
+
+    asof_date = getattr(context, "previous_date", None)
+    if asof_date != signal_date:
+        audit_event(
+            "live_like_skip",
+            context,
+            execution_timing_mode=snapshot_params()["ExecutionTimingMode"],
+            signal_date=signal_date,
+            asof_date=asof_date,
+            trade_date=trade_date,
+            reason="previous_date_not_signal_date",
+        )
+        queue.pop(0)
+        return
+
+    audit_event(
+        "live_like_rebalance_execute",
+        context,
+        execution_timing_mode=snapshot_params()["ExecutionTimingMode"],
+        signal_date=signal_date,
+        asof_date=asof_date,
+        trade_date=trade_date,
+    )
+    weekly_check(context)
+    queue.pop(0)
 
 
 # ============================================================

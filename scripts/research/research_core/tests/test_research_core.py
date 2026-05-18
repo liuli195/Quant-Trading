@@ -28,14 +28,15 @@ def test_load_price_bundle_normalizes_frames(tmp_path) -> None:
         "calendar": ["2026-01-02", "2026-01-05"],
         "prices": {
             "AAA": [
-                {"date": "2026-01-02", "close": 1.0, "high": 1.1, "low": 0.9, "money": 10},
-                {"date": "2026-01-05", "close": 1.1, "high": 1.2, "low": 1.0, "money": 11},
+                {"date": "2026-01-02", "open": 0.95, "close": 1.0, "high": 1.1, "low": 0.9, "money": 10},
+                {"date": "2026-01-05", "open": 1.05, "close": 1.1, "high": 1.2, "low": 1.0, "money": 11},
             ]
         },
     }
     path = tmp_path / "prices.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
     frames = load_price_bundle(path, codes=("AAA", "BBB"))
+    assert frames.open.loc[pd.Timestamp("2026-01-05"), "AAA"] == 1.05
     assert list(frames.close.columns) == ["AAA", "BBB"]
     assert frames.close.loc[pd.Timestamp("2026-01-05"), "AAA"] == 1.1
     assert pd.isna(frames.close.loc[pd.Timestamp("2026-01-05"), "BBB"])

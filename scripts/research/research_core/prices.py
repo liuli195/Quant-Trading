@@ -15,6 +15,7 @@ import pandas as pd
 class PriceFrames:
     """Normalized daily price bundle."""
 
+    open: pd.DataFrame
     close: pd.DataFrame
     high: pd.DataFrame
     low: pd.DataFrame
@@ -50,6 +51,7 @@ def load_price_bundle(path: str | Path, codes: Iterable[str] | None = None) -> P
     selected_codes = tuple(codes) if codes is not None else inferred_codes
     calendar = pd.DatetimeIndex(pd.to_datetime(payload["calendar"]).normalize())
     return PriceFrames(
+        open=_field_frame(payload, selected_codes, "open", calendar),
         close=_field_frame(payload, selected_codes, "close", calendar),
         high=_field_frame(payload, selected_codes, "high", calendar),
         low=_field_frame(payload, selected_codes, "low", calendar),

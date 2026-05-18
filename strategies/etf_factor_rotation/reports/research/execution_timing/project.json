@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "strategy": "etf_factor_rotation",
+  "project": "execution_timing",
+  "template": "generic",
+  "plugin": "generic",
+  "datasets": [],
+  "inputs": {
+    "raw_data": "strategies/etf_factor_rotation/reports/research/execution_timing/inputs/raw/execution_timing_prices.json",
+    "audit_log": "strategies/etf_factor_rotation/backtest_runs/20260517-1724-bt580e16e5a3f1bf99d197cea88889da1a/tabs_raw/audit_log.jsonl"
+  },
+  "runtime": {
+    "fast_top_k": 20,
+    "cloud_top_k": 3,
+    "fast_mode_slo_seconds": 3.0,
+    "full_mode_slo_seconds": 30.0
+  }
+}

@@ -65,6 +65,7 @@ def normalize_joinquant_price_payload(payload: dict[str, Any]) -> pd.DataFrame:
                 {
                     "date": pd.Timestamp(record["date"]).normalize(),
                     "symbol": symbol,
+                    "open": record.get("open"),
                     "close": record.get("close"),
                     "high": record.get("high"),
                     "low": record.get("low"),
@@ -249,6 +250,7 @@ def load_price_frames(snapshot: DatasetSnapshot, codes: tuple[str, ...] | None =
                 )
 
             return PriceFrames(
+                open=pivot("open"),
                 close=pivot("close"),
                 high=pivot("high"),
                 low=pivot("low"),

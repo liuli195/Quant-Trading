@@ -105,6 +105,7 @@
 - `source` — 必填，JoinQuant 价格导出 JSON 路径
 - `--dataset-id` — 必填，数据集标识
 - `--snapshot-id` — 可选，快照 ID（默认自动生成：时间戳 + 内容 SHA256 前 12 位）
+- 价格字段按导出内容原样保留，当前研究基线约定为 `open / close / high / low / money`
 
 产物：`raw/source.json.gz`、`data/data.parquet`、`views/`（profile.md、schema.md、sample.csv、profile.json）、`dataset.json`、`README.md`。自动更新 `research_datasets/catalog.json` 和 `catalog.md`。
 

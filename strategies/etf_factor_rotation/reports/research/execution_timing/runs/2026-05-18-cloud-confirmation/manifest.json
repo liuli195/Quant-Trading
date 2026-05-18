@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "project": "execution_timing",
+  "run_id": "2026-05-18-cloud-confirmation",
+  "generated_at": "2026-05-18T21:33:19",
+  "inputs": {
+    "valid_cloud_batch": "strategies/etf_factor_rotation/test_batches/20260518-execution-timing-cloud-compare-v2/manifest.json",
+    "diagnostic_discarded_batch": "strategies/etf_factor_rotation/test_batches/20260518-execution-timing-cloud-compare/manifest.json",
+    "baseline_run_id": "20260518-2125-bt17c8ba539ebb20f374b4c36fc322b718",
+    "logic_2_run_id": "20260518-2128-bt720a21be72ca92343877e3eed66a5644",
+    "logic_3_run_id": "20260518-2130-btd3a302dab6ce74013cb2c7dfd6785a62"
+  },
+  "outputs": [
+    "reports/cloud_comparison.md",
+    "tables/cloud_comparison_summary.json"
+  ]
+}

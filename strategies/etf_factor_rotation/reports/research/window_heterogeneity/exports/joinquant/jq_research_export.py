@@ -4,7 +4,7 @@ import os
 from jqdata import *
 
 ETF_CODES = ['159819.XSHE', '513100.XSHG', '518880.XSHG']
-FIELDS = ["close", "high", "low", "money"]
+FIELDS = ["open", "close", "high", "low", "money"]
 HISTORY_START = "2018-01-01"
 SCORE_START = "2021-01-01"
 SCORE_END = "2026-04-30"

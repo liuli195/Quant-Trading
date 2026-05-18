@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "project": "execution_timing",
+  "run_id": "2026-05-18-phase1-open-refresh",
+  "generated_at": "2026-05-18T20:56:57",
+  "inputs": {
+    "raw_price_path": "D:/My Project/Quant Trading/strategies/etf_factor_rotation/reports/research/execution_timing/inputs/raw/execution_timing_prices.json",
+    "audit_log_path": "D:/My Project/Quant Trading/strategies/etf_factor_rotation/backtest_runs/20260517-1724-bt580e16e5a3f1bf99d197cea88889da1a/tabs_raw/audit_log.jsonl",
+    "has_open_prices": true
+  },
+  "outputs": [
+    "reports/delay_only_impact.md",
+    "reports/signal_shift_report.md",
+    "reports/timing_local_decision.md",
+    "tables/delay_only_weekly_impact.csv",
+    "tables/delay_only_summary.json",
+    "tables/signal_shift_weekly.csv",
+    "tables/signal_shift_summary.json",
+    "tables/timing_path_compare.csv",
+    "tables/timing_path_summary.json",
+    "tables/timing_local_decision.json"
+  ]
+}

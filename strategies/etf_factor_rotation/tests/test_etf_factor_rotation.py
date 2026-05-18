@@ -100,6 +100,9 @@ class TestModuleLoading:
     def test_all_core_functions_exist(self, strategy):
         core_funcs = [
             'initialize', 'set_parameter', 'weekly_check',
+            'build_rebalance_plan', 'prepare_delay_only_rebalance',
+            'execute_pending_rebalance', 'mark_live_like_signal_day',
+            'execute_live_like_rebalance',
             'get_history_data', 'compute_trend_gates', 'compute_momentum_scores',
             'select_topk', 'compute_rp_weights', 'compute_rsrs_multipliers',
             'compute_rsrs_adjusted_scores',
@@ -239,6 +242,47 @@ class TestInitialize:
         args, kwargs = strategy.run_weekly.call_args
         assert kwargs['weekday'] == 1
         assert kwargs['time'] == 'open'
+        strategy.run_daily.assert_not_called()
+
+    def test_initialize_registers_delay_only_tasks(self, strategy):
+        original_set_parameter = strategy.set_parameter
+
+        def set_delay_only(context):
+            original_set_parameter(context)
+            strategy.g.ExecutionTimingMode = "logic-2-delay-only"
+
+        context = SimpleNamespace()
+        context.portfolio = strategy._mock_portfolio
+        with patch.object(strategy, 'set_parameter', side_effect=set_delay_only):
+            strategy.initialize(context)
+
+        strategy.run_weekly.assert_called_once()
+        _, weekly_kwargs = strategy.run_weekly.call_args
+        assert weekly_kwargs['weekday'] == 1
+        assert weekly_kwargs['time'] == 'open'
+        strategy.run_daily.assert_called_once()
+        _, daily_kwargs = strategy.run_daily.call_args
+        assert daily_kwargs['time'] == 'open'
+
+    def test_initialize_registers_live_like_task(self, strategy):
+        original_set_parameter = strategy.set_parameter
+
+        def set_live_like(context):
+            original_set_parameter(context)
+            strategy.g.ExecutionTimingMode = "logic-3-live-like"
+
+        context = SimpleNamespace()
+        context.portfolio = strategy._mock_portfolio
+        with patch.object(strategy, 'set_parameter', side_effect=set_live_like):
+            strategy.initialize(context)
+
+        strategy.run_weekly.assert_called_once()
+        _, weekly_kwargs = strategy.run_weekly.call_args
+        assert weekly_kwargs['weekday'] == 1
+        assert weekly_kwargs['time'] == 'open'
+        strategy.run_daily.assert_called_once()
+        _, daily_kwargs = strategy.run_daily.call_args
+        assert daily_kwargs['time'] == 'open'
 
     def test_initialize_calls_set_order_cost(self, strategy):
         """验证 initialize 调用了 set_order_cost 并传递正确的费率参数。"""
@@ -1759,6 +1803,131 @@ class TestWeeklyCheckIntegration:
         )
 
 
+class TestExecutionTimingModes:
+    """测试三种执行时序的调度语义。"""
+
+    def test_delay_only_prepares_then_executes_next_day(self, strategy, mock_g):
+        mock_g.ExecutionTimingMode = "logic-2-delay-only"
+        params = strategy.snapshot_params()
+        final_weights = np.array([0.4, 0.3, 0.0])
+        plan = {
+            "pool": list(mock_g.etf_pool),
+            "final_weights": final_weights,
+            "params": params,
+            "asof_date": pd.Timestamp("2026-05-15").date(),
+            "prepared_date": pd.Timestamp("2026-05-18").date(),
+        }
+
+        with patch.object(strategy, 'build_rebalance_plan', return_value=plan):
+            monday = SimpleNamespace(
+                current_dt=pd.Timestamp("2026-05-18 09:30:00").to_pydatetime(),
+                previous_date=pd.Timestamp("2026-05-15").date(),
+                portfolio=strategy._mock_portfolio,
+            )
+            strategy.prepare_delay_only_rebalance(monday)
+
+        assert strategy.g.pending_rebalances == [plan]
+
+        with patch.object(strategy, 'execute_rebalance') as execute:
+            strategy.execute_pending_rebalance(monday)
+            execute.assert_not_called()
+
+            tuesday = SimpleNamespace(
+                current_dt=pd.Timestamp("2026-05-19 09:30:00").to_pydatetime(),
+                previous_date=pd.Timestamp("2026-05-18").date(),
+                portfolio=strategy._mock_portfolio,
+            )
+            strategy.execute_pending_rebalance(tuesday)
+            execute.assert_called_once_with(
+                tuesday,
+                plan["pool"],
+                plan["final_weights"],
+                plan["params"],
+            )
+
+        assert strategy.g.pending_rebalances == []
+
+    def test_delay_only_keeps_queued_plan_across_holiday_gap(self, strategy, mock_g):
+        mock_g.ExecutionTimingMode = "logic-2-delay-only"
+        first_plan = {
+            "pool": list(mock_g.etf_pool),
+            "final_weights": np.array([0.4, 0.3, 0.0]),
+            "params": strategy.snapshot_params(),
+            "asof_date": pd.Timestamp("2021-09-30").date(),
+            "prepared_date": pd.Timestamp("2021-10-08").date(),
+        }
+        second_plan = {
+            "pool": list(mock_g.etf_pool),
+            "final_weights": np.array([0.2, 0.5, 0.0]),
+            "params": strategy.snapshot_params(),
+            "asof_date": pd.Timestamp("2021-10-08").date(),
+            "prepared_date": pd.Timestamp("2021-10-11").date(),
+        }
+        strategy.g.pending_rebalances = [first_plan, second_plan]
+        monday = SimpleNamespace(
+            current_dt=pd.Timestamp("2021-10-11 09:30:00").to_pydatetime(),
+            previous_date=pd.Timestamp("2021-10-08").date(),
+            portfolio=strategy._mock_portfolio,
+        )
+
+        with patch.object(strategy, 'execute_rebalance') as execute:
+            strategy.execute_pending_rebalance(monday)
+
+        execute.assert_called_once_with(
+            monday,
+            first_plan["pool"],
+            first_plan["final_weights"],
+            first_plan["params"],
+        )
+        assert strategy.g.pending_rebalances == [second_plan]
+
+    def test_live_like_marks_then_executes_next_trade_day(self, strategy, mock_g):
+        mock_g.ExecutionTimingMode = "logic-3-live-like"
+        monday = SimpleNamespace(
+            current_dt=pd.Timestamp("2026-05-18 09:30:00").to_pydatetime(),
+            previous_date=pd.Timestamp("2026-05-15").date(),
+            portfolio=strategy._mock_portfolio,
+        )
+        tuesday = SimpleNamespace(
+            current_dt=pd.Timestamp("2026-05-19 09:30:00").to_pydatetime(),
+            previous_date=pd.Timestamp("2026-05-18").date(),
+            portfolio=strategy._mock_portfolio,
+        )
+
+        with patch.object(strategy, 'weekly_check') as weekly_check:
+            strategy.mark_live_like_signal_day(monday)
+            strategy.execute_live_like_rebalance(monday)
+            weekly_check.assert_not_called()
+
+            strategy.execute_live_like_rebalance(tuesday)
+            weekly_check.assert_called_once_with(tuesday)
+
+        assert strategy.g.pending_live_like_signal_days == []
+
+    def test_live_like_executes_after_holiday_gap(self, strategy, mock_g):
+        mock_g.ExecutionTimingMode = "logic-3-live-like"
+        friday = SimpleNamespace(
+            current_dt=pd.Timestamp("2021-10-08 09:30:00").to_pydatetime(),
+            previous_date=pd.Timestamp("2021-09-30").date(),
+            portfolio=strategy._mock_portfolio,
+        )
+        monday = SimpleNamespace(
+            current_dt=pd.Timestamp("2021-10-11 09:30:00").to_pydatetime(),
+            previous_date=pd.Timestamp("2021-10-08").date(),
+            portfolio=strategy._mock_portfolio,
+        )
+
+        with patch.object(strategy, 'weekly_check') as weekly_check:
+            strategy.mark_live_like_signal_day(friday)
+            strategy.mark_live_like_signal_day(monday)
+            strategy.execute_live_like_rebalance(monday)
+
+        weekly_check.assert_called_once_with(monday)
+        assert strategy.g.pending_live_like_signal_days == [
+            pd.Timestamp("2021-10-11").date()
+        ]
+
+
 # ============================================================
 # 10. R3 修复验证 — get_history_data 显式 end_date=context.previous_date
 # ============================================================
@@ -2286,6 +2455,7 @@ class TestSnapshotParams:
             "CrowdStart", "CrowdEnd", "MinCrowdPenalty",
             "PortfolioVolWindow", "TargetVol", "MaxPortfolioVolScale",
             "MaxWeight", "MinWeight", "RebalanceThreshold", "MaxTotalWeight",
+            "ExecutionTimingMode",
             "use_real_price", "fq_mode", "history_buffer",
         ]
         for key in required:
@@ -2300,6 +2470,7 @@ class TestSnapshotParams:
         assert params["fq_mode"] == mock_g.fq_mode
         assert params["history_buffer"] == mock_g.history_buffer
         assert params["etf_names"] == mock_g.etf_names
+        assert params["ExecutionTimingMode"] == mock_g.ExecutionTimingMode
 
     def test_snapshot_list_values_are_copies(self, strategy, mock_g):
         params = strategy.snapshot_params()
@@ -2483,6 +2654,12 @@ class TestValidateParams:
         mock_g.RSRSTiltMax = 0.8
         params = strategy.snapshot_params()
         with pytest.raises(ValueError, match="RSRS tilt bounds"):
+            strategy.validate_params(params)
+
+    def test_execution_timing_mode_must_be_known(self, strategy, mock_g):
+        mock_g.ExecutionTimingMode = "unknown"
+        params = strategy.snapshot_params()
+        with pytest.raises(ValueError, match="ExecutionTimingMode must be one of"):
             strategy.validate_params(params)
 
 

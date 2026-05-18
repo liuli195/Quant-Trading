@@ -21,7 +21,7 @@ import os
 from jqdata import *
 
 ETF_CODES = [{etfs}]
-FIELDS = ["close", "high", "low", "money"]
+FIELDS = ["open", "close", "high", "low", "money"]
 HISTORY_START = "{history_start}"
 SCORE_START = "{SCORE_START.isoformat()}"
 SCORE_END = "{SCORE_END.isoformat()}"

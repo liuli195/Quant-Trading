@@ -1,0 +1,91 @@
+{
+  "status": "ok",
+  "weeks": 272,
+  "mean_weekly_delta": 3.1812283905119066e-05,
+  "compounded_delta": 0.007954361380658304,
+  "annual_breakdown": [
+    {
+      "year": 2021,
+      "weeks": 52,
+      "compounded_delta": -0.014078935118333802,
+      "mean_weekly_delta": -0.0002682859094109777
+    },
+    {
+      "year": 2022,
+      "weeks": 50,
+      "compounded_delta": 0.00029113534443547806,
+      "mean_weekly_delta": 8.575558427507766e-06
+    },
+    {
+      "year": 2023,
+      "weeks": 50,
+      "compounded_delta": -0.002309150492760259,
+      "mean_weekly_delta": -4.501010308873797e-05
+    },
+    {
+      "year": 2024,
+      "weeks": 52,
+      "compounded_delta": 0.021491362899257904,
+      "mean_weekly_delta": 0.0004100818019161861
+    },
+    {
+      "year": 2025,
+      "weeks": 52,
+      "compounded_delta": 0.005808333435744162,
+      "mean_weekly_delta": 0.00011484450046858174
+    },
+    {
+      "year": 2026,
+      "weeks": 16,
+      "compounded_delta": -0.0029283107192723534,
+      "mean_weekly_delta": -0.00017941449871144914
+    }
+  ],
+  "worst_weeks": [
+    {
+      "signal_date": "2025-09-01",
+      "delay_minus_baseline_return": -0.009660763653228549
+    },
+    {
+      "signal_date": "2022-06-06",
+      "delay_minus_baseline_return": -0.007300641724679757
+    },
+    {
+      "signal_date": "2026-04-13",
+      "delay_minus_baseline_return": -0.006288692571310623
+    },
+    {
+      "signal_date": "2021-09-27",
+      "delay_minus_baseline_return": -0.005667060212514796
+    },
+    {
+      "signal_date": "2025-03-03",
+      "delay_minus_baseline_return": -0.0050573097343194085
+    },
+    {
+      "signal_date": "2021-07-12",
+      "delay_minus_baseline_return": -0.005044173120623311
+    },
+    {
+      "signal_date": "2026-01-12",
+      "delay_minus_baseline_return": -0.004958502616767997
+    },
+    {
+      "signal_date": "2021-02-01",
+      "delay_minus_baseline_return": -0.004703176387095782
+    },
+    {
+      "signal_date": "2021-10-25",
+      "delay_minus_baseline_return": -0.004555996979288981
+    },
+    {
+      "signal_date": "2022-03-07",
+      "delay_minus_baseline_return": -0.004408294051228792
+    }
+  ],
+  "contribution_by_etf": {
+    "159819.XSHE": -0.03903892207953888,
+    "513100.XSHG": 0.015282542828341171,
+    "518880.XSHG": 0.0324093204733901
+  }
+}

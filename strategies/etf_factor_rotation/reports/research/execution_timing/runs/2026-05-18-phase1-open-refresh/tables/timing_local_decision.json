@@ -1,0 +1,9 @@
+{
+  "status": "ok",
+  "needs_cloud_confirmation": true,
+  "reasons": [
+    "logic_2_drawdown_worse_gt_0.30pp",
+    "logic_3_drawdown_worse_gt_0.30pp",
+    "signal_shift_not_rare"
+  ]
+}

@@ -31,7 +31,7 @@ from scripts.research.etf_window_research.spec import ETF_CODES
 def _write_price_bundle(path: Path) -> None:
     dates = pd.bdate_range("2018-01-01", periods=800)
     payload = {
-        "metadata": {"fields": ["close", "high", "low", "money"]},
+        "metadata": {"fields": ["open", "close", "high", "low", "money"]},
         "calendar": [day.date().isoformat() for day in dates],
         "prices": {},
     }
@@ -40,6 +40,7 @@ def _write_price_bundle(path: Path) -> None:
         payload["prices"][code] = [
             {
                 "date": day.date().isoformat(),
+                "open": float(value * 0.995),
                 "close": float(value),
                 "high": float(value * 1.01),
                 "low": float(value * 0.99),
@@ -81,6 +82,7 @@ def test_dataset_snapshot_writes_parquet_and_human_views(tmp_path) -> None:
     assert (snapshot.root / "views" / "profile.md").exists()
     assert (tmp_path / "research_datasets" / "catalog.md").exists()
     frames = load_price_frames(snapshot)
+    assert not frames.open.empty
     assert not frames.close.empty
 
 

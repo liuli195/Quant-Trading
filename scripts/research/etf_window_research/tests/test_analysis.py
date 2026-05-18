@@ -39,7 +39,14 @@ def _synthetic_frames() -> PriceFrames:
         },
         index=dates,
     )
-    return PriceFrames(close=close, high=close * 1.01, low=close * 0.99, money=money, calendar=dates)
+    return PriceFrames(
+        open=close,
+        close=close,
+        high=close * 1.01,
+        low=close * 0.99,
+        money=money,
+        calendar=dates,
+    )
 
 
 def test_window_band_classification() -> None:

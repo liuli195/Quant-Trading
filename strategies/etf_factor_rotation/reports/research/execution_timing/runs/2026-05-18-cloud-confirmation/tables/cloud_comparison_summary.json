@@ -1,0 +1,59 @@
+{
+  "status": "ok",
+  "valid_batch_id": "20260518-execution-timing-cloud-compare-v2",
+  "discarded_batch_id": "20260518-execution-timing-cloud-compare",
+  "variants": {
+    "baseline": {
+      "run_id": "20260518-2125-bt17c8ba539ebb20f374b4c36fc322b718",
+      "total_return": 1.1832,
+      "annual_return": 0.1635,
+      "max_drawdown": 0.0799,
+      "sharpe": 1.498,
+      "volatility": 0.082,
+      "rebalance_signals": 272
+    },
+    "logic_2_delay_only": {
+      "run_id": "20260518-2128-bt720a21be72ca92343877e3eed66a5644",
+      "total_return": 1.2107,
+      "annual_return": 0.1663,
+      "max_drawdown": 0.0912,
+      "sharpe": 1.535,
+      "volatility": 0.082,
+      "rebalance_signals": 272,
+      "prepared": 272,
+      "executed": 272
+    },
+    "logic_3_live_like": {
+      "run_id": "20260518-2130-btd3a302dab6ce74013cb2c7dfd6785a62",
+      "total_return": 1.1617,
+      "annual_return": 0.1613,
+      "max_drawdown": 0.1143,
+      "sharpe": 1.514,
+      "volatility": 0.08,
+      "rebalance_signals": 272,
+      "marked": 272,
+      "executed": 272
+    }
+  },
+  "delta_vs_baseline": {
+    "logic_2_delay_only": {
+      "total_return_pp": 2.75,
+      "annual_return_pp": 0.28,
+      "max_drawdown_worse_pp": 1.13,
+      "sharpe_delta": 0.037
+    },
+    "logic_3_live_like": {
+      "total_return_pp": -2.15,
+      "annual_return_pp": -0.22,
+      "max_drawdown_worse_pp": 3.44,
+      "sharpe_delta": 0.016
+    }
+  },
+  "decision": {
+    "cloud_confirmation_needed": true,
+    "cloud_confirmation_completed": true,
+    "formal_result": "timing_difference_not_negligible",
+    "write_back_ready": false,
+    "reason": "real_live_execution_path_still_unconfirmed"
+  }
+}

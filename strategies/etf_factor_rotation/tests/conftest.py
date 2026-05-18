@@ -36,7 +36,7 @@ def strategy():
 
     注入的 mock 对象：
     - g: SimpleNamespace
-    - set_option, set_order_cost, set_slippage, run_weekly: Mock
+    - set_option, set_order_cost, set_slippage, run_weekly, run_daily: Mock
     - OrderCost, FixedSlippage: Mock
     - log: MagicMock
     - get_price: MagicMock（返回可配置的 DataFrame）
@@ -58,6 +58,7 @@ def strategy():
     module.set_order_cost = Mock()
     module.set_slippage = Mock()
     module.run_weekly = Mock()
+    module.run_daily = Mock()
     module.set_benchmark = Mock()
     module.log = MagicMock()
     module.OrderCost = Mock()
@@ -197,6 +198,7 @@ def mock_g(strategy):
         MinWeight=0.05,
         RebalanceThreshold=0.03,
         MaxTotalWeight=1.0,
+        ExecutionTimingMode='baseline',
         live_days=1250,
         history_buffer=100,
         benchmark='000300.XSHG',
@@ -205,6 +207,8 @@ def mock_g(strategy):
         audit_token='test-token',
         audit_path='jq_auto_audit/test-token.jsonl',
         audit_seq=0,
+        pending_rebalances=[],
+        pending_live_like_signal_days=[],
     )
     return strategy.g
 
@@ -242,3 +246,4 @@ def _auto_reset_mocks(strategy):
     strategy.set_order_cost.reset_mock()
     strategy.set_slippage.reset_mock()
     strategy.run_weekly.reset_mock()
+    strategy.run_daily.reset_mock()
