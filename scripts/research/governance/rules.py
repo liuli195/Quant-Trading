@@ -26,6 +26,7 @@ REQUIRED_RULE_DOCS = (
     "docs/rules/index.md",
     "docs/rules/ai-agents.md",
     "docs/rules/governance.md",
+    "docs/rules/review-guidelines.md",
     "docs/rules/research-workflow.md",
     "docs/rules/code-style.md",
     "docs/rules/docs-and-pathref.md",
@@ -35,7 +36,6 @@ REQUIRED_CODEOWNER_PATTERNS = (
     "AGENTS.md",
     "docs/rules/**",
     "docs/adr/**",
-    ".claude/agents/**",
     ".claude/skills/**",
     ".github/workflows/**",
     ".githooks/**",
@@ -49,16 +49,21 @@ PR_TEMPLATE_TOKENS = (
     "影响范围",
     "规则同步",
     "已运行检查",
-    "评审治理 Agent 结论",
-    "pr-governance-review",
+    "Codex Code Review 结论",
+    "Codex",
     "waiver",
     "证据",
 )
-REQUIRED_REVIEW_AGENT_TOKENS = (
-    "name: pr-governance-review",
-    "独立评审 Agent",
+REQUIRED_REVIEW_GUIDELINES_TOKENS = (
+    "Codex Code Review",
+    "@codex review",
+    "AGENTS.md",
+    "docs/rules/review-guidelines.md",
+    "逐条检查",
+    "docs/rules/*.md",
+    "P0/P1",
     "scripts.research.governance gate",
-    "评审治理 Agent 结论",
+    "Codex Code Review 结论",
     "结论: 通过",
     "阻断问题: 无",
 )
@@ -87,7 +92,7 @@ def run_audit(
     findings.extend(_audit_tool_registry(root))
     findings.extend(_audit_layer_docs(root))
     findings.extend(_audit_claude_and_skills(root))
-    findings.extend(_audit_review_agent(root))
+    findings.extend(_audit_review_guidelines(root))
     findings.extend(_audit_governance_gate(root))
     findings.extend(_audit_rule_sources(root))
     findings.extend(_audit_codeowners(root))
@@ -148,8 +153,9 @@ def _audit_claude_and_skills(root: Path) -> list[AuditFinding]:
             "scripts.research.governance",
             "scripts.research.registry",
             "docs/rules/index.md",
+            "docs/rules/review-guidelines.md",
             "docs/adr",
-            "pr-governance-review",
+            "Codex Code Review",
         ):
             if token not in text:
                 findings.append(AuditFinding("claude_sync", "error", f"CLAUDE.md missing {token}"))
@@ -174,16 +180,25 @@ def _audit_claude_and_skills(root: Path) -> list[AuditFinding]:
     return findings
 
 
-def _audit_review_agent(root: Path) -> list[AuditFinding]:
-    path = root / ".claude" / "agents" / "pr-governance-review.md"
+def _audit_review_guidelines(root: Path) -> list[AuditFinding]:
+    findings: list[AuditFinding] = []
+    path = root / "docs" / "rules" / "review-guidelines.md"
     if not path.is_file():
-        return [AuditFinding("review_agent", "error", ".claude/agents/pr-governance-review.md missing")]
+        return [AuditFinding("review_guidelines", "error", "docs/rules/review-guidelines.md missing")]
     text = path.read_text(encoding="utf-8", errors="ignore")
-    return [
-        AuditFinding("review_agent", "error", f"pr-governance-review missing {token}")
-        for token in REQUIRED_REVIEW_AGENT_TOKENS
+    findings.extend(
+        AuditFinding("review_guidelines", "error", f"review-guidelines.md missing {token}")
+        for token in REQUIRED_REVIEW_GUIDELINES_TOKENS
         if token not in text
-    ]
+    )
+
+    agents = root / "AGENTS.md"
+    if agents.is_file():
+        agents_text = agents.read_text(encoding="utf-8", errors="ignore")
+        for token in ("## Review guidelines", "docs/rules/review-guidelines.md"):
+            if token not in agents_text:
+                findings.append(AuditFinding("review_guidelines", "error", f"AGENTS.md missing {token}"))
+    return findings
 
 
 def _audit_governance_gate(root: Path) -> list[AuditFinding]:

@@ -4,7 +4,6 @@ AGENTS.md @liuli195
 docs/rules/** @liuli195
 docs/adr/** @liuli195
 .claude/skills/** @liuli195
-.claude/agents/** @liuli195
 .github/workflows/** @liuli195
 .githooks/** @liuli195
 scripts/research/governance/** @liuli195

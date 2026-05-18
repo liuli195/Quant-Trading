@@ -17,13 +17,14 @@
 - [ ] `.\.venv\Scripts\python.exe -m scripts.tools.path_tools.refactor check`
 - [ ] 相关 pytest / py_compile
 
-## 评审治理 Agent 结论
+## Codex Code Review 结论
 
-- Agent: `pr-governance-review`
+- Reviewer: `Codex`
+- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`
 - 结论: 未执行
 - 阻断问题: 未确认
 - 关键证据:
-  -
+  - Codex review 链接：https://github.com/<owner>/<repo>/pull/<number>#pullrequestreview-<id>
 
 ## waiver
 

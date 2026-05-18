@@ -6,7 +6,7 @@
 - 所有主干改动必须通过 PR，并通过 required status checks。
 - 关键路径必须由 CODEOWNERS 覆盖并经过 owner review。
 - `scripts.research.governance gate` 是本地 hook 和 CI 的强门禁入口。
-- PR 必须包含独立 `pr-governance-review` Agent 的通过结论，CI 必须用 `pr-review-evidence` job 校验该结论。
+- PR 必须包含官方 Codex Code Review 的通过结论，CI 必须用 `pr-review-evidence` job 校验该结论。
 - 本地仓库必须设置 `git config core.hooksPath .githooks`，不能只提交 hook 文件。
 - `.githooks/pre-push` 必须调用 `scripts.research.governance.branch_protection pre-push` 和 `scripts.research.governance gate`，并保留 Git LFS pre-push 转交。
 - 在远端 rulesets 不生效的私有仓库中，`.githooks/pre-push` 必须本地阻断推送到 `main` / `master`。
@@ -30,7 +30,6 @@
 
 - `CLAUDE.md`
 - `AGENTS.md`
-- `.claude/agents/**`
 - `docs/rules/**`
 - `docs/adr/**`
 - `.claude/skills/**`

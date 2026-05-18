@@ -35,7 +35,6 @@ def _write_minimal_repo(root: Path) -> None:
         "research_datasets",
         ".github/workflows",
         ".githooks",
-        ".claude/agents",
         ".claude/skills/jq-research",
         ".claude/skills/jq-ab-test",
         "research_datasets/demo/snap/raw",
@@ -62,12 +61,14 @@ def _write_minimal_repo(root: Path) -> None:
         "docs/rules/index.md",
         "docs/rules/ai-agents.md",
         "docs/rules/governance.md",
+        "docs/rules/review-guidelines.md",
         "docs/rules/research-workflow.md",
         "docs/rules/code-style.md",
         "docs/rules/docs-and-pathref.md",
         "docs/adr/0001-rule-source-and-governance-model.md",
         "docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md",
         "docs/adr/0003-governance-gate-and-main-branch-protection.md",
+        "docs/adr/0004-codex-code-review-governance.md",
         "research_datasets/README.md",
         "scripts/research/platform/tests/test_platform.py",
         "scripts/research/registry/tests/test_registry.py",
@@ -87,12 +88,15 @@ def _write_minimal_repo(root: Path) -> None:
     (root / "CLAUDE.md").write_text(
         "scripts.research.cli scripts.research.datasets scripts.research.variants "
         "scripts.research.governance scripts.research.governance gate scripts.research.registry "
-        "docs/rules/index.md docs/adr/ pr-governance-review "
+        "docs/rules/index.md docs/rules/review-guidelines.md docs/adr/ Codex Code Review "
         "所有进入主干的改动必须通过 PR 禁止本地合并主干",
         encoding="utf-8",
     )
     (root / "AGENTS.md").write_text(
-        "所有 AI 编码助手统一以 CLAUDE.md 为权威规则源。\n",
+        "所有 AI 编码助手统一以 CLAUDE.md 为权威规则源。\n\n"
+        "## Review guidelines\n\n"
+        "Before reviewing, read and apply docs/rules/review-guidelines.md. "
+        "If you cannot access that file, treat the review as blocked.\n",
         encoding="utf-8",
     )
     (root / ".githooks/pre-commit").write_text(
@@ -149,7 +153,6 @@ def _write_minimal_repo(root: Path) -> None:
                 "AGENTS.md @research-platform",
                 "docs/rules/** @research-platform",
                 "docs/adr/** @research-platform",
-                ".claude/agents/** @research-platform",
                 ".claude/skills/** @research-platform",
                 ".github/workflows/** @research-platform",
                 ".githooks/** @research-platform",
@@ -162,7 +165,26 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     (root / ".github/pull_request_template.md").write_text(
-        "改动目标\n影响范围\n规则同步\n已运行检查\n评审治理 Agent 结论\npr-governance-review\nwaiver\n证据\n",
+        "改动目标\n影响范围\n规则同步\n已运行检查\nCodex Code Review 结论\nCodex\nwaiver\n证据\n",
+        encoding="utf-8",
+    )
+    (root / "docs/rules/review-guidelines.md").write_text(
+        "\n".join(
+            [
+                "# Codex Code Review 指南",
+                "Codex Code Review",
+                "@codex review",
+                "AGENTS.md",
+                "docs/rules/review-guidelines.md",
+                "逐条检查",
+                "docs/rules/*.md",
+                "P0/P1",
+                "scripts.research.governance gate",
+                "Codex Code Review 结论",
+                "结论: 通过",
+                "阻断问题: 无",
+            ]
+        ),
         encoding="utf-8",
     )
     (root / "docs/exceptions/active-waivers.yaml").write_text(
@@ -175,21 +197,6 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / ".claude/skills/jq-ab-test/SKILL.md").write_text(
         "variant_id 参数变体 结构变体 scripts.research.variants",
-        encoding="utf-8",
-    )
-    (root / ".claude/agents/pr-governance-review.md").write_text(
-        "\n".join(
-            [
-                "---",
-                "name: pr-governance-review",
-                "---",
-                "独立评审 Agent",
-                "scripts.research.governance gate",
-                "评审治理 Agent 结论",
-                "结论: 通过",
-                "阻断问题: 无",
-            ]
-        ),
         encoding="utf-8",
     )
     (root / "path_aliases.json").write_text(
@@ -380,12 +387,12 @@ def test_governance_audit_flags_invalid_pr_template(tmp_path) -> None:
     assert any(finding.rule_id == "pr_template" and "规则同步" in finding.message for finding in report.findings)
 
 
-def test_governance_audit_flags_missing_review_agent(tmp_path) -> None:
+def test_governance_audit_flags_missing_review_guidelines(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
-    (tmp_path / ".claude/agents/pr-governance-review.md").unlink()
+    (tmp_path / "docs/rules/review-guidelines.md").unlink()
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
-    assert any(finding.rule_id == "review_agent" for finding in report.findings)
+    assert any(finding.rule_id == "review_guidelines" for finding in report.findings)
 
 
 def test_governance_audit_flags_workflow_without_review_evidence_gate(tmp_path) -> None:
@@ -511,7 +518,7 @@ def test_governance_audit_flags_claude_without_pr_main_merge_rule(tmp_path) -> N
     (tmp_path / "CLAUDE.md").write_text(
         "scripts.research.cli scripts.research.datasets scripts.research.variants "
         "scripts.research.governance scripts.research.governance gate scripts.research.registry "
-        "docs/rules/index.md docs/adr/ pr-governance-review",
+        "docs/rules/index.md docs/rules/review-guidelines.md docs/adr/ Codex Code Review",
         encoding="utf-8",
     )
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
@@ -581,37 +588,167 @@ def test_reference_transaction_branch_protection_allows_audited_bypass() -> None
     assert violations == []
 
 
-def test_pr_review_evidence_accepts_approved_agent_conclusion() -> None:
+def test_pr_review_evidence_accepts_approved_codex_conclusion() -> None:
+    head_sha = "0" * 40
     report = validate_pr_body(
         "\n".join(
             [
-                "## 评审治理 Agent 结论",
+                "## Codex Code Review 结论",
                 "",
-                "- Agent: `pr-governance-review`",
+                "- Reviewer: `Codex`",
+                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
+                "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
                 "  - `scripts.research.governance gate`",
             ]
-        )
+        ),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        comments=[
+            "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。"
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
     )
     assert report.ok
     assert report.errors == ()
 
 
-def test_pr_review_evidence_rejects_unexecuted_agent_conclusion() -> None:
+def test_pr_review_evidence_rejects_unexecuted_codex_conclusion() -> None:
     report = validate_pr_body(
         "\n".join(
             [
-                "## 评审治理 Agent 结论",
+                "## Codex Code Review 结论",
                 "",
-                "- Agent: `pr-governance-review`",
+                "- Reviewer: `Codex`",
+                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
                 "- 结论: 未执行",
                 "- 阻断问题: 未确认",
                 "- 关键证据:",
+                "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
                 "  - `scripts.research.governance gate`",
             ]
         )
     )
     assert not report.ok
     assert "结论 must be 通过" in report.errors
+
+
+def test_pr_review_evidence_rejects_placeholder_codex_review_link() -> None:
+    report = validate_pr_body(
+        "\n".join(
+            [
+                "## Codex Code Review 结论",
+                "",
+                "- Reviewer: `Codex`",
+                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 结论: 通过",
+                "- 阻断问题: 无",
+                "- 关键证据:",
+                "  - Codex review 链接：",
+                "  - `scripts.research.governance gate`",
+            ]
+        )
+    )
+    assert not report.ok
+    assert "review evidence must include a real Codex review link for this PR" in report.errors
+
+
+def test_pr_review_evidence_rejects_other_pr_review_link() -> None:
+    report = validate_pr_body(
+        "\n".join(
+            [
+                "## Codex Code Review 结论",
+                "",
+                "- Reviewer: `Codex`",
+                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 结论: 通过",
+                "- 阻断问题: 无",
+                "- 关键证据:",
+                "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/4#pullrequestreview-4314779358",
+                "  - `scripts.research.governance gate`",
+            ]
+        ),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+    )
+    assert not report.ok
+    assert "review evidence must include a real Codex review link for this PR" in report.errors
+
+
+def test_pr_review_evidence_rejects_discussion_link_as_review() -> None:
+    report = validate_pr_body(
+        "\n".join(
+            [
+                "## Codex Code Review 结论",
+                "",
+                "- Reviewer: `Codex`",
+                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 结论: 通过",
+                "- 阻断问题: 无",
+                "- 关键证据:",
+                "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#discussion_r3262925410",
+                "  - `scripts.research.governance gate`",
+            ]
+        ),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+    )
+    assert not report.ok
+    assert "review evidence must include a real Codex review link for this PR" in report.errors
+
+
+def test_pr_review_evidence_rejects_missing_required_trigger_comment() -> None:
+    report = validate_pr_body(
+        "\n".join(
+            [
+                "## Codex Code Review 结论",
+                "",
+                "- Reviewer: `Codex`",
+                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 结论: 通过",
+                "- 阻断问题: 无",
+                "- 关键证据:",
+                "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
+                "  - `scripts.research.governance gate`",
+            ]
+        ),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        comments=["@codex review"],
+    )
+    assert not report.ok
+    assert "PR comments must include the required @codex review trigger" in report.errors
+
+
+def test_pr_review_evidence_rejects_review_from_old_head() -> None:
+    report = validate_pr_body(
+        "\n".join(
+            [
+                "## Codex Code Review 结论",
+                "",
+                "- Reviewer: `Codex`",
+                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 结论: 通过",
+                "- 阻断问题: 无",
+                "- 关键证据:",
+                "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
+                "  - `scripts.research.governance gate`",
+            ]
+        ),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha="1" * 40,
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": "0" * 40,
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+    )
+    assert not report.ok
+    assert "Codex review link must match a Codex review on the current head" in report.errors

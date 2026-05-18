@@ -15,6 +15,7 @@
 - 本地 Python 命令必须通过 `.\.venv\Scripts\python.exe`，不使用系统 Python。
 - 本地 Git hook 必须启用：`git config core.hooksPath .githooks`，确保提交、推送和本地主干 ref 更新触发治理门禁。
 - Markdown 内部文件引用采用双轨格式（可点击路径 + `pathref` 注释），确保机器可校验。
+- PR 合并前采用官方 Codex Code Review；无论代码由 Claude、Codex、Cursor、Copilot 或人工提交，都必须按 [review-guidelines.md](docs/rules/review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md --> 评审。
 - 每次任务后清理临时产物。
 - 所有回答和输出使用简体中文。
 
@@ -23,7 +24,7 @@
 - **开发流程**：本地修改 → 语法/单测校验 → 本地研究 → 云端回测 → 分析结果。
 - **代码规范**：`initialize` 集中配置与注册，`handle_data`/`run_daily` 实现调仓。参数集中定义、避免魔法数字。先筛选后计算、优先批量向量化、处理停牌缺失等边界。明确仓位上下限与风控参数。
 - **注释规范**：解释"为什么"而非逐行翻译；推荐三层（模块头/函数/关键语句）。研究结论写入分析文档，不留在代码注释。报告使用 `<topic>_YYYY/MM/DD.md` 命名。
-- **提交检查**：语法/单测通过、无未来函数、参数一致、分析文档同步。
+- **提交检查**：语法/单测通过、无未来函数、参数一致、分析文档同步；PR 阶段必须触发 Codex Code Review。
 
 ## 日常命令
 
@@ -57,9 +58,11 @@ git config core.hooksPath .githooks
 `.claude/skills/` 中的 AI agent 技能：`jq-run`、`jq-analyze`、`jq-fix`、`jq-param-scan`、`jq-ab-test`、`jq-research`。
 每个技能有独立的 `SKILL.md`，包含完整指令与约束。
 
-## Agents
+## Codex Code Review
 
-`.claude/agents/pr-governance-review.md` 是独立评审治理 Agent。进入主干前，PR 必须填入该 Agent 的通过结论，并通过 CI 的 `pr-review-evidence` 检查。
+进入主干前必须完成官方 Codex Code Review。这条规则适用于 Claude Code 或任何其他实现者提交的代码；实现者不得用自审替代 Codex review。
+
+PR 必须用评论 `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md` 触发 review。PR 必须填入 `Codex Code Review 结论`，并通过 CI 的 `pr-review-evidence` 检查。
 
 本地 `main` 只用于同步 `origin/main`。如需在 PR 合并后同步本地主干，必须使用带审计说明的显式绕过：`ALLOW_MAIN_REF_UPDATE=1` 与 `MAIN_REF_UPDATE_REASON=<reason>`。
 
@@ -72,7 +75,6 @@ git config core.hooksPath .githooks
 - `scripts/research/research_core/` — 指标、稳健性、回放和报告基础库
 - `docs/` — 文档入口、规则、研究流程、架构、参考资料
 - `.claude/skills/` — AI agent 技能定义
-- `.claude/agents/` — 独立 Agent 定义
 - 目录路径统一通过 `path_aliases.json` 的别名解析，禁止硬编码。
 
 ## 详细文档索引
@@ -82,6 +84,7 @@ git config core.hooksPath .githooks
 | 云端回测完整参考（命令签名、参数表、schema、错误索引） | [jq_automation/README.md](scripts/tools/jq_automation/README.md) |
 | 路径别名与重构工具说明 | [path_tools/README.md](scripts/tools/path_tools/README.md) |
 | 仓库级规则总索引 | [rules/index.md](docs/rules/index.md) <!-- pathref: docs/rules/index.md --> |
+| Codex Code Review 规则 | [review-guidelines.md](docs/rules/review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md --> |
 | 架构决策记录 | [docs/adr](docs/adr) <!-- pathref: docs/adr --> |
 | 本地优先研究流程与命令行示例 | [docs/guides/research-workflow.md](docs/guides/research-workflow.md) <!-- pathref: docs/guides/research-workflow.md --> |
 | 本地研究平台架构与治理 | [research-platform-architecture.md](docs/architecture/research-platform-architecture.md) <!-- pathref: docs/architecture/research-platform-architecture.md --> |
