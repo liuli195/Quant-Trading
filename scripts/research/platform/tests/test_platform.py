@@ -5,13 +5,26 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from scripts.research.platform.contracts import FidelityLevel, validate_baseline_exports
+from scripts.research.platform.batch_executor import execute_batch
+from scripts.research.platform.benchmark_runner import run_smoke_benchmark
+from scripts.research.platform.coverage_audit import (
+    ScanCoverageSlice,
+    audit_scan_coverage,
+    coverage_is_complete,
+)
 from scripts.research.platform.datasets import import_joinquant_price_json, load_price_frames
 from scripts.research.platform.engine import create_project, promote_run, resume_run, run_project
 from scripts.research.platform.features import FeatureStore
 from scripts.research.platform.funnel import build_fast_funnel, promote_full_funnel
-from scripts.research.platform.plugins import BUILTIN_PLUGINS, PARAMETER_REPLAY_ADAPTERS, ParameterReplayAdapter
+from scripts.research.platform.plugins import (
+    BUILTIN_PLUGINS,
+    PARAMETER_REPLAY_ADAPTERS,
+    ParameterReplayAdapter,
+    PortfolioVolatilityPlugin,
+)
 from scripts.research.etf_window_research.spec import ETF_CODES
 
 
@@ -93,6 +106,7 @@ def test_builtin_plugins_declare_local_capabilities() -> None:
     assert BUILTIN_PLUGINS["factor_scan"].capabilities.fidelity_level == FidelityLevel.LOCAL_EXACT
     assert "weight_shape" in BUILTIN_PLUGINS["parameter_followup"].capabilities.replayable_params
     assert "paired_bootstrap" in BUILTIN_PLUGINS["robustness_check"].capabilities.local_capabilities
+    assert "exact_domain_scan" in BUILTIN_PLUGINS["portfolio_volatility"].capabilities.local_capabilities
 
 
 def test_validate_baseline_exports_reports_missing_fields() -> None:
@@ -234,3 +248,86 @@ def test_robustness_check_fast_and_full_runs(tmp_path, monkeypatch) -> None:
     assert full["manifest"]["mode"] == "full"
     review = pd.read_csv(project_dir / "runs" / "full-1" / "tables" / "full_candidate_review.csv")
     assert review["candidate_id"].tolist() == ["variant-a"]
+
+
+def test_batch_executor_collects_rows_and_failures() -> None:
+    result = execute_batch(
+        [1, 2, 3],
+        lambda value: {"value": value} if value != 2 else (_ for _ in ()).throw(ValueError("boom")),
+    )
+    assert result.item_count == 3
+    assert [row["value"] for row in result.rows] == [1, 3]
+    assert result.errors[0]["error_type"] == "ValueError"
+
+
+def test_coverage_audit_flags_missing_intervals() -> None:
+    complete = audit_scan_coverage(
+        [
+            ScanCoverageSlice(
+                slice_id="20",
+                lower_bound=0.0,
+                upper_bound=0.2,
+                breakpoints=(0.0, 0.1, 0.2),
+                interval_points=(0.05, 0.15),
+            )
+        ]
+    )
+    missing = audit_scan_coverage(
+        [
+            ScanCoverageSlice(
+                slice_id="20",
+                lower_bound=0.0,
+                upper_bound=0.2,
+                breakpoints=(0.0, 0.1, 0.2),
+                interval_points=(0.05,),
+            )
+        ]
+    )
+    assert coverage_is_complete(complete) is True
+    assert coverage_is_complete(missing) is False
+
+
+def test_smoke_benchmark_projects_warm_runtime() -> None:
+    summary = run_smoke_benchmark(
+        [1, 2, 3],
+        lambda value: {"value": value},
+        full_item_count=6,
+        target_seconds=10.0,
+    )
+    assert summary.sample_size == 3
+    assert summary.full_item_count == 6
+    assert summary.predicted_full_seconds >= 0
+    assert summary.passed is True
+
+
+def test_portfolio_volatility_promotion_requires_warm_smoke(tmp_path) -> None:
+    project_dir = tmp_path / "portfolio"
+    fast_dir = project_dir / "runs" / "fast-1" / "tables"
+    fast_dir.mkdir(parents=True)
+    shortlist = pd.DataFrame([{"candidate_id": "portfolio-volatility-full-scan"}])
+    plugin = PortfolioVolatilityPlugin()
+
+    (fast_dir / "smoke_summary.json").write_text(
+        json.dumps(
+            {
+                "coverage_complete": True,
+                "feature_cache_hit": False,
+                "smoke_passed": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="feature_cache_not_warm"):
+        plugin.validate_promotion(project_dir=project_dir, fast_run_id="fast-1", shortlist=shortlist)
+
+    (fast_dir / "smoke_summary.json").write_text(
+        json.dumps(
+            {
+                "coverage_complete": True,
+                "feature_cache_hit": True,
+                "smoke_passed": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    plugin.validate_promotion(project_dir=project_dir, fast_run_id="fast-1", shortlist=shortlist)

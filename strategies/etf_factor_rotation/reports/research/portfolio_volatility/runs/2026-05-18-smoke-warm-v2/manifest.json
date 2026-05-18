@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "project": "portfolio_volatility",
+  "strategy": "etf_factor_rotation",
+  "run_id": "2026-05-18-smoke-warm-v2",
+  "mode": "fast",
+  "plugin": "portfolio_volatility",
+  "source_run_id": null,
+  "datasets": [],
+  "inputs": {
+    "raw_data": "strategies/etf_factor_rotation/reports/research/window_heterogeneity/inputs/raw/etf_window_research_prices.json",
+    "baseline_run_dir": "strategies/etf_factor_rotation/backtest_runs/20260517-1724-bt580e16e5a3f1bf99d197cea88889da1a",
+    "smoke_points_per_window": 16
+  },
+  "capabilities": {
+    "local_capabilities": [
+      "performance_smoke",
+      "exact_domain_scan",
+      "coverage_audit"
+    ],
+    "replayable_params": [
+      "portfolio_vol_window",
+      "target_vol"
+    ],
+    "required_exports": [
+      "daily_returns",
+      "audit_events",
+      "params"
+    ],
+    "unsupported_changes": [
+      "signal_definition",
+      "execution_logic",
+      "external_data_dependency"
+    ],
+    "fidelity_level": "local_replayable"
+  },
+  "feature_cache": {
+    "cache_key": "bb77a144840350d7b7714ca37eafebbfbdad908a4c7e06f6e320b1d64e49f2ed",
+    "cache_hit": true,
+    "cold_build_seconds": 0.0
+  },
+  "runtime_seconds": 0.6738172999998824,
+  "artifacts": {
+    "reports": [
+      "portfolio-volatility-performance-smoke.md"
+    ],
+    "tables": [
+      "benchmark.json",
+      "candidate_ranking.csv",
+      "coverage_audit.csv",
+      "discarded_candidates.csv",
+      "fast_decision.json",
+      "fast_grid.csv",
+      "shortlist.csv",
+      "smoke_points.csv",
+      "smoke_results.csv",
+      "smoke_summary.json"
+    ],
+    "curves": [],
+    "checkpoints": []
+  }
+}

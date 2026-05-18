@@ -96,7 +96,11 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--project-dir", required=True)
     init.add_argument("--strategy", required=True)
     init.add_argument("--project", required=True)
-    init.add_argument("--template", choices=["factor_scan", "parameter_followup", "robustness_check", "generic"], required=True)
+    init.add_argument(
+        "--template",
+        choices=["factor_scan", "parameter_followup", "robustness_check", "generic", "portfolio_volatility"],
+        required=True,
+    )
     init.add_argument("--plugin")
     init.add_argument("--dataset-id")
     init.add_argument("--snapshot-id")

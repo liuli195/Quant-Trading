@@ -304,7 +304,16 @@
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.research.momentum_tilt_research ab-plan --help)",
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.research.momentum_tilt_research cloud-robustness --help)",
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.research.cli --help)",
-      "PowerShell(\\(Get-Content \"d:\\\\My Project\\\\Quant Trading\\\\CLAUDE.md\" | Measure-Object -Line\\).Lines)"
+      "PowerShell(\\(Get-Content \"d:\\\\My Project\\\\Quant Trading\\\\CLAUDE.md\" | Measure-Object -Line\\).Lines)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m py_compile strategies\\\\etf_factor_rotation\\\\etf_factor_rotation.py)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest strategies\\\\etf_factor_rotation\\\\tests -q)",
+      "Skill(jq-run)",
+      "Skill(jq-run:*)",
+      "PowerShell(Get-ChildItem \"d:\\\\My Project\\\\Quant Trading\\\\strategies\\\\etf_factor_rotation\\\\backtest_runs\" -Directory | Sort-Object Name -Descending | Select-Object -First 3 | ForEach-Object { $_.Name })",
+      "Bash(./.venv/Scripts/python.exe -m scripts.tools.jq_automation compile-check \"strategies/etf_factor_rotation/etf_factor_rotation.py\")",
+      "Bash(./.venv/Scripts/python.exe -m scripts.tools.jq_automation run \"strategies/etf_factor_rotation/scenario_default_run.json\" --yes --backtest-timeout 600)",
+      "Skill(jq-analyze)",
+      "Skill(jq-analyze:*)"
     ],
     "additionalDirectories": [
       "d:\\My Project\\Quant Trading\\.claude\\skills\\jq-param-scan"

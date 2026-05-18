@@ -470,7 +470,7 @@ def set_parameter(context):
     g.CrowdRetMid_by_etf = None      # 列表或 None，None 时使用全局 CrowdRetMid
 
     # ---- 组合波动率控制 ----
-    g.PortfolioVolWindow = 60
+    g.PortfolioVolWindow = 40
     g.TargetVol = 0.08
     g.MaxPortfolioVolScale = 1.0
 

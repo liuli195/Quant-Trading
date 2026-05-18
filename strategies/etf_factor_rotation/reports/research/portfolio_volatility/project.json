@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "strategy": "etf_factor_rotation",
+  "project": "portfolio_volatility",
+  "template": "portfolio_volatility",
+  "plugin": "portfolio_volatility",
+  "datasets": [],
+  "inputs": {
+    "raw_data": "strategies/etf_factor_rotation/reports/research/window_heterogeneity/inputs/raw/etf_window_research_prices.json",
+    "baseline_run_dir": "strategies/etf_factor_rotation/backtest_runs/20260517-1724-bt580e16e5a3f1bf99d197cea88889da1a",
+    "smoke_points_per_window": 16
+  },
+  "runtime": {
+    "fast_top_k": 1,
+    "cloud_top_k": 0,
+    "fast_mode_slo_seconds": 3.0,
+    "full_mode_slo_seconds": 60.0
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "coverage_complete": true,
+  "feature_cache_hit": false,
+  "sample_size": 80,
+  "full_item_count": 8835,
+  "cold_seconds": 0.312879100000373,
+  "warm_seconds": 0.3102596000003359,
+  "cold_per_item_seconds": 0.003910988750004662,
+  "warm_per_item_seconds": 0.003878245000004199,
+  "predicted_full_seconds": 34.2642945750371,
+  "target_seconds": 60.0,
+  "smoke_passed": false
+}

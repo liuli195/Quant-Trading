@@ -13,7 +13,11 @@
 | `features.py` | 特征缓存 | `FeatureStore`, `FeatureBundle`, `stable_hash` |
 | `funnel.py` | 候选漏斗 | `CandidateFunnel`, `build_fast_funnel`, `promote_full_funnel` |
 | `datasets.py` | 数据集快照管理 | `DatasetSnapshot`, `load_snapshot`, `import_joinquant_price_json`, `import_audit_log_jsonl`, `load_price_frames` |
-| `plugins.py` | 内置研究插件 | `FactorScanPlugin`, `ParameterFollowupPlugin`, `RobustnessCheckPlugin`, `GenericPlugin`, `get_plugin` |
+| `plugins.py` | 内置研究插件 | `FactorScanPlugin`, `ParameterFollowupPlugin`, `RobustnessCheckPlugin`, `GenericPlugin`, `PortfolioVolatilityPlugin`, `get_plugin` |
+| `benchmark_runner.py` | 性能冒烟 | `BenchmarkSummary`, `run_smoke_benchmark` |
+| `coverage_audit.py` | 扫描覆盖证明 | `ScanCoverageSlice`, `audit_scan_coverage`, `coverage_is_complete` |
+| `batch_executor.py` | 批量执行 | `BatchExecutionResult`, `execute_batch` |
+| `report_primitives.py` | 通用报告片段 | `benchmark_frame`, `markdown_section` |
 
 ---
 
@@ -226,13 +230,14 @@ snapshot.parquet_path  # Path → Parquet 主存储
 ```python
 from scripts.research.platform.plugins import (
     get_plugin, BUILTIN_PLUGINS,
-    FactorScanPlugin, ParameterFollowupPlugin, RobustnessCheckPlugin, GenericPlugin,
+    FactorScanPlugin, ParameterFollowupPlugin, RobustnessCheckPlugin,
+    GenericPlugin, PortfolioVolatilityPlugin,
 )
 ```
 
 ### get_plugin(name) → ResearchPlugin
 
-按名称获取插件实例。内置 4 个：
+按名称获取插件实例。内置 5 个：
 
 | 插件 | 模板 | 可信度 | 用途 |
 |---|---|---|---|
@@ -240,6 +245,7 @@ from scripts.research.platform.plugins import (
 | `ParameterFollowupPlugin` | `parameter_followup` | `LOCAL_REPLAYABLE` | 参数跟随研究，通过策略特定 adapter 回放 |
 | `RobustnessCheckPlugin` | `robustness_check` | `LOCAL_EXACT` | 事后稳健性验证（bootstrap + 滚动窗 + 年度分解） |
 | `GenericPlugin` | `generic` | `LOCAL_EXACT` | 最小脚手架，不预设漏斗流程，供诊断/探索用 |
+| `PortfolioVolatilityPlugin` | `portfolio_volatility` | `LOCAL_REPLAYABLE` | 组合波动率性能冒烟 + 行为完整扫描 |
 
 ### FactorScanPlugin
 
@@ -271,6 +277,13 @@ full 模式门禁（5 条全部通过才算 eligible）：
 ### GenericPlugin
 
 不执行任何分析逻辑的最小插件。生成空漏斗，供用户在 `runs/<run_id>/` 下手动运行分析脚本。
+
+### PortfolioVolatilityPlugin
+
+面向 `PortfolioVolScale` 的专用研究插件：
+- **fast**：在代表性点集上跑 cold/warm 冒烟，生成覆盖证明与耗时预测
+- **promote**：只有覆盖完整、当前 fast run 命中特征缓存、预计 full 耗时不超过项目 SLO 时才放行
+- **full**：按行为断点和区间代表点做完整扫描，不依赖固定粗网格
 
 ---
 

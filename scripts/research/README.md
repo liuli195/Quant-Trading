@@ -17,7 +17,7 @@
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.research.cli init `
   --project-dir <dir> --strategy <name> --project <name> `
-  --template {factor_scan,parameter_followup,robustness_check,generic} `
+  --template {factor_scan,parameter_followup,robustness_check,generic,portfolio_volatility} `
   [--plugin <name>] [--dataset-id <id> --snapshot-id <id>] [--raw-data <path>] `
   [--audit-log <path>] [--baseline-returns <path>] [--variant-return label=path ...]
 ```
@@ -26,7 +26,7 @@
 - `--project-dir` — 必填，项目目录
 - `--strategy` — 必填，策略名称（如 `etf_factor_rotation`）
 - `--project` — 必填，项目名称
-- `--template` — 必填，研究模板：`factor_scan` / `parameter_followup` / `robustness_check` / `generic`
+- `--template` — 必填，研究模板：`factor_scan` / `parameter_followup` / `robustness_check` / `generic` / `portfolio_volatility`
 - `--plugin` — 可选，插件名（默认与 template 同名）
 - `--dataset-id` / `--snapshot-id` — 可选，关联的数据集快照
 - `--raw-data` — 可选，原始数据路径

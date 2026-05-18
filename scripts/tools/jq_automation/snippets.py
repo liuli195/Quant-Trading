@@ -12,7 +12,7 @@ class SnippetError(RuntimeError):
 def read_snippet(name: str, root: Path | None = None) -> str:
     base = root or repo_root()
     candidates = [
-        base / "scripts" / "jq_automation" / "snippets" / name,
+        base / "scripts" / "tools" / "jq_automation" / "snippets" / name,
     ]
     for candidate in candidates:
         if candidate.is_file():

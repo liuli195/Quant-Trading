@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "run_id": "2026-05-18-volscale-full-scan",
+  "generated_at": "2026-05-18T14:53:58",
+  "inputs": {
+    "baseline_run_dir": "D:/My Project/Quant Trading/strategies/etf_factor_rotation/backtest_runs/20260517-1724-bt580e16e5a3f1bf99d197cea88889da1a",
+    "raw_price_path": "D:/My Project/Quant Trading/strategies/etf_factor_rotation/reports/research/window_heterogeneity/inputs/raw/etf_window_research_prices.json"
+  },
+  "scan": {
+    "global_windows": [
+      20,
+      40,
+      60,
+      90,
+      120
+    ],
+    "global_targets": [
+      0.06,
+      0.07,
+      0.08,
+      0.09,
+      0.1,
+      0.11,
+      0.12,
+      0.13,
+      0.14
+    ],
+    "mix_bases": [
+      [
+        40,
+        0.07
+      ],
+      [
+        40,
+        0.08
+      ],
+      [
+        60,
+        0.08
+      ]
+    ],
+    "mix_steps": [
+      0.0,
+      0.1,
+      0.2,
+      0.3
+    ]
+  },
+  "outputs": [
+    "reports/portfolio-volatility-full-scan.md",
+    "tables/portfolio_vol_global_scan.csv",
+    "tables/portfolio_vol_mix_scan.csv",
+    "tables/portfolio_vol_shortlist_robustness.csv"
+  ]
+}

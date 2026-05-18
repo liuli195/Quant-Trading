@@ -36,10 +36,25 @@ from scripts.research.momentum_tilt_research.replay import (
 )
 from scripts.research.momentum_tilt_research.spec import ETF_CODES as MOMENTUM_TILT_ETF_CODES
 from scripts.research.momentum_tilt_research.spec import LINEAR_STRENGTHS
+from scripts.research.portfolio_volatility_research.domain_builder import (
+    build_domains as build_portfolio_vol_domains,
+    representative_smoke_points,
+)
+from scripts.research.portfolio_volatility_research.evaluator import (
+    evaluate_variant as evaluate_portfolio_vol_variant,
+    load_context as load_portfolio_vol_context,
+)
+from scripts.research.portfolio_volatility_research.report_spec import (
+    render_full_report as render_portfolio_vol_full_report,
+    render_smoke_report as render_portfolio_vol_smoke_report,
+)
 
+from .batch_executor import execute_batch
+from .benchmark_runner import run_smoke_benchmark
+from .coverage_audit import ScanCoverageSlice, audit_scan_coverage, coverage_is_complete
 from .contracts import FidelityLevel, PluginCapabilities, ResearchRunContext
 from .datasets import load_price_frames, load_snapshot
-from .funnel import build_fast_funnel, promote_full_funnel
+from .funnel import CandidateFunnel, build_fast_funnel, promote_full_funnel
 
 
 def _candidate_id(factor: str, etf: str, window: int) -> str:
@@ -526,11 +541,246 @@ class GenericPlugin:
         }
 
 
+class PortfolioVolatilityPlugin:
+    """Exact portfolio-volatility domain scan with performance smoke gating."""
+
+    name = "portfolio_volatility"
+    template = "portfolio_volatility"
+    code_version = "portfolio_volatility:v2"
+    capabilities = PluginCapabilities(
+        local_capabilities=("performance_smoke", "exact_domain_scan", "coverage_audit"),
+        replayable_params=("portfolio_vol_window", "target_vol"),
+        required_exports=("daily_returns", "audit_events", "params"),
+        unsupported_changes=("signal_definition", "execution_logic", "external_data_dependency"),
+        fidelity_level=FidelityLevel.LOCAL_REPLAYABLE,
+    )
+
+    def build_feature_spec(self, project: dict[str, Any]) -> dict[str, Any]:
+        inputs = project.get("inputs", {})
+        return {
+            "plugin": self.name,
+            "baseline_run_dir": inputs.get("baseline_run_dir"),
+            "raw_data": inputs.get("raw_data"),
+            "algorithm": "exact-breakpoints-plus-interval-points",
+        }
+
+    def dataset_fingerprint(self, project: dict[str, Any]) -> str:
+        inputs = project.get("inputs", {})
+        baseline_run_dir = Path(inputs["baseline_run_dir"])
+        raw_data = Path(inputs["raw_data"])
+        payload = {
+            "raw_data": _sha256_file(raw_data),
+            "audit_log": _sha256_file(baseline_run_dir / "tabs_raw" / "audit_log.jsonl"),
+            "baseline_returns": _sha256_file(baseline_run_dir / "tabs_raw" / "daily_returns.md"),
+            "summary_metrics": _sha256_file(baseline_run_dir / "summary_metrics.json"),
+        }
+        return f"sha256:{_stable_json_hash(payload)}"
+
+    def build_features(self, project: dict[str, Any]) -> dict[str, Any]:
+        inputs = project["inputs"]
+        context = load_portfolio_vol_context(
+            baseline_run_dir=Path(inputs["baseline_run_dir"]),
+            raw_price_path=Path(inputs["raw_data"]),
+        )
+        domains = build_portfolio_vol_domains(context)
+        coverage = audit_scan_coverage(
+            [
+                ScanCoverageSlice(
+                    slice_id=str(domain.window),
+                    lower_bound=0.0,
+                    upper_bound=domain.upper_bound,
+                    breakpoints=domain.breakpoints,
+                    interval_points=domain.interval_points,
+                    breakpoint_sources=domain.breakpoint_sources,
+                )
+                for domain in domains.values()
+            ]
+        )
+        return {
+            "context": context,
+            "domains": domains,
+            "coverage": coverage,
+        }
+
+    def run_fast(self, context: ResearchRunContext, features: dict[str, Any]) -> dict[str, Any]:
+        domains = features["domains"]
+        coverage = features["coverage"]
+        smoke_points = representative_smoke_points(
+            domains,
+            per_window=int(context.project.get("inputs", {}).get("smoke_points_per_window", 16)),
+        )
+        full_item_count = sum(len(domain.evaluation_points) for domain in domains.values())
+        target_seconds = float(context.project.get("runtime", {}).get("full_mode_slo_seconds", 60.0))
+        summary = run_smoke_benchmark(
+            smoke_points,
+            lambda item: evaluate_portfolio_vol_variant(
+                features["context"],
+                window=int(item["window"]),
+                target=float(item["target"]),
+                label=f"smoke-w{int(item['window'])}-t{float(item['target']):.12f}",
+            ),
+            full_item_count=full_item_count,
+            target_seconds=target_seconds,
+        )
+        complete = coverage_is_complete(coverage)
+        feature_cache_hit = bool(context.feature_cache_hit)
+        smoke_passed = bool(summary.passed and complete and feature_cache_hit)
+        coverage.to_csv(context.run.tables_dir / "coverage_audit.csv", index=False)
+        pd.DataFrame(smoke_points).to_csv(context.run.tables_dir / "smoke_points.csv", index=False)
+        pd.DataFrame(summary.warm.rows).to_csv(context.run.tables_dir / "smoke_results.csv", index=False)
+        payload = {
+            "coverage_complete": complete,
+            "feature_cache_hit": feature_cache_hit,
+            "sample_size": summary.sample_size,
+            "full_item_count": summary.full_item_count,
+            "cold_seconds": summary.cold.runtime_seconds,
+            "warm_seconds": summary.warm.runtime_seconds,
+            "cold_per_item_seconds": summary.cold.per_item_seconds,
+            "warm_per_item_seconds": summary.warm.per_item_seconds,
+            "predicted_full_seconds": summary.predicted_full_seconds,
+            "target_seconds": summary.target_seconds,
+            "smoke_passed": smoke_passed,
+        }
+        (context.run.tables_dir / "smoke_summary.json").write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        (context.run.reports_dir / "portfolio-volatility-performance-smoke.md").write_text(
+            render_portfolio_vol_smoke_report(
+                coverage=coverage,
+                summary=summary,
+                feature_cache_hit=feature_cache_hit,
+            ),
+            encoding="utf-8",
+        )
+        ranked = pd.DataFrame(
+            [
+                {
+                    "candidate_id": "portfolio-volatility-full-scan",
+                    "fast_score": 1.0 if smoke_passed else 0.0,
+                    "coverage_complete": complete,
+                    "feature_cache_hit": feature_cache_hit,
+                    "predicted_full_seconds": summary.predicted_full_seconds,
+                    "target_seconds": summary.target_seconds,
+                    "smoke_passed": smoke_passed,
+                }
+            ]
+        )
+        funnel = build_fast_funnel(ranked, score_column="fast_score", top_k=1)
+        return {
+            "grid": ranked,
+            "funnel": funnel,
+            "decision": {
+                "mode": "fast",
+                "candidate_count": 1,
+                "shortlist_count": int(len(funnel.shortlist)),
+                "smoke_passed": smoke_passed,
+                "coverage_complete": complete,
+                "feature_cache_hit": feature_cache_hit,
+                "predicted_full_seconds": summary.predicted_full_seconds,
+                "target_seconds": summary.target_seconds,
+            },
+        }
+
+    def run_full(
+        self,
+        context: ResearchRunContext,
+        features: dict[str, Any],
+        shortlist: pd.DataFrame,
+    ) -> dict[str, Any]:
+        coverage = features["coverage"]
+        items = [
+            {"window": window, "target": target}
+            for window, domain in features["domains"].items()
+            for target in domain.evaluation_points
+        ]
+        batch = execute_batch(
+            items,
+            lambda item: evaluate_portfolio_vol_variant(
+                features["context"],
+                window=int(item["window"]),
+                target=float(item["target"]),
+                label=f"global-w{int(item['window'])}-t{float(item['target']):.12f}",
+            ),
+        )
+        if batch.errors:
+            raise RuntimeError(f"portfolio-volatility full scan failed for {len(batch.errors)} items")
+        scan = pd.DataFrame(batch.rows)
+        coverage.to_csv(context.run.tables_dir / "coverage_audit.csv", index=False)
+        scan.to_csv(context.run.tables_dir / "portfolio_vol_full_scan.csv", index=False)
+        (context.run.reports_dir / "portfolio-volatility-full-scan.md").write_text(
+            render_portfolio_vol_full_report(
+                global_scan=scan,
+                coverage=coverage,
+                baseline_position=float(features["context"].baseline_schedule.sum(axis=1).mean()),
+            ),
+            encoding="utf-8",
+        )
+        best = scan.sort_values(
+            ["sharpe_delta", "annual_delta", "target"],
+            ascending=[False, False, True],
+        ).head(1)
+        reviewed = best.assign(
+            eligible_for_cloud=False,
+            promotion_reasons="formal_local_scan_completed",
+            refinement_score=best["sharpe_delta"],
+        )
+        funnel = promote_full_funnel(reviewed, cloud_top_k=context.cloud_top_k)
+        return {
+            "reviewed": reviewed,
+            "funnel": funnel,
+            "decision": {
+                "mode": "full",
+                "reviewed_count": int(len(reviewed)),
+                "eligible_count": 0,
+                "cloud_candidate_count": 0,
+                "scan_point_count": int(len(scan)),
+                "coverage_complete": coverage_is_complete(coverage),
+                "runtime_seconds": batch.runtime_seconds,
+            },
+        }
+
+    def validate_promotion(
+        self,
+        *,
+        project_dir: Path,
+        fast_run_id: str,
+        shortlist: pd.DataFrame,
+    ) -> None:
+        """Allow full scan only after a warm, complete, passing smoke run."""
+
+        summary_path = project_dir / "runs" / fast_run_id / "tables" / "smoke_summary.json"
+        if not summary_path.is_file():
+            raise ValueError("portfolio-volatility promotion requires smoke_summary.json")
+        payload = json.loads(summary_path.read_text(encoding="utf-8"))
+        reasons = []
+        if not bool(payload.get("coverage_complete")):
+            reasons.append("coverage_incomplete")
+        if not bool(payload.get("feature_cache_hit")):
+            reasons.append("feature_cache_not_warm")
+        if not bool(payload.get("smoke_passed")):
+            reasons.append("smoke_failed")
+        if reasons:
+            raise ValueError("portfolio-volatility promotion blocked: " + ";".join(reasons))
+
+    def build_cloud_handoff(
+        self,
+        context: ResearchRunContext,
+        cloud_candidates: pd.DataFrame,
+    ) -> dict[str, Any] | None:
+        return {
+            "status": "not_applicable",
+            "reason": "portfolio_volatility_local_scan_only",
+            "candidate_ids": [],
+        }
+
+
 BUILTIN_PLUGINS = {
     FactorScanPlugin.name: FactorScanPlugin(),
     ParameterFollowupPlugin.name: ParameterFollowupPlugin(),
     RobustnessCheckPlugin.name: RobustnessCheckPlugin(),
     GenericPlugin.name: GenericPlugin(),
+    PortfolioVolatilityPlugin.name: PortfolioVolatilityPlugin(),
 }
 
 

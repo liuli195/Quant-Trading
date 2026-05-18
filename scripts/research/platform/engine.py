@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,7 @@ DEFAULT_TEMPLATES = {
     "parameter_followup": "parameter_followup",
     "robustness_check": "robustness_check",
     "generic": "generic",
+    "portfolio_volatility": "portfolio_volatility",
 }
 
 
@@ -123,6 +125,11 @@ def run_project(
         code_version=plugin.code_version,
     )
     features = store.load_or_build(key, lambda: plugin.build_features(project))
+    context = replace(
+        context,
+        feature_cache_hit=features.cache_hit,
+        feature_cold_build_seconds=features.build_seconds,
+    )
 
     started = time.perf_counter()
     if mode == "fast":
@@ -172,6 +179,8 @@ def promote_run(
     top_k: int | None = None,
     cloud_top_k: int | None = None,
 ) -> dict[str, Any]:
+    project = load_project(project_dir)
+    plugin = get_plugin(project["plugin"])
     fast_shortlist = (
         ResearchProjectLayout.from_path(project_dir).run(fast_run_id).tables_dir / "shortlist.csv"
     )
@@ -180,6 +189,13 @@ def promote_run(
     shortlist = pd.read_csv(fast_shortlist)
     if top_k is not None:
         shortlist = shortlist.head(top_k)
+    validate_promotion = getattr(plugin, "validate_promotion", None)
+    if callable(validate_promotion):
+        validate_promotion(
+            project_dir=Path(project_dir),
+            fast_run_id=fast_run_id,
+            shortlist=shortlist,
+        )
     return run_project(
         project_dir=project_dir,
         run_id=full_run_id,

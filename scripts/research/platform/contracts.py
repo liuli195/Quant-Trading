@@ -55,6 +55,8 @@ class ResearchRunContext:
     top_k: int
     cloud_top_k: int
     source_run_id: str | None = None
+    feature_cache_hit: bool | None = None
+    feature_cold_build_seconds: float | None = None
 
 
 class ResearchPlugin(Protocol):
