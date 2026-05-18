@@ -35,6 +35,7 @@ REQUIRED_CODEOWNER_PATTERNS = (
     "AGENTS.md",
     "docs/rules/**",
     "docs/adr/**",
+    ".claude/agents/**",
     ".claude/skills/**",
     ".github/workflows/**",
     ".githooks/**",
@@ -48,8 +49,18 @@ PR_TEMPLATE_TOKENS = (
     "影响范围",
     "规则同步",
     "已运行检查",
+    "评审治理 Agent 结论",
+    "pr-governance-review",
     "waiver",
     "证据",
+)
+REQUIRED_REVIEW_AGENT_TOKENS = (
+    "name: pr-governance-review",
+    "独立评审 Agent",
+    "scripts.research.governance gate",
+    "评审治理 Agent 结论",
+    "结论: 通过",
+    "阻断问题: 无",
 )
 WAIVER_REQUIRED_FIELDS = (
     "id",
@@ -76,6 +87,7 @@ def run_audit(
     findings.extend(_audit_tool_registry(root))
     findings.extend(_audit_layer_docs(root))
     findings.extend(_audit_claude_and_skills(root))
+    findings.extend(_audit_review_agent(root))
     findings.extend(_audit_governance_gate(root))
     findings.extend(_audit_rule_sources(root))
     findings.extend(_audit_codeowners(root))
@@ -137,6 +149,7 @@ def _audit_claude_and_skills(root: Path) -> list[AuditFinding]:
             "scripts.research.registry",
             "docs/rules/index.md",
             "docs/adr",
+            "pr-governance-review",
         ):
             if token not in text:
                 findings.append(AuditFinding("claude_sync", "error", f"CLAUDE.md missing {token}"))
@@ -159,6 +172,18 @@ def _audit_claude_and_skills(root: Path) -> list[AuditFinding]:
             if token not in text:
                 findings.append(AuditFinding("skill_sync", "error", f"jq-ab-test skill missing {token}"))
     return findings
+
+
+def _audit_review_agent(root: Path) -> list[AuditFinding]:
+    path = root / ".claude" / "agents" / "pr-governance-review.md"
+    if not path.is_file():
+        return [AuditFinding("review_agent", "error", ".claude/agents/pr-governance-review.md missing")]
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    return [
+        AuditFinding("review_agent", "error", f"pr-governance-review missing {token}")
+        for token in REQUIRED_REVIEW_AGENT_TOKENS
+        if token not in text
+    ]
 
 
 def _audit_governance_gate(root: Path) -> list[AuditFinding]:
@@ -194,6 +219,8 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         text = workflow.read_text(encoding="utf-8", errors="ignore")
         if "scripts.research.governance gate" not in text:
             findings.append(AuditFinding("governance_gate", "error", "CI workflow missing governance gate"))
+        if "scripts.research.governance.pr_review_evidence" not in text:
+            findings.append(AuditFinding("governance_gate", "error", "CI workflow missing PR review evidence gate"))
         if "schedule:" not in text:
             findings.append(AuditFinding("governance_gate", "error", "CI workflow missing scheduled drift audit"))
 

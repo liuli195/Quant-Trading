@@ -39,6 +39,7 @@ ruleset:
 
 - require pull request before merging;
 - require status check `Research Governance / governance`;
+- require status check `Research Governance / pr-review-evidence`;
 - require review from Code Owners;
 - block force pushes.
 
@@ -46,6 +47,7 @@ ruleset:
 
 - 仓库级规则文档 [docs/rules/index.md](../../../docs/rules/index.md) <!-- pathref: docs/rules/index.md --> 是否存在，ADR 目录 [docs/adr](../../../docs/adr) <!-- pathref: docs/adr --> 是否连续编号。
 - `.githooks/pre-push` 是否仍调用代码化主干保护门禁、完整 gate 和 Git LFS 转交。
+- 独立评审 Agent `.claude/agents/pr-governance-review.md` 是否存在，PR 模板是否要求 Agent 结论。
 - `CODEOWNERS` 是否覆盖关键治理路径，`.github/pull_request_template.md` 是否包含规则同步、检查、waiver 和证据项。
 - `docs/exceptions/active-waivers.yaml` 中的 waiver 是否有 owner、批准人、过期时间和迁移计划。
 - 工具是否登记在中央 registry。

@@ -25,6 +25,7 @@
 - [0001-rule-source-and-governance-model.md](../adr/0001-rule-source-and-governance-model.md) <!-- pathref: docs/adr/0001-rule-source-and-governance-model.md -->
 - [0002-ai-agent-parallel-work-uses-git-branches.md](../adr/0002-ai-agent-parallel-work-uses-git-branches.md) <!-- pathref: docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md -->
 - [0003-governance-gate-and-main-branch-protection.md](../adr/0003-governance-gate-and-main-branch-protection.md) <!-- pathref: docs/adr/0003-governance-gate-and-main-branch-protection.md -->
+- [0004-independent-pr-review-agent.md](../adr/0004-independent-pr-review-agent.md) <!-- pathref: docs/adr/0004-independent-pr-review-agent.md -->
 
 ## 规则变更
 

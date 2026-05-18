@@ -17,6 +17,14 @@
 - [ ] `.\.venv\Scripts\python.exe -m scripts.tools.path_tools.refactor check`
 - [ ] 相关 pytest / py_compile
 
+## 评审治理 Agent 结论
+
+- Agent: `pr-governance-review`
+- 结论: 未执行
+- 阻断问题: 未确认
+- 关键证据:
+  -
+
 ## waiver
 
 - [ ] 不需要 waiver
