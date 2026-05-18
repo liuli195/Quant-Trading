@@ -562,6 +562,7 @@ A/B 测试比较多个"最终上传代码快照"。配置路径：`strategies/<s
 | `variants` | list[object] | 是 | 候选列表 |
 | `variants[].label` | str | 是 | 候选标签，必须唯一 |
 | `variants[].role` | enum | 否 | `control` / `variant` |
+| `variants[].variant_id` | str | 否 | 已登记策略变体 ID；设置后从 `strategies/<strategy>/variants/<variant_id>.json` 读取参数和结构代码来源 |
 | `variants[].code_source` | object | 否 | 覆盖 base.code_source |
 | `variants[].params_mode` | enum | 是 | `params_diff`（改写 set_parameter）/ `baked_in_git`（不改写） |
 | `variants[].params_diff` | dict | 否 | params_mode=params_diff 时的参数覆盖 |
@@ -577,6 +578,10 @@ ab expand → ab run → ab report
 - **expand**：冻结 commit SHA，物化源码，生成 scenario.json，写入 manifest
 - **run**：在同一浏览器 session 中串行执行 pending/failed variants（避免编辑器状态互相覆盖）。每个 variant：上传 → 编译 → 回测 → 抓取 → 回写 manifest
 - **report**：生成 `report/ab-<experiment_id>-comparison.md` 和 `-summary.json`
+
+`variant_id` 存在时，A/B 配置只承载 label、role、note 等实验元信息；参数覆盖和结构变体 `code_source` 必须来自策略变体登记表。`ab expand` 会把解析后的 Git 来源冻结进 manifest，`ab run` 上传完整物化快照。
+
+`run`、`fetch`、`batch`、`ab run` 抓取完成后默认把完整 `backtest_runs/<run_id>` 登记进 `research_datasets/<strategy>_backtest_runs/<run_id>`。特殊情况可用 `--no-dataset-register` 关闭，或用 `--datasets-root <path>` 指定数据中心根目录。
 
 ### manifest 写回字段
 

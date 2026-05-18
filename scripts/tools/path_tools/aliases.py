@@ -18,6 +18,8 @@ from typing import Any
 
 CONFIG_NAME = "path_aliases.json"
 PLACEHOLDER_RE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
+NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+ALIAS_LIFECYCLES = {"active", "superseded", "archived"}
 
 
 class PathAliasError(ValueError):
@@ -50,6 +52,45 @@ def load_config(root: str | Path | None = None) -> dict[str, Any]:
     config.setdefault("roots", {})
     config.setdefault("aliases", {})
     return config
+
+
+def validate_config(config: dict[str, Any]) -> list[str]:
+    """Validate the path alias registry without resolving user variables."""
+
+    errors: list[str] = []
+    if config.get("schema_version") != 1:
+        errors.append("schema_version must be 1")
+    if not isinstance(config.get("owner"), str) or not config["owner"].strip():
+        errors.append("owner is required")
+    if config.get("lifecycle") not in ALIAS_LIFECYCLES:
+        errors.append(f"lifecycle must be one of {sorted(ALIAS_LIFECYCLES)}")
+    roots = config.get("roots")
+    aliases = config.get("aliases")
+    if not isinstance(roots, dict) or not roots:
+        errors.append("roots must be a non-empty object")
+        roots = {}
+    if not isinstance(aliases, dict):
+        errors.append("aliases must be an object")
+        aliases = {}
+    for section, values in (("roots", roots), ("aliases", aliases)):
+        for name, expression in values.items():
+            if not isinstance(name, str) or not NAME_RE.fullmatch(name):
+                errors.append(f"{section}.{name}: invalid name")
+            if not isinstance(expression, str) or not expression.strip():
+                errors.append(f"{section}.{name}: expression must be a non-empty string")
+                continue
+            try:
+                _validate_path_expression(expression)
+            except PathAliasError as exc:
+                errors.append(f"{section}.{name}: {exc}")
+    errors.extend(_validate_alias_cycles(aliases))
+    return errors
+
+
+def validate_config_file(root: str | Path | None = None) -> list[str]:
+    """Validate ``path_aliases.json`` from a repository root."""
+
+    return validate_config(load_config(root))
 
 
 def repo_relative(path: str | Path, root: str | Path | None = None) -> str:
@@ -134,6 +175,38 @@ def _render_expression(
     return normalized.as_posix()
 
 
+def _validate_path_expression(expression: str) -> None:
+    normalized = Path(expression.replace("\\", "/"))
+    if normalized.is_absolute():
+        raise PathAliasError(f"absolute paths are not allowed: {expression}")
+    if ".." in normalized.parts:
+        raise PathAliasError(f"path escapes repository root: {expression}")
+
+
+def _validate_alias_cycles(aliases: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(name: str, stack: list[str]) -> None:
+        if name in visited:
+            return
+        if name in visiting:
+            errors.append(f"circular path alias reference: {' -> '.join([*stack, name])}")
+            return
+        visiting.add(name)
+        expression = str(aliases.get(name, ""))
+        for token in PLACEHOLDER_RE.findall(expression):
+            if token in aliases:
+                visit(token, [*stack, name])
+        visiting.remove(name)
+        visited.add(name)
+
+    for alias_name in aliases:
+        visit(str(alias_name), [])
+    return errors
+
+
 def _parse_assignments(items: list[str]) -> dict[str, str]:
     values: dict[str, str] = {}
     for item in items:
@@ -164,6 +237,16 @@ def _cmd_list(_: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_validate(_: argparse.Namespace) -> int:
+    errors = validate_config_file()
+    if errors:
+        for error in errors:
+            print(f"error: {error}", file=sys.stderr)
+        return 1
+    print("ok")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -176,6 +259,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     list_parser = subparsers.add_parser("list", help="list configured aliases")
     list_parser.set_defaults(func=_cmd_list)
+
+    validate_parser = subparsers.add_parser("validate", help="validate path_aliases.json")
+    validate_parser.set_defaults(func=_cmd_validate)
     return parser
 
 

@@ -18,6 +18,9 @@
 | `coverage_audit.py` | 扫描覆盖证明 | `ScanCoverageSlice`, `audit_scan_coverage`, `coverage_is_complete` |
 | `batch_executor.py` | 批量执行 | `BatchExecutionResult`, `execute_batch` |
 | `report_primitives.py` | 通用报告片段 | `benchmark_frame`, `markdown_section` |
+| `strategy_variants.py` | 策略变体库与 Git 计划 | `VariantRegistry`, `StrategyMaterializer`, `StructuralBranchManager`, `VariantMergeManager`, `StrategyManifestReader` |
+| `docs_index.py` | 报告索引与证据链接 | `DocsIndexer`, `ReportRegistry`, `EvidenceLinker`, `PathrefValidator` |
+| `workflows.py` | 流程模板 schema | `WorkflowTemplate`, `load_workflow_templates` |
 
 ---
 
@@ -298,3 +301,68 @@ cli.py (依赖 platform.engine)
 ```
 
 `platform` 层依赖 `research_core`，且 plugins.py 会 import `etf_window_research.analysis` 和 `momentum_tilt_research` 作为具体分析实现。
+
+---
+
+## strategy_variants.py — 策略变体库
+
+```python
+from scripts.research.platform.strategy_variants import (
+    VariantRegistry, StrategyMaterializer,
+    StructuralBranchManager, VariantMergeManager, StrategyManifestReader,
+)
+```
+
+### VariantRegistry
+
+在 `strategies/<strategy>/variants/` 下登记参数变体和结构变体：
+
+- `variants.json`：轻量索引。
+- `<variant_id>.json`：完整变体定义。
+
+结构变体状态固定为：
+
+```text
+candidate -> in_research -> cloud_confirmed -> merge_ready -> merged_pending_validation -> merged_confirmed
+```
+
+标记 `merged_confirmed` 必须传入显式授权参数。
+
+### StrategyMaterializer
+
+读取策略主文件和变体参数，生成 `.local/research-materialized/<strategy>/<variant_id>/<run_id>/` 下的可上传快照。当前仅支持保守替换 `set_parameter` 中形如 `g.Param = value` 的参数行，找不到目标参数会停止。
+
+### StructuralBranchManager / VariantMergeManager
+
+- `branch_plan` 和 `merge_plan` 默认只生成计划。
+- `create_branch` 和 `apply_merge` 没有显式授权会抛出 `GitAuthorizationError`。
+- 合并失败或冲突只返回冲突文件，不自动解决。
+
+---
+
+## docs_index.py — 文档报告索引
+
+```python
+from scripts.research.platform.docs_index import DocsIndexer, ReportRegistry
+```
+
+`DocsIndexer.write()` 扫描 `docs/`、策略 `reports/`、`backtest_runs/*/report/` 和 `test_batches/*/report/`，生成：
+
+- `docs/indexes/docs_catalog.json`
+- `docs/indexes/reports_catalog.json`
+- `docs/indexes/datasets_catalog.json`
+- `docs/indexes/variants_catalog.json`
+- `docs/indexes/reports.json`（兼容旧入口）
+- `docs/indexes/reports.md`
+
+`DocsIndexer.stale_entries()` 可识别索引中已经不存在的报告路径，`governance audit` 会检查报告索引与实际文件是否一致。
+
+---
+
+## workflows.py — 流程模板 schema
+
+```python
+from scripts.research.platform.workflows import WorkflowTemplate, load_workflow_templates
+```
+
+模板文件位于 `scripts/research/workflows/templates/`，声明输入、阶段、输出和门槛。模板不执行业务逻辑，只给 CLI、Skill 和治理审计提供稳定契约。

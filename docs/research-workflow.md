@@ -13,6 +13,10 @@
 
 中断后可用 `resume --project-dir ... --run-id ...` 复用已保存的运行请求。
 
+参数变体默认登记为 `variant_id`，不新建 Git 分支；结构变体需要先生成分支计划，只有用户显式授权后才创建分支、合并或写回默认参数。
+
+正式流程模板保存在 [workflows/templates](../scripts/research/workflows/templates) <!-- pathref: scripts/research/workflows/templates -->，治理审计会校验模板 schema。
+
 ## 计算分层
 
 | 层级 | 目标 |
@@ -101,4 +105,8 @@
 
 - 研究平台 CLI：[cli.py](../scripts/research/cli.py) <!-- pathref: scripts/research/cli.py -->
 - 研究数据集 CLI：[datasets.py](../scripts/research/datasets.py) <!-- pathref: scripts/research/datasets.py -->
+- 策略变体 CLI：[variants.py](../scripts/research/variants.py) <!-- pathref: scripts/research/variants.py -->
+- 文档索引 CLI：[docs.py](../scripts/research/docs.py) <!-- pathref: scripts/research/docs.py -->
+- 治理审计：[governance/](../scripts/research/governance) <!-- pathref: scripts/research/governance -->
 - 平台核心实现：[platform/](../scripts/research/platform) <!-- pathref: scripts/research/platform -->
+- 平台架构说明：[research-platform-architecture.md](research-platform-architecture.md) <!-- pathref: docs/research-platform-architecture.md -->

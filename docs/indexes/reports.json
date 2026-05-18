@@ -1,0 +1,3920 @@
+{
+  "schema_version": 1,
+  "catalog_type": "documents",
+  "generated_at": "2026-05-18T18:27:32+00:00",
+  "count": 348,
+  "reports": [
+    {
+      "path": "docs/joinquant-api.md",
+      "title": "定义一个全局变量, 保存要操作的股票",
+      "category": "docs",
+      "strategy": null,
+      "date": "2007-01-30",
+      "tags": [],
+      "pathrefs": [
+        "docs_images/img_93896a6c.png",
+        "docs_images/Bar_的示意图_3e195308.png",
+        "docs_images/K线序列_7796c276.png",
+        "docs_images/日K线_7cbfd219.png",
+        "docs_images/分钟K线_6dd4c15c.png",
+        "docs_images/Tick序列_74bf7fbf.png",
+        "docs_images/图解订单处理_ce63c691.png",
+        "docs_images/传统回测模式_347fbb23.png",
+        "docs_images/开启真实价格回测_cc58e6b5.png",
+        "docs_images/p3_2b2b99c4.png",
+        "docs_images/GL_pre_45d89b8a.png",
+        "docs_images/gbzs_a1fa0a4e.png",
+        "docs_images/kqzs_3a91dbcf.png",
+        "docs_images/enter_image_description_here_d955fc9f.png",
+        "docs_images/enter_image_description_here_cfdcdd64.png",
+        "docs_images/3_png_d9201919.png",
+        "docs_images/4_png_a723c3d9.png",
+        "docs_images/5_png_accd05e0.png",
+        "docs_images/6_png_16dd3d9e.png",
+        "docs_images/7_png_f7a4869c.png",
+        "docs_images/8_png_ece66f3a.png",
+        "docs_images/enter_image_description_here_445e9167.png",
+        "docs_images/enter_image_description_here_23f2e053.png",
+        "docs_images/enter_image_description_here_01b9888e.png",
+        "docs_images/enter_image_description_here_5c5a1f3c.png",
+        "docs_images/enter_image_description_here_731b88e9.png",
+        "docs_images/1e7d7bab_1e7d7bab.png",
+        "docs_images/img_2901ea6b.png"
+      ],
+      "updated_at": "2026-05-04T11:28:37+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_Alpha101.md",
+      "title": "导入 Alpha101 库",
+      "category": "docs",
+      "strategy": null,
+      "date": "2018-12-24",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:51:54+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_Alpha191.md",
+      "title": "导入 Alpha191 库",
+      "category": "docs",
+      "strategy": null,
+      "date": "2017-06-16",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:51:54+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_债券数据.md",
+      "title": "查询交易市场为上交所的债券基本信息数据",
+      "category": "docs",
+      "strategy": null,
+      "date": "2016-07-25",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:51:54+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_场内基金数据.md",
+      "title": "查询510190追踪的指数信息",
+      "category": "docs",
+      "strategy": null,
+      "date": "2009-11-19",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:51:54+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_场外基金.md",
+      "title": "JQ_场外基金",
+      "category": "docs",
+      "strategy": null,
+      "date": "2001-12-18",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:51:57+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_宏观经济数据.md",
+      "title": "查询分地区农林牧渔业总产值表(季度累计) 的前10条数据",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:51:58+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_常见问题.md",
+      "title": "常见问题",
+      "category": "docs",
+      "strategy": null,
+      "date": "2019-12-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T15:47:53+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_技术分析指标.md",
+      "title": "(官网)导入 technical_analysis 库",
+      "category": "docs",
+      "strategy": null,
+      "date": "2019-08-05",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:51:59+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_指数数据.md",
+      "title": "输出沪深300指数信息",
+      "category": "docs",
+      "strategy": null,
+      "date": "2015-10-15",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:51:59+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_期权数据.md",
+      "title": "查询当前可交易的50ETF期权合约信息",
+      "category": "docs",
+      "strategy": null,
+      "date": "2018-09-25",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:51:59+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_期货数据.md",
+      "title": "输出沪深300股指期货信息",
+      "category": "docs",
+      "strategy": null,
+      "date": "2003-07-15",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:52:00+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_聚宽因子库.md",
+      "title": "导入函数库",
+      "category": "docs",
+      "strategy": null,
+      "date": "2017-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:52:00+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_股票数据.md",
+      "title": "输出平安银行信息的中文名称",
+      "category": "docs",
+      "strategy": null,
+      "date": "2015-10-10",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:52:01+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_舆情数据.md",
+      "title": "JQ_舆情数据",
+      "category": "docs",
+      "strategy": null,
+      "date": "2019-02-19",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:52:01+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_行业概念数据.md",
+      "title": "JQ_行业概念数据",
+      "category": "docs",
+      "strategy": null,
+      "date": "2017-05-03",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:52:02+00:00"
+    },
+    {
+      "path": "docs/joinquant-parameter-analysis-framework.md",
+      "title": "JoinQuant 参数分析框架分析报告",
+      "category": "docs",
+      "strategy": null,
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [
+        "docs/research-workflow.md",
+        "docs/research-workflow-migration.md"
+      ],
+      "updated_at": "2026-05-18T15:43:03+00:00"
+    },
+    {
+      "path": "docs/local-python-env.md",
+      "title": "本地 Python 环境说明",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "repo/.venv",
+        "repo/requirements.txt"
+      ],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "docs/research-platform-architecture.md",
+      "title": "本地研究平台架构",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "scripts/research/cli.py",
+        "scripts/research/datasets.py",
+        "scripts/research/variants.py",
+        "scripts/research/docs.py",
+        "scripts/research/registry/tool_registry.py",
+        "scripts/research/governance/audit.py",
+        "scripts/research/platform/strategy_variants.py",
+        "research_datasets",
+        "scripts/research/workflows/templates",
+        "scripts/research/platform/workflows.py",
+        "scripts/research/research_core",
+        "scripts/research/platform/docs_index.py",
+        "docs/indexes/docs_catalog.json",
+        "docs/indexes/reports_catalog.json",
+        "docs/indexes/datasets_catalog.json",
+        "docs/indexes/variants_catalog.json",
+        "docs/indexes/reports.json",
+        "docs/indexes/reports.md"
+      ],
+      "updated_at": "2026-05-18T18:20:45+00:00"
+    },
+    {
+      "path": "docs/research-workflow-migration.md",
+      "title": "旧研究项目迁移指南",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "docs/research-workflow.md",
+      "title": "本地优先研究流程",
+      "category": "docs",
+      "strategy": null,
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [
+        "scripts/research/workflows/templates",
+        "scripts/research/cli.py",
+        "scripts/research/datasets.py",
+        "scripts/research/variants.py",
+        "scripts/research/docs.py",
+        "scripts/research/governance",
+        "scripts/research/platform",
+        "docs/research-platform-architecture.md"
+      ],
+      "updated_at": "2026-05-18T18:20:54+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/attribution-analysis.md",
+      "title": "回测归因分析 — ETF 动态调仓策略",
+      "category": "backtest_run",
+      "strategy": "etf_dynamic_rebalance",
+      "date": "2023-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-04T00:55:25+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/backtest_report.md",
+      "title": "回测报告 — ETF 动态调仓策略",
+      "category": "backtest_run",
+      "strategy": "etf_dynamic_rebalance",
+      "date": "2023-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_report_dir(strategy=etf_dynamic_rebalance, run_id=20260504_1)/strategy-analysis.md",
+        "backtest_report_dir(strategy=etf_dynamic_rebalance, run_id=20260504_1)/performance-analysis.md",
+        "backtest_report_dir(strategy=etf_dynamic_rebalance, run_id=20260504_1)/attribution-analysis.md"
+      ],
+      "updated_at": "2026-05-04T00:55:57+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/performance-analysis.md",
+      "title": "性能分析报告 — ETF 动态调仓策略",
+      "category": "backtest_run",
+      "strategy": "etf_dynamic_rebalance",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-04T00:52:54+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/strategy-analysis.md",
+      "title": "策略分析报告 — ETF 动态调仓策略",
+      "category": "backtest_run",
+      "strategy": "etf_dynamic_rebalance",
+      "date": "2023-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-04T00:51:55+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260507-1622-bt9185c8dff5682cc51043774c05817179/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_dynamic_rebalance",
+      "date": "2021-01-04",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260507-1622-bt9185c8dff5682cc51043774c05817179/report/performance-analysis.md",
+      "title": "性能分析",
+      "category": "backtest_run",
+      "strategy": "etf_dynamic_rebalance",
+      "date": "2021-01-04",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260507-1622-bt9185c8dff5682cc51043774c05817179/report/strategy-analysis.md",
+      "title": "策略分析",
+      "category": "backtest_run",
+      "strategy": "etf_dynamic_rebalance",
+      "date": "2021-01-04",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/backtest_runs/etf_threshold_005_20260503_214900_8c080de9/report/backtest_report.md",
+      "title": "ETF动态调仓策略 — 回测详情报告",
+      "category": "backtest_run",
+      "strategy": "etf_dynamic_rebalance",
+      "date": "2023-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-03T15:03:14+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/backtest_runs/etf_threshold_005_20260503_214900_8c080de9/report/performance-analysis.md",
+      "title": "ETF 动态调仓策略 — 性能分析报告（偏离度阈值 5%）",
+      "category": "backtest_run",
+      "strategy": "etf_dynamic_rebalance",
+      "date": "2023-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-03T19:22:01+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/backtest_runs/etf_threshold_005_20260503_214900_8c080de9/report/strategy-analysis.md",
+      "title": "ETF 动态调仓策略 — 策略分析报告（偏离度阈值 5%）",
+      "category": "backtest_run",
+      "strategy": "etf_dynamic_rebalance",
+      "date": "2023-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-03T19:21:38+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/backtest_runs/etf_threshold_010_20260503_215400_cedcd414/report/backtest_report.md",
+      "title": "ETF动态调仓策略 — 回测详情报告",
+      "category": "backtest_run",
+      "strategy": "etf_dynamic_rebalance",
+      "date": "2023-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-03T15:03:14+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/backtest_runs/etf_threshold_010_20260503_215400_cedcd414/report/performance-analysis.md",
+      "title": "ETF 动态调仓策略 — 性能分析报告（偏离度阈值 10%）",
+      "category": "backtest_run",
+      "strategy": "etf_dynamic_rebalance",
+      "date": "2023-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-03T19:22:49+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/backtest_runs/etf_threshold_010_20260503_215400_cedcd414/report/strategy-analysis.md",
+      "title": "ETF 动态调仓策略 — 策略分析报告（偏离度阈值 10%）",
+      "category": "backtest_run",
+      "strategy": "etf_dynamic_rebalance",
+      "date": "2023-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-03T19:22:26+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/backtest_runs/etf_threshold_015_20260503_215600_9b64a0ee/report/backtest_report.md",
+      "title": "ETF动态调仓策略 — 回测详情报告",
+      "category": "backtest_run",
+      "strategy": "etf_dynamic_rebalance",
+      "date": "2023-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-03T15:03:14+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/backtest_runs/etf_threshold_015_20260503_215600_9b64a0ee/report/performance-analysis.md",
+      "title": "ETF 动态调仓策略 — 性能分析报告（偏离度阈值 15%）",
+      "category": "backtest_run",
+      "strategy": "etf_dynamic_rebalance",
+      "date": "2023-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-03T19:23:40+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/backtest_runs/etf_threshold_015_20260503_215600_9b64a0ee/report/strategy-analysis.md",
+      "title": "ETF 动态调仓策略 — 策略分析报告（偏离度阈值 15%）",
+      "category": "backtest_run",
+      "strategy": "etf_dynamic_rebalance",
+      "date": "2023-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-03T19:23:16+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/backtest_runs/jq_existing_20260504_084253/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_dynamic_rebalance",
+      "date": "2023-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-04T11:14:23+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/backtest_runs/jq_existing_20260504_084253/report/performance-analysis.md",
+      "title": "性能分析",
+      "category": "backtest_run",
+      "strategy": "etf_dynamic_rebalance",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-04T11:14:23+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/backtest_runs/jq_existing_20260504_084253/report/risk-series.md",
+      "title": "风险序列明细",
+      "category": "backtest_run",
+      "strategy": "etf_dynamic_rebalance",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-04T10:57:17+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/backtest_runs/jq_existing_20260504_084253/report/strategy-analysis.md",
+      "title": "策略分析",
+      "category": "backtest_run",
+      "strategy": "etf_dynamic_rebalance",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-04T11:14:23+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/reports/01-threshold-comparison.md",
+      "title": "ETF 动态调仓策略 — 偏离度阈值对比分析",
+      "category": "report",
+      "strategy": "etf_dynamic_rebalance",
+      "date": "2023-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-03T13:59:25+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/reports/02-drawdown-attribution.md",
+      "title": "ETF 动态调仓策略 — 最大回撤归因分析",
+      "category": "report",
+      "strategy": "etf_dynamic_rebalance",
+      "date": "2023-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-03T17:43:17+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/reports/deep-research-report.md",
+      "title": "执行摘要",
+      "category": "report",
+      "strategy": "etf_dynamic_rebalance",
+      "date": "2018-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/reports/test-guide.md",
+      "title": "ETF 动态调仓策略 (etf_dynamic_rebalance) 测试文档",
+      "category": "report",
+      "strategy": "etf_dynamic_rebalance",
+      "date": "2026-05-03",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/reports/量化交易策略研究.md",
+      "title": "基于跨资产异构择时与多层协同架构的A股量化交易策略深度研究：AI概念、纳斯达克QDII与黄金资产的体系化演进",
+      "category": "report",
+      "strategy": "etf_dynamic_rebalance",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "strategies/etf_dynamic_rebalance/reports/黄金_AI_纳指100_配比方案.md",
+      "title": "黄金 + AI ETF + 纳指100 ETF 配比方案",
+      "category": "report",
+      "strategy": "etf_dynamic_rebalance",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260505-0933-bt7a98269d2440d36f387fb95085dfb39d/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2025-04-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-05T09:46:42+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260505-0933-bt7a98269d2440d36f387fb95085dfb39d/report/performance-analysis.md",
+      "title": "性能分析报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-05T10:10:44+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260505-0933-bt7a98269d2440d36f387fb95085dfb39d/report/strategy-analysis.md",
+      "title": "策略分析报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2025-04-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-05T09:50:08+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260505-2023-bt41b9a777fa2e2f1ce80858aec7d140aa/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2024-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-05T12:23:16+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260505-2023-bt41b9a777fa2e2f1ce80858aec7d140aa/report/performance-analysis.md",
+      "title": "性能分析报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2024-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-05T12:26:57+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260505-2023-bt41b9a777fa2e2f1ce80858aec7d140aa/report/strategy-analysis.md",
+      "title": "策略分析报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2024-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260505-2215-btc3196b4b03d329d6f426ef7b43ca7a17/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2025-04-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-05T14:15:48+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260505-2215-btc3196b4b03d329d6f426ef7b43ca7a17/report/fq-comparison.md",
+      "title": "FQ A/B 复权模式对比分析",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2025-04-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260505-2215-btc3196b4b03d329d6f426ef7b43ca7a17/report/performance-analysis.md",
+      "title": "性能分析报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2025-04-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-06T17:46:37+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260505-2215-btc3196b4b03d329d6f426ef7b43ca7a17/report/strategy-analysis.md",
+      "title": "策略分析报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2025-04-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260505-2218-bt149cf2096d978f58083820813960d145/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2025-11-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-05T14:18:43+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260505-2218-bt149cf2096d978f58083820813960d145/report/performance-analysis.md",
+      "title": "性能分析报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-05T14:26:33+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260505-2218-bt149cf2096d978f58083820813960d145/report/strategy-analysis.md",
+      "title": "策略分析报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2025-11-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260506-0314-bt30cba1413b71d2db54bf0af0ab15eb9b/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-03-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-05T19:30:09+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260506-0314-bt30cba1413b71d2db54bf0af0ab15eb9b/report/performance-analysis.md",
+      "title": "性能分析报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-06T17:46:37+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260506-0314-bt30cba1413b71d2db54bf0af0ab15eb9b/report/strategy-analysis.md",
+      "title": "策略分析报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-03-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260506-0315-bt640080d57fef5127e820a0613bea2d2d/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-03-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-05T19:30:09+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260506-1756-btac5a03b99d8722f55b0a05a57554abf0/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2018-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-06T17:46:37+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260506-1756-btac5a03b99d8722f55b0a05a57554abf0/report/perf-004-log-assessment.md",
+      "title": "C3-PERF-004 日志量评估",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-06T17:46:37+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260506-1756-btac5a03b99d8722f55b0a05a57554abf0/report/performance-analysis.md",
+      "title": "性能分析报告 — R4 长周期基线",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-06T17:46:37+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260506-1756-btac5a03b99d8722f55b0a05a57554abf0/report/regime-analysis.md",
+      "title": "C2-REGIME 市场场景拆分分析",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2018-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260506-1756-btac5a03b99d8722f55b0a05a57554abf0/report/strategy-analysis.md",
+      "title": "策略分析报告 — R4 长周期基线",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2018-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260506-1921-btc7488e9834cae42a85355fd34fa31cbf/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2018-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-06T17:46:37+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260506-1921-btc7488e9834cae42a85355fd34fa31cbf/report/performance-analysis.md",
+      "title": "性能分析报告 -- R5 无 Profile 对比回测",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-06T17:46:37+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260506-1921-btc7488e9834cae42a85355fd34fa31cbf/report/profile-comparison.md",
+      "title": "Profile 开销对比：R4 (enable_profile) vs R5 (无 profile)",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-06",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-06T17:46:37+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260506-1921-btc7488e9834cae42a85355fd34fa31cbf/report/strategy-analysis.md",
+      "title": "策略分析报告 -- R5 无 Profile 对比回测",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2018-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260506-1937-bt3c84878563018bbeeabaf16b953d3e2a/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-02-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-06T17:46:37+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260506-1937-bt3c84878563018bbeeabaf16b953d3e2a/report/performance-analysis.md",
+      "title": "R6 高窗口压力测试 — 性能分析",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-02-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-06T17:46:37+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260506-1937-bt3c84878563018bbeeabaf16b953d3e2a/report/strategy-analysis.md",
+      "title": "R6 高窗口压力测试 — 策略分析",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-02-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-06T17:46:37+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260506-1944-bt88d80f50a3c47c4474cb7c4ff9b439fc/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-02-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-06T17:46:37+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260506-1944-bt88d80f50a3c47c4474cb7c4ff9b439fc/report/performance-analysis.md",
+      "title": "R7 扩展资产池测试 — 性能分析",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-02-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-06T17:46:37+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260506-1944-bt88d80f50a3c47c4474cb7c4ff9b439fc/report/strategy-analysis.md",
+      "title": "strategy-analysis",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-02-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0232-bt177cbb8fb0bfcd76934a0e05b5dcdc66/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-04-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0318-bt219e526c9941f131f8e08b9b5371359d/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0318-bt219e526c9941f131f8e08b9b5371359d/report/strategy-analysis.md",
+      "title": "策略分析报告 — NFC=1.0（默认参数）",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0320-bt92297a4c5b8e4bcc22b832c29ebc2e00/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0320-bt92297a4c5b8e4bcc22b832c29ebc2e00/report/strategy-analysis.md",
+      "title": "策略分析报告 — NFC=1.2",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0322-bt377eeb5e8b9ccfb5545c41a042f8f7ae/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0322-bt377eeb5e8b9ccfb5545c41a042f8f7ae/report/strategy-analysis.md",
+      "title": "策略分析报告 — NFC=1.5",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0324-bt84435d141c06188fcfdf4031d1fb1c94/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0324-bt84435d141c06188fcfdf4031d1fb1c94/report/strategy-analysis.md",
+      "title": "策略分析报告 — NFC=1.8（推荐）",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0326-bteb49d2cd9f2e0aa9814baa2177ac8eaf/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0326-bteb49d2cd9f2e0aa9814baa2177ac8eaf/report/strategy-analysis.md",
+      "title": "策略分析报告 — NFC=2.0",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0341-bt235477ccecbc4cc4949bbccb467a0bde/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0341-bt235477ccecbc4cc4949bbccb467a0bde/report/strategy-analysis.md",
+      "title": "策略分析报告 — NFC=1.6",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0343-bt7c554142e9a47668c32aa3b07bc07f7b/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0343-bt7c554142e9a47668c32aa3b07bc07f7b/report/strategy-analysis.md",
+      "title": "策略分析报告 — NFC=1.7",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0424-btfa1fc77dd168c0112656f5b0be1ec58e/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0424-btfa1fc77dd168c0112656f5b0be1ec58e/report/performance-analysis.md",
+      "title": "性能分析报告 — TopK=2",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0424-btfa1fc77dd168c0112656f5b0be1ec58e/report/strategy-analysis.md",
+      "title": "策略分析报告 — TopK=2",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0426-bt2796484d1b98e2de0ad70978a41674b1/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0426-bt2796484d1b98e2de0ad70978a41674b1/report/performance-analysis.md",
+      "title": "性能分析报告 — TopK=3",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0426-bt2796484d1b98e2de0ad70978a41674b1/report/strategy-analysis.md",
+      "title": "策略分析报告 — TopK=3",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0509-btb4072def4c657fd2616313f5ac340f6e/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0509-btb4072def4c657fd2616313f5ac340f6e/report/performance-analysis.md",
+      "title": "性能分析报告 — RMM=1.0 (Baseline)",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0509-btb4072def4c657fd2616313f5ac340f6e/report/strategy-analysis.md",
+      "title": "策略分析报告 — RMM=1.0 (Baseline)",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0511-bt1a8ceadc5305c5048c426f7b939afbf4/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0511-bt1a8ceadc5305c5048c426f7b939afbf4/report/strategy-analysis.md",
+      "title": "策略分析报告 — RMM=1.1",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0513-bt736b00d6fe04534f93d136aba47fa12e/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0513-bt736b00d6fe04534f93d136aba47fa12e/report/strategy-analysis.md",
+      "title": "策略分析报告 — RMM=1.2",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0515-bt4f67065375b4a5783bfec97fa834e419/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0515-bt4f67065375b4a5783bfec97fa834e419/report/strategy-analysis.md",
+      "title": "策略分析报告 — RMM=1.3",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0517-bt6513de156ac1567b74a94cff4805067f/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0517-bt6513de156ac1567b74a94cff4805067f/report/strategy-analysis.md",
+      "title": "策略分析报告 — RMM=1.4",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0519-bt736ee37bca600a5d26239e618b0bb7a3/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0519-bt736ee37bca600a5d26239e618b0bb7a3/report/performance-analysis.md",
+      "title": "性能分析报告 — RMM=1.5 (Best)",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0519-bt736ee37bca600a5d26239e618b0bb7a3/report/strategy-analysis.md",
+      "title": "策略分析报告 — RMM=1.5 (Best)",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0547-btbac39e64cea76d5fdde490163382884b/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0549-bt4255148c5d49ac45b9de48544d417c9b/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0551-btdb439ed38d3d77f4c341c37c0c7ab9f7/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0553-bt3d27c9d6a5882f74acf951e2178620d5/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0555-btb16d6354e885f42ae346a73fcbe52151/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0604-bt663a4ac9f81deccf693195dab5dc1e65/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0606-bt25f2f78931b8c57c8493d5521bcf8139/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0608-bt3987596a420b50632cf796de82c3e4bd/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0610-bt5965d85dd52516580bfbb4a4e5a31b35/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0619-bt1f9e588c3a2891238a06e2013258886d/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0621-bt56a49a22c9649620597d2b1c7223a8ee/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0623-bt0ca77eab09b91548696834a6618c2118/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-0625-bt69dc0ff8b24797f86790f58edd568ace/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-cloud-acceptance-auto-fallback/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T13:27:00+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-cloud-acceptance-auto-long/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T13:27:00+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260507-cloud-acceptance-research-short/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T13:27:00+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0013-bt869bfbeb9021c76b30f76a90dd622f6a/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0013-bt869bfbeb9021c76b30f76a90dd622f6a/report/performance-analysis.md",
+      "title": "性能分析报告：MA_long=120",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0013-bt869bfbeb9021c76b30f76a90dd622f6a)/metadata.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0013-bt869bfbeb9021c76b30f76a90dd622f6a)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260508-0013-bt869bfbeb9021c76b30f76a90dd622f6a)/profile.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/param-scan-report.md"
+      ],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0013-bt869bfbeb9021c76b30f76a90dd622f6a/report/strategy-analysis.md",
+      "title": "策略分析报告：MA_long=120",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0013-bt869bfbeb9021c76b30f76a90dd622f6a)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0013-bt869bfbeb9021c76b30f76a90dd622f6a)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260508-0013-bt869bfbeb9021c76b30f76a90dd622f6a)",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/batch-comparison.md"
+      ],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0014-bt9bb4faba66f1fb565ad2783fb33147c3/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0014-bt9bb4faba66f1fb565ad2783fb33147c3/report/performance-analysis.md",
+      "title": "性能分析报告：MA_long=20",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0014-bt9bb4faba66f1fb565ad2783fb33147c3)/metadata.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0014-bt9bb4faba66f1fb565ad2783fb33147c3)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260508-0014-bt9bb4faba66f1fb565ad2783fb33147c3)/profile.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/param-scan-report.md"
+      ],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0014-bt9bb4faba66f1fb565ad2783fb33147c3/report/strategy-analysis.md",
+      "title": "策略分析报告：MA_long=20",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0014-bt9bb4faba66f1fb565ad2783fb33147c3)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0014-bt9bb4faba66f1fb565ad2783fb33147c3)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260508-0014-bt9bb4faba66f1fb565ad2783fb33147c3)",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/batch-comparison.md"
+      ],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994/report/performance-analysis.md",
+      "title": "性能分析报告：MA_long=40",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994)/metadata.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994)/profile.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/param-scan-report.md"
+      ],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994/report/strategy-analysis.md",
+      "title": "策略分析报告：MA_long=40",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994)",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/batch-comparison.md"
+      ],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0019-bt91c62e12c5cc7fd16dd43466b0b7d502/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0019-bt91c62e12c5cc7fd16dd43466b0b7d502/report/performance-analysis.md",
+      "title": "性能分析报告：MA_long=60",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0019-bt91c62e12c5cc7fd16dd43466b0b7d502)/metadata.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0019-bt91c62e12c5cc7fd16dd43466b0b7d502)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260508-0019-bt91c62e12c5cc7fd16dd43466b0b7d502)/profile.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/param-scan-report.md"
+      ],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0019-bt91c62e12c5cc7fd16dd43466b0b7d502/report/strategy-analysis.md",
+      "title": "策略分析报告：MA_long=60",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0019-bt91c62e12c5cc7fd16dd43466b0b7d502)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0019-bt91c62e12c5cc7fd16dd43466b0b7d502)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260508-0019-bt91c62e12c5cc7fd16dd43466b0b7d502)",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/batch-comparison.md"
+      ],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0021-bt5ce8b6f11fe037f9780b2e051ed2979d/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0021-bt5ce8b6f11fe037f9780b2e051ed2979d/report/performance-analysis.md",
+      "title": "性能分析报告：MA_long=80",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0021-bt5ce8b6f11fe037f9780b2e051ed2979d)/metadata.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0021-bt5ce8b6f11fe037f9780b2e051ed2979d)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260508-0021-bt5ce8b6f11fe037f9780b2e051ed2979d)/profile.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/param-scan-report.md"
+      ],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0021-bt5ce8b6f11fe037f9780b2e051ed2979d/report/strategy-analysis.md",
+      "title": "策略分析报告：MA_long=80",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0021-bt5ce8b6f11fe037f9780b2e051ed2979d)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0021-bt5ce8b6f11fe037f9780b2e051ed2979d)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260508-0021-bt5ce8b6f11fe037f9780b2e051ed2979d)",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/batch-comparison.md"
+      ],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0023-bt595479372f9c3d54da84c2f826894688/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0023-bt595479372f9c3d54da84c2f826894688/report/performance-analysis.md",
+      "title": "性能分析报告：MA_long=100",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0023-bt595479372f9c3d54da84c2f826894688)/metadata.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0023-bt595479372f9c3d54da84c2f826894688)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260508-0023-bt595479372f9c3d54da84c2f826894688)/profile.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/param-scan-report.md"
+      ],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0023-bt595479372f9c3d54da84c2f826894688/report/strategy-analysis.md",
+      "title": "策略分析报告：MA_long=100",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0023-bt595479372f9c3d54da84c2f826894688)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0023-bt595479372f9c3d54da84c2f826894688)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260508-0023-bt595479372f9c3d54da84c2f826894688)",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/batch-comparison.md"
+      ],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0025-bt3365e3ec6040aa54f1a2b8462d0dcf49/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0025-bt3365e3ec6040aa54f1a2b8462d0dcf49/report/performance-analysis.md",
+      "title": "性能分析报告：MA_long=140",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0025-bt3365e3ec6040aa54f1a2b8462d0dcf49)/metadata.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0025-bt3365e3ec6040aa54f1a2b8462d0dcf49)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260508-0025-bt3365e3ec6040aa54f1a2b8462d0dcf49)/profile.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/param-scan-report.md"
+      ],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0025-bt3365e3ec6040aa54f1a2b8462d0dcf49/report/strategy-analysis.md",
+      "title": "策略分析报告：MA_long=140",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0025-bt3365e3ec6040aa54f1a2b8462d0dcf49)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0025-bt3365e3ec6040aa54f1a2b8462d0dcf49)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260508-0025-bt3365e3ec6040aa54f1a2b8462d0dcf49)",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/batch-comparison.md"
+      ],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0027-btb2784ac85d31dd228ec8f7e4e36ce212/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0027-btb2784ac85d31dd228ec8f7e4e36ce212/report/performance-analysis.md",
+      "title": "性能分析报告：MA_long=160",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0027-btb2784ac85d31dd228ec8f7e4e36ce212)/metadata.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0027-btb2784ac85d31dd228ec8f7e4e36ce212)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260508-0027-btb2784ac85d31dd228ec8f7e4e36ce212)/profile.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/param-scan-report.md"
+      ],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260508-0027-btb2784ac85d31dd228ec8f7e4e36ce212/report/strategy-analysis.md",
+      "title": "策略分析报告：MA_long=160",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0027-btb2784ac85d31dd228ec8f7e4e36ce212)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0027-btb2784ac85d31dd228ec8f7e4e36ce212)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260508-0027-btb2784ac85d31dd228ec8f7e4e36ce212)",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/batch-comparison.md"
+      ],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260514-1528-bt94a4982a9278019c0eeb6828d1ec0315/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-14T08:11:33+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260514-1528-bt94a4982a9278019c0eeb6828d1ec0315/report/performance-analysis.md",
+      "title": "性能分析报告：AI20_NQ40_Gold100",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260514-1528-bt94a4982a9278019c0eeb6828d1ec0315)/metadata.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260514-1528-bt94a4982a9278019c0eeb6828d1ec0315)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260514-1528-bt94a4982a9278019c0eeb6828d1ec0315)/profile.md"
+      ],
+      "updated_at": "2026-05-14T08:11:33+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260514-1528-bt94a4982a9278019c0eeb6828d1ec0315/report/strategy-analysis.md",
+      "title": "策略分析报告：AI20_NQ40_Gold100",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260514-1528-bt94a4982a9278019c0eeb6828d1ec0315)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260514-1528-bt94a4982a9278019c0eeb6828d1ec0315)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260514-1528-bt94a4982a9278019c0eeb6828d1ec0315)",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260514-etf-ma-mixed-confirmation)/param-scan-report.md"
+      ],
+      "updated_at": "2026-05-14T08:11:33+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260514-1530-bte11b8a2022b2f2e90db7f30680344e7a/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-14T08:11:33+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260514-1530-bte11b8a2022b2f2e90db7f30680344e7a/report/performance-analysis.md",
+      "title": "性能分析报告：AI100_NQ40_Gold100",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260514-1530-bte11b8a2022b2f2e90db7f30680344e7a)/metadata.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260514-1530-bte11b8a2022b2f2e90db7f30680344e7a)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260514-1530-bte11b8a2022b2f2e90db7f30680344e7a)/profile.md"
+      ],
+      "updated_at": "2026-05-14T08:11:33+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260514-1530-bte11b8a2022b2f2e90db7f30680344e7a/report/strategy-analysis.md",
+      "title": "策略分析报告：AI100_NQ40_Gold100",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260514-1530-bte11b8a2022b2f2e90db7f30680344e7a)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260514-1530-bte11b8a2022b2f2e90db7f30680344e7a)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260514-1530-bte11b8a2022b2f2e90db7f30680344e7a)",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260514-etf-ma-mixed-confirmation)/param-scan-report.md"
+      ],
+      "updated_at": "2026-05-14T08:11:33+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260514-1532-bt1ea3afc1650a49a3ee8597b3e58f3c28/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-14T08:11:33+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260514-1532-bt1ea3afc1650a49a3ee8597b3e58f3c28/report/performance-analysis.md",
+      "title": "性能分析报告：AI120_NQ40_Gold100",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260514-1532-bt1ea3afc1650a49a3ee8597b3e58f3c28)/metadata.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260514-1532-bt1ea3afc1650a49a3ee8597b3e58f3c28)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260514-1532-bt1ea3afc1650a49a3ee8597b3e58f3c28)/profile.md"
+      ],
+      "updated_at": "2026-05-14T08:11:33+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260514-1532-bt1ea3afc1650a49a3ee8597b3e58f3c28/report/strategy-analysis.md",
+      "title": "策略分析报告：AI120_NQ40_Gold100",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260514-1532-bt1ea3afc1650a49a3ee8597b3e58f3c28)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260514-1532-bt1ea3afc1650a49a3ee8597b3e58f3c28)/all_data.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260514-1532-bt1ea3afc1650a49a3ee8597b3e58f3c28)",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260514-etf-ma-mixed-confirmation)/param-scan-report.md"
+      ],
+      "updated_at": "2026-05-14T08:11:33+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260514-1804-bt775e3d35921112503655717fa185f106/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-14T12:23:34+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260514-1804-bt775e3d35921112503655717fa185f106/report/performance-analysis.md",
+      "title": "性能分析报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-14T12:23:34+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260514-1804-bt775e3d35921112503655717fa185f106/report/strategy-analysis.md",
+      "title": "策略分析报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-14T12:23:34+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260514-1959-bt1a70c5cd71fac1c27eed2268045ad80a/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-14T12:23:34+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260514-1959-bt1a70c5cd71fac1c27eed2268045ad80a/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-14",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-14T12:23:34+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260514-1959-bt1a70c5cd71fac1c27eed2268045ad80a/report/deep_attribution.md",
+      "title": "深度归因分析报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-14T12:43:20+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2039-bt5faac6620b963dbcc07a09361866e115/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T12:41:13+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2039-bt5faac6620b963dbcc07a09361866e115/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-15",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T12:41:13+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2049-bt7636c4788d821690fd90b281dee7e913/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T12:51:18+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2049-bt7636c4788d821690fd90b281dee7e913/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-15",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T12:51:18+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2049-bt7636c4788d821690fd90b281dee7e913/report/performance-analysis.md",
+      "title": "性能分析报告 — 黄金-baseline (CrowdStart=0.60)",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T14:02:44+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2049-bt7636c4788d821690fd90b281dee7e913/report/strategy-analysis.md",
+      "title": "策略分析报告 — 黄金-baseline (CrowdStart=0.60)",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260515-2049-bt7636c4788d821690fd90b281dee7e913)"
+      ],
+      "updated_at": "2026-05-15T14:02:44+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2051-bte8e07662646ef6b56f453ea15c7d959d/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T12:53:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2051-bte8e07662646ef6b56f453ea15c7d959d/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-15",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T12:53:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2051-bte8e07662646ef6b56f453ea15c7d959d/report/performance-analysis.md",
+      "title": "性能分析报告 — 黄金-start-080 (CrowdStart=0.80)",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T14:02:44+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2051-bte8e07662646ef6b56f453ea15c7d959d/report/robustness-verification.md",
+      "title": "稳健性验证：黄金 CrowdStart 0.60 → 0.80",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T13:58:58+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2051-bte8e07662646ef6b56f453ea15c7d959d/report/strategy-analysis.md",
+      "title": "策略分析报告 — 黄金-start-080 (CrowdStart=0.80)",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260515-2051-bte8e07662646ef6b56f453ea15c7d959d)"
+      ],
+      "updated_at": "2026-05-15T14:02:44+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2054-bt72abfe3d501669b91a4b3d3a0fd5b49b/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T12:56:36+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2054-bt72abfe3d501669b91a4b3d3a0fd5b49b/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-15",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T12:56:36+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2054-bt72abfe3d501669b91a4b3d3a0fd5b49b/report/performance-analysis.md",
+      "title": "性能分析报告 — 黄金-neutralized (取消惩罚)",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T14:02:44+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2054-bt72abfe3d501669b91a4b3d3a0fd5b49b/report/strategy-analysis.md",
+      "title": "策略分析报告 — 黄金-neutralized (取消惩罚)",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260515-2054-bt72abfe3d501669b91a4b3d3a0fd5b49b)"
+      ],
+      "updated_at": "2026-05-15T14:02:44+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2056-bt3e11aaf64867aa42e8644d88dfe0a4e3/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T12:59:01+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2056-bt3e11aaf64867aa42e8644d88dfe0a4e3/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-15",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T12:59:01+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2056-bt3e11aaf64867aa42e8644d88dfe0a4e3/report/performance-analysis.md",
+      "title": "性能分析报告 — 黄金-calc-longwin (延长计算窗口)",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T14:02:44+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2056-bt3e11aaf64867aa42e8644d88dfe0a4e3/report/strategy-analysis.md",
+      "title": "策略分析报告 — 黄金-calc-longwin (延长计算窗口)",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260515-2056-bt3e11aaf64867aa42e8644d88dfe0a4e3)"
+      ],
+      "updated_at": "2026-05-15T14:02:44+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2100-bt852ee6d4016248c77c11386f2f6a7245/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T13:02:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2100-bt852ee6d4016248c77c11386f2f6a7245/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-15",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T13:02:20+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2100-bt852ee6d4016248c77c11386f2f6a7245/report/performance-analysis.md",
+      "title": "性能分析报告 — AI-baseline (CrowdStart=0.60)",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T14:02:44+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2100-bt852ee6d4016248c77c11386f2f6a7245/report/strategy-analysis.md",
+      "title": "策略分析报告 — AI-baseline (CrowdStart=0.60)",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260515-2100-bt852ee6d4016248c77c11386f2f6a7245)"
+      ],
+      "updated_at": "2026-05-15T14:02:44+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2102-bt5d8807c600e004cf70f4c4b31a1b28ac/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T13:04:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2102-bt5d8807c600e004cf70f4c4b31a1b28ac/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-15",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T13:04:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2102-bt5d8807c600e004cf70f4c4b31a1b28ac/report/performance-analysis.md",
+      "title": "性能分析报告 — AI-start-075 (CrowdStart=0.75)",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T14:02:44+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2102-bt5d8807c600e004cf70f4c4b31a1b28ac/report/strategy-analysis.md",
+      "title": "策略分析报告 — AI-start-075 (CrowdStart=0.75)",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260515-2102-bt5d8807c600e004cf70f4c4b31a1b28ac)"
+      ],
+      "updated_at": "2026-05-15T14:02:44+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2105-bt6fb6670169c26ae89dd2902eba243fff/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T13:07:14+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2105-bt6fb6670169c26ae89dd2902eba243fff/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-15",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T13:07:14+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2105-bt6fb6670169c26ae89dd2902eba243fff/report/performance-analysis.md",
+      "title": "性能分析报告 — AI-neutralized (取消惩罚)",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T14:02:44+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2105-bt6fb6670169c26ae89dd2902eba243fff/report/strategy-analysis.md",
+      "title": "策略分析报告 — AI-neutralized (取消惩罚)",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260515-2105-bt6fb6670169c26ae89dd2902eba243fff)"
+      ],
+      "updated_at": "2026-05-15T14:02:44+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2107-bt157c5e16bdd7a47cb327a70b75b69da4/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T13:09:37+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2107-bt157c5e16bdd7a47cb327a70b75b69da4/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-15",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T13:09:37+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2107-bt157c5e16bdd7a47cb327a70b75b69da4/report/performance-analysis.md",
+      "title": "性能分析报告 — AI-calc-longwin (延长计算窗口)",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T14:02:44+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260515-2107-bt157c5e16bdd7a47cb327a70b75b69da4/report/strategy-analysis.md",
+      "title": "策略分析报告 — AI-calc-longwin (延长计算窗口)",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260515-2107-bt157c5e16bdd7a47cb327a70b75b69da4)"
+      ],
+      "updated_at": "2026-05-15T14:02:44+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1611-bt9b67f2f9a034bb7d3d7a044cf3e0d4e9/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1611-bt9b67f2f9a034bb7d3d7a044cf3e0d4e9/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1624-btac3499f8d6b8bf0f5ee81147b6bd0da1/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1624-btac3499f8d6b8bf0f5ee81147b6bd0da1/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1624-btac3499f8d6b8bf0f5ee81147b6bd0da1/report/robustness-verification.md",
+      "title": "稳健性验证：`extreme-neutral-090`",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1627-bteaf8bd75c426dcbb66b49eca35aeab1c/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1627-bteaf8bd75c426dcbb66b49eca35aeab1c/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1629-bt13a13155cdf761ba85550d3987fd22c4/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1629-bt13a13155cdf761ba85550d3987fd22c4/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1724-bt580e16e5a3f1bf99d197cea88889da1a/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1724-bt580e16e5a3f1bf99d197cea88889da1a/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1726-bta2d755cf006abe1aac853e65803acf70/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1726-bta2d755cf006abe1aac853e65803acf70/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1729-bt2405ba5c36f5774b229998b57b1d400e/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1729-bt2405ba5c36f5774b229998b57b1d400e/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1731-btbe2e525c63caec09d9355836a69f8676/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1731-btbe2e525c63caec09d9355836a69f8676/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1731-btbe2e525c63caec09d9355836a69f8676/report/robustness-verification.md",
+      "title": "稳健性验证：linear-035",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:49:34+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1734-bt19cd602c6a77e0878d1aec4a60c9f3d8/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1734-bt19cd602c6a77e0878d1aec4a60c9f3d8/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1734-bt19cd602c6a77e0878d1aec4a60c9f3d8/report/robustness-verification.md",
+      "title": "稳健性验证：linear-025",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260518-1613-bt8a5fed74b68c674774fb511ccabb1978/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260518-1613-bt8a5fed74b68c674774fb511ccabb1978/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260518-1613-bt8a5fed74b68c674774fb511ccabb1978/report/performance-analysis.md",
+      "title": "性能分析报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260518-1613-bt8a5fed74b68c674774fb511ccabb1978/report/strategy-analysis.md",
+      "title": "策略分析报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260518-1650-bt623fbd8857ee042d2af47036ae25a61b/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T09:39:51+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260518-1650-bt623fbd8857ee042d2af47036ae25a61b/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T09:39:51+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260518-2112-btad92e9f81ce38a61c4c2bc96f313e182/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T13:14:52+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260518-2112-btad92e9f81ce38a61c4c2bc96f313e182/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T13:14:52+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260518-2115-bte20c289b37c62e437e71790dd58e2293/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T13:17:36+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260518-2115-bte20c289b37c62e437e71790dd58e2293/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T13:17:36+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260518-2117-bt5f9c36b58a30b48ee51e916b7fa0576c/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T13:20:03+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260518-2117-bt5f9c36b58a30b48ee51e916b7fa0576c/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T13:20:03+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260518-2125-bt17c8ba539ebb20f374b4c36fc322b718/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T13:28:02+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260518-2125-bt17c8ba539ebb20f374b4c36fc322b718/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T13:28:02+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260518-2128-bt720a21be72ca92343877e3eed66a5644/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T13:30:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260518-2128-bt720a21be72ca92343877e3eed66a5644/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T13:30:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260518-2130-btd3a302dab6ce74013cb2c7dfd6785a62/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T13:33:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260518-2130-btd3a302dab6ce74013cb2c7dfd6785a62/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T13:33:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/2026-05-07-factor-vs-dynamic-rebalance-attribution.md",
+      "title": "ETF 因子轮动 vs 动态再平衡深度归因报告",
+      "category": "report",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-07",
+      "tags": [],
+      "pathrefs": [
+        "strategy_dir(strategy=etf_factor_rotation)/etf_factor_rotation.py",
+        "strategy_dir(strategy=etf_dynamic_rebalance)/etf_dynamic_rebalance.py",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260507-0625-bt69dc0ff8b24797f86790f58edd568ace)/metadata.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260507-0625-bt69dc0ff8b24797f86790f58edd568ace)/summary_metrics.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260507-0625-bt69dc0ff8b24797f86790f58edd568ace)/positioninfo.md",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260507-0625-bt69dc0ff8b24797f86790f58edd568ace)/transactioninfo.md",
+        "backtest_run(strategy=etf_dynamic_rebalance, run_id=20260507-1622-bt9185c8dff5682cc51043774c05817179)/metadata.json",
+        "backtest_run(strategy=etf_dynamic_rebalance, run_id=20260507-1622-bt9185c8dff5682cc51043774c05817179)/summary_metrics.json",
+        "backtest_tabs_dir(strategy=etf_dynamic_rebalance, run_id=20260507-1622-bt9185c8dff5682cc51043774c05817179)/positioninfo.md",
+        "backtest_tabs_dir(strategy=etf_dynamic_rebalance, run_id=20260507-1622-bt9185c8dff5682cc51043774c05817179)/transactioninfo.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260507-targetvol-scan)/batch-comparison.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260507-topk-scan)/batch-comparison.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260507-rsrsmaxmultiplier-scan)/batch-comparison.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260507-0000-rsrs-negfullcut-scan)/batch-comparison.md",
+        "strategy_reports(strategy=etf_dynamic_rebalance)/01-threshold-comparison.md",
+        "strategy_reports(strategy=etf_dynamic_rebalance)/02-drawdown-attribution.md"
+      ],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/2026-05-14-deep-attribution.md",
+      "title": "深度归因分析报告",
+      "category": "report",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260514-1959-bt1a70c5cd71fac1c27eed2268045ad80a)/summary_metrics.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260514-1959-bt1a70c5cd71fac1c27eed2268045ad80a)/audit_log.jsonl",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260514-1959-bt1a70c5cd71fac1c27eed2268045ad80a)/positioninfo.md",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260514-1959-bt1a70c5cd71fac1c27eed2268045ad80a)/daily_returns.md",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260514-1959-bt1a70c5cd71fac1c27eed2268045ad80a)/transactioninfo.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260514-1959-bt1a70c5cd71fac1c27eed2268045ad80a)/data-integrity.md",
+        "strategy_dir(strategy=etf_factor_rotation)/etf_factor_rotation.py"
+      ],
+      "updated_at": "2026-05-14T13:50:17+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/2026-05-15-crowd-penalty-ab-decision.md",
+      "title": "拥挤度惩罚 AB 验证 — 最终决策",
+      "category": "report",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-15",
+      "tags": [],
+      "pathrefs": [
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260515-2051-bte8e07662646ef6b56f453ea15c7d959d)/robustness-verification.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260515-2051-bte8e07662646ef6b56f453ea15c7d959d)/robustness-verification.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260515-gold-crowd-ab)/ab-gold-crowd-ab-comparison.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260515-gold-crowd-ab)/crowd-window-check.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260515-gold-crowd-ab)/ab-gold-crowd-ab-summary.json",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260515-ai-crowd-ab)/ab-ai-crowd-ab-comparison.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260515-ai-crowd-ab)/crowd-window-check.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260515-ai-crowd-ab)/ab-ai-crowd-ab-summary.json"
+      ],
+      "updated_at": "2026-05-15T14:03:40+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/2026-05-17-momentum-extreme-tilt-ab-decision.md",
+      "title": "动量极端高位弱化 A/B 决策",
+      "category": "report",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [
+        "strategy_reports(strategy=etf_factor_rotation)/testing/2026-05-17-momentum-extreme-tilt-validation-plan.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260517-momentum-extreme-ab)/ab-momentum-extreme-ab-comparison.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260517-momentum-extreme-ab)/momentum-bucket-check.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260517-1624-btac3499f8d6b8bf0f5ee81147b6bd0da1)/robustness-verification.md"
+      ],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/2026-05-17-momentum-strength-035-robustness-and-platform-validation.md",
+      "title": "`linear-035` 稳健性补充与本地研究平台验证",
+      "category": "report",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [
+        "strategy_reports(strategy=etf_factor_rotation)/2026-05-17-momentum-strength-confirmation-decision.md",
+        "strategy_research_project_manifest(strategy=etf_factor_rotation, project=momentum_strength_035_robustness)",
+        "strategy_research_run_tables(strategy=etf_factor_rotation, project=momentum_strength_035_robustness, run_id=2026-05-17-full)/full_candidate_review.csv",
+        "strategy_research_run_tables(strategy=etf_factor_rotation, project=momentum_strength_035_robustness, run_id=2026-05-17-full)/cloud_handoff.json",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260517-1731-btbe2e525c63caec09d9355836a69f8676)/robustness-verification.md"
+      ],
+      "updated_at": "2026-05-17T14:50:51+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/2026-05-17-momentum-strength-confirmation-decision.md",
+      "title": "动量倾斜强度确认决策",
+      "category": "report",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [
+        "strategy_research_run_reports(strategy=etf_factor_rotation, project=momentum_tilt, run_id=2026-05-17-baseline)/momentum-next-stage-decision.md",
+        "strategy_research_run_reports(strategy=etf_factor_rotation, project=momentum_tilt, run_id=2026-05-17-baseline)/replay_calibration.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260517-momentum-strength-confirmation)/ab-momentum-strength-confirmation-comparison.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260517-1734-bt19cd602c6a77e0878d1aec4a60c9f3d8)/robustness-verification.md",
+        "strategy_reports(strategy=etf_factor_rotation)/2026-05-17-momentum-strength-035-robustness-and-platform-validation.md"
+      ],
+      "updated_at": "2026-05-17T14:50:51+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/design/2026-05-05-code-review.md",
+      "title": "使用项目 .venv 环境",
+      "category": "design",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-05",
+      "tags": [],
+      "pathrefs": [
+        "strategy_dir(strategy=etf_factor_rotation)/etf_factor_rotation.py",
+        "strategy_tests(strategy=etf_factor_rotation)/test_etf_factor_rotation.py",
+        "strategy_reports(strategy=etf_factor_rotation)/design/ETF轮动策略方案说明书.md",
+        "docs/joinquant-api.md",
+        "joinquant_data/JQ_场内基金数据.md",
+        "repo/CLAUDE.md"
+      ],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/design/2026-05-17-cash-utilization-optimization-plan.md",
+      "title": "现金利用率优化研究计划",
+      "category": "design",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [
+        "strategy_dir(strategy=etf_factor_rotation)/etf_factor_rotation.py",
+        "strategy_reports(strategy=etf_factor_rotation)/2026-05-14-deep-attribution.md",
+        "strategy_research_run_reports(strategy=etf_factor_rotation, project=cash_utilization, run_id=2026-05-17-phase0-baseline)/cash_decomposition_summary.md",
+        "strategy_research_run_reports(strategy=etf_factor_rotation, project=cash_utilization, run_id=2026-05-18-volscale-full-scan)/portfolio-volatility-full-scan.md",
+        "strategy_research_run_reports(strategy=etf_factor_rotation, project=portfolio_volatility, run_id=2026-05-18-smoke-warm-v2)/portfolio-volatility-performance-smoke.md",
+        "strategy_research_run_reports(strategy=etf_factor_rotation, project=portfolio_volatility, run_id=2026-05-18-full-v1)/portfolio-volatility-full-scan.md"
+      ],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/design/2026-05-17-momentum-followup-research-plan.md",
+      "title": "动量倾斜进一步研究计划",
+      "category": "design",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [
+        "strategy_reports(strategy=etf_factor_rotation)/2026-05-17-momentum-extreme-tilt-ab-decision.md",
+        "strategy_reports(strategy=etf_factor_rotation)/2026-05-14-deep-attribution.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260517-momentum-extreme-ab)/momentum-bucket-check.md"
+      ],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/design/2026-05-18-execution-timing-impact-study-plan.md",
+      "title": "执行时序影响研究计划",
+      "category": "design",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [
+        "strategy_dir(strategy=etf_factor_rotation)/etf_factor_rotation.py",
+        "strategy_reports(strategy=etf_factor_rotation)/design/ETF轮动策略技术实现方案.md",
+        "scripts/research/README.md",
+        "scripts/research/platform/README.md",
+        "scripts/research/research_core/prices.py",
+        "strategy_dir(strategy=etf_factor_rotation)/etf_factor_rotation.py",
+        "strategy_reports(strategy=etf_factor_rotation)/design/ETF轮动策略技术实现方案.md",
+        "scripts/research/platform/README.md",
+        "scripts/research/platform/plugins.py",
+        "scripts/research/research_core/prices.py"
+      ],
+      "updated_at": "2026-05-18T12:33:52+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/design/ETF轮动策略技术实现方案.md",
+      "title": "ETF轮动策略技术实现方案",
+      "category": "design",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-05",
+      "tags": [],
+      "pathrefs": [
+        "strategy_dir(strategy=etf_factor_rotation)/etf_factor_rotation.py",
+        "strategy_reports(strategy=etf_factor_rotation)/design/ETF轮动策略方案说明书.md",
+        "strategy_reports(strategy=etf_factor_rotation)/testing/测试方案设计文档.md",
+        "docs/joinquant-api.md",
+        "joinquant_data/JQ_场内基金数据.md",
+        "strategy_reports(strategy=etf_factor_rotation)/testing/测试方案设计文档.md"
+      ],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/design/ETF轮动策略方案说明书.md",
+      "title": "ETF 轮动策略方案说明书：方案1线性乘数版",
+      "category": "design",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/design/动量RSRS相对倾斜技术实现方案.md",
+      "title": "动量RSRS相对倾斜技术实现方案",
+      "category": "design",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-14",
+      "tags": [],
+      "pathrefs": [
+        "strategy_dir(strategy=etf_factor_rotation)/etf_factor_rotation.py",
+        "strategy_reports(strategy=etf_factor_rotation)/design/ETF轮动策略技术实现方案.md",
+        "strategy_reports(strategy=etf_factor_rotation)/design/ETF轮动策略方案说明书.md",
+        "strategy_tests(strategy=etf_factor_rotation)/test_etf_factor_rotation.py",
+        "strategy_reports(strategy=etf_factor_rotation)/design/ETF轮动策略方案说明书.md",
+        "strategy_reports(strategy=etf_factor_rotation)/design/ETF轮动策略技术实现方案.md",
+        "strategy_reports(strategy=etf_factor_rotation)/testing/测试方案设计文档.md"
+      ],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/cash_utilization/README.md",
+      "title": "cash_utilization",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/cash_utilization/docs/cloud_confirmation_plan.md",
+      "title": "云端确认计划",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/cash_utilization/docs/data_contract.md",
+      "title": "数据契约",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/cash_utilization/docs/decision_log.md",
+      "title": "决策记录",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/cash_utilization/docs/execution_plan.md",
+      "title": "执行计划",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/cash_utilization/docs/performance_plan.md",
+      "title": "性能计划",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/cash_utilization/docs/research_spec.md",
+      "title": "研究规格",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/cash_utilization/runs/2026-05-17-phase0-baseline/reports/cash_decomposition_summary.md",
+      "title": "现金来源拆解摘要",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/cash_utilization/runs/2026-05-18-volscale-full-scan/reports/portfolio-volatility-full-scan.md",
+      "title": "组合波动率全量本地扫描",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/execution_timing/README.md",
+      "title": "执行时序影响研究项目",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [
+        "strategy_research_project_docs(strategy=etf_factor_rotation, project=execution_timing)",
+        "strategy_research_project_raw_inputs(strategy=etf_factor_rotation, project=execution_timing)",
+        "strategy_research_project_exports(strategy=etf_factor_rotation, project=execution_timing)/joinquant",
+        "strategy_research_project_runs(strategy=etf_factor_rotation, project=execution_timing)",
+        "strategy_research_project_raw_inputs(strategy=etf_factor_rotation, project=execution_timing)/execution_timing_prices.json",
+        "strategy_research_run(strategy=etf_factor_rotation, project=execution_timing, run_id=2026-05-18-phase1-open-refresh)",
+        "strategy_research_run(strategy=etf_factor_rotation, project=execution_timing, run_id=2026-05-18-cloud-confirmation)"
+      ],
+      "updated_at": "2026-05-18T13:35:03+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/execution_timing/docs/cloud_confirmation_plan.md",
+      "title": "云端确认计划",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T12:43:57+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/execution_timing/docs/data_contract.md",
+      "title": "数据契约",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T12:57:16+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/execution_timing/docs/decision_log.md",
+      "title": "决策日志",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T13:35:03+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/execution_timing/docs/execution_plan.md",
+      "title": "执行计划",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T12:49:43+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/execution_timing/docs/performance_plan.md",
+      "title": "性能计划",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T12:43:57+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/execution_timing/docs/research_spec.md",
+      "title": "研究规格",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T12:43:57+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/execution_timing/runs/2026-05-18-cloud-confirmation/reports/cloud_comparison.md",
+      "title": "执行时序云端正式比较",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [
+        "test_batch(strategy=etf_factor_rotation, batch_id=20260518-execution-timing-cloud-compare-v2)/manifest.json",
+        "test_scenario(strategy=etf_factor_rotation, batch_id=20260518-execution-timing-cloud-compare-v2, scenario_id=s01-execution-timing-worktree)/scenario.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260518-2125-bt17c8ba539ebb20f374b4c36fc322b718)/summary_metrics.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260518-2125-bt17c8ba539ebb20f374b4c36fc322b718)/audit_log.jsonl",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260518-2128-bt720a21be72ca92343877e3eed66a5644)/summary_metrics.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260518-2128-bt720a21be72ca92343877e3eed66a5644)/audit_log.jsonl",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260518-2130-btd3a302dab6ce74013cb2c7dfd6785a62)/summary_metrics.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260518-2130-btd3a302dab6ce74013cb2c7dfd6785a62)/audit_log.jsonl",
+        "strategy_research_run(strategy=etf_factor_rotation, project=execution_timing, run_id=2026-05-18-phase1-open-refresh)/tables/timing_path_summary.json"
+      ],
+      "updated_at": "2026-05-18T13:35:43+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/execution_timing/runs/2026-05-18-phase1-initial/reports/delay_only_impact.md",
+      "title": "执行延迟影响",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T12:54:43+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/execution_timing/runs/2026-05-18-phase1-initial/reports/signal_shift_report.md",
+      "title": "信号刷新影响",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T12:54:43+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/execution_timing/runs/2026-05-18-phase1-initial/reports/timing_local_decision.md",
+      "title": "本地时序研究决策",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T12:54:43+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/execution_timing/runs/2026-05-18-phase1-open-refresh/reports/delay_only_impact.md",
+      "title": "执行延迟影响",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2025-09-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T12:56:57+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/execution_timing/runs/2026-05-18-phase1-open-refresh/reports/signal_shift_report.md",
+      "title": "信号刷新影响",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T12:56:57+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/execution_timing/runs/2026-05-18-phase1-open-refresh/reports/timing_local_decision.md",
+      "title": "本地时序研究决策",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T12:56:57+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/momentum_strength_035_robustness/README.md",
+      "title": "momentum_strength_035_robustness",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:47:55+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/momentum_strength_035_robustness/docs/cloud_confirmation_plan.md",
+      "title": "云端确认计划",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:47:55+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/momentum_strength_035_robustness/docs/data_contract.md",
+      "title": "数据契约",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:47:55+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/momentum_strength_035_robustness/docs/decision_log.md",
+      "title": "决策记录",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:47:55+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/momentum_strength_035_robustness/docs/execution_plan.md",
+      "title": "执行计划",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:47:55+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/momentum_strength_035_robustness/docs/performance_plan.md",
+      "title": "性能计划",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:47:55+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/momentum_strength_035_robustness/docs/research_spec.md",
+      "title": "研究规格",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:47:55+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/momentum_tilt/runs/2026-05-17-baseline/reports/baseline_snapshot.md",
+      "title": "基线快照",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260517-1611-bt9b67f2f9a034bb7d3d7a044cf3e0d4e9)/audit_log.jsonl",
+        "strategy_research_project_raw_inputs(strategy=etf_factor_rotation, project=window_heterogeneity)/etf_window_research_prices.json",
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260517-1611-bt9b67f2f9a034bb7d3d7a044cf3e0d4e9)/daily_returns.md"
+      ],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/momentum_tilt/runs/2026-05-17-baseline/reports/momentum-next-stage-decision.md",
+      "title": "动量倾斜下一阶段决策",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/momentum_tilt/runs/2026-05-17-baseline/reports/momentum_response_curve.md",
+      "title": "动量响应曲线",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/momentum_tilt/runs/2026-05-17-baseline/reports/momentum_shape_candidate_summary.md",
+      "title": "动量倾斜强度扫描",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/momentum_tilt/runs/2026-05-17-baseline/reports/replay_calibration.md",
+      "title": "Replay 校准",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/momentum_tilt/runs/2026-05-17-baseline/reports/sample_split.md",
+      "title": "样本切分",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/portfolio_volatility/README.md",
+      "title": "portfolio_volatility",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/portfolio_volatility/docs/cloud_confirmation_plan.md",
+      "title": "云端确认计划",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/portfolio_volatility/docs/data_contract.md",
+      "title": "数据契约",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/portfolio_volatility/docs/decision_log.md",
+      "title": "决策日志",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/portfolio_volatility/docs/execution_plan.md",
+      "title": "执行计划",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/portfolio_volatility/docs/performance_plan.md",
+      "title": "性能计划",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/portfolio_volatility/docs/research_spec.md",
+      "title": "研究规格",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/portfolio_volatility/runs/2026-05-18-full-v1/reports/portfolio-volatility-full-scan.md",
+      "title": "组合波动率行为完整扫描",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/portfolio_volatility/runs/2026-05-18-smoke-cold-v2/reports/portfolio-volatility-performance-smoke.md",
+      "title": "组合波动率全量扫描性能冒烟",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/portfolio_volatility/runs/2026-05-18-smoke-warm-v2/reports/portfolio-volatility-performance-smoke.md",
+      "title": "组合波动率全量扫描性能冒烟",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/window_heterogeneity/README.md",
+      "title": "README",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-15",
+      "tags": [],
+      "pathrefs": [
+        "strategy_research_project_docs(strategy=etf_factor_rotation, project=window_heterogeneity)",
+        "strategy_research_project_raw_inputs(strategy=etf_factor_rotation, project=window_heterogeneity)",
+        "strategy_research_project_exports(strategy=etf_factor_rotation, project=window_heterogeneity)/joinquant",
+        "strategy_research_project_runs(strategy=etf_factor_rotation, project=window_heterogeneity)",
+        "strategy_research_project_docs(strategy=etf_factor_rotation, project=window_heterogeneity)/research_spec.md",
+        "strategy_research_project_docs(strategy=etf_factor_rotation, project=window_heterogeneity)/cloud_confirmation_plan.md",
+        "strategy_research_project_docs(strategy=etf_factor_rotation, project=window_heterogeneity)/performance_optimization_plan.md",
+        "strategy_research_run(strategy=etf_factor_rotation, project=window_heterogeneity, run_id=2026-05-15-baseline)"
+      ],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/window_heterogeneity/docs/cloud_confirmation_plan.md",
+      "title": "cloud_confirmation_plan",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-15",
+      "tags": [],
+      "pathrefs": [
+        "strategy_research_project_docs(strategy=etf_factor_rotation, project=window_heterogeneity)/research_spec.md"
+      ],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/window_heterogeneity/docs/performance_optimization_plan.md",
+      "title": "performance_optimization_plan",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-15",
+      "tags": [],
+      "pathrefs": [
+        "strategy_research_project_docs(strategy=etf_factor_rotation, project=window_heterogeneity)/research_spec.md",
+        "scripts/research/etf_window_research/analysis.py"
+      ],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/window_heterogeneity/docs/research_spec.md",
+      "title": "research_spec",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-15",
+      "tags": [],
+      "pathrefs": [
+        "strategy_reports(strategy=etf_factor_rotation)/testing/2026-05-15-window-heterogeneity-validation-plan.md",
+        "strategy_dir(strategy=etf_factor_rotation)/etf_factor_rotation.py"
+      ],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/window_heterogeneity/runs/2026-05-15-baseline/reports/data_integrity.md",
+      "title": "时间窗异质性研究数据完整性",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/window_heterogeneity/runs/2026-05-15-baseline/reports/default_signal_difference_note.md",
+      "title": "默认信号复现差异说明",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-15",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/window_heterogeneity/runs/2026-05-15-baseline/reports/default_signal_reproduction.md",
+      "title": "默认信号复现对账",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-15",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/window_heterogeneity/runs/2026-05-15-baseline/reports/robustness_check.md",
+      "title": "时间窗异质性稳健性检查",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-15",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/window_heterogeneity/runs/2026-05-15-baseline/reports/window-heterogeneity-validation-report.md",
+      "title": "ETF 时间窗异质性验证报告",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-15",
+      "tags": [],
+      "pathrefs": [
+        "strategy_research_project_docs(strategy=etf_factor_rotation, project=window_heterogeneity)/research_spec.md"
+      ],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/testing/2026-05-15-window-heterogeneity-validation-plan.md",
+      "title": "2026-05-15-window-heterogeneity-validation-plan",
+      "category": "report",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-15",
+      "tags": [],
+      "pathrefs": [
+        "strategy_dir(strategy=etf_factor_rotation)/etf_factor_rotation.py",
+        "strategy_reports(strategy=etf_factor_rotation)/2026-05-14-deep-attribution.md",
+        "strategy_research_project_docs(strategy=etf_factor_rotation, project=window_heterogeneity)/research_spec.md",
+        "strategy_research_project_docs(strategy=etf_factor_rotation, project=window_heterogeneity)/research_spec.md",
+        "strategy_research_project_docs(strategy=etf_factor_rotation, project=window_heterogeneity)/cloud_confirmation_plan.md",
+        "strategy_research_project_exports(strategy=etf_factor_rotation, project=window_heterogeneity)/joinquant/jq_research_export.py",
+        "scripts/research/etf_window_research/analysis.py",
+        "scripts/research/etf_window_research/research_export.py"
+      ],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/testing/2026-05-17-momentum-extreme-tilt-validation-plan.md",
+      "title": "2026-05-17-momentum-extreme-tilt-validation-plan",
+      "category": "report",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [
+        "strategy_reports(strategy=etf_factor_rotation)/2026-05-14-deep-attribution.md",
+        "strategy_dir(strategy=etf_factor_rotation)/etf_factor_rotation.py",
+        "test_batch_abtests(strategy=etf_factor_rotation, batch_id=20260517-momentum-extreme-ab)/momentum-extreme-ab.json",
+        "test_scenario(strategy=etf_factor_rotation, batch_id=20260517-momentum-extreme-ab, scenario_id=s01-momentum-extreme-worktree)/scenario.json"
+      ],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/testing/batch-plan.md",
+      "title": "ETF Factor Rotation 云端测试执行计划",
+      "category": "report",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-05",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/testing/测试方案设计文档.md",
+      "title": "测试方案设计文档",
+      "category": "report",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-05",
+      "tags": [],
+      "pathrefs": [
+        "strategy_dir(strategy=etf_factor_rotation)/etf_factor_rotation.py",
+        "strategy_tests(strategy=etf_factor_rotation)/test_etf_factor_rotation.py",
+        "strategy_tests(strategy=etf_factor_rotation)/conftest.py",
+        "strategy_reports(strategy=etf_factor_rotation)/design/ETF轮动策略方案说明书.md",
+        "docs/joinquant-api.md"
+      ],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260505-0000-etf-factor-rotation-full-test/report/batch-comparison.md",
+      "title": "批次全量对比报告",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-06",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-06T17:46:37+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260505-0000-etf-factor-rotation-full-test/report/exit-criteria-check.md",
+      "title": "退出标准核查",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-06",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-06T17:46:37+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260505-0000-etf-factor-rotation-full-test/report/fq-decision.md",
+      "title": "FQ 口径最终决策文档",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-06",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-06T17:46:37+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260505-0000-etf-factor-rotation-full-test/report/issue-log.md",
+      "title": "Issue Log",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-06",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-06T17:46:37+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260506-smoke-ab/report/ab-smoke-params-ab-comparison.md",
+      "title": "AB 对比报告: smoke-params-ab",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-06",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-05T19:30:09+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260507-0000-rsrs-negfullcut-scan/report/batch-comparison.md",
+      "title": "RSRS NegativeFullCut 参数扫描对比分析",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260507-rsrsmaxmultiplier-scan/report/batch-comparison.md",
+      "title": "RSRSMaxMultiplier 参数扫描对比报告",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260507-targetvol-scan/report/batch-comparison.md",
+      "title": "TargetVol 参数扫描对比报告",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260507-topk-scan/report/batch-comparison.md",
+      "title": "批次对比报告 — TopK 参数扫描",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-07T09:52:45+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260508-hard-ma-scan/report/batch-comparison.md",
+      "title": "硬门槛 MA_long 参数扫描报告",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "test_batch(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/manifest.json",
+        "test_scenario(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan, scenario_id=s01-ma-long-scan)/scenario.json",
+        "joinquant_quota_ledger/20260508.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0013-bt869bfbeb9021c76b30f76a90dd622f6a)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0014-bt9bb4faba66f1fb565ad2783fb33147c3)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0019-bt91c62e12c5cc7fd16dd43466b0b7d502)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0021-bt5ce8b6f11fe037f9780b2e051ed2979d)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0023-bt595479372f9c3d54da84c2f826894688)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0025-bt3365e3ec6040aa54f1a2b8462d0dcf49)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0027-btb2784ac85d31dd228ec8f7e4e36ce212)/summary_metrics.json",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0013-bt869bfbeb9021c76b30f76a90dd622f6a)/strategy-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0013-bt869bfbeb9021c76b30f76a90dd622f6a)/performance-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0014-bt9bb4faba66f1fb565ad2783fb33147c3)/strategy-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0014-bt9bb4faba66f1fb565ad2783fb33147c3)/performance-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994)/strategy-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994)/performance-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0019-bt91c62e12c5cc7fd16dd43466b0b7d502)/strategy-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0019-bt91c62e12c5cc7fd16dd43466b0b7d502)/performance-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0021-bt5ce8b6f11fe037f9780b2e051ed2979d)/strategy-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0021-bt5ce8b6f11fe037f9780b2e051ed2979d)/performance-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0023-bt595479372f9c3d54da84c2f826894688)/strategy-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0023-bt595479372f9c3d54da84c2f826894688)/performance-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0025-bt3365e3ec6040aa54f1a2b8462d0dcf49)/strategy-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0025-bt3365e3ec6040aa54f1a2b8462d0dcf49)/performance-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0027-btb2784ac85d31dd228ec8f7e4e36ce212)/strategy-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0027-btb2784ac85d31dd228ec8f7e4e36ce212)/performance-analysis.md"
+      ],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260508-hard-ma-scan/report/etf-ma-parameter-attribution.md",
+      "title": "三只 ETF 的 MA_long 参数归因分析",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "test_batch(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/manifest.json",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/param-scan-report.md",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/ma40-vs-120-attribution.md",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0014-bt9bb4faba66f1fb565ad2783fb33147c3)/api_export.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994)/api_export.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0019-bt91c62e12c5cc7fd16dd43466b0b7d502)/api_export.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0021-bt5ce8b6f11fe037f9780b2e051ed2979d)/api_export.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0023-bt595479372f9c3d54da84c2f826894688)/api_export.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0013-bt869bfbeb9021c76b30f76a90dd622f6a)/api_export.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0025-bt3365e3ec6040aa54f1a2b8462d0dcf49)/api_export.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0027-btb2784ac85d31dd228ec8f7e4e36ce212)/api_export.json"
+      ],
+      "updated_at": "2026-05-14T08:11:33+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260508-hard-ma-scan/report/ma40-vs-120-attribution.md",
+      "title": "MA_long=40 vs 120 深度归因分析",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": "2022-03-09",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994)/api_export.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0013-bt869bfbeb9021c76b30f76a90dd622f6a)/api_export.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0013-bt869bfbeb9021c76b30f76a90dd622f6a)/summary_metrics.json",
+        "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/batch-comparison.md"
+      ],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260508-hard-ma-scan/report/param-scan-report.md",
+      "title": "硬门槛 MA_long 参数扫描报告",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "test_batch(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/manifest.json",
+        "test_scenario(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan, scenario_id=s01-ma-long-scan)/scenario.json",
+        "joinquant_quota_ledger/20260508.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0013-bt869bfbeb9021c76b30f76a90dd622f6a)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0014-bt9bb4faba66f1fb565ad2783fb33147c3)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0019-bt91c62e12c5cc7fd16dd43466b0b7d502)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0021-bt5ce8b6f11fe037f9780b2e051ed2979d)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0023-bt595479372f9c3d54da84c2f826894688)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0025-bt3365e3ec6040aa54f1a2b8462d0dcf49)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0027-btb2784ac85d31dd228ec8f7e4e36ce212)/summary_metrics.json",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0013-bt869bfbeb9021c76b30f76a90dd622f6a)/strategy-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0013-bt869bfbeb9021c76b30f76a90dd622f6a)/performance-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0014-bt9bb4faba66f1fb565ad2783fb33147c3)/strategy-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0014-bt9bb4faba66f1fb565ad2783fb33147c3)/performance-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994)/strategy-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994)/performance-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0019-bt91c62e12c5cc7fd16dd43466b0b7d502)/strategy-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0019-bt91c62e12c5cc7fd16dd43466b0b7d502)/performance-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0021-bt5ce8b6f11fe037f9780b2e051ed2979d)/strategy-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0021-bt5ce8b6f11fe037f9780b2e051ed2979d)/performance-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0023-bt595479372f9c3d54da84c2f826894688)/strategy-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0023-bt595479372f9c3d54da84c2f826894688)/performance-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0025-bt3365e3ec6040aa54f1a2b8462d0dcf49)/strategy-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0025-bt3365e3ec6040aa54f1a2b8462d0dcf49)/performance-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0027-btb2784ac85d31dd228ec8f7e4e36ce212)/strategy-analysis.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260508-0027-btb2784ac85d31dd228ec8f7e4e36ce212)/performance-analysis.md"
+      ],
+      "updated_at": "2026-05-07T17:24:26+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260514-etf-ma-mixed-confirmation/report/param-scan-report.md",
+      "title": "ETF 专属 MA_long 混合参数确认扫描",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260514-1528-bt94a4982a9278019c0eeb6828d1ec0315)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260514-1530-bte11b8a2022b2f2e90db7f30680344e7a)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260514-1532-bt1ea3afc1650a49a3ee8597b3e58f3c28)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0013-bt869bfbeb9021c76b30f76a90dd622f6a)/summary_metrics.json",
+        "backtest_run(strategy=etf_factor_rotation, run_id=20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994)/summary_metrics.json"
+      ],
+      "updated_at": "2026-05-14T08:11:33+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260515-ai-crowd-ab/report/ab-ai-crowd-ab-comparison.md",
+      "title": "AB 对比报告: ai-crowd-ab",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-15",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T13:11:24+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260515-ai-crowd-ab/report/crowd-window-check.md",
+      "title": "Crowd Penalty Multi-Window Verification",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T13:22:20+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260515-gold-crowd-ab/report/ab-gold-crowd-ab-comparison.md",
+      "title": "AB 对比报告: gold-crowd-ab",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-15",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T12:59:38+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260515-gold-crowd-ab/report/crowd-window-check.md",
+      "title": "Crowd Penalty Multi-Window Verification",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-15T13:22:03+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260517-momentum-extreme-ab/report/ab-momentum-extreme-ab-comparison.md",
+      "title": "ab-momentum-extreme-ab-comparison",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [
+        "test_batch(strategy=etf_factor_rotation, batch_id=20260517-momentum-extreme-ab)/manifest.json",
+        "strategy_reports(strategy=etf_factor_rotation)/testing/2026-05-17-momentum-extreme-tilt-validation-plan.md"
+      ],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260517-momentum-extreme-ab/report/momentum-bucket-check.md",
+      "title": "动量分桶检查",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "backtest_tabs_dir(strategy=etf_factor_rotation, run_id=20260517-1611-bt9b67f2f9a034bb7d3d7a044cf3e0d4e9)/audit_log.jsonl",
+        "strategy_research_project_raw_inputs(strategy=etf_factor_rotation, project=window_heterogeneity)/etf_window_research_prices.json"
+      ],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260517-momentum-strength-confirmation/report/ab-momentum-strength-confirmation-comparison.md",
+      "title": "AB 对比报告: momentum-strength-confirmation",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/ma_crossover/backtest_runs/20260505-1939-bt48ef4a644906d1ada69ba04637aa4bb6/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "ma_crossover",
+      "date": "2026-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-05T11:39:17+00:00"
+    },
+    {
+      "path": "strategies/ma_crossover/backtest_runs/20260505-1939-bt48ef4a644906d1ada69ba04637aa4bb6/report/performance-analysis.md",
+      "title": "性能分析报告 — ma_crossover (s01-baseline)",
+      "category": "backtest_run",
+      "strategy": "ma_crossover",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-05T11:41:32+00:00"
+    },
+    {
+      "path": "strategies/ma_crossover/backtest_runs/20260505-1939-bt48ef4a644906d1ada69ba04637aa4bb6/report/strategy-analysis.md",
+      "title": "策略分析报告 — ma_crossover (s01-baseline)",
+      "category": "backtest_run",
+      "strategy": "ma_crossover",
+      "date": "2026-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-05T11:41:12+00:00"
+    },
+    {
+      "path": "strategies/ma_crossover/backtest_runs/20260505-1947-bt9d35a958df27c3d1c9534f43644cdd46/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "ma_crossover",
+      "date": "2026-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-05T11:47:46+00:00"
+    },
+    {
+      "path": "strategies/ma_crossover/backtest_runs/20260505-1947-bt9d35a958df27c3d1c9534f43644cdd46/report/performance-analysis.md",
+      "title": "性能分析报告 — ma_crossover (s01-baseline)",
+      "category": "backtest_run",
+      "strategy": "ma_crossover",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-05T14:02:38+00:00"
+    },
+    {
+      "path": "strategies/ma_crossover/backtest_runs/20260505-1947-bt9d35a958df27c3d1c9534f43644cdd46/report/strategy-analysis.md",
+      "title": "策略分析报告 — ma_crossover (s01-baseline)",
+      "category": "backtest_run",
+      "strategy": "ma_crossover",
+      "date": "2026-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-05T14:02:19+00:00"
+    },
+    {
+      "path": "strategies/ma_crossover/reports/Analysis_ma_crossover.md",
+      "title": "双均线交叉策略 — 回测分析报告",
+      "category": "report",
+      "strategy": "ma_crossover",
+      "date": "2025-05-02",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-01T18:51:05+00:00"
+    },
+    {
+      "path": "strategies/ma_crossover/reports/performance_ma_crossover.md",
+      "title": "双均线交叉策略 — 性能分析报告",
+      "category": "report",
+      "strategy": "ma_crossover",
+      "date": "2025-05-02",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-01T18:51:33+00:00"
+    },
+    {
+      "path": "strategies/min_market_cap/reports/Analysis_min_market_cap.md",
+      "title": "市值最小策略 回测分析",
+      "category": "report",
+      "strategy": "min_market_cap",
+      "date": "2025-04-30",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-03T09:25:50+00:00"
+    },
+    {
+      "path": "strategies/min_market_cap/reports/performance_min_market_cap.md",
+      "title": "小市值策略 — 性能分析",
+      "category": "report",
+      "strategy": "min_market_cap",
+      "date": "2026-04-24",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-01T07:37:18+00:00"
+    },
+    {
+      "path": "strategies/value_stock_rsrs/reports/Analysis_Value_Stock_RSRS.md",
+      "title": "Value_Stock_RSRS 策略分析报告",
+      "category": "report",
+      "strategy": "value_stock_rsrs",
+      "date": "2025-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/value_stock_rsrs/reports/performance_Value_Stock_RSRS.md",
+      "title": "Value_Stock_RSRS 性能分析报告",
+      "category": "report",
+      "strategy": "value_stock_rsrs",
+      "date": "2025-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:19+00:00"
+    }
+  ]
+}

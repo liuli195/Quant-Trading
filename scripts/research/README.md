@@ -121,6 +121,18 @@
 - 从 `rebalance_signals` 事件中展平数组字段（趋势门槛、RP 权重、动量/RSRS 倾斜、拥挤度惩罚、各阶段权重、组合波动率缩放等）
 - 写入 `data/data.parquet`
 
+#### import-backtest-run — 导入完整回测 run
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.research.datasets import-backtest-run `
+  strategies\etf_factor_rotation\backtest_runs\<run_id> `
+  --dataset-id <id> [--snapshot-id <id>]
+```
+
+将完整 `backtest_runs/<run_id>` 登记为不可变快照。要求存在 `summary_metrics.json`、`tabs_raw/daily_returns.md`、`tabs_raw/audit_log.jsonl`、`detail_api_export.json` 或 `api_export.json`。输出 `raw/*.gz`、`data/*.parquet` 和 `views/` 摘要，保留原始目录副本用于追溯。
+
+`scripts.tools.jq_automation run/fetch/batch/ab run` 完成抓取后默认调用该 importer，把新 run 写入 `research_datasets/<strategy>_backtest_runs/<run_id>`。需要临时跳过时使用 `--no-dataset-register`。
+
 #### inspect — 查看数据集元数据
 
 ```powershell
@@ -129,6 +141,61 @@
 ```
 
 输出 `dataset.json` 的完整内容（JSON 格式）。
+
+### 文档索引（docs.py）
+
+扫描仓库 Markdown 报告并生成总索引。
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.research.docs index
+```
+
+输出 `docs/indexes/docs_catalog.json`、`reports_catalog.json`、`datasets_catalog.json`、`variants_catalog.json`，并保留 `reports.json`、`reports.md` 兼容旧入口。
+
+### 策略变体（variants.py）
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.research.variants register `
+  --strategy <strategy> `
+  --variant-id <id> --variant-type parameter `
+  --payload-json '{"param_overrides":{"MomentumTiltStrength":0.35}}'
+
+.\.venv\Scripts\python.exe -m scripts.research.variants materialize `
+  --strategy <strategy> --variant-id <id>
+
+.\.venv\Scripts\python.exe -m scripts.research.variants branch-plan --variant-id <id>
+
+.\.venv\Scripts\python.exe -m scripts.research.variants merge-plan `
+  --strategy <strategy> --variant-id <id>
+```
+
+结构变体必须有 `code_source`；`branch-create`、`merge-apply`、标记 `merged_confirmed` 均需要显式 `--yes`。`merge-apply` 成功后只进入 `merged_pending_validation`。
+
+### 流程模板
+
+模板位于 `scripts/research/workflows/templates/`，由 `scripts.research.platform.workflows` 校验。新增模板必须声明输入、阶段、输出和门槛，并通过 `governance audit`。
+
+### 中央工具注册（registry）
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.research.registry.tool_registry list
+.\.venv\Scripts\python.exe -m scripts.research.registry.tool_registry list --group-by-library
+.\.venv\Scripts\python.exe -m scripts.research.registry.tool_registry list --group-by-layer
+.\.venv\Scripts\python.exe -m scripts.research.registry.tool_registry validate
+.\.venv\Scripts\python.exe -m scripts.research.registry.tool_registry write-layers
+```
+
+登记工具 ID、所属层、入口模块、CLI、输入输出、README、文档和测试锚点。
+`write-layers` 会从注册表生成 [layers](layers) <!-- pathref: scripts/research/layers --> 下的5层工具索引。
+
+### 治理审计（governance）
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.research.governance audit
+.\.venv\Scripts\python.exe -m scripts.research.governance gate
+```
+
+审计工具登记、README、CLI help、workflow template schema、`CLAUDE.md`、`jq-research`/`jq-ab-test` Skill、数据 catalog、报告 catalog 和 pathref。`gate` 是本地 hook 和 CI 的固定入口。
 
 ## 库模块
 
@@ -144,19 +211,19 @@
 
 ```
 # 1. 导入数据
-python -m scripts.research.datasets import-audit-log audit_log.jsonl --dataset-id my_audit
+.\.venv\Scripts\python.exe -m scripts.research.datasets import-audit-log audit_log.jsonl --dataset-id my_audit
 
 # 2. 创建研究项目
-python -m scripts.research.cli init --project-dir my_project --strategy etf_factor_rotation \
+.\.venv\Scripts\python.exe -m scripts.research.cli init --project-dir my_project --strategy etf_factor_rotation \
   --project my_study --template generic --dataset-id my_audit --snapshot-id <id>
 
 # 3. 快速筛选
-python -m scripts.research.cli run --project-dir my_project --run-id fast-01 --mode fast
+.\.venv\Scripts\python.exe -m scripts.research.cli run --project-dir my_project --run-id fast-01 --mode fast
 
 # 4. 升级到完整评估
-python -m scripts.research.cli promote --project-dir my_project \
+.\.venv\Scripts\python.exe -m scripts.research.cli promote --project-dir my_project \
   --fast-run-id fast-01 --full-run-id full-01
 
 # 5. 生成云端交接
-python -m scripts.research.cli handoff-cloud --project-dir my_project --run-id full-01
+.\.venv\Scripts\python.exe -m scripts.research.cli handoff-cloud --project-dir my_project --run-id full-01
 ```

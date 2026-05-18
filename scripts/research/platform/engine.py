@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +26,7 @@ DEFAULT_TEMPLATES = {
     "generic": "generic",
     "portfolio_volatility": "portfolio_volatility",
 }
+PROJECT_LIFECYCLES = {"active", "superseded", "archived"}
 
 
 def create_project(
@@ -44,12 +45,20 @@ def create_project(
     if template not in DEFAULT_TEMPLATES:
         raise ValueError(f"unknown template: {template}")
     selected_plugin = plugin or DEFAULT_TEMPLATES[template]
+    get_plugin(selected_plugin)
     layout = ResearchProjectLayout.from_path(project_dir)
     layout.ensure_project_dirs()
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     payload = {
         "schema_version": SCHEMA_VERSION,
         "strategy": strategy,
         "project": project,
+        "owner": "research-platform",
+        "created_by": "research-platform",
+        "updated_by": "research-platform",
+        "created_at": now,
+        "updated_at": now,
+        "lifecycle": "active",
         "template": template,
         "plugin": selected_plugin,
         "datasets": datasets or [],
@@ -64,6 +73,9 @@ def create_project(
             "full_mode_slo_seconds": 30.0,
         },
     }
+    errors = validate_project_config(payload)
+    if errors:
+        raise ValueError(f"invalid project config: {'; '.join(errors)}")
     config_path = layout.root / "project.json"
     config_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     _write_project_docs(layout.root, payload)
@@ -74,7 +86,61 @@ def load_project(project_dir: str | Path) -> dict[str, Any]:
     path = Path(project_dir) / "project.json"
     if not path.is_file():
         raise FileNotFoundError(f"project.json not found: {path}")
-    return json.loads(path.read_text(encoding="utf-8"))
+    project = json.loads(path.read_text(encoding="utf-8"))
+    errors = validate_project_config(project)
+    if errors:
+        raise ValueError(f"invalid project config {path}: {'; '.join(errors)}")
+    return project
+
+
+def validate_project_config(project: dict[str, Any]) -> list[str]:
+    """Validate a research ``project.json`` control-plane record."""
+
+    errors: list[str] = []
+    if not isinstance(project, dict):
+        return ["project config must be an object"]
+    if project.get("schema_version") != SCHEMA_VERSION:
+        errors.append("schema_version must be 1")
+    for field in ("strategy", "project", "template", "plugin", "owner", "created_at", "updated_at", "lifecycle"):
+        if not isinstance(project.get(field), str) or not str(project.get(field)).strip():
+            errors.append(f"{field} is required")
+    template = str(project.get("template", ""))
+    if template and template not in DEFAULT_TEMPLATES:
+        errors.append(f"unknown template: {template}")
+    plugin = str(project.get("plugin", ""))
+    if plugin:
+        try:
+            get_plugin(plugin)
+        except KeyError:
+            errors.append(f"unknown plugin: {plugin}")
+    if project.get("lifecycle") not in PROJECT_LIFECYCLES:
+        errors.append(f"lifecycle must be one of {sorted(PROJECT_LIFECYCLES)}")
+    datasets = project.get("datasets")
+    if not isinstance(datasets, list):
+        errors.append("datasets must be a list")
+    else:
+        for index, dataset in enumerate(datasets):
+            if not isinstance(dataset, dict):
+                errors.append(f"datasets[{index}] must be an object")
+                continue
+            for field in ("dataset_id", "snapshot_id"):
+                if not isinstance(dataset.get(field), str) or not dataset[field].strip():
+                    errors.append(f"datasets[{index}].{field} is required")
+    if not isinstance(project.get("inputs"), dict):
+        errors.append("inputs must be an object")
+    runtime = project.get("runtime")
+    if not isinstance(runtime, dict):
+        errors.append("runtime must be an object")
+    else:
+        for field in ("fast_top_k", "cloud_top_k"):
+            value = runtime.get(field)
+            if not isinstance(value, int) or value < 0:
+                errors.append(f"runtime.{field} must be a non-negative integer")
+        for field in ("fast_mode_slo_seconds", "full_mode_slo_seconds"):
+            value = runtime.get(field)
+            if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
+                errors.append(f"runtime.{field} must be a positive number")
+    return errors
 
 
 def run_project(

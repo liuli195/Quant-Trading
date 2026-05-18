@@ -26,3 +26,27 @@ def markdown_table(frame: pd.DataFrame) -> str:
 
 def write_json(path: str | Path, payload: object) -> None:
     Path(path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+class ReportPrimitives:
+    """Reusable Markdown report fragments."""
+
+    @staticmethod
+    def table(frame: pd.DataFrame) -> str:
+        return markdown_table(frame)
+
+    @staticmethod
+    def conclusion_block(*, directional_support: str, writeback_readiness: str) -> str:
+        return "\n".join(
+            [
+                "## 结论边界",
+                "",
+                f"- **方向性支持**: {directional_support}",
+                f"- **准备写回默认参数**: {writeback_readiness}",
+                "",
+            ]
+        )
+
+    @staticmethod
+    def evidence_link(label: str, rel_path: str) -> str:
+        return f"- **{label}**: [{rel_path}]({rel_path}) <!-- pathref: repo/{rel_path} -->"

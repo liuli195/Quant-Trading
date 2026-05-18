@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "template": "robustness_check",
+  "inputs": ["baseline_returns", "variants"],
+  "stages": ["init", "fast", "full", "handoff", "report"],
+  "outputs": ["candidate_ranking", "shortlist", "full_candidate_review", "cloud_candidates", "cloud_handoff"],
+  "gates": ["paired_series_aligned", "rolling_sharpe_win_rate_positive", "yearly_split_not_concentrated"]
+}

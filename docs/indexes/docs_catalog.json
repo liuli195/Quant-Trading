@@ -1,0 +1,281 @@
+{
+  "schema_version": 1,
+  "catalog_type": "docs",
+  "generated_at": "2026-05-18T18:27:32+00:00",
+  "count": 21,
+  "reports": [
+    {
+      "path": "docs/joinquant-api.md",
+      "title": "定义一个全局变量, 保存要操作的股票",
+      "category": "docs",
+      "strategy": null,
+      "date": "2007-01-30",
+      "tags": [],
+      "pathrefs": [
+        "docs_images/img_93896a6c.png",
+        "docs_images/Bar_的示意图_3e195308.png",
+        "docs_images/K线序列_7796c276.png",
+        "docs_images/日K线_7cbfd219.png",
+        "docs_images/分钟K线_6dd4c15c.png",
+        "docs_images/Tick序列_74bf7fbf.png",
+        "docs_images/图解订单处理_ce63c691.png",
+        "docs_images/传统回测模式_347fbb23.png",
+        "docs_images/开启真实价格回测_cc58e6b5.png",
+        "docs_images/p3_2b2b99c4.png",
+        "docs_images/GL_pre_45d89b8a.png",
+        "docs_images/gbzs_a1fa0a4e.png",
+        "docs_images/kqzs_3a91dbcf.png",
+        "docs_images/enter_image_description_here_d955fc9f.png",
+        "docs_images/enter_image_description_here_cfdcdd64.png",
+        "docs_images/3_png_d9201919.png",
+        "docs_images/4_png_a723c3d9.png",
+        "docs_images/5_png_accd05e0.png",
+        "docs_images/6_png_16dd3d9e.png",
+        "docs_images/7_png_f7a4869c.png",
+        "docs_images/8_png_ece66f3a.png",
+        "docs_images/enter_image_description_here_445e9167.png",
+        "docs_images/enter_image_description_here_23f2e053.png",
+        "docs_images/enter_image_description_here_01b9888e.png",
+        "docs_images/enter_image_description_here_5c5a1f3c.png",
+        "docs_images/enter_image_description_here_731b88e9.png",
+        "docs_images/1e7d7bab_1e7d7bab.png",
+        "docs_images/img_2901ea6b.png"
+      ],
+      "updated_at": "2026-05-04T11:28:37+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_Alpha101.md",
+      "title": "导入 Alpha101 库",
+      "category": "docs",
+      "strategy": null,
+      "date": "2018-12-24",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:51:54+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_Alpha191.md",
+      "title": "导入 Alpha191 库",
+      "category": "docs",
+      "strategy": null,
+      "date": "2017-06-16",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:51:54+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_债券数据.md",
+      "title": "查询交易市场为上交所的债券基本信息数据",
+      "category": "docs",
+      "strategy": null,
+      "date": "2016-07-25",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:51:54+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_场内基金数据.md",
+      "title": "查询510190追踪的指数信息",
+      "category": "docs",
+      "strategy": null,
+      "date": "2009-11-19",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:51:54+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_场外基金.md",
+      "title": "JQ_场外基金",
+      "category": "docs",
+      "strategy": null,
+      "date": "2001-12-18",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:51:57+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_宏观经济数据.md",
+      "title": "查询分地区农林牧渔业总产值表(季度累计) 的前10条数据",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:51:58+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_常见问题.md",
+      "title": "常见问题",
+      "category": "docs",
+      "strategy": null,
+      "date": "2019-12-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T15:47:53+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_技术分析指标.md",
+      "title": "(官网)导入 technical_analysis 库",
+      "category": "docs",
+      "strategy": null,
+      "date": "2019-08-05",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:51:59+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_指数数据.md",
+      "title": "输出沪深300指数信息",
+      "category": "docs",
+      "strategy": null,
+      "date": "2015-10-15",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:51:59+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_期权数据.md",
+      "title": "查询当前可交易的50ETF期权合约信息",
+      "category": "docs",
+      "strategy": null,
+      "date": "2018-09-25",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:51:59+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_期货数据.md",
+      "title": "输出沪深300股指期货信息",
+      "category": "docs",
+      "strategy": null,
+      "date": "2003-07-15",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:52:00+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_聚宽因子库.md",
+      "title": "导入函数库",
+      "category": "docs",
+      "strategy": null,
+      "date": "2017-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:52:00+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_股票数据.md",
+      "title": "输出平安银行信息的中文名称",
+      "category": "docs",
+      "strategy": null,
+      "date": "2015-10-10",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:52:01+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_舆情数据.md",
+      "title": "JQ_舆情数据",
+      "category": "docs",
+      "strategy": null,
+      "date": "2019-02-19",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:52:01+00:00"
+    },
+    {
+      "path": "docs/joinquant-data/JQ_行业概念数据.md",
+      "title": "JQ_行业概念数据",
+      "category": "docs",
+      "strategy": null,
+      "date": "2017-05-03",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-02T13:52:02+00:00"
+    },
+    {
+      "path": "docs/joinquant-parameter-analysis-framework.md",
+      "title": "JoinQuant 参数分析框架分析报告",
+      "category": "docs",
+      "strategy": null,
+      "date": "2026-05-18",
+      "tags": [],
+      "pathrefs": [
+        "docs/research-workflow.md",
+        "docs/research-workflow-migration.md"
+      ],
+      "updated_at": "2026-05-18T15:43:03+00:00"
+    },
+    {
+      "path": "docs/local-python-env.md",
+      "title": "本地 Python 环境说明",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "repo/.venv",
+        "repo/requirements.txt"
+      ],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "docs/research-platform-architecture.md",
+      "title": "本地研究平台架构",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "scripts/research/cli.py",
+        "scripts/research/datasets.py",
+        "scripts/research/variants.py",
+        "scripts/research/docs.py",
+        "scripts/research/registry/tool_registry.py",
+        "scripts/research/governance/audit.py",
+        "scripts/research/platform/strategy_variants.py",
+        "research_datasets",
+        "scripts/research/workflows/templates",
+        "scripts/research/platform/workflows.py",
+        "scripts/research/research_core",
+        "scripts/research/platform/docs_index.py",
+        "docs/indexes/docs_catalog.json",
+        "docs/indexes/reports_catalog.json",
+        "docs/indexes/datasets_catalog.json",
+        "docs/indexes/variants_catalog.json",
+        "docs/indexes/reports.json",
+        "docs/indexes/reports.md"
+      ],
+      "updated_at": "2026-05-18T18:20:45+00:00"
+    },
+    {
+      "path": "docs/research-workflow-migration.md",
+      "title": "旧研究项目迁移指南",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "docs/research-workflow.md",
+      "title": "本地优先研究流程",
+      "category": "docs",
+      "strategy": null,
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [
+        "scripts/research/workflows/templates",
+        "scripts/research/cli.py",
+        "scripts/research/datasets.py",
+        "scripts/research/variants.py",
+        "scripts/research/docs.py",
+        "scripts/research/governance",
+        "scripts/research/platform",
+        "docs/research-platform-architecture.md"
+      ],
+      "updated_at": "2026-05-18T18:20:54+00:00"
+    }
+  ]
+}

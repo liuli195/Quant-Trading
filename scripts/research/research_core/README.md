@@ -1,6 +1,6 @@
 # research_core — 共享研究基础库
 
-所有研究工具和 CLI 的底层依赖库，提供审计日志解析、交易日历、文件布局、绩效指标、价格加载和报告输出 6 个模块。
+所有研究工具和 CLI 的底层依赖库，提供审计日志解析、交易日历、文件布局、绩效指标、稳健性检查、回放接口、价格加载和报告输出模块。
 
 无 CLI 入口，所有符号通过 Python import 使用。
 
@@ -11,9 +11,11 @@
 | `audit.py` | 聚宽审计日志解析 | `load_rebalance_events`, `load_run_start_params` |
 | `calendar.py` | 周频交易日历与前向收益 | `first_trading_days_by_week`, `build_weekly_anchor_frame`, `forward_return_frame` |
 | `layout.py` | 研究项目文件布局 | `ResearchProjectLayout`, `ResearchRunLayout` |
-| `metrics.py` | 绩效指标与统计检验 | `parse_cumulative_returns_md`, `performance_metrics`, `paired_block_bootstrap`, `rolling_sharpe`, `yearly_metrics` |
+| `metrics.py` | 绩效指标与统计检验 | `MetricToolkit`, `parse_cumulative_returns_md`, `performance_metrics`, `paired_block_bootstrap`, `rolling_sharpe`, `yearly_metrics` |
+| `robustness.py` | 稳健性检查 | `RobustnessToolkit` |
+| `replay.py` | 本地回放接口 | `ReplayAdapter`, `ReplayResult` |
 | `prices.py` | 价格数据加载 | `load_price_bundle`, `PriceFrames` |
-| `reporting.py` | 报告与持久化 | `markdown_table`, `write_json` |
+| `reporting.py` | 报告与持久化 | `ReportPrimitives`, `markdown_table`, `write_json` |
 
 ---
 
@@ -111,7 +113,7 @@ run.ensure_dirs()  # 创建所有子目录
 
 ```python
 from scripts.research.research_core.metrics import (
-    parse_cumulative_returns_md, performance_metrics, paired_block_bootstrap,
+    MetricToolkit, parse_cumulative_returns_md, performance_metrics, paired_block_bootstrap,
     rolling_sharpe, yearly_metrics,
 )
 ```
@@ -150,6 +152,30 @@ from scripts.research.research_core.metrics import (
 
 按日历年分组计算绩效指标。返回 `[year, days, total_return, annual_return, volatility, sharpe, max_drawdown]`。
 
+### MetricToolkit
+
+面向平台层的薄封装，提供 `summary`、`annual_return`、`max_drawdown`、`sharpe`、`volatility`、`rolling_sharpe`、`yearly`。
+
+---
+
+## robustness.py — 稳健性检查
+
+```python
+from scripts.research.research_core.robustness import RobustnessToolkit
+```
+
+`RobustnessToolkit` 提供配对 bootstrap、滚动 Sharpe 胜率和年度拆分。它只负责统计计算，不决定是否写回主策略。
+
+---
+
+## replay.py — 本地回放接口
+
+```python
+from scripts.research.research_core.replay import ReplayAdapter, ReplayResult
+```
+
+`ReplayAdapter` 是本地 counterfactual replay 的标准协议。replay 校准失败时只能输出诊断，不应生成云端候选。
+
 ---
 
 ## prices.py — 价格数据
@@ -181,7 +207,7 @@ frames = PriceFrames(
 ## reporting.py — 报告输出
 
 ```python
-from scripts.research.research_core.reporting import markdown_table, write_json
+from scripts.research.research_core.reporting import ReportPrimitives, markdown_table, write_json
 ```
 
 ### markdown_table(frame) → str
@@ -191,6 +217,10 @@ from scripts.research.research_core.reporting import markdown_table, write_json
 ### write_json(path, payload) → None
 
 将 Python 对象以 UTF-8 编码、2 空格缩进写入 JSON 文件。
+
+### ReportPrimitives
+
+提供 Markdown 表格、结论边界块和证据链接片段。报告结论必须区分“方向性支持”和“准备写回默认参数”。
 
 ---
 

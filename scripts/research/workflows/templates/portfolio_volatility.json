@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "template": "portfolio_volatility",
+  "inputs": ["dataset", "baseline_run", "audit_events", "price_bundle", "scan_domain"],
+  "stages": ["init", "fast", "full", "report"],
+  "outputs": ["coverage_audit", "portfolio_vol_shortlist", "portfolio_vol_scan", "research_report"],
+  "gates": ["feature_cache_warm", "coverage_complete", "smoke_runtime_ok", "full_scan_passed"]
+}

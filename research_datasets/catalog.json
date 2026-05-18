@@ -7,6 +7,9 @@
     "date_range": [
       "2021-01-01",
       "2026-04-30"
-    ]
+    ],
+    "source_kind": "joinquant_audit_log_jsonl",
+    "owner": "research-platform",
+    "lifecycle": "active"
   }
 ]

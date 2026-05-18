@@ -118,3 +118,35 @@ def yearly_metrics(returns: pd.Series) -> pd.DataFrame:
         metrics = performance_metrics(group)
         rows.append({"year": int(year), "days": int(group.notna().sum()), **metrics})
     return pd.DataFrame(rows)
+
+
+class MetricToolkit:
+    """Facade for common performance metrics."""
+
+    @staticmethod
+    def summary(returns: pd.Series | np.ndarray) -> dict[str, float]:
+        return performance_metrics(returns)
+
+    @staticmethod
+    def annual_return(returns: pd.Series | np.ndarray) -> float:
+        return performance_metrics(returns)["annual_return"]
+
+    @staticmethod
+    def max_drawdown(returns: pd.Series | np.ndarray) -> float:
+        return performance_metrics(returns)["max_drawdown"]
+
+    @staticmethod
+    def sharpe(returns: pd.Series | np.ndarray) -> float:
+        return performance_metrics(returns)["sharpe"]
+
+    @staticmethod
+    def volatility(returns: pd.Series | np.ndarray) -> float:
+        return performance_metrics(returns)["volatility"]
+
+    @staticmethod
+    def rolling_sharpe(returns: pd.Series | np.ndarray, window: int = 252) -> pd.Series:
+        return rolling_sharpe(returns, window=window)
+
+    @staticmethod
+    def yearly(returns: pd.Series) -> pd.DataFrame:
+        return yearly_metrics(returns)

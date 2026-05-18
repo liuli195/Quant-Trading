@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "template": "factor_scan",
+  "inputs": ["dataset", "raw_data", "factor_grid"],
+  "stages": ["init", "fast", "full", "handoff", "report"],
+  "outputs": ["candidate_ranking", "shortlist", "full_candidate_review", "cloud_candidates", "cloud_handoff"],
+  "gates": ["local_exact_available", "coverage_complete", "fast_score_positive"]
+}

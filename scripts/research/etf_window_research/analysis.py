@@ -9,6 +9,12 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 
+from scripts.research.research_core.calendar import first_trading_days_by_week
+from scripts.research.research_core.calendar import forward_return_frame as _core_forward_return_frame
+from scripts.research.research_core.prices import PriceFrames
+from scripts.research.research_core.prices import load_price_bundle as _core_load_price_bundle
+from scripts.research.research_core.reporting import markdown_table as _core_markdown_table
+
 from .layout import ResearchProjectLayout, ResearchRunLayout
 from .spec import (
     BOOTSTRAP_BLOCK_SIZE,
@@ -29,15 +35,6 @@ from .spec import (
 
 
 @dataclass(frozen=True)
-class PriceFrames:
-    close: pd.DataFrame
-    high: pd.DataFrame
-    low: pd.DataFrame
-    money: pd.DataFrame
-    calendar: pd.DatetimeIndex
-
-
-@dataclass(frozen=True)
 class ResearchCache:
     anchors: pd.DataFrame
     forward: pd.DataFrame
@@ -45,45 +42,7 @@ class ResearchCache:
 
 
 def load_price_bundle(path: str | Path) -> PriceFrames:
-    payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    prices = payload.get("prices") or {}
-    frames: dict[str, pd.DataFrame] = {}
-    for field in ("close", "high", "low", "money"):
-        series_map: dict[str, pd.Series] = {}
-        for code in ETF_CODES:
-            records = prices.get(code) or []
-            if not records:
-                continue
-            frame = pd.DataFrame(records)
-            if "date" not in frame.columns or field not in frame.columns:
-                continue
-            series = pd.Series(
-                pd.to_numeric(frame[field], errors="coerce").values,
-                index=pd.to_datetime(frame["date"]),
-                name=code,
-            )
-            series_map[code] = series
-        frames[field] = pd.DataFrame(series_map).sort_index().reindex(columns=ETF_CODES)
-
-    calendar = pd.DatetimeIndex(pd.to_datetime(payload.get("calendar") or [])).sort_values()
-    if len(calendar) == 0:
-        calendar = frames["close"].index
-    return PriceFrames(
-        close=frames["close"],
-        high=frames["high"],
-        low=frames["low"],
-        money=frames["money"],
-        calendar=calendar,
-    )
-
-
-def first_trading_days_by_week(calendar: pd.DatetimeIndex, start: date, end: date) -> pd.DatetimeIndex:
-    mask = (calendar.date >= start) & (calendar.date <= end)
-    scoped = calendar[mask]
-    if len(scoped) == 0:
-        return scoped
-    groups = pd.Series(scoped, index=scoped).groupby(scoped.to_period("W-SUN"))
-    return pd.DatetimeIndex([group.iloc[0] for _, group in groups])
+    return _core_load_price_bundle(path, codes=ETF_CODES)
 
 
 def _anchor_frame(calendar: pd.DatetimeIndex) -> pd.DataFrame:
@@ -102,24 +61,7 @@ def _anchor_frame(calendar: pd.DatetimeIndex) -> pd.DataFrame:
 
 
 def _forward_return_frame(close: pd.DataFrame, anchors: pd.DataFrame) -> pd.DataFrame:
-    rows = []
-    for _, anchor in anchors.iterrows():
-        for code in ETF_CODES:
-            record = {
-                "signal_date": anchor["signal_date"],
-                "asof_date": anchor["asof_date"],
-                "etf": code,
-            }
-            base = close.at[anchor["asof_date"], code] if anchor["asof_date"] in close.index else np.nan
-            for horizon in HORIZONS:
-                future_date = anchor[f"future_{horizon}d"]
-                if pd.isna(future_date) or future_date not in close.index or pd.isna(base):
-                    record[f"forward_{horizon}d"] = np.nan
-                else:
-                    future_close = close.at[future_date, code]
-                    record[f"forward_{horizon}d"] = future_close / base - 1 if pd.notna(future_close) else np.nan
-            rows.append(record)
-    return pd.DataFrame(rows)
+    return _core_forward_return_frame(close, anchors, HORIZONS, ETF_CODES)
 
 
 def _rolling_percentile_rank(series: pd.Series, lookback: int = CROWD_WINDOW) -> pd.Series:
@@ -586,18 +528,7 @@ def compare_default_signals(frames: PriceFrames, audit_log_path: str | Path) -> 
 
 
 def _markdown_table(frame: pd.DataFrame) -> str:
-    if frame.empty:
-        return "_无可用记录。_"
-    display = frame.copy()
-    display = display.fillna("")
-    headers = [str(column) for column in display.columns]
-    rows = [[str(value) for value in row] for row in display.itertuples(index=False, name=None)]
-    lines = [
-        "| " + " | ".join(headers) + " |",
-        "| " + " | ".join("---" for _ in headers) + " |",
-    ]
-    lines.extend("| " + " | ".join(row) + " |" for row in rows)
-    return "\n".join(lines)
+    return _core_markdown_table(frame)
 
 
 def render_data_integrity(frames: PriceFrames) -> str:

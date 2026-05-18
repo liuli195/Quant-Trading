@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "template": "generic",
+  "inputs": ["dataset", "research_spec"],
+  "stages": ["init", "fast", "full", "report"],
+  "outputs": ["manifest", "benchmark", "research_report"],
+  "gates": ["scope_documented", "outputs_reproducible"]
+}

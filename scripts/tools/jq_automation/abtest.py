@@ -11,6 +11,7 @@ from typing import Any
 
 from .artifacts import save_api_bundle, save_dom_tabs
 from .config import load_config_mapping
+from .dataset_registration import register_backtest_run_dataset
 from .git_versioning import (
     GitVersionError,
     assert_file_at_commit,
@@ -78,6 +79,7 @@ class ABVariantSpec:
     """Parsed specification of a single AB variant from the experiment config."""
     label: str
     role: str  # "control" or "variant"
+    variant_id: str | None
     code_source: ABCodeSource
     params_mode: str  # "params_diff" or "baked_in_git"
     params_diff: dict[str, Any]
@@ -171,6 +173,9 @@ def load_ab_config(path_or_dict: str | Path | dict[str, Any]) -> ABExperimentCon
         if role not in ("control", "variant"):
             raise ABConfigError(f"variants[{i}].role must be 'control' or 'variant', got: {role}")
 
+        variant_id_raw = v.get("variant_id")
+        variant_id = str(variant_id_raw).strip() if variant_id_raw not in (None, "") else None
+
         params_mode = str(v.get("params_mode") or "params_diff")
         if params_mode not in ("params_diff", "baked_in_git"):
             raise ABConfigError(
@@ -193,8 +198,34 @@ def load_ab_config(path_or_dict: str | Path | dict[str, Any]) -> ABExperimentCon
         if note is not None:
             note = str(note)
 
-        # Merge code_source: variant-level overrides base
-        variant_cs_raw = v.get("code_source")
+        registered_variant = None
+        if variant_id:
+            if "params_diff" in v and params_diff:
+                raise ABConfigError(
+                    f"variants[{i}] uses variant_id, so params_diff must be stored in the variant registry"
+                )
+            if isinstance(v.get("code_source"), dict):
+                raise ABConfigError(
+                    f"variants[{i}] uses variant_id, so code_source must be stored in the variant registry"
+                )
+            registered_variant = _load_registered_variant(
+                strategy=strategy,
+                base_code_path=base_cs_kwargs["path"],
+                variant_id=variant_id,
+            )
+            params_diff = _registered_params_diff(registered_variant)
+            if params_diff and params_mode == "baked_in_git":
+                raise ABConfigError(
+                    f"variants[{i}] variant_id '{variant_id}' has registered params_diff; "
+                    "use params_mode='params_diff'"
+                )
+            if scan_source is None:
+                scan_source = {"variant_id": variant_id}
+            if note is None and registered_variant.get("description"):
+                note = str(registered_variant["description"])
+
+        # Merge code_source: variant registry > variant-level override > base
+        variant_cs_raw = _registered_code_source(registered_variant) if registered_variant else v.get("code_source")
         if isinstance(variant_cs_raw, dict):
             cs_kwargs = _parse_code_source(variant_cs_raw)
         else:
@@ -210,6 +241,7 @@ def load_ab_config(path_or_dict: str | Path | dict[str, Any]) -> ABExperimentCon
         variants.append(ABVariantSpec(
             label=label,
             role=role,
+            variant_id=variant_id,
             code_source=code_source,
             params_mode=params_mode,
             params_diff=params_diff,
@@ -278,6 +310,7 @@ def resolve_ab_code_sources(config: ABExperimentConfig) -> ABExperimentConfig:
         frozen_variants.append(ABVariantSpec(
             label=v.label,
             role=v.role,
+            variant_id=v.variant_id,
             code_source=frozen_cs,
             params_mode=v.params_mode,
             params_diff=v.params_diff,
@@ -333,11 +366,7 @@ def expand_ab_experiment(
             _reset_pending_variants(existing)
 
     # 3. Generate scenarios
-    scenarios_dir = resolve_path(
-        "test_batch_scenarios",
-        strategy=config.strategy,
-        batch_id=config.batch_id,
-    )
+    scenarios_dir = manifest_path.parent / "scenarios"
     scenarios_dir.mkdir(parents=True, exist_ok=True)
 
     candidate_order: list[str] = []
@@ -362,6 +391,7 @@ def expand_ab_experiment(
             "run_label": run_label,
             "run_id": preserved_run_id,
             "role": v.role,
+            "variant_id": v.variant_id,
             "is_baseline": v.label == config.baseline,
             "upload_index": idx,
             "code_source": {
@@ -400,6 +430,7 @@ def expand_ab_experiment(
             "batch_id": config.batch_id,
             "strategy": config.strategy,
             "params_diff": v.params_diff,
+            "variant_id": v.variant_id,
             "_params_mode": v.params_mode,
             "_scan_source": v.scan_source,
             "_experiment_id": config.experiment_id,
@@ -670,6 +701,15 @@ async def _ab_run_session(
                     actual_seconds = await browser.fetch_runtime_seconds()
                     actual_minutes = (actual_seconds / 60.0) if actual_seconds else None
 
+                register_backtest_run_dataset(
+                    run_dir,
+                    strategy=config.strategy,
+                    run_id=run_id,
+                    datasets_root=getattr(args, "datasets_root", "research_datasets"),
+                    enabled=not getattr(args, "no_dataset_register", False),
+                    allow_partial=_allow_partial(args, bool(config.base.get("allow_partial", False))),
+                )
+
                 if actual_minutes is not None:
                     update_actual_minutes(ledger, run_id, actual_minutes)
                     print(f"  Actual compute: {actual_minutes:.2f} min")
@@ -866,13 +906,54 @@ def write_ab_report(
 
 
 def _parse_code_source(raw: dict[str, Any]) -> dict[str, str]:
-    ref = str(raw.get("ref") or "")
+    ref = str(raw.get("ref") or raw.get("commit") or "")
     if not ref:
         raise ABConfigError("code_source.ref is required")
     path = str(raw.get("path") or "")
     if not path:
         raise ABConfigError("code_source.path is required")
     return {"type": "git", "ref": ref, "path": path}
+
+
+def _load_registered_variant(*, strategy: str, base_code_path: str, variant_id: str) -> dict[str, Any]:
+    """Load one strategy variant from the central variant registry."""
+    try:
+        from scripts.research.platform.strategy_variants import VariantRegistry, VariantError
+
+        strategy_root = _strategy_root_for_variant_registry(strategy, base_code_path)
+        return VariantRegistry(strategy_root).get(variant_id)
+    except VariantError as exc:
+        raise ABConfigError(f"variant_id '{variant_id}' cannot be loaded from registry: {exc}") from exc
+
+
+def _strategy_root_for_variant_registry(strategy: str, base_code_path: str) -> Path:
+    root = repo_root()
+    code_path = Path(base_code_path)
+    if code_path.is_absolute():
+        return code_path.parent
+    from_code_source = (root / code_path).resolve().parent
+    if from_code_source.exists():
+        return from_code_source
+    return (root / "strategies" / strategy).resolve()
+
+
+def _registered_params_diff(record: dict[str, Any]) -> dict[str, Any]:
+    payload = record.get("payload") if isinstance(record.get("payload"), dict) else {}
+    params = (
+        record.get("params_diff")
+        or payload.get("params_diff")
+        or payload.get("param_overrides")
+        or {}
+    )
+    return _dictify(params)
+
+
+def _registered_code_source(record: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not record:
+        return None
+    payload = record.get("payload") if isinstance(record.get("payload"), dict) else {}
+    code_source = record.get("code_source") or payload.get("code_source")
+    return code_source if isinstance(code_source, dict) else None
 
 
 def _dictify(value: Any) -> dict[str, Any]:
@@ -936,9 +1017,11 @@ def _build_summary(
     """Build a JSON-serialisable summary dict."""
     variants_summary = []
     for vm in all_vm:
+        entry = _find_variant_entry(experiment, vm.label) or {}
         variants_summary.append({
             "label": vm.label,
             "role": vm.role,
+            "variant_id": entry.get("variant_id"),
             "is_baseline": vm.is_baseline,
             "metrics": vm.metrics,
             "metadata": vm.metadata,
@@ -1055,8 +1138,11 @@ def _build_markdown_report(
     lines.append("## 变体详情")
     lines.append("")
     for vm in all_vm:
+        entry = _find_variant_entry(experiment, vm.label) or {}
         lines.append(f"### {vm.label}")
         lines.append(f"- **Role:** {vm.role}" + (" (baseline)" if vm.is_baseline else ""))
+        if entry.get("variant_id"):
+            lines.append(f"- **Variant ID:** {entry['variant_id']}")
         lines.append(f"- **Issues:** {', '.join(vm.issues) if vm.issues else 'none'}")
         if vm.metadata.get("run_id"):
             lines.append(f"- **Run ID:** {vm.metadata['run_id']}")

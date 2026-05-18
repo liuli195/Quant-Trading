@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "strategy": "etf_factor_rotation",
+  "owner": "research-platform",
+  "created_by": "research-platform",
+  "updated_by": "research-platform",
+  "lifecycle": "active",
+  "code_path": "etf_factor_rotation.py",
+  "strategy_file": "strategies/etf_factor_rotation/etf_factor_rotation.py",
+  "default_branch": "main",
+  "default_params_source": "set_parameter",
+  "cloud_runtime": "joinquant",
+  "variant_registry": "strategies/etf_factor_rotation/variants/variants.json",
+  "variants_path": "variants/variants.json",
+  "reports_path": "reports",
+  "backtest_runs_path": "backtest_runs",
+  "test_batches_path": "test_batches",
+  "constraints": {
+    "git_operations_require_authorization": true,
+    "default_parameter_writeback_requires_authorization": true
+  }
+}

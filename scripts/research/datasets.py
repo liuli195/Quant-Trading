@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from .platform.datasets import import_joinquant_price_json, import_audit_log_jsonl, load_snapshot
+from .platform.datasets import import_joinquant_price_json, import_audit_log_jsonl, import_backtest_run, load_snapshot
 
 
 def _cmd_import(args: argparse.Namespace) -> int:
@@ -20,6 +20,16 @@ def _cmd_import(args: argparse.Namespace) -> int:
 
 def _cmd_import_audit(args: argparse.Namespace) -> int:
     snapshot = import_audit_log_jsonl(
+        args.source,
+        dataset_id=args.dataset_id,
+        snapshot_id=args.snapshot_id,
+    )
+    print(snapshot.root)
+    return 0
+
+
+def _cmd_import_backtest_run(args: argparse.Namespace) -> int:
+    snapshot = import_backtest_run(
         args.source,
         dataset_id=args.dataset_id,
         snapshot_id=args.snapshot_id,
@@ -49,6 +59,12 @@ def build_parser() -> argparse.ArgumentParser:
     audit_import.add_argument("--dataset-id", required=True)
     audit_import.add_argument("--snapshot-id")
     audit_import.set_defaults(func=_cmd_import_audit)
+
+    run_import = subparsers.add_parser("import-backtest-run", help="import one complete backtest_runs/<run_id> directory")
+    run_import.add_argument("source")
+    run_import.add_argument("--dataset-id", required=True)
+    run_import.add_argument("--snapshot-id")
+    run_import.set_defaults(func=_cmd_import_backtest_run)
 
     inspect = subparsers.add_parser("inspect", help="print dataset metadata")
     inspect.add_argument("dataset_id")

@@ -43,6 +43,7 @@ from scripts.tools.jq_automation.metrics import (
     extract_from_api_stats,
     parse_metric_value,
 )
+from scripts.research.platform.strategy_variants import StrategyManifestReader, VariantRegistry
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -116,6 +117,39 @@ class ABConfigTests(unittest.TestCase):
         self.assertEqual(cfg.baseline, "main_best")
         self.assertEqual(len(cfg.variants), 2)
         self.assertEqual(cfg.metrics, DEFAULT_METRICS)
+
+    def test_variant_id_loads_params_from_registry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            strategy_root = root / "strategies" / "demo_strategy"
+            strategy_root.mkdir(parents=True)
+            (strategy_root / "demo_strategy.py").write_text(
+                "def set_parameter(context):\n    g.TopK = 1\n",
+                encoding="utf-8",
+            )
+            StrategyManifestReader(root / "strategies").ensure(strategy_root)
+            VariantRegistry(strategy_root).register(
+                variant_id="topk-3",
+                variant_type="parameter",
+                payload={"param_overrides": {"TopK": 3}},
+                description="registered parameter variant",
+            )
+            raw = _ab_config_dict()
+            raw["base"]["code_source"]["path"] = "strategies/demo_strategy/demo_strategy.py"
+            raw["variants"][1] = {
+                "label": "registered_topk",
+                "role": "variant",
+                "variant_id": "topk-3",
+            }
+            raw["baseline"] = "main_best"
+
+            with patch("scripts.tools.jq_automation.abtest.repo_root", return_value=root):
+                cfg = load_ab_config(raw)
+
+            self.assertEqual(cfg.variants[1].variant_id, "topk-3")
+            self.assertEqual(cfg.variants[1].params_diff, {"TopK": 3})
+            self.assertEqual(cfg.variants[1].scan_source, {"variant_id": "topk-3"})
+            self.assertEqual(cfg.variants[1].note, "registered parameter variant")
 
     def test_baseline_must_match_variant(self) -> None:
         with self.assertRaises(ABConfigError):
@@ -427,19 +461,17 @@ class ABExpandTests(unittest.TestCase):
         }), encoding="utf-8")
         return manifest_path, batch_dir
 
-    @patch("scripts.tools.jq_automation.abtest.resolve_path")
     @patch("scripts.tools.jq_automation.abtest.resolve_git_ref")
     @patch("scripts.tools.jq_automation.abtest.assert_file_at_commit")
     @patch("scripts.tools.jq_automation.abtest.materialize_strategy_source")
     def test_expand_generates_scenario_files(
-        self, mock_mat: Mock, mock_assert: Mock, mock_resolve: Mock, mock_rpath: Mock
+        self, mock_mat: Mock, mock_assert: Mock, mock_resolve: Mock
     ) -> None:
         mock_resolve.return_value = "a" * 40
         mock_assert.return_value = "a" * 40
         mock_mat.return_value = self.tmp_path / "dummy.py"
 
         manifest_path, batch_dir = self._make_dirs_and_manifest()
-        mock_rpath.return_value = batch_dir / "scenarios"
 
         cfg = load_ab_config(_ab_config_dict())
         expand_ab_experiment(cfg, manifest_path)
@@ -451,6 +483,7 @@ class ABExpandTests(unittest.TestCase):
         self.assertEqual(len(exp["variants"]), 2)
         self.assertEqual(exp["variants"][0]["scenario_id"], "ab-test-ab-main_best")
         self.assertEqual(exp["variants"][1]["scenario_id"], "ab-test-ab-branch_best")
+        self.assertTrue((batch_dir / "scenarios" / "ab-test-ab-main_best" / "scenario.json").is_file())
 
     @patch("scripts.tools.jq_automation.abtest.resolve_git_ref")
     @patch("scripts.tools.jq_automation.abtest.assert_file_at_commit")

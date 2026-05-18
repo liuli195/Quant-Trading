@@ -1,0 +1,59 @@
+"""Governance gate for local hooks and CI."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+from .rules import run_audit
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repo-root", default=".")
+    parser.add_argument("--skip-cli-help", action="store_true")
+    return parser
+
+
+def run_gate(
+    repo_root: str | Path = ".",
+    *,
+    check_cli_help: bool = True,
+) -> dict[str, Any]:
+    root = Path(repo_root).resolve()
+    audit = run_audit(root, check_cli_help=check_cli_help, check_pathrefs=False)
+    pathref = subprocess.run(
+        [sys.executable, "-m", "scripts.tools.path_tools.refactor", "check"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    pathref_ok = pathref.returncode == 0
+    return {
+        "ok": audit.ok and pathref_ok,
+        "audit": audit.to_dict(),
+        "pathref": {
+            "ok": pathref_ok,
+            "returncode": pathref.returncode,
+            "stdout": pathref.stdout.strip(),
+            "stderr": pathref.stderr.strip(),
+        },
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    report = run_gate(args.repo_root, check_cli_help=not args.skip_cli_help)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    return 0 if report["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

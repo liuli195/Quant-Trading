@@ -15,6 +15,7 @@ from typing import Any
 from .artifacts import save_api_bundle, save_dom_tabs
 from .browser import AutomationError, CompileFailed, JoinQuantBrowser
 from .config import ConfigError, ScenarioConfig, load_config_mapping, load_scenario_config
+from .dataset_registration import DatasetRegistrationError, register_backtest_run_dataset
 from .local import LocalCheckError, apply_params_overrides, compile_strategy, generate_upload_file
 from .manifest import ManifestError, list_pending_runs, load_manifest, update_manifest
 from .paths import (
@@ -66,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return int(args.func(args))
-    except (AutomationError, CompileFailed, ConfigError, LocalCheckError, ManifestError, QuotaError, ResearchFetchError, OSError) as exc:
+    except (AutomationError, CompileFailed, ConfigError, DatasetRegistrationError, LocalCheckError, ManifestError, QuotaError, ResearchFetchError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     except Exception as exc:
@@ -102,6 +103,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--backtest-timeout", type=int, default=180, help="Formal backtest wait timeout in seconds.")
     add_allow_partial_arg(run_parser)
     add_result_source_arg(run_parser)
+    add_dataset_registration_args(run_parser)
     add_browser_args(run_parser)
     run_parser.set_defaults(func=cmd_run)
 
@@ -120,6 +122,7 @@ def build_parser() -> argparse.ArgumentParser:
     fetch_parser.add_argument("--audit-path")
     add_allow_partial_arg(fetch_parser)
     add_result_source_arg(fetch_parser)
+    add_dataset_registration_args(fetch_parser)
     add_browser_args(fetch_parser)
     fetch_parser.set_defaults(func=cmd_fetch)
 
@@ -130,6 +133,7 @@ def build_parser() -> argparse.ArgumentParser:
     batch_parser.add_argument("--backtest-timeout", type=int, default=180)
     add_allow_partial_arg(batch_parser)
     add_result_source_arg(batch_parser)
+    add_dataset_registration_args(batch_parser)
     add_browser_args(batch_parser)
     batch_parser.set_defaults(func=cmd_batch)
 
@@ -148,6 +152,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--backtest-timeout", type=int, default=180)
     add_allow_partial_arg(run_parser)
     add_result_source_arg(run_parser)
+    add_dataset_registration_args(run_parser)
     add_browser_args(run_parser)
     run_parser.set_defaults(func=cmd_ab_run)
 
@@ -180,6 +185,19 @@ def add_allow_partial_arg(parser: argparse.ArgumentParser) -> None:
         "--allow-partial",
         action="store_true",
         help="Persist incomplete artifacts instead of failing the run integrity gate.",
+    )
+
+
+def add_dataset_registration_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--no-dataset-register",
+        action="store_true",
+        help="Do not register saved backtest artifacts into research_datasets.",
+    )
+    parser.add_argument(
+        "--datasets-root",
+        default="research_datasets",
+        help="Data center root used for automatic backtest-run snapshot registration.",
     )
 
 
@@ -436,6 +454,15 @@ async def _run_scenario(
                 actual_seconds = await browser.fetch_runtime_seconds()
                 actual_minutes = (actual_seconds / 60.0) if actual_seconds else None
 
+            register_backtest_run_dataset(
+                run_dir,
+                strategy=config.strategy,
+                run_id=run_id,
+                datasets_root=getattr(args, "datasets_root", "research_datasets"),
+                enabled=not getattr(args, "no_dataset_register", False),
+                allow_partial=_allow_partial(args, config.allow_partial),
+            )
+
             if actual_minutes is not None:
                 update_actual_minutes(ledger, run_id, actual_minutes)
                 print(f"JoinQuant actual compute time: {actual_minutes:.2f} min")
@@ -505,6 +532,14 @@ async def _fetch_existing(args: argparse.Namespace) -> int:
             )
         else:
             run_dir = save_dom_tabs(fetched.payload, strategy=args.strategy, run_id=run_id)
+    register_backtest_run_dataset(
+        run_dir,
+        strategy=args.strategy,
+        run_id=run_id,
+        datasets_root=getattr(args, "datasets_root", "research_datasets"),
+        enabled=not getattr(args, "no_dataset_register", False),
+        allow_partial=bool(args.allow_partial),
+    )
     print(f"Saved existing backtest artifacts: {run_dir}")
     return 0
 

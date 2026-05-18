@@ -12,6 +12,7 @@ Resolve an alias:
 
 ```bash
 python -m scripts.tools.path_tools.aliases resolve backtest_report_dir strategy=etf_dynamic_rebalance run_id=xxx
+python -m scripts.tools.path_tools.aliases validate
 ```
 
 Use it from Python:

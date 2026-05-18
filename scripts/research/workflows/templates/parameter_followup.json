@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "template": "parameter_followup",
+  "inputs": ["dataset", "baseline_returns", "variants"],
+  "stages": ["init", "fast", "full", "handoff", "report"],
+  "outputs": ["candidate_ranking", "discarded_candidates", "shortlist", "full_candidate_review", "cloud_candidates", "cloud_handoff"],
+  "gates": ["local_replay_calibrated", "bootstrap_ci_non_negative", "candidate_has_variant_id"]
+}

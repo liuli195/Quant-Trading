@@ -13,6 +13,7 @@ from scripts.tools.jq_automation import artifacts
 from scripts.tools.jq_automation.browser import CompileFailed, wait_for_compile_completion
 from scripts.tools.jq_automation.cli import _bundle_options
 from scripts.tools.jq_automation.config import ConfigError, ScenarioConfig
+from scripts.tools.jq_automation.dataset_registration import register_backtest_run_dataset
 from scripts.tools.jq_automation.local import LocalCheckError, apply_params_overrides
 from scripts.tools.jq_automation.manifest import list_pending_runs, update_manifest
 from scripts.tools.jq_automation.paths import extract_backtest_id, make_run_id
@@ -409,6 +410,41 @@ class CoreTests(unittest.TestCase):
                 detail_api_json_path=None,
                 allow_partial=False,
             )
+
+    def test_register_backtest_run_dataset_imports_saved_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_dir = root / "backtest_runs" / "demo" / "r1"
+            tabs = run_dir / "tabs_raw"
+            tabs.mkdir(parents=True)
+            (run_dir / "summary_metrics.json").write_text(json.dumps({"sharpe": 1.0}), encoding="utf-8")
+            (run_dir / "metadata.json").write_text(json.dumps({"backtest_id": "bt1"}), encoding="utf-8")
+            (run_dir / "api_export.json").write_text(json.dumps({"status": "ok"}), encoding="utf-8")
+            (tabs / "daily_returns.md").write_text(
+                "| date | cumulative_return |\n| --- | ---: |\n| 2026-01-01 | 0.010000 |\n",
+                encoding="utf-8",
+            )
+            (tabs / "audit_log.jsonl").write_text(
+                '{"seq": 1, "event": "run_start", "current_dt": "2026-01-01 09:30:00"}\n',
+                encoding="utf-8",
+            )
+
+            snapshot = register_backtest_run_dataset(
+                run_dir,
+                strategy="demo",
+                run_id="r1",
+                datasets_root=root / "research_datasets",
+            )
+            duplicate = register_backtest_run_dataset(
+                run_dir,
+                strategy="demo",
+                run_id="r1",
+                datasets_root=root / "research_datasets",
+            )
+
+            self.assertIsNotNone(snapshot)
+            self.assertIsNone(duplicate)
+            self.assertTrue((root / "research_datasets" / "demo_backtest_runs" / "r1" / "dataset.json").is_file())
 
 
     def test_bundle_options_includes_frequency_and_py_version(self) -> None:

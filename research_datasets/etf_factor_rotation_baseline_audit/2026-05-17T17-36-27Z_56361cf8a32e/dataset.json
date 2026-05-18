@@ -4,6 +4,9 @@
   "snapshot_id": "2026-05-17T17-36-27Z_56361cf8a32e",
   "fingerprint": "sha256:56361cf8a32ebdc6163cdb5c2f648285ab1a8ed8ff24373e9758b302e2dc047c",
   "created_at": "2026-05-17T17:36:27+00:00",
+  "owner": "research-platform",
+  "created_by": "research-platform",
+  "lifecycle": "active",
   "source": {
     "kind": "joinquant_audit_log_jsonl",
     "path": "strategies/etf_factor_rotation/backtest_runs/20260517-1724-bt580e16e5a3f1bf99d197cea88889da1a/tabs_raw/audit_log.jsonl"

@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "template": "cloud_confirmation",
+  "inputs": ["cloud_candidates", "variant_registry", "backtest_config"],
+  "stages": ["init", "handoff", "cloud_confirmation", "report"],
+  "outputs": ["cloud_handoff", "backtest_runs", "decision_report"],
+  "gates": ["local_gate_passed", "quota_checked", "variant_materialized"]
+}

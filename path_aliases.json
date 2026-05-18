@@ -1,4 +1,7 @@
 {
+  "schema_version": 1,
+  "owner": "research-platform",
+  "lifecycle": "active",
   "roots": {
     "repo": ".",
     "docs": "docs",

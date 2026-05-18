@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+
+PYTHON_CMD="${PYTHON:-.venv/Scripts/python.exe}"
+if [ ! -x "$PYTHON_CMD" ]; then
+  PYTHON_CMD="python"
+fi
+
+"$PYTHON_CMD" -m scripts.research.governance gate
