@@ -10,14 +10,27 @@
 ```
 
 `gate` is the enforced entry for hooks and CI. It runs governance audit plus
-the pathref checker. The tracked hook is `.githooks/pre-commit`; enable it with:
+the pathref checker. The tracked hooks are `.githooks/pre-commit` and
+`.githooks/pre-push`; enable them with:
 
 ```powershell
 git config core.hooksPath .githooks
 ```
 
+`.githooks/pre-push` calls:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.research.governance.branch_protection pre-push
+```
+
+It blocks direct pushes to `main` / `master` when remote rulesets are unavailable.
+
 审计范围：
 
+- 仓库级规则文档 [docs/rules/index.md](../../../docs/rules/index.md) <!-- pathref: docs/rules/index.md --> 是否存在，ADR 目录 [docs/adr](../../../docs/adr) <!-- pathref: docs/adr --> 是否连续编号。
+- `.githooks/pre-push` 是否仍调用代码化主干保护门禁。
+- `CODEOWNERS` 是否覆盖关键治理路径，`.github/pull_request_template.md` 是否包含规则同步、检查、waiver 和证据项。
+- `docs/exceptions/active-waivers.yaml` 中的 waiver 是否有 owner、批准人、过期时间和迁移计划。
 - 工具是否登记在中央 registry。
 - README、文档入口、测试文件是否存在。
 - 主要 CLI 的 `--help` 是否可运行。

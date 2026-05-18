@@ -32,7 +32,7 @@
 
 # 指定输入输出
 .\.venv\Scripts\python.exe scripts/archive/convert_html_to_md.py `
-  --html "API新 - JoinQuant.html" --out docs/joinquant-api.md
+  --html "API新 - JoinQuant.html" --out docs/reference/joinquant-api.md
 
 # 指定图片目录
 .\.venv\Scripts\python.exe scripts/archive/convert_html_to_md.py `
@@ -41,7 +41,7 @@
 
 参数：
 - `--html` — 输入 HTML 路径（默认：自动查找 `API新*.html`）
-- `--out` — 输出 Markdown 路径（默认：`docs/joinquant-api.md`）
+- `--out` — 输出 Markdown 路径（默认：`docs/reference/joinquant-api.md`）
 - `--images` — 图片输出目录（默认：`docs/images`）
 
 依赖：`beautifulsoup4`、`markdownify`（首次运行自动安装）

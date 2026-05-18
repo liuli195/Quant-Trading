@@ -1,6 +1,6 @@
 # 本地 Python 环境说明
 
-本文档约定仓库本地开发、静态检查和单元测试统一使用项目虚拟环境 [`.venv`](../.venv) <!-- pathref: repo/.venv -->。
+本文档约定仓库本地开发、静态检查和单元测试统一使用项目虚拟环境 [`.venv`](../../.venv) <!-- pathref: repo/.venv -->。
 
 ## 推荐解释器
 
@@ -54,7 +54,7 @@ py -3.12 -m venv --upgrade .venv
 
 ## 依赖说明
 
-仓库根目录的 [`requirements.txt`](../requirements.txt) <!-- pathref: repo/requirements.txt --> 覆盖当前本地开发和文档脚本所需的基础依赖：
+仓库根目录的 [`requirements.txt`](../../requirements.txt) <!-- pathref: repo/requirements.txt --> 覆盖当前本地开发和文档脚本所需的基础依赖：
 
 - 策略和测试：`numpy`、`pandas`、`pytest`
 - 文档脚本：`requests`、`beautifulsoup4`、`markdownify`、`python-docx`

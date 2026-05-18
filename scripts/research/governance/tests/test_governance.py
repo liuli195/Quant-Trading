@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from scripts.research.governance.branch_protection import check_pre_push_input
 from scripts.research.governance.rules import run_audit
 from scripts.research.registry import default_tool_registry
 
@@ -25,6 +26,9 @@ def _write_minimal_repo(root: Path) -> None:
         "scripts/research/workflows/templates",
         "scripts/tools/jq_automation/tests",
         "scripts/tools/path_tools",
+        "docs/rules",
+        "docs/adr",
+        "docs/exceptions",
         "docs/indexes",
         "research_datasets/demo/snap",
         "research_datasets",
@@ -51,8 +55,17 @@ def _write_minimal_repo(root: Path) -> None:
         "scripts/research/workflows/README.md",
         "scripts/tools/jq_automation/README.md",
         "scripts/tools/path_tools/README.md",
-        "docs/research-workflow.md",
-        "docs/research-platform-architecture.md",
+        "docs/guides/research-workflow.md",
+        "docs/architecture/research-platform-architecture.md",
+        "docs/rules/index.md",
+        "docs/rules/ai-agents.md",
+        "docs/rules/governance.md",
+        "docs/rules/research-workflow.md",
+        "docs/rules/code-style.md",
+        "docs/rules/docs-and-pathref.md",
+        "docs/adr/0001-rule-source-and-governance-model.md",
+        "docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md",
+        "docs/adr/0003-governance-gate-and-main-branch-protection.md",
         "research_datasets/README.md",
         "scripts/research/platform/tests/test_platform.py",
         "scripts/research/registry/tests/test_registry.py",
@@ -71,15 +84,54 @@ def _write_minimal_repo(root: Path) -> None:
 
     (root / "CLAUDE.md").write_text(
         "scripts.research.cli scripts.research.datasets scripts.research.variants "
-        "scripts.research.governance scripts.research.governance gate scripts.research.registry",
+        "scripts.research.governance scripts.research.governance gate scripts.research.registry "
+        "docs/rules/index.md docs/adr/",
+        encoding="utf-8",
+    )
+    (root / "AGENTS.md").write_text(
+        "所有 AI 编码助手统一以 CLAUDE.md 为权威规则源。\n",
         encoding="utf-8",
     )
     (root / ".githooks/pre-commit").write_text(
         "python -m scripts.research.governance gate\n",
         encoding="utf-8",
     )
+    (root / ".githooks/pre-push").write_text(
+        "python -m scripts.research.governance.branch_protection pre-push\n",
+        encoding="utf-8",
+    )
     (root / ".github/workflows/research-governance.yml").write_text(
-        "run: python -m scripts.research.governance gate\n",
+        "on:\n  schedule:\n    - cron: '0 2 * * 1'\nsteps:\n  - run: python -m scripts.research.governance gate\n",
+        encoding="utf-8",
+    )
+    (root / "scripts/research/governance/README.md").write_text(
+        "docs/rules/index.md docs/adr scripts.research.governance gate\n",
+        encoding="utf-8",
+    )
+    (root / "CODEOWNERS").write_text(
+        "\n".join(
+            [
+                "CLAUDE.md @research-platform",
+                "AGENTS.md @research-platform",
+                "docs/rules/** @research-platform",
+                "docs/adr/** @research-platform",
+                ".claude/skills/** @research-platform",
+                ".github/workflows/** @research-platform",
+                ".githooks/** @research-platform",
+                "scripts/research/governance/** @research-platform",
+                "scripts/research/registry/** @research-platform",
+                "path_aliases.json @research-platform",
+                "strategies/** @research-platform",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (root / ".github/pull_request_template.md").write_text(
+        "改动目标\n影响范围\n规则同步\n已运行检查\nwaiver\n证据\n",
+        encoding="utf-8",
+    )
+    (root / "docs/exceptions/active-waivers.yaml").write_text(
+        "schema_version: 1\nwaivers: []\n",
         encoding="utf-8",
     )
     (root / ".claude/skills/jq-research/SKILL.md").write_text(
@@ -260,3 +312,83 @@ def test_governance_audit_flags_project_config_without_owner(tmp_path) -> None:
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(finding.rule_id == "project_config" and "owner is required" in finding.message for finding in report.findings)
+
+
+def test_governance_audit_flags_missing_codeowners_coverage(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / "CODEOWNERS").write_text("CLAUDE.md @research-platform\n", encoding="utf-8")
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(finding.rule_id == "codeowners" and "docs/rules/**" in finding.message for finding in report.findings)
+
+
+def test_governance_audit_flags_invalid_pr_template(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".github/pull_request_template.md").write_text("改动目标\n", encoding="utf-8")
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(finding.rule_id == "pr_template" and "规则同步" in finding.message for finding in report.findings)
+
+
+def test_governance_audit_flags_expired_waiver(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / "docs/exceptions/active-waivers.yaml").write_text(
+        "\n".join(
+            [
+                "schema_version: 1",
+                "waivers:",
+                "  - id: WAIVER-2000-001",
+                "    rule_id: test-rule",
+                "    path: docs/**",
+                "    reason: test",
+                "    owner: research-platform",
+                "    approved_by: research-platform",
+                "    expires_at: 2000-01-01",
+                "    migration_plan: docs/migration.md",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(finding.rule_id == "waiver" and "expired" in finding.message for finding in report.findings)
+
+
+def test_governance_audit_flags_adr_number_gap(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / "docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md").unlink()
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(finding.rule_id == "adr" and "continuous" in finding.message for finding in report.findings)
+
+
+def test_governance_audit_flags_missing_pre_push_branch_protection(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/pre-push").unlink()
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(finding.rule_id == "governance_gate" and "pre-push" in finding.message for finding in report.findings)
+
+
+def test_pre_push_branch_protection_blocks_main() -> None:
+    violations = check_pre_push_input(
+        "refs/heads/topic abc123 refs/heads/main def456\n",
+        environ={},
+    )
+    assert violations == ["main"]
+
+
+def test_pre_push_branch_protection_allows_feature_branch() -> None:
+    violations = check_pre_push_input(
+        "refs/heads/topic abc123 refs/heads/feature/topic def456\n",
+        environ={},
+    )
+    assert violations == []
+
+
+def test_pre_push_branch_protection_allows_explicit_bypass() -> None:
+    violations = check_pre_push_input(
+        "refs/heads/topic abc123 refs/heads/main def456\n",
+        environ={"ALLOW_PROTECTED_BRANCH_PUSH": "1"},
+    )
+    assert violations == []

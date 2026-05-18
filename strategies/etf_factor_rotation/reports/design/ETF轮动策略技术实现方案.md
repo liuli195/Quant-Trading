@@ -4,7 +4,7 @@
 适用策略：[etf_factor_rotation.py](../../etf_factor_rotation.py) <!-- pathref: strategy_dir(strategy=etf_factor_rotation)/etf_factor_rotation.py -->  
 业务方案依据：[ETF轮动策略方案说明书.md](ETF轮动策略方案说明书.md) <!-- pathref: strategy_reports(strategy=etf_factor_rotation)/design/ETF轮动策略方案说明书.md -->  
 测试方案依据：[测试方案设计文档.md](../testing/测试方案设计文档.md) <!-- pathref: strategy_reports(strategy=etf_factor_rotation)/testing/测试方案设计文档.md -->  
-聚宽 API 依据：[joinquant-api.md](../../../../docs/joinquant-api.md) <!-- pathref: docs/joinquant-api.md -->  
+聚宽 API 依据：[joinquant-api.md](../../../../docs/reference/joinquant-api.md) <!-- pathref: docs/reference/joinquant-api.md -->
 聚宽数据字典依据：[JQ_场内基金数据.md](../../../../docs/joinquant-data/JQ_场内基金数据.md) <!-- pathref: joinquant_data/JQ_场内基金数据.md -->
 
 ## 1. 文档目标

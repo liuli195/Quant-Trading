@@ -1,0 +1,12 @@
+# Critical governance and strategy paths.
+CLAUDE.md @liuli195
+AGENTS.md @liuli195
+docs/rules/** @liuli195
+docs/adr/** @liuli195
+.claude/skills/** @liuli195
+.github/workflows/** @liuli195
+.githooks/** @liuli195
+scripts/research/governance/** @liuli195
+scripts/research/registry/** @liuli195
+path_aliases.json @liuli195
+strategies/** @liuli195

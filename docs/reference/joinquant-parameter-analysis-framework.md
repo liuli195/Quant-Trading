@@ -9,8 +9,8 @@
 
 相关本地流程：
 
-- [research-workflow.md](research-workflow.md) <!-- pathref: docs/research-workflow.md -->
-- [research-workflow-migration.md](research-workflow-migration.md) <!-- pathref: docs/research-workflow-migration.md -->
+- [research-workflow.md](../guides/research-workflow.md) <!-- pathref: docs/guides/research-workflow.md -->
+- [research-workflow-migration.md](../guides/research-workflow-migration.md) <!-- pathref: docs/guides/research-workflow-migration.md -->
 
 ## 一句话结论
 

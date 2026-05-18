@@ -22,7 +22,7 @@
 主要参考文件：
 
 - `黄金_AI_纳指100_配比方案.md`：三资产定位、核心公式、60 日波动率、周度调仓、10%~60% 权重约束。
-- `docs/joinquant-api.md`：`set_option('use_real_price', True)`、`set_option("avoid_future_data", True)`、`run_weekly`、`get_price`、`set_order_cost`、`set_slippage`、`order_target_value` 的平台语义。
+- `docs/reference/joinquant-api.md`：`set_option('use_real_price', True)`、`set_option("avoid_future_data", True)`、`run_weekly`、`get_price`、`set_order_cost`、`set_slippage`、`order_target_value` 的平台语义。
 - `docs/joinquant-data/JQ_技术分析指标.md`：`BIAS`、`ROC` 的参数、返回字典结构、`check_date` 与未来数据注意事项。
 - ~~`../reports/03-legacy-strategy-analysis.md`~~（文件不存在，源回测数据未保留）：2021-01-01 至 2026-04-30 的回测指标基准。
 - ~~`../reports/04-legacy-performance-analysis.md`~~（文件不存在，源回测数据未保留）：函数级耗时、重复 `BIAS/ROC` 调用、`get_price` 调用成本。

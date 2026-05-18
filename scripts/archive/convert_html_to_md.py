@@ -464,7 +464,7 @@ def main():
         epilog="""
 示例:
   python scripts/convert_html_to_md.py
-  python scripts/convert_html_to_md.py --html "API新 - JoinQuant.html" --out docs/joinquant-api.md
+  python scripts/convert_html_to_md.py --html "API新 - JoinQuant.html" --out docs/reference/joinquant-api.md
   python scripts/convert_html_to_md.py --html input.html --out output.md --images docs/imgs
         """
     )
@@ -478,8 +478,8 @@ def main():
     parser.add_argument(
         '--out',
         type=str,
-        default='docs/joinquant-api.md',
-        help='输出 Markdown 路径，相对于项目根目录（默认: docs/joinquant-api.md）'
+        default='docs/reference/joinquant-api.md',
+        help='输出 Markdown 路径，相对于项目根目录（默认: docs/reference/joinquant-api.md）'
     )
     parser.add_argument(
         '--images',

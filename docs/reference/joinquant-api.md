@@ -5,7 +5,7 @@
 内容较多，可使用`Ctrl+F`进行搜索。
 
 如果以下内容仍没有解决您的问题，请您查看[常见问题](https://www.joinquant.com/help/api/help?name=faq "https://www.joinquant.com/help/api/help?name=faq")、[常见Bug或者警告解决方法](https://www.joinquant.com/view/community/detail/6cab768c4b2fa259385a45927089367f "https://www.joinquant.com/view/community/detail/6cab768c4b2fa259385a45927089367f")或者通过[社区提问](https://www.joinquant.com/community "https://www.joinquant.com/community")的方式告诉我们。此外您也可以通过在线客服免费咨询
-![img](images/img_93896a6c.png) <!-- pathref: docs_images/img_93896a6c.png -->
+![img](../images/img_93896a6c.png) <!-- pathref: docs_images/img_93896a6c.png -->
 
 ## 开始写策略
 
@@ -179,11 +179,11 @@ record(stock_price=current_price)
 
 Bar 的示意图如下所示：
 
-![Bar 的示意图](images/Bar_的示意图_3e195308.png) <!-- pathref: docs_images/Bar_的示意图_3e195308.png -->
+![Bar 的示意图](../images/Bar_的示意图_3e195308.png) <!-- pathref: docs_images/Bar_的示意图_3e195308.png -->
 
 Bar 就是时间维度上，价格在空间维度上变化构成的数据单元。如下图所示，多个数据单元 Bar 构成的一个时间序列。
 
-![K线序列](images/K线序列_7796c276.png) <!-- pathref: docs_images/K线序列_7796c276.png -->
+![K线序列](../images/K线序列_7796c276.png) <!-- pathref: docs_images/K线序列_7796c276.png -->
 
 **2. 频率详解**
 
@@ -195,7 +195,7 @@ Bar 就是时间维度上，价格在空间维度上变化构成的数据单元�
 
 在算法中，可以获取任何粒度的数据。
 
-![日K线](images/日K线_7cbfd219.png) <!-- pathref: docs_images/日K线_7cbfd219.png -->
+![日K线](../images/日K线_7cbfd219.png) <!-- pathref: docs_images/日K线_7cbfd219.png -->
 
 **频率：分钟**
 
@@ -203,7 +203,7 @@ Bar 就是时间维度上，价格在空间维度上变化构成的数据单元�
 
 在算法中，可以获取任何粒度的数据。
 
-![分钟K线](images/分钟K线_6dd4c15c.png) <!-- pathref: docs_images/分钟K线_6dd4c15c.png -->
+![分钟K线](../images/分钟K线_6dd4c15c.png) <!-- pathref: docs_images/分钟K线_6dd4c15c.png -->
 
 **频率：Tick**
 
@@ -211,7 +211,7 @@ Bar 就是时间维度上，价格在空间维度上变化构成的数据单元�
 
 执行示意图如下图所示：
 
-![Tick序列](images/Tick序列_74bf7fbf.png) <!-- pathref: docs_images/Tick序列_74bf7fbf.png -->
+![Tick序列](../images/Tick序列_74bf7fbf.png) <!-- pathref: docs_images/Tick序列_74bf7fbf.png -->
 
 ### 运行时间
 
@@ -357,7 +357,7 @@ Bar 就是时间维度上，价格在空间维度上变化构成的数据单元�
 - 市价单挂单后开始交易时会按照下单时的逻辑撮合，限价单按照bar/tick来撮合
 - 如果用户在 11:30:01 下单，那么订单挂单，引擎退出；下午开盘前引擎恢复运行时，账户初始化会定位未完成订单的对应频率的数据，如果是tick，**可能会影响用户的tick订阅数量**
 
-![图解订单处理](images/图解订单处理_ce63c691.png) <!-- pathref: docs_images/图解订单处理_ce63c691.png -->
+![图解订单处理](../images/图解订单处理_ce63c691.png) <!-- pathref: docs_images/图解订单处理_ce63c691.png -->
 
 ### 拆分合并与分红
 
@@ -370,17 +370,17 @@ Bar 就是时间维度上，价格在空间维度上变化构成的数据单元�
 
 使用前复权价格，不论回测开始时间、结束时间是何时，使用的数据都是基于今天（回测当天）或某个时间的复权因子进行前复权获得的价格，因此使用前复权价格进行回测，回测结果肯定有问题。示意图如下：
 
-![传统回测模式](images/传统回测模式_347fbb23.png) <!-- pathref: docs_images/传统回测模式_347fbb23.png -->
+![传统回测模式](../images/传统回测模式_347fbb23.png) <!-- pathref: docs_images/传统回测模式_347fbb23.png -->
 
 不论历史时刻1或历史时刻2，拿到的数据都是基于未来某一天的前复权价格，使用这样的数据存在未来函数（未来函数是回测最大的敌人之一）
 
-![开启真实价格回测](images/开启真实价格回测_cc58e6b5.png) <!-- pathref: docs_images/开启真实价格回测_cc58e6b5.png -->
+![开启真实价格回测](../images/开启真实价格回测_cc58e6b5.png) <!-- pathref: docs_images/开启真实价格回测_cc58e6b5.png -->
 
 使用真实价格回测模式，回测到历史时刻1，使用历史时刻1的真实价格撮合成交；如果需要复权，会使用的历史时刻1的复权因子，对“历史时刻1"之前的价格进行前复权，这样有效避免了未来函数，因为回测全程都不可能使用未来的数据。
 
 你可能没有看懂，下面举个例子：
 
-![p3](images/p3_2b2b99c4.png) <!-- pathref: docs_images/p3_2b2b99c4.png -->
+![p3](../images/p3_2b2b99c4.png) <!-- pathref: docs_images/p3_2b2b99c4.png -->
 
 如现有一只股票，股价一直没有波动，只进行了拆分。
 
@@ -399,7 +399,7 @@ Bar 就是时间维度上，价格在空间维度上变化构成的数据单元�
 
 下面再举一个真实的例子，比较一下前复权回测模式和真实价格回测模式的区别
 
-![GL_pre](images/GL_pre_45d89b8a.png) <!-- pathref: docs_images/GL_pre_45d89b8a.png -->
+![GL_pre](../images/GL_pre_45d89b8a.png) <!-- pathref: docs_images/GL_pre_45d89b8a.png -->
 
 2007-01-30，波导股份的真实股价（绿色曲线）是低于格力电器（黑色曲线）的；但使用前复权价格，波导股份的价格会高于格力电器。
 采用最简单的交易思路，购买股价低的股票并持有，前复权模式会买入格力电器，真实价格回测模式会买入波导股份。
@@ -412,7 +412,7 @@ Bar 就是时间维度上，价格在空间维度上变化构成的数据单元�
 沪深300收益：21.98%
 最大回撤：64.98%
 
-![gbzs](images/gbzs_a1fa0a4e.png) <!-- pathref: docs_images/gbzs_a1fa0a4e.png -->
+![gbzs](../images/gbzs_a1fa0a4e.png) <!-- pathref: docs_images/gbzs_a1fa0a4e.png -->
 
 **真实价格回测模式的回测结果：**
 初始资金：100,000
@@ -420,7 +420,7 @@ Bar 就是时间维度上，价格在空间维度上变化构成的数据单元�
 沪深300收益：21.98%
 最大回撤：79.78%
 
-![kqzs](images/kqzs_3a91dbcf.png) <!-- pathref: docs_images/kqzs_3a91dbcf.png -->
+![kqzs](../images/kqzs_3a91dbcf.png) <!-- pathref: docs_images/kqzs_3a91dbcf.png -->
 
 **由回测结果不难看出，前复权回测模式因为存在未来函数，结果是不准确的，使用前复权回测模式可能会让你获得非常高的收益，但实盘时，效果却非常一般；在某些策略中，如使用到价格因子，前复权模式会导致回测中买卖信号与实际中不一致，从而导致回测结果不准确，影响策略在真实场景中的应用。**
 
@@ -446,7 +446,7 @@ set_option('use_real_price', True)
 
 后复权模式示意图如下图所示：
 
-![enter image description here](images/enter_image_description_here_d955fc9f.png) <!-- pathref: docs_images/enter_image_description_here_d955fc9f.png -->
+![enter image description here](../images/enter_image_description_here_d955fc9f.png) <!-- pathref: docs_images/enter_image_description_here_d955fc9f.png -->
 
 不开启真实价格模拟盘的运算结果是没有错误，只是会让您理解起来更费劲一些。
 
@@ -455,7 +455,7 @@ set_option('use_real_price', True)
 为了让用户使用更便于理解、更真实的模拟系统，我们强烈建议您**开启动态复权(真实价格)模式**。开启方式：用户可在代码中调用`set_option('use_real_price', True)`.
 
 开启动态复权(真实价格)模式示意图如下图所示：
-![enter image description here](images/enter_image_description_here_cfdcdd64.png) <!-- pathref: docs_images/enter_image_description_here_cfdcdd64.png -->
+![enter image description here](../images/enter_image_description_here_cfdcdd64.png) <!-- pathref: docs_images/enter_image_description_here_cfdcdd64.png -->
 
 **开启动态复权(真实)模式后，您看到的价格都是最新的，每到新的一天, 如果持仓中有股票发生了拆合或者分红或者其他可能影响复权因子的情形, 我们会根据复权因子自动调整股票的数量. 但不要跨日期缓存这些 API 返回的结果**
 
@@ -710,7 +710,7 @@ Rf=无风险利率（默认0.04）Rf=无风险利率（默认0.04¨C37C
 
 先看一眼这条线的效果，第一印象就可以发现它和策略线分开了，不是继续黏在一起。
 
-![3.png](images/3_png_d9201919.png) <!-- pathref: docs_images/3_png_d9201919.png -->
+![3.png](../images/3_png_d9201919.png) <!-- pathref: docs_images/3_png_d9201919.png -->
 
 回到上面的例子，假如在时间T时策略的净值S是基准B的十倍，那么超额收益线就是:
 
@@ -730,7 +730,7 @@ S∗1.02B∗1.10−100%=1000%∗92.7%−100%=827%S∗1.02B∗1.10−100%=1000%�
 
 举一个可以看出效果的例子，看下图标为 1 和 2 的部分：
 
-![4.png](images/4_png_a723c3d9.png) <!-- pathref: docs_images/4_png_a723c3d9.png -->
+![4.png](../images/4_png_a723c3d9.png) <!-- pathref: docs_images/4_png_a723c3d9.png -->
 
 - 在 1 的地方，策略和基准都涨了。谁涨的多？看黄线下跌了，所以是基准涨的多。
 - 在 2 的地方策略和基准都跌了。谁跌的多？看黄线又是下跌了，所以是策略跌的多。
@@ -742,7 +742,7 @@ S∗1.02B∗1.10−100%=1000%∗92.7%−100%=827%S∗1.02B∗1.10−100%=1000%�
 
 除法版超额收益线解决了多个时间序列在截面上比对的问题，但是同一序列在不同时间的对比还存在着问题。什么问题呢？就是我们没法看清策略在两个不同时间段的涨跌幅的区别。再回顾之前的一个回测的话，
 
-![5.png](images/5_png_accd05e0.png) <!-- pathref: docs_images/5_png_accd05e0.png -->
+![5.png](../images/5_png_accd05e0.png) <!-- pathref: docs_images/5_png_accd05e0.png -->
 
 要不是图上标出了最大回撤的位置，我们肯定目测不出最大回撤的位置。这是因为08年的时候策略净值还相对小，回撤个80%所损失的钱也不是那么多；而15年的时候净值是之前的几十倍，就算回撤20%损失也比之前回撤80%的损失多，所以在图上根本对比不出来。再者说，基准线呢？根本都看不见了啊。
 
@@ -766,7 +766,7 @@ log(x/y)=log(x)−log(y)log(x/y)=log(x)¨C43C¨C44C¨C45C¨C46C¨C47C
 
 除此之外，策略和基准在同一时间段中的对比也更简单了。假设基准在一段时间里翻了一倍，策略只涨了 50%，那么如果策略净值太大的话我们在普通轴上根本看不出基准有什么变动。在上边我们提到可以根据除法版超额收益的回撤来观测，而另一个方法就是在对数轴上看：在这段时间里基准在对数轴上上升了log(2)log(2) 个单位，而基准只上升了 log(1.5)log(1.5) 个单位，很直观，上升多的那个就是赢了。
 
-![6.png](images/6_png_16dd3d9e.png) <!-- pathref: docs_images/6_png_16dd3d9e.png -->
+![6.png](../images/6_png_16dd3d9e.png) <!-- pathref: docs_images/6_png_16dd3d9e.png -->
 
 我们把之前的回测放到对数轴上，净值规模造成的问题荡然无存。08 年回撤巨大，在图上清晰可见。相比之下，16 年的股灾（标注 3 的地方）虽然净值损失很多，但是实际上回撤比 08 年温柔很多，同时凭目测可以看出标注2的阴跌部分回撤和 16 年股灾中差不多。
 
@@ -780,11 +780,11 @@ log(策略净值基准净值)=log(策略净值)−log(基准净值)log(策略净
 
 如何看一个策略是否有稳定的alpha收益？**最直观的方法莫过于看它在对数轴上的超额收益线了，如果那条线是稳定斜向向上的就对了。**
 
-![7.png](images/7_png_f7a4869c.png) <!-- pathref: docs_images/7_png_f7a4869c.png -->
+![7.png](../images/7_png_f7a4869c.png) <!-- pathref: docs_images/7_png_f7a4869c.png -->
 
 先看这个回测，它有着整体很高的超额收益，但是我们也发现了几个明显的黄线回撤，说明它在这些时段跑输大盘的地方。而下面这个策略虽然收益不如上面的高，但是超额收益高稳定得多，黄线看不出明显回撤说明它基本没有跑输大盘的时候。
 
-![8.png](images/8_png_ece66f3a.png) <!-- pathref: docs_images/8_png_ece66f3a.png -->
+![8.png](../images/8_png_ece66f3a.png) <!-- pathref: docs_images/8_png_ece66f3a.png -->
 
 进一步，我们也可以看出这个策略的超额收益都产生于哪些时候。在第一根红线之前超额收益超额收益斜率较大，说明超额收益很高；两根红线的之间的超额收益基本为零；第二根红线之后又开始有了超额收益，但远没有第一个阶段里高。策略什么时候强什么时候弱，哪些时段需要额外的分析研究，或者很多其他的重要信息，都在一条线上一目了然，这是一条不简单的线。
 
@@ -941,23 +941,23 @@ def process_initialize(context):
 
 - **模型1：等权重配置**
 
-![enter image description here](images/enter_image_description_here_445e9167.png) <!-- pathref: docs_images/enter_image_description_here_445e9167.png -->
+![enter image description here](../images/enter_image_description_here_445e9167.png) <!-- pathref: docs_images/enter_image_description_here_445e9167.png -->
 
 - **模型2：组合风险平价；股票的总权重限制为0到90%，ETF的总权重限制为0到10%；每只标的权重不超过10%**
 
-![enter image description here](images/enter_image_description_here_23f2e053.png) <!-- pathref: docs_images/enter_image_description_here_23f2e053.png -->
+![enter image description here](../images/enter_image_description_here_23f2e053.png) <!-- pathref: docs_images/enter_image_description_here_23f2e053.png -->
 
 - **模型3：组合风险最小化（最小化组合方差）；组合总权重限制为90%到100%；组合年化收益率目标下限为10%**
 
-![enter image description here](images/enter_image_description_here_01b9888e.png) <!-- pathref: docs_images/enter_image_description_here_01b9888e.png -->
+![enter image description here](../images/enter_image_description_here_01b9888e.png) <!-- pathref: docs_images/enter_image_description_here_01b9888e.png -->
 
 - **模型4：'人气指标5日均值'最大化；组合年化收益率目标下限为10%；每只标的权重不超过20%**
 
-![enter image description here](images/enter_image_description_here_5c5a1f3c.png) <!-- pathref: docs_images/enter_image_description_here_5c5a1f3c.png -->
+![enter image description here](../images/enter_image_description_here_5c5a1f3c.png) <!-- pathref: docs_images/enter_image_description_here_5c5a1f3c.png -->
 
 - **模型5：组合夏普比率最大化；每只标的权重不超过10%**
 
-![enter image description here](images/enter_image_description_here_731b88e9.png) <!-- pathref: docs_images/enter_image_description_here_731b88e9.png -->
+![enter image description here](../images/enter_image_description_here_731b88e9.png) <!-- pathref: docs_images/enter_image_description_here_731b88e9.png -->
 
 回测代码如下, 优化函数API详情见 [portfolio\_optimizer - 投资组合优化](#name:optimizer "#name:optimizer")：
 
@@ -6229,7 +6229,7 @@ create_backtest(algorithm_id, start_date, end_date, frequency="day", initial_cas
 **参数：**
 
 - algorithm\_id: 策略ID，从策略编辑页的 url 中获取, 比如 '/algorithm/index/edit?algorithmId=xxxx'，则策略ID为: xxxx。如下图所示：
-  ![](images/1e7d7bab_1e7d7bab.png) <!-- pathref: docs_images/1e7d7bab_1e7d7bab.png -->
+  ![](../images/1e7d7bab_1e7d7bab.png) <!-- pathref: docs_images/1e7d7bab_1e7d7bab.png -->
 - start\_date: 回测开始日期
 - end\_date: 回测结束日期
 - frequency: 数据频率，支持 day, minute, tick
@@ -6478,7 +6478,7 @@ gt = get_backtest(backtest_id)
 
 - backtest\_id: 回测ID，从回测详情页以及模拟交易详情页的 url 中获取, 比如 '/algorithm/backtest/detail?backtestId='以及'/algorithm/live/index?backtestId='，则回测ID为:xxxx。如下图所示：
 
-![img](images/img_2901ea6b.png) <!-- pathref: docs_images/img_2901ea6b.png -->
+![img](../images/img_2901ea6b.png) <!-- pathref: docs_images/img_2901ea6b.png -->
 
 **返回：**
 

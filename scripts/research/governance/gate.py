@@ -32,6 +32,7 @@ def run_gate(
         capture_output=True,
         text=True,
         encoding="utf-8",
+        errors="replace",
         check=False,
     )
     pathref_ok = pathref.returncode == 0
@@ -48,6 +49,8 @@ def run_gate(
 
 
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     parser = build_parser()
     args = parser.parse_args(argv)
     report = run_gate(args.repo_root, check_cli_help=not args.skip_cli_help)

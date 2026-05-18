@@ -1,47 +1,188 @@
 {
   "schema_version": 1,
   "catalog_type": "documents",
-  "generated_at": "2026-05-18T18:27:32+00:00",
-  "count": 348,
+  "generated_at": "2026-05-18T21:30:00+00:00",
+  "count": 361,
   "reports": [
     {
-      "path": "docs/joinquant-api.md",
-      "title": "定义一个全局变量, 保存要操作的股票",
+      "path": "docs/README.md",
+      "title": "文档入口",
       "category": "docs",
       "strategy": null,
-      "date": "2007-01-30",
+      "date": null,
       "tags": [],
       "pathrefs": [
-        "docs_images/img_93896a6c.png",
-        "docs_images/Bar_的示意图_3e195308.png",
-        "docs_images/K线序列_7796c276.png",
-        "docs_images/日K线_7cbfd219.png",
-        "docs_images/分钟K线_6dd4c15c.png",
-        "docs_images/Tick序列_74bf7fbf.png",
-        "docs_images/图解订单处理_ce63c691.png",
-        "docs_images/传统回测模式_347fbb23.png",
-        "docs_images/开启真实价格回测_cc58e6b5.png",
-        "docs_images/p3_2b2b99c4.png",
-        "docs_images/GL_pre_45d89b8a.png",
-        "docs_images/gbzs_a1fa0a4e.png",
-        "docs_images/kqzs_3a91dbcf.png",
-        "docs_images/enter_image_description_here_d955fc9f.png",
-        "docs_images/enter_image_description_here_cfdcdd64.png",
-        "docs_images/3_png_d9201919.png",
-        "docs_images/4_png_a723c3d9.png",
-        "docs_images/5_png_accd05e0.png",
-        "docs_images/6_png_16dd3d9e.png",
-        "docs_images/7_png_f7a4869c.png",
-        "docs_images/8_png_ece66f3a.png",
-        "docs_images/enter_image_description_here_445e9167.png",
-        "docs_images/enter_image_description_here_23f2e053.png",
-        "docs_images/enter_image_description_here_01b9888e.png",
-        "docs_images/enter_image_description_here_5c5a1f3c.png",
-        "docs_images/enter_image_description_here_731b88e9.png",
-        "docs_images/1e7d7bab_1e7d7bab.png",
-        "docs_images/img_2901ea6b.png"
+        "repo/CLAUDE.md",
+        "docs/rules",
+        "docs/rules/index.md",
+        "docs/adr",
+        "docs/adr/0001-rule-source-and-governance-model.md",
+        "docs/guides",
+        "docs/guides/research-workflow.md",
+        "docs/architecture",
+        "docs/architecture/research-platform-architecture.md",
+        "docs/design",
+        "docs/design/本地研究平台重构技术实施方案.md",
+        "docs/reference",
+        "docs/reference/joinquant-api.md",
+        "docs/joinquant-data",
+        "docs/joinquant-data/JQ_场内基金数据.md",
+        "docs/indexes",
+        "docs/indexes/docs_catalog.json"
       ],
-      "updated_at": "2026-05-04T11:28:37+00:00"
+      "updated_at": "2026-05-18T21:27:24+00:00"
+    },
+    {
+      "path": "docs/adr/0001-rule-source-and-governance-model.md",
+      "title": "ADR 0001: 规则来源和治理模型",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "repo/CLAUDE.md",
+        "docs/rules",
+        "docs/adr"
+      ],
+      "updated_at": "2026-05-18T20:55:48+00:00"
+    },
+    {
+      "path": "docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md",
+      "title": "ADR 0002: 多 AI Agent 并行工作使用 Git 分支",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T20:55:48+00:00"
+    },
+    {
+      "path": "docs/adr/0003-governance-gate-and-main-branch-protection.md",
+      "title": "ADR 0003: Governance Gate 和主干保护",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T21:16:25+00:00"
+    },
+    {
+      "path": "docs/architecture/research-platform-architecture.md",
+      "title": "本地研究平台架构",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "scripts/research/cli.py",
+        "scripts/research/datasets.py",
+        "scripts/research/variants.py",
+        "scripts/research/docs.py",
+        "scripts/research/registry/tool_registry.py",
+        "scripts/research/governance/audit.py",
+        "scripts/research/platform/strategy_variants.py",
+        "research_datasets",
+        "scripts/research/workflows/templates",
+        "scripts/research/platform/workflows.py",
+        "scripts/research/research_core",
+        "scripts/research/platform/docs_index.py",
+        "docs/indexes/docs_catalog.json",
+        "docs/indexes/reports_catalog.json",
+        "docs/indexes/datasets_catalog.json",
+        "docs/indexes/variants_catalog.json",
+        "docs/indexes/reports.json",
+        "docs/indexes/reports.md",
+        "scripts/research/layers"
+      ],
+      "updated_at": "2026-05-18T21:29:06+00:00"
+    },
+    {
+      "path": "docs/design/本地研究平台重构.md",
+      "title": "本地研究平台重构",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T21:29:31+00:00"
+    },
+    {
+      "path": "docs/design/本地研究平台重构技术实施方案.md",
+      "title": "本地研究平台重构技术实施方案",
+      "category": "docs",
+      "strategy": null,
+      "date": "2026-05-19",
+      "tags": [],
+      "pathrefs": [
+        "scripts/research/cli.py",
+        "scripts/research/datasets.py",
+        "scripts/research/platform",
+        "docs/guides/research-workflow.md",
+        "docs/guides/research-workflow-migration.md",
+        "repo/CLAUDE.md"
+      ],
+      "updated_at": "2026-05-18T21:29:26+00:00"
+    },
+    {
+      "path": "docs/design/长期项目防止开发规则漂移方案.md",
+      "title": "长期项目防止开发规则漂移方案",
+      "category": "docs",
+      "strategy": null,
+      "date": "2026-08-31",
+      "tags": [],
+      "pathrefs": [
+        "repo/CLAUDE.md",
+        "docs/rules/index.md",
+        "docs/adr",
+        "repo/CODEOWNERS",
+        "repo/.github/pull_request_template.md",
+        "repo/.githooks/pre-push",
+        "docs/exceptions/active-waivers.yaml",
+        "scripts/research/governance"
+      ],
+      "updated_at": "2026-05-18T21:29:06+00:00"
+    },
+    {
+      "path": "docs/guides/local-python-env.md",
+      "title": "本地 Python 环境说明",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "repo/.venv",
+        "repo/requirements.txt"
+      ],
+      "updated_at": "2026-05-18T21:29:06+00:00"
+    },
+    {
+      "path": "docs/guides/research-workflow-migration.md",
+      "title": "旧研究项目迁移指南",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-17T14:31:18+00:00"
+    },
+    {
+      "path": "docs/guides/research-workflow.md",
+      "title": "本地优先研究流程",
+      "category": "docs",
+      "strategy": null,
+      "date": "2026-05-17",
+      "tags": [],
+      "pathrefs": [
+        "scripts/research/workflows/templates",
+        "scripts/research/cli.py",
+        "scripts/research/datasets.py",
+        "scripts/research/variants.py",
+        "scripts/research/docs.py",
+        "scripts/research/governance",
+        "scripts/research/platform",
+        "docs/architecture/research-platform-architecture.md"
+      ],
+      "updated_at": "2026-05-18T21:29:06+00:00"
     },
     {
       "path": "docs/joinquant-data/JQ_Alpha101.md",
@@ -194,88 +335,130 @@
       "updated_at": "2026-05-02T13:52:02+00:00"
     },
     {
-      "path": "docs/joinquant-parameter-analysis-framework.md",
+      "path": "docs/reference/joinquant-api.md",
+      "title": "定义一个全局变量, 保存要操作的股票",
+      "category": "docs",
+      "strategy": null,
+      "date": "2007-01-30",
+      "tags": [],
+      "pathrefs": [
+        "docs_images/img_93896a6c.png",
+        "docs_images/Bar_的示意图_3e195308.png",
+        "docs_images/K线序列_7796c276.png",
+        "docs_images/日K线_7cbfd219.png",
+        "docs_images/分钟K线_6dd4c15c.png",
+        "docs_images/Tick序列_74bf7fbf.png",
+        "docs_images/图解订单处理_ce63c691.png",
+        "docs_images/传统回测模式_347fbb23.png",
+        "docs_images/开启真实价格回测_cc58e6b5.png",
+        "docs_images/p3_2b2b99c4.png",
+        "docs_images/GL_pre_45d89b8a.png",
+        "docs_images/gbzs_a1fa0a4e.png",
+        "docs_images/kqzs_3a91dbcf.png",
+        "docs_images/enter_image_description_here_d955fc9f.png",
+        "docs_images/enter_image_description_here_cfdcdd64.png",
+        "docs_images/3_png_d9201919.png",
+        "docs_images/4_png_a723c3d9.png",
+        "docs_images/5_png_accd05e0.png",
+        "docs_images/6_png_16dd3d9e.png",
+        "docs_images/7_png_f7a4869c.png",
+        "docs_images/8_png_ece66f3a.png",
+        "docs_images/enter_image_description_here_445e9167.png",
+        "docs_images/enter_image_description_here_23f2e053.png",
+        "docs_images/enter_image_description_here_01b9888e.png",
+        "docs_images/enter_image_description_here_5c5a1f3c.png",
+        "docs_images/enter_image_description_here_731b88e9.png",
+        "docs_images/1e7d7bab_1e7d7bab.png",
+        "docs_images/img_2901ea6b.png"
+      ],
+      "updated_at": "2026-05-18T21:29:07+00:00"
+    },
+    {
+      "path": "docs/reference/joinquant-parameter-analysis-framework.md",
       "title": "JoinQuant 参数分析框架分析报告",
       "category": "docs",
       "strategy": null,
       "date": "2026-05-18",
       "tags": [],
       "pathrefs": [
-        "docs/research-workflow.md",
-        "docs/research-workflow-migration.md"
+        "docs/guides/research-workflow.md",
+        "docs/guides/research-workflow-migration.md"
       ],
-      "updated_at": "2026-05-18T15:43:03+00:00"
+      "updated_at": "2026-05-18T21:29:07+00:00"
     },
     {
-      "path": "docs/local-python-env.md",
-      "title": "本地 Python 环境说明",
+      "path": "docs/rules/ai-agents.md",
+      "title": "多 AI Agent 协作规则",
       "category": "docs",
       "strategy": null,
       "date": null,
       "tags": [],
       "pathrefs": [
-        "repo/.venv",
-        "repo/requirements.txt"
+        "repo/CLAUDE.md",
+        "repo/AGENTS.md"
       ],
-      "updated_at": "2026-05-17T14:31:18+00:00"
+      "updated_at": "2026-05-18T21:16:16+00:00"
     },
     {
-      "path": "docs/research-platform-architecture.md",
-      "title": "本地研究平台架构",
-      "category": "docs",
-      "strategy": null,
-      "date": null,
-      "tags": [],
-      "pathrefs": [
-        "scripts/research/cli.py",
-        "scripts/research/datasets.py",
-        "scripts/research/variants.py",
-        "scripts/research/docs.py",
-        "scripts/research/registry/tool_registry.py",
-        "scripts/research/governance/audit.py",
-        "scripts/research/platform/strategy_variants.py",
-        "research_datasets",
-        "scripts/research/workflows/templates",
-        "scripts/research/platform/workflows.py",
-        "scripts/research/research_core",
-        "scripts/research/platform/docs_index.py",
-        "docs/indexes/docs_catalog.json",
-        "docs/indexes/reports_catalog.json",
-        "docs/indexes/datasets_catalog.json",
-        "docs/indexes/variants_catalog.json",
-        "docs/indexes/reports.json",
-        "docs/indexes/reports.md"
-      ],
-      "updated_at": "2026-05-18T18:20:45+00:00"
-    },
-    {
-      "path": "docs/research-workflow-migration.md",
-      "title": "旧研究项目迁移指南",
+      "path": "docs/rules/code-style.md",
+      "title": "代码风格和策略实现规则",
       "category": "docs",
       "strategy": null,
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-17T14:31:18+00:00"
+      "updated_at": "2026-05-18T20:55:48+00:00"
     },
     {
-      "path": "docs/research-workflow.md",
-      "title": "本地优先研究流程",
+      "path": "docs/rules/docs-and-pathref.md",
+      "title": "文档和 Pathref 规则",
       "category": "docs",
       "strategy": null,
-      "date": "2026-05-17",
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T20:55:48+00:00"
+    },
+    {
+      "path": "docs/rules/governance.md",
+      "title": "治理门禁规则",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T21:16:11+00:00"
+    },
+    {
+      "path": "docs/rules/index.md",
+      "title": "仓库规则总索引",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
       "tags": [],
       "pathrefs": [
-        "scripts/research/workflows/templates",
-        "scripts/research/cli.py",
-        "scripts/research/datasets.py",
-        "scripts/research/variants.py",
-        "scripts/research/docs.py",
-        "scripts/research/governance",
-        "scripts/research/platform",
-        "docs/research-platform-architecture.md"
+        "repo/CLAUDE.md",
+        "docs/adr",
+        "docs/rules/ai-agents.md",
+        "docs/rules/governance.md",
+        "docs/rules/research-workflow.md",
+        "docs/rules/code-style.md",
+        "docs/rules/docs-and-pathref.md",
+        "docs/adr/0001-rule-source-and-governance-model.md",
+        "docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md",
+        "docs/adr/0003-governance-gate-and-main-branch-protection.md"
       ],
-      "updated_at": "2026-05-18T18:20:54+00:00"
+      "updated_at": "2026-05-18T20:55:48+00:00"
+    },
+    {
+      "path": "docs/rules/research-workflow.md",
+      "title": "研究流程规则",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-18T20:55:48+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/attribution-analysis.md",
@@ -519,7 +702,7 @@
       "date": "2026-05-03",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-17T14:31:18+00:00"
+      "updated_at": "2026-05-18T21:28:32+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/reports/量化交易策略研究.md",
@@ -2746,11 +2929,11 @@
         "strategy_dir(strategy=etf_factor_rotation)/etf_factor_rotation.py",
         "strategy_tests(strategy=etf_factor_rotation)/test_etf_factor_rotation.py",
         "strategy_reports(strategy=etf_factor_rotation)/design/ETF轮动策略方案说明书.md",
-        "docs/joinquant-api.md",
+        "docs/reference/joinquant-api.md",
         "joinquant_data/JQ_场内基金数据.md",
         "repo/CLAUDE.md"
       ],
-      "updated_at": "2026-05-17T14:31:19+00:00"
+      "updated_at": "2026-05-18T21:28:39+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/reports/design/2026-05-17-cash-utilization-optimization-plan.md",
@@ -2815,11 +2998,11 @@
         "strategy_dir(strategy=etf_factor_rotation)/etf_factor_rotation.py",
         "strategy_reports(strategy=etf_factor_rotation)/design/ETF轮动策略方案说明书.md",
         "strategy_reports(strategy=etf_factor_rotation)/testing/测试方案设计文档.md",
-        "docs/joinquant-api.md",
+        "docs/reference/joinquant-api.md",
         "joinquant_data/JQ_场内基金数据.md",
         "strategy_reports(strategy=etf_factor_rotation)/testing/测试方案设计文档.md"
       ],
-      "updated_at": "2026-05-17T14:31:19+00:00"
+      "updated_at": "2026-05-18T21:28:40+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/reports/design/ETF轮动策略方案说明书.md",
@@ -3496,9 +3679,9 @@
         "strategy_tests(strategy=etf_factor_rotation)/test_etf_factor_rotation.py",
         "strategy_tests(strategy=etf_factor_rotation)/conftest.py",
         "strategy_reports(strategy=etf_factor_rotation)/design/ETF轮动策略方案说明书.md",
-        "docs/joinquant-api.md"
+        "docs/reference/joinquant-api.md"
       ],
-      "updated_at": "2026-05-17T14:31:19+00:00"
+      "updated_at": "2026-05-18T21:28:40+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/test_batches/20260505-0000-etf-factor-rotation-full-test/report/batch-comparison.md",

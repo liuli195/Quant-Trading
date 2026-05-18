@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
+from datetime import date, datetime
 from pathlib import Path
+
+import yaml
 
 from scripts.research.registry import default_tool_registry
 from scripts.research.governance.schemas import AuditFinding, AuditReport
@@ -16,6 +20,47 @@ from scripts.research.platform.engine import validate_project_config
 from scripts.research.platform.strategy_variants import StrategyManifestReader, VariantError
 from scripts.research.platform.workflows import WorkflowTemplateError, load_workflow_templates
 from scripts.tools.path_tools.aliases import validate_config_file as validate_path_alias_config
+
+
+REQUIRED_RULE_DOCS = (
+    "docs/rules/index.md",
+    "docs/rules/ai-agents.md",
+    "docs/rules/governance.md",
+    "docs/rules/research-workflow.md",
+    "docs/rules/code-style.md",
+    "docs/rules/docs-and-pathref.md",
+)
+REQUIRED_CODEOWNER_PATTERNS = (
+    "CLAUDE.md",
+    "AGENTS.md",
+    "docs/rules/**",
+    "docs/adr/**",
+    ".claude/skills/**",
+    ".github/workflows/**",
+    ".githooks/**",
+    "scripts/research/governance/**",
+    "scripts/research/registry/**",
+    "path_aliases.json",
+    "strategies/**",
+)
+PR_TEMPLATE_TOKENS = (
+    "改动目标",
+    "影响范围",
+    "规则同步",
+    "已运行检查",
+    "waiver",
+    "证据",
+)
+WAIVER_REQUIRED_FIELDS = (
+    "id",
+    "rule_id",
+    "path",
+    "reason",
+    "owner",
+    "approved_by",
+    "expires_at",
+    "migration_plan",
+)
 
 
 def run_audit(
@@ -32,6 +77,10 @@ def run_audit(
     findings.extend(_audit_layer_docs(root))
     findings.extend(_audit_claude_and_skills(root))
     findings.extend(_audit_governance_gate(root))
+    findings.extend(_audit_rule_sources(root))
+    findings.extend(_audit_codeowners(root))
+    findings.extend(_audit_pr_template(root))
+    findings.extend(_audit_waivers(root))
     findings.extend(_audit_path_aliases(root))
     findings.extend(_audit_strategy_manifests(root))
     findings.extend(_audit_project_configs(root))
@@ -86,6 +135,8 @@ def _audit_claude_and_skills(root: Path) -> list[AuditFinding]:
             "scripts.research.variants",
             "scripts.research.governance",
             "scripts.research.registry",
+            "docs/rules/index.md",
+            "docs/adr",
         ):
             if token not in text:
                 findings.append(AuditFinding("claude_sync", "error", f"CLAUDE.md missing {token}"))
@@ -120,6 +171,14 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         if "scripts.research.governance gate" not in text:
             findings.append(AuditFinding("governance_gate", "error", "pre-commit hook missing governance gate"))
 
+    pre_push = root / ".githooks" / "pre-push"
+    if not pre_push.is_file():
+        findings.append(AuditFinding("governance_gate", "error", ".githooks/pre-push missing"))
+    else:
+        text = pre_push.read_text(encoding="utf-8", errors="ignore")
+        if "scripts.research.governance.branch_protection pre-push" not in text:
+            findings.append(AuditFinding("governance_gate", "error", "pre-push hook missing branch protection gate"))
+
     workflow = root / ".github" / "workflows" / "research-governance.yml"
     if not workflow.is_file():
         findings.append(AuditFinding("governance_gate", "error", ".github/workflows/research-governance.yml missing"))
@@ -127,10 +186,126 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         text = workflow.read_text(encoding="utf-8", errors="ignore")
         if "scripts.research.governance gate" not in text:
             findings.append(AuditFinding("governance_gate", "error", "CI workflow missing governance gate"))
+        if "schedule:" not in text:
+            findings.append(AuditFinding("governance_gate", "error", "CI workflow missing scheduled drift audit"))
 
     claude = root / "CLAUDE.md"
     if claude.is_file() and "scripts.research.governance gate" not in claude.read_text(encoding="utf-8", errors="ignore"):
         findings.append(AuditFinding("governance_gate", "error", "CLAUDE.md missing governance gate entry"))
+    return findings
+
+
+def _audit_rule_sources(root: Path) -> list[AuditFinding]:
+    findings: list[AuditFinding] = []
+    for rel_path in REQUIRED_RULE_DOCS:
+        if not (root / rel_path).is_file():
+            findings.append(AuditFinding("rule_source", "error", f"rule doc missing: {rel_path}"))
+
+    adr_root = root / "docs" / "adr"
+    if not adr_root.is_dir():
+        findings.append(AuditFinding("adr", "error", "docs/adr missing"))
+    else:
+        adr_files = sorted(path for path in adr_root.glob("*.md") if re.match(r"^\d{4}-", path.name))
+        if not adr_files:
+            findings.append(AuditFinding("adr", "error", "docs/adr has no numbered ADR files"))
+        else:
+            numbers = [int(path.name[:4]) for path in adr_files]
+            expected = list(range(1, max(numbers) + 1))
+            if numbers != expected:
+                findings.append(
+                    AuditFinding(
+                        "adr",
+                        "error",
+                        f"ADR numbers must be continuous from 0001: found {numbers}",
+                    )
+                )
+
+    agents = root / "AGENTS.md"
+    if not agents.is_file():
+        findings.append(AuditFinding("agent_rule_source", "error", "AGENTS.md missing"))
+    else:
+        text = agents.read_text(encoding="utf-8", errors="ignore")
+        for token in ("CLAUDE.md", "权威规则源"):
+            if token not in text:
+                findings.append(AuditFinding("agent_rule_source", "error", f"AGENTS.md missing {token}"))
+
+    governance_readme = root / "scripts" / "research" / "governance" / "README.md"
+    if governance_readme.is_file():
+        text = governance_readme.read_text(encoding="utf-8", errors="ignore")
+        for token in ("docs/rules/index.md", "docs/adr"):
+            if token not in text:
+                findings.append(AuditFinding("governance_docs", "error", f"governance README missing {token}"))
+    return findings
+
+
+def _audit_codeowners(root: Path) -> list[AuditFinding]:
+    path = root / "CODEOWNERS"
+    if not path.is_file():
+        return [AuditFinding("codeowners", "error", "CODEOWNERS missing")]
+
+    findings: list[AuditFinding] = []
+    patterns: set[str] = set()
+    for lineno, line in enumerate(path.read_text(encoding="utf-8", errors="ignore").splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        parts = stripped.split()
+        if len(parts) < 2:
+            findings.append(AuditFinding("codeowners", "error", f"CODEOWNERS line {lineno} missing owner"))
+            continue
+        patterns.add(_normalize_codeowner_pattern(parts[0]))
+
+    for pattern in REQUIRED_CODEOWNER_PATTERNS:
+        if _normalize_codeowner_pattern(pattern) not in patterns:
+            findings.append(AuditFinding("codeowners", "error", f"CODEOWNERS missing {pattern}"))
+    return findings
+
+
+def _audit_pr_template(root: Path) -> list[AuditFinding]:
+    path = root / ".github" / "pull_request_template.md"
+    if not path.is_file():
+        return [AuditFinding("pr_template", "error", ".github/pull_request_template.md missing")]
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    return [
+        AuditFinding("pr_template", "error", f"PR template missing {token}")
+        for token in PR_TEMPLATE_TOKENS
+        if token not in text
+    ]
+
+
+def _audit_waivers(root: Path) -> list[AuditFinding]:
+    path = root / "docs" / "exceptions" / "active-waivers.yaml"
+    if not path.is_file():
+        return [AuditFinding("waiver", "error", "docs/exceptions/active-waivers.yaml missing")]
+    try:
+        payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as exc:
+        return [AuditFinding("waiver", "error", f"invalid waiver YAML: {exc}")]
+    if not isinstance(payload, dict):
+        return [AuditFinding("waiver", "error", "waiver registry must be a mapping")]
+
+    findings: list[AuditFinding] = []
+    if payload.get("schema_version") != 1:
+        findings.append(AuditFinding("waiver", "error", "waiver registry schema_version must be 1"))
+    waivers = payload.get("waivers", [])
+    if not isinstance(waivers, list):
+        findings.append(AuditFinding("waiver", "error", "waivers must be a list"))
+        return findings
+
+    today = date.today()
+    for index, waiver in enumerate(waivers, start=1):
+        if not isinstance(waiver, dict):
+            findings.append(AuditFinding("waiver", "error", f"waiver #{index} must be a mapping"))
+            continue
+        waiver_id = str(waiver.get("id") or f"#{index}")
+        for field in WAIVER_REQUIRED_FIELDS:
+            if not str(waiver.get(field, "")).strip():
+                findings.append(AuditFinding("waiver", "error", f"{waiver_id}: {field} is required"))
+        expires_at = _parse_date(waiver.get("expires_at"))
+        if expires_at is None:
+            findings.append(AuditFinding("waiver", "error", f"{waiver_id}: expires_at must be YYYY-MM-DD"))
+        elif expires_at < today:
+            findings.append(AuditFinding("waiver", "error", f"{waiver_id}: waiver expired at {expires_at.isoformat()}"))
     return findings
 
 
@@ -224,7 +399,15 @@ def _audit_cli_help(root: Path) -> list[AuditFinding]:
         if tool.kind == "cli"
     ]
     for command in commands:
-        result = subprocess.run(command, cwd=root, capture_output=True, text=True, encoding="utf-8", check=False)
+        result = subprocess.run(
+            command,
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
         if result.returncode != 0:
             findings.append(
                 AuditFinding(
@@ -279,6 +462,23 @@ def _module_is_registered(module: str, registered: set[str]) -> bool:
     return False
 
 
+def _normalize_codeowner_pattern(pattern: str) -> str:
+    return pattern.strip().lstrip("/")
+
+
+def _parse_date(value: object) -> date | None:
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
 def _audit_pathrefs(root: Path) -> list[AuditFinding]:
     result = subprocess.run(
         [sys.executable, "-m", "scripts.tools.path_tools.refactor", "check"],
@@ -286,6 +486,7 @@ def _audit_pathrefs(root: Path) -> list[AuditFinding]:
         capture_output=True,
         text=True,
         encoding="utf-8",
+        errors="replace",
         check=False,
     )
     if result.returncode == 0:

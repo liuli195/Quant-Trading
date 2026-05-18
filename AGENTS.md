@@ -9,6 +9,8 @@
 
 所有 AI 编码助手（Claude Code、Cursor、Copilot、Codex 等）统一以 **[CLAUDE.md](CLAUDE.md) 为权威规则源**。
 
+CLAUDE.md 是 AI 助手入口。仓库级规则正文在 **[docs/rules/index.md](docs/rules/index.md) <!-- pathref: docs/rules/index.md -->**，重大规则和治理决策记录在 **[docs/adr](docs/adr) <!-- pathref: docs/adr -->**。
+
 CLAUDE.md 包含：目录结构约定、工具入口与命令、策略代码规范、注释与文档约定、提交前检查清单、Skills 说明。
 
 本文件仅记录跨工具通用的补充约束，内容稳定不随项目迭代频繁变更。
