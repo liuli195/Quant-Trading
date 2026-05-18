@@ -1,9 +1,5 @@
 #!/bin/sh
 set -eu
 
-PYTHON_CMD="${PYTHON:-.venv/Scripts/python.exe}"
-if [ ! -x "$PYTHON_CMD" ]; then
-  PYTHON_CMD="python"
-fi
-
-"$PYTHON_CMD" -m scripts.research.governance gate
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".githooks/run-python.ps1" \
+  -m scripts.research.governance gate

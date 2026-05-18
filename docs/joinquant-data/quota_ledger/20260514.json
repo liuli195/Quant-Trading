@@ -1,0 +1,45 @@
+{
+  "date": "20260514",
+  "budget_minutes": 60.0,
+  "runs": [
+    {
+      "scenario_id": "s01-etf-ma-mix-confirmation",
+      "run_id": "20260514-1528-bt94a4982a9278019c0eeb6828d1ec0315",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-14T15:29:53",
+      "actual_minutes": 1.4409999999999998
+    },
+    {
+      "scenario_id": "s01-etf-ma-mix-confirmation",
+      "run_id": "20260514-1530-bte11b8a2022b2f2e90db7f30680344e7a",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-14T15:32:15",
+      "actual_minutes": 1.4603333333333335
+    },
+    {
+      "scenario_id": "s01-etf-ma-mix-confirmation",
+      "run_id": "20260514-1532-bt1ea3afc1650a49a3ee8597b3e58f3c28",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-14T15:34:18",
+      "actual_minutes": 1.4385000000000001
+    },
+    {
+      "scenario_id": "tilt-verify",
+      "run_id": "20260514-1804-bt775e3d35921112503655717fa185f106",
+      "estimated_minutes": 5.0,
+      "status": "completed",
+      "updated_at": "2026-05-14T18:06:12",
+      "actual_minutes": 1.4051666666666667
+    },
+    {
+      "scenario_id": "c2-full-integrity",
+      "run_id": "20260514-1959-bt1a70c5cd71fac1c27eed2268045ad80a",
+      "estimated_minutes": 6.0,
+      "status": "failed",
+      "updated_at": "2026-05-14T20:02:00"
+    }
+  ]
+}

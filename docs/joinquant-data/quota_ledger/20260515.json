@@ -1,0 +1,77 @@
+{
+  "date": "20260515",
+  "budget_minutes": 60.0,
+  "runs": [
+    {
+      "scenario_id": "ab-gold-crowd-ab-gold-baseline",
+      "run_id": "20260515-2039-bt5faac6620b963dbcc07a09361866e115",
+      "estimated_minutes": 6.0,
+      "status": "failed",
+      "updated_at": "2026-05-15T20:41:13"
+    },
+    {
+      "scenario_id": "ab-gold-crowd-ab-gold-baseline",
+      "run_id": "20260515-2049-bt7636c4788d821690fd90b281dee7e913",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-15T20:51:18",
+      "actual_minutes": 1.538
+    },
+    {
+      "scenario_id": "ab-gold-crowd-ab-gold-start-080",
+      "run_id": "20260515-2051-bte8e07662646ef6b56f453ea15c7d959d",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-15T20:53:45",
+      "actual_minutes": 1.5688333333333333
+    },
+    {
+      "scenario_id": "ab-gold-crowd-ab-gold-neutralized",
+      "run_id": "20260515-2054-bt72abfe3d501669b91a4b3d3a0fd5b49b",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-15T20:56:36",
+      "actual_minutes": 1.9711666666666665
+    },
+    {
+      "scenario_id": "ab-gold-crowd-ab-gold-calc-longwin",
+      "run_id": "20260515-2056-bt3e11aaf64867aa42e8644d88dfe0a4e3",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-15T20:59:01",
+      "actual_minutes": 1.5696666666666668
+    },
+    {
+      "scenario_id": "ab-ai-crowd-ab-ai-baseline",
+      "run_id": "20260515-2100-bt852ee6d4016248c77c11386f2f6a7245",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-15T21:02:20",
+      "actual_minutes": 1.5030000000000001
+    },
+    {
+      "scenario_id": "ab-ai-crowd-ab-ai-start-075",
+      "run_id": "20260515-2102-bt5d8807c600e004cf70f4c4b31a1b28ac",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-15T21:04:45",
+      "actual_minutes": 1.5443333333333333
+    },
+    {
+      "scenario_id": "ab-ai-crowd-ab-ai-neutralized",
+      "run_id": "20260515-2105-bt6fb6670169c26ae89dd2902eba243fff",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-15T21:07:14",
+      "actual_minutes": 1.6075000000000002
+    },
+    {
+      "scenario_id": "ab-ai-crowd-ab-ai-calc-longwin",
+      "run_id": "20260515-2107-bt157c5e16bdd7a47cb327a70b75b69da4",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-15T21:09:37",
+      "actual_minutes": 1.537
+    }
+  ]
+}

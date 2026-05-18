@@ -35,6 +35,7 @@ REQUIRED_CODEOWNER_PATTERNS = (
     "AGENTS.md",
     "docs/rules/**",
     "docs/adr/**",
+    ".claude/agents/**",
     ".claude/skills/**",
     ".github/workflows/**",
     ".githooks/**",
@@ -48,8 +49,18 @@ PR_TEMPLATE_TOKENS = (
     "影响范围",
     "规则同步",
     "已运行检查",
+    "评审治理 Agent 结论",
+    "pr-governance-review",
     "waiver",
     "证据",
+)
+REQUIRED_REVIEW_AGENT_TOKENS = (
+    "name: pr-governance-review",
+    "独立评审 Agent",
+    "scripts.research.governance gate",
+    "评审治理 Agent 结论",
+    "结论: 通过",
+    "阻断问题: 无",
 )
 WAIVER_REQUIRED_FIELDS = (
     "id",
@@ -76,6 +87,7 @@ def run_audit(
     findings.extend(_audit_tool_registry(root))
     findings.extend(_audit_layer_docs(root))
     findings.extend(_audit_claude_and_skills(root))
+    findings.extend(_audit_review_agent(root))
     findings.extend(_audit_governance_gate(root))
     findings.extend(_audit_rule_sources(root))
     findings.extend(_audit_codeowners(root))
@@ -137,6 +149,7 @@ def _audit_claude_and_skills(root: Path) -> list[AuditFinding]:
             "scripts.research.registry",
             "docs/rules/index.md",
             "docs/adr",
+            "pr-governance-review",
         ):
             if token not in text:
                 findings.append(AuditFinding("claude_sync", "error", f"CLAUDE.md missing {token}"))
@@ -161,8 +174,24 @@ def _audit_claude_and_skills(root: Path) -> list[AuditFinding]:
     return findings
 
 
+def _audit_review_agent(root: Path) -> list[AuditFinding]:
+    path = root / ".claude" / "agents" / "pr-governance-review.md"
+    if not path.is_file():
+        return [AuditFinding("review_agent", "error", ".claude/agents/pr-governance-review.md missing")]
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    return [
+        AuditFinding("review_agent", "error", f"pr-governance-review missing {token}")
+        for token in REQUIRED_REVIEW_AGENT_TOKENS
+        if token not in text
+    ]
+
+
 def _audit_governance_gate(root: Path) -> list[AuditFinding]:
     findings: list[AuditFinding] = []
+    hook_python = root / ".githooks" / "run-python.ps1"
+    if not hook_python.is_file():
+        findings.append(AuditFinding("governance_gate", "error", ".githooks/run-python.ps1 missing"))
+
     hook = root / ".githooks" / "pre-commit"
     if not hook.is_file():
         findings.append(AuditFinding("governance_gate", "error", ".githooks/pre-commit missing"))
@@ -178,6 +207,32 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         text = pre_push.read_text(encoding="utf-8", errors="ignore")
         if "scripts.research.governance.branch_protection pre-push" not in text:
             findings.append(AuditFinding("governance_gate", "error", "pre-push hook missing branch protection gate"))
+        if "scripts.research.governance gate" not in text:
+            findings.append(AuditFinding("governance_gate", "error", "pre-push hook missing governance gate"))
+        if "git lfs pre-push" not in text:
+            findings.append(AuditFinding("governance_gate", "error", "pre-push hook missing Git LFS handoff"))
+
+    reference_transaction = root / ".githooks" / "reference-transaction"
+    if not reference_transaction.is_file():
+        findings.append(AuditFinding("governance_gate", "error", ".githooks/reference-transaction missing"))
+    else:
+        text = reference_transaction.read_text(encoding="utf-8", errors="ignore")
+        if "scripts.research.governance.branch_protection reference-transaction" not in text:
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "reference-transaction hook missing local branch protection gate",
+                )
+            )
+        if "prepared" not in text:
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "reference-transaction hook must validate the prepared phase",
+                )
+            )
 
     workflow = root / ".github" / "workflows" / "research-governance.yml"
     if not workflow.is_file():
@@ -186,12 +241,35 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         text = workflow.read_text(encoding="utf-8", errors="ignore")
         if "scripts.research.governance gate" not in text:
             findings.append(AuditFinding("governance_gate", "error", "CI workflow missing governance gate"))
+        if "scripts.research.governance.pr_review_evidence" not in text:
+            findings.append(AuditFinding("governance_gate", "error", "CI workflow missing PR review evidence gate"))
         if "schedule:" not in text:
             findings.append(AuditFinding("governance_gate", "error", "CI workflow missing scheduled drift audit"))
 
     claude = root / "CLAUDE.md"
-    if claude.is_file() and "scripts.research.governance gate" not in claude.read_text(encoding="utf-8", errors="ignore"):
-        findings.append(AuditFinding("governance_gate", "error", "CLAUDE.md missing governance gate entry"))
+    if claude.is_file():
+        text = claude.read_text(encoding="utf-8", errors="ignore")
+        for token in (
+            "scripts.research.governance gate",
+            "所有进入主干的改动必须通过 PR",
+            "禁止本地合并主干",
+        ):
+            if token not in text:
+                findings.append(AuditFinding("governance_gate", "error", f"CLAUDE.md missing {token}"))
+
+    ai_agents = root / "docs" / "rules" / "ai-agents.md"
+    if ai_agents.is_file():
+        text = ai_agents.read_text(encoding="utf-8", errors="ignore")
+        for token in ("所有进入主干的改动必须通过 PR", "禁止本地合并主干"):
+            if token not in text:
+                findings.append(AuditFinding("governance_gate", "error", f"ai-agents.md missing {token}"))
+
+    governance = root / "docs" / "rules" / "governance.md"
+    if governance.is_file():
+        text = governance.read_text(encoding="utf-8", errors="ignore")
+        for token in (".githooks/reference-transaction", "ALLOW_MAIN_REF_UPDATE", "MAIN_REF_UPDATE_REASON"):
+            if token not in text:
+                findings.append(AuditFinding("governance_gate", "error", f"governance.md missing {token}"))
     return findings
 
 

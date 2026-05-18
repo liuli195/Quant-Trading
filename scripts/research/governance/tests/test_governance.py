@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from scripts.research.governance.branch_protection import check_pre_push_input
+from scripts.research.governance.branch_protection import check_pre_push_input, check_reference_transaction_input
+from scripts.research.governance.pr_review_evidence import validate_pr_body
 from scripts.research.governance.rules import run_audit
 from scripts.research.registry import default_tool_registry
 
@@ -34,6 +35,7 @@ def _write_minimal_repo(root: Path) -> None:
         "research_datasets",
         ".github/workflows",
         ".githooks",
+        ".claude/agents",
         ".claude/skills/jq-research",
         ".claude/skills/jq-ab-test",
         "research_datasets/demo/snap/raw",
@@ -85,7 +87,8 @@ def _write_minimal_repo(root: Path) -> None:
     (root / "CLAUDE.md").write_text(
         "scripts.research.cli scripts.research.datasets scripts.research.variants "
         "scripts.research.governance scripts.research.governance gate scripts.research.registry "
-        "docs/rules/index.md docs/adr/",
+        "docs/rules/index.md docs/adr/ pr-governance-review "
+        "所有进入主干的改动必须通过 PR 禁止本地合并主干",
         encoding="utf-8",
     )
     (root / "AGENTS.md").write_text(
@@ -96,16 +99,47 @@ def _write_minimal_repo(root: Path) -> None:
         "python -m scripts.research.governance gate\n",
         encoding="utf-8",
     )
+    (root / ".githooks/run-python.ps1").write_text(
+        "& .venv\\Scripts\\python.exe @args\n",
+        encoding="utf-8",
+    )
     (root / ".githooks/pre-push").write_text(
-        "python -m scripts.research.governance.branch_protection pre-push\n",
+        "\n".join(
+            [
+                "python -m scripts.research.governance.branch_protection pre-push",
+                "python -m scripts.research.governance gate",
+                "git lfs pre-push",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (root / ".githooks/reference-transaction").write_text(
+        "\n".join(
+            [
+                "STATE=${1:-}",
+                'if [ "$STATE" = "prepared" ]; then',
+                "python -m scripts.research.governance.branch_protection reference-transaction",
+                "fi",
+            ]
+        ),
         encoding="utf-8",
     )
     (root / ".github/workflows/research-governance.yml").write_text(
-        "on:\n  schedule:\n    - cron: '0 2 * * 1'\nsteps:\n  - run: python -m scripts.research.governance gate\n",
+        "on:\n  schedule:\n    - cron: '0 2 * * 1'\nsteps:\n"
+        "  - run: python -m scripts.research.governance gate\n"
+        "  - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
         encoding="utf-8",
     )
     (root / "scripts/research/governance/README.md").write_text(
         "docs/rules/index.md docs/adr scripts.research.governance gate\n",
+        encoding="utf-8",
+    )
+    (root / "docs/rules/ai-agents.md").write_text(
+        "所有进入主干的改动必须通过 PR\n禁止本地合并主干\n",
+        encoding="utf-8",
+    )
+    (root / "docs/rules/governance.md").write_text(
+        ".githooks/reference-transaction ALLOW_MAIN_REF_UPDATE MAIN_REF_UPDATE_REASON\n",
         encoding="utf-8",
     )
     (root / "CODEOWNERS").write_text(
@@ -115,6 +149,7 @@ def _write_minimal_repo(root: Path) -> None:
                 "AGENTS.md @research-platform",
                 "docs/rules/** @research-platform",
                 "docs/adr/** @research-platform",
+                ".claude/agents/** @research-platform",
                 ".claude/skills/** @research-platform",
                 ".github/workflows/** @research-platform",
                 ".githooks/** @research-platform",
@@ -127,7 +162,7 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     (root / ".github/pull_request_template.md").write_text(
-        "改动目标\n影响范围\n规则同步\n已运行检查\nwaiver\n证据\n",
+        "改动目标\n影响范围\n规则同步\n已运行检查\n评审治理 Agent 结论\npr-governance-review\nwaiver\n证据\n",
         encoding="utf-8",
     )
     (root / "docs/exceptions/active-waivers.yaml").write_text(
@@ -140,6 +175,21 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / ".claude/skills/jq-ab-test/SKILL.md").write_text(
         "variant_id 参数变体 结构变体 scripts.research.variants",
+        encoding="utf-8",
+    )
+    (root / ".claude/agents/pr-governance-review.md").write_text(
+        "\n".join(
+            [
+                "---",
+                "name: pr-governance-review",
+                "---",
+                "独立评审 Agent",
+                "scripts.research.governance gate",
+                "评审治理 Agent 结论",
+                "结论: 通过",
+                "阻断问题: 无",
+            ]
+        ),
         encoding="utf-8",
     )
     (root / "path_aliases.json").write_text(
@@ -330,6 +380,29 @@ def test_governance_audit_flags_invalid_pr_template(tmp_path) -> None:
     assert any(finding.rule_id == "pr_template" and "规则同步" in finding.message for finding in report.findings)
 
 
+def test_governance_audit_flags_missing_review_agent(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".claude/agents/pr-governance-review.md").unlink()
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(finding.rule_id == "review_agent" for finding in report.findings)
+
+
+def test_governance_audit_flags_workflow_without_review_evidence_gate(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".github/workflows/research-governance.yml").write_text(
+        "on:\n  schedule:\n    - cron: '0 2 * * 1'\nsteps:\n"
+        "  - run: python -m scripts.research.governance gate\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "PR review evidence" in finding.message
+        for finding in report.findings
+    )
+
+
 def test_governance_audit_flags_expired_waiver(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / "docs/exceptions/active-waivers.yaml").write_text(
@@ -370,6 +443,85 @@ def test_governance_audit_flags_missing_pre_push_branch_protection(tmp_path) -> 
     assert any(finding.rule_id == "governance_gate" and "pre-push" in finding.message for finding in report.findings)
 
 
+def test_governance_audit_flags_missing_hook_python_wrapper(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/run-python.ps1").unlink()
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "run-python.ps1" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_pre_push_without_gate(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/pre-push").write_text(
+        "python -m scripts.research.governance.branch_protection pre-push\n"
+        "git lfs pre-push\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "pre-push hook missing governance gate" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_pre_push_without_lfs_handoff(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/pre-push").write_text(
+        "python -m scripts.research.governance.branch_protection pre-push\n"
+        "python -m scripts.research.governance gate\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "Git LFS handoff" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_missing_reference_transaction_hook(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/reference-transaction").unlink()
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "reference-transaction" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_reference_transaction_without_branch_protection(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/reference-transaction").write_text("exit 0\n", encoding="utf-8")
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "local branch protection" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_claude_without_pr_main_merge_rule(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / "CLAUDE.md").write_text(
+        "scripts.research.cli scripts.research.datasets scripts.research.variants "
+        "scripts.research.governance scripts.research.governance gate scripts.research.registry "
+        "docs/rules/index.md docs/adr/ pr-governance-review",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "禁止本地合并主干" in finding.message
+        for finding in report.findings
+    )
+
+
 def test_pre_push_branch_protection_blocks_main() -> None:
     violations = check_pre_push_input(
         "refs/heads/topic abc123 refs/heads/main def456\n",
@@ -392,3 +544,74 @@ def test_pre_push_branch_protection_allows_explicit_bypass() -> None:
         environ={"ALLOW_PROTECTED_BRANCH_PUSH": "1"},
     )
     assert violations == []
+
+
+def test_reference_transaction_branch_protection_blocks_main_update() -> None:
+    violations = check_reference_transaction_input(
+        "0" * 40 + " " + "1" * 40 + " refs/heads/main\n",
+        environ={},
+    )
+    assert violations == ["main"]
+
+
+def test_reference_transaction_branch_protection_allows_feature_update() -> None:
+    violations = check_reference_transaction_input(
+        "0" * 40 + " " + "1" * 40 + " refs/heads/fix/topic\n",
+        environ={},
+    )
+    assert violations == []
+
+
+def test_reference_transaction_branch_protection_requires_bypass_reason() -> None:
+    violations = check_reference_transaction_input(
+        "0" * 40 + " " + "1" * 40 + " refs/heads/main\n",
+        environ={"ALLOW_MAIN_REF_UPDATE": "1"},
+    )
+    assert violations == ["main"]
+
+
+def test_reference_transaction_branch_protection_allows_audited_bypass() -> None:
+    violations = check_reference_transaction_input(
+        "0" * 40 + " " + "1" * 40 + " refs/heads/main\n",
+        environ={
+            "ALLOW_MAIN_REF_UPDATE": "1",
+            "MAIN_REF_UPDATE_REASON": "sync origin/main after PR merge",
+        },
+    )
+    assert violations == []
+
+
+def test_pr_review_evidence_accepts_approved_agent_conclusion() -> None:
+    report = validate_pr_body(
+        "\n".join(
+            [
+                "## 评审治理 Agent 结论",
+                "",
+                "- Agent: `pr-governance-review`",
+                "- 结论: 通过",
+                "- 阻断问题: 无",
+                "- 关键证据:",
+                "  - `scripts.research.governance gate`",
+            ]
+        )
+    )
+    assert report.ok
+    assert report.errors == ()
+
+
+def test_pr_review_evidence_rejects_unexecuted_agent_conclusion() -> None:
+    report = validate_pr_body(
+        "\n".join(
+            [
+                "## 评审治理 Agent 结论",
+                "",
+                "- Agent: `pr-governance-review`",
+                "- 结论: 未执行",
+                "- 阻断问题: 未确认",
+                "- 关键证据:",
+                "  - `scripts.research.governance gate`",
+            ]
+        )
+    )
+    assert not report.ok
+    assert "结论 must be 通过" in report.errors

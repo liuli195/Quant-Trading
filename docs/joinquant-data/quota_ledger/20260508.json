@@ -1,0 +1,70 @@
+{
+  "date": "20260508",
+  "budget_minutes": 60.0,
+  "runs": [
+    {
+      "scenario_id": "s01-ma-long-scan",
+      "run_id": "20260508-0013-bt869bfbeb9021c76b30f76a90dd622f6a",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-08T00:14:44",
+      "actual_minutes": 1.3951666666666667
+    },
+    {
+      "scenario_id": "s01-ma-long-scan",
+      "run_id": "20260508-0014-bt9bb4faba66f1fb565ad2783fb33147c3",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-08T00:16:44",
+      "actual_minutes": 1.4065
+    },
+    {
+      "scenario_id": "s01-ma-long-scan",
+      "run_id": "20260508-0017-btcb52cf938ddf626e9fb6b767baeaf994",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-08T00:18:45",
+      "actual_minutes": 1.3835000000000002
+    },
+    {
+      "scenario_id": "s01-ma-long-scan",
+      "run_id": "20260508-0019-bt91c62e12c5cc7fd16dd43466b0b7d502",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-08T00:20:51",
+      "actual_minutes": 1.4696666666666667
+    },
+    {
+      "scenario_id": "s01-ma-long-scan",
+      "run_id": "20260508-0021-bt5ce8b6f11fe037f9780b2e051ed2979d",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-08T00:22:58",
+      "actual_minutes": 1.4648333333333334
+    },
+    {
+      "scenario_id": "s01-ma-long-scan",
+      "run_id": "20260508-0023-bt595479372f9c3d54da84c2f826894688",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-08T00:25:02",
+      "actual_minutes": 1.4438333333333333
+    },
+    {
+      "scenario_id": "s01-ma-long-scan",
+      "run_id": "20260508-0025-bt3365e3ec6040aa54f1a2b8462d0dcf49",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-08T00:27:07",
+      "actual_minutes": 1.4661666666666666
+    },
+    {
+      "scenario_id": "s01-ma-long-scan",
+      "run_id": "20260508-0027-btb2784ac85d31dd228ec8f7e4e36ce212",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-08T00:29:55",
+      "actual_minutes": 2.1021666666666667
+    }
+  ]
+}
