@@ -1,0 +1,77 @@
+{
+  "date": "20260517",
+  "budget_minutes": 60.0,
+  "runs": [
+    {
+      "scenario_id": "s01-momentum-extreme-worktree",
+      "run_id": "20260517-1611-bt9b67f2f9a034bb7d3d7a044cf3e0d4e9",
+      "estimated_minutes": 6.0,
+      "status": "failed",
+      "updated_at": "2026-05-17T16:13:00"
+    },
+    {
+      "scenario_id": "s01-momentum-extreme-worktree",
+      "run_id": "20260517-1624-btac3499f8d6b8bf0f5ee81147b6bd0da1",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-17T16:27:01",
+      "actual_minutes": 1.7169999999999999
+    },
+    {
+      "scenario_id": "s01-momentum-extreme-worktree",
+      "run_id": "20260517-1627-bteaf8bd75c426dcbb66b49eca35aeab1c",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-17T16:29:30",
+      "actual_minutes": 1.6159999999999999
+    },
+    {
+      "scenario_id": "s01-momentum-extreme-worktree",
+      "run_id": "20260517-1629-bt13a13155cdf761ba85550d3987fd22c4",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-17T16:31:52",
+      "actual_minutes": 1.5065
+    },
+    {
+      "scenario_id": "ab-momentum-strength-confirmation-baseline-linear-050",
+      "run_id": "20260517-1724-bt580e16e5a3f1bf99d197cea88889da1a",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-17T17:26:38",
+      "actual_minutes": 1.6391666666666667
+    },
+    {
+      "scenario_id": "ab-momentum-strength-confirmation-linear-045",
+      "run_id": "20260517-1726-bta2d755cf006abe1aac853e65803acf70",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-17T17:28:59",
+      "actual_minutes": 1.5
+    },
+    {
+      "scenario_id": "ab-momentum-strength-confirmation-linear-040",
+      "run_id": "20260517-1729-bt2405ba5c36f5774b229998b57b1d400e",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-17T17:31:20",
+      "actual_minutes": 1.5188333333333333
+    },
+    {
+      "scenario_id": "ab-momentum-strength-confirmation-linear-035",
+      "run_id": "20260517-1731-btbe2e525c63caec09d9355836a69f8676",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-17T17:33:46",
+      "actual_minutes": 1.5525
+    },
+    {
+      "scenario_id": "ab-momentum-strength-confirmation-linear-025",
+      "run_id": "20260517-1734-bt19cd602c6a77e0878d1aec4a60c9f3d8",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-17T17:36:12",
+      "actual_minutes": 1.5636666666666665
+    }
+  ]
+}

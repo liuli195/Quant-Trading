@@ -1,0 +1,70 @@
+{
+  "date": "20260518",
+  "budget_minutes": 60.0,
+  "runs": [
+    {
+      "scenario_id": "default-full-run",
+      "run_id": "20260518-1613-bt8a5fed74b68c674774fb511ccabb1978",
+      "estimated_minutes": 8.0,
+      "status": "completed",
+      "updated_at": "2026-05-18T16:16:26",
+      "actual_minutes": 1.6983333333333335
+    },
+    {
+      "scenario_id": "daily-frequency-full-run",
+      "run_id": "20260518-1650-bt623fbd8857ee042d2af47036ae25a61b",
+      "estimated_minutes": 25.0,
+      "status": "completed",
+      "updated_at": "2026-05-18T16:58:51",
+      "actual_minutes": 5.3453333333333335
+    },
+    {
+      "scenario_id": "s01-execution-timing-worktree",
+      "run_id": "20260518-2112-btad92e9f81ce38a61c4c2bc96f313e182",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-18T21:14:52",
+      "actual_minutes": 1.5270000000000001
+    },
+    {
+      "scenario_id": "s01-execution-timing-worktree",
+      "run_id": "20260518-2115-bte20c289b37c62e437e71790dd58e2293",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-18T21:17:36",
+      "actual_minutes": 1.7118333333333333
+    },
+    {
+      "scenario_id": "s01-execution-timing-worktree",
+      "run_id": "20260518-2117-bt5f9c36b58a30b48ee51e916b7fa0576c",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-18T21:20:03",
+      "actual_minutes": 1.5626666666666666
+    },
+    {
+      "scenario_id": "s01-execution-timing-worktree",
+      "run_id": "20260518-2125-bt17c8ba539ebb20f374b4c36fc322b718",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-18T21:28:02",
+      "actual_minutes": 1.611
+    },
+    {
+      "scenario_id": "s01-execution-timing-worktree",
+      "run_id": "20260518-2128-bt720a21be72ca92343877e3eed66a5644",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-18T21:30:41",
+      "actual_minutes": 1.627
+    },
+    {
+      "scenario_id": "s01-execution-timing-worktree",
+      "run_id": "20260518-2130-btd3a302dab6ce74013cb2c7dfd6785a62",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-18T21:33:19",
+      "actual_minutes": 1.6355
+    }
+  ]
+}

@@ -1,0 +1,262 @@
+{
+  "date": "20260507",
+  "budget_minutes": 60.0,
+  "runs": [
+    {
+      "scenario_id": "s01-smoke",
+      "run_id": "20260507-0232-bt177cbb8fb0bfcd76934a0e05b5dcdc66",
+      "estimated_minutes": 5.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T02:32:57",
+      "actual_minutes": 0.06966666666666667
+    },
+    {
+      "scenario_id": "s01-rsrs-scan",
+      "run_id": "20260507-0318-bt219e526c9941f131f8e08b9b5371359d",
+      "estimated_minutes": 15.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T03:20:30",
+      "actual_minutes": 1.5201666666666667
+    },
+    {
+      "scenario_id": "s01-rsrs-scan",
+      "run_id": "20260507-0320-bt92297a4c5b8e4bcc22b832c29ebc2e00",
+      "estimated_minutes": 15.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T03:22:30",
+      "actual_minutes": 1.3938333333333333
+    },
+    {
+      "scenario_id": "s01-rsrs-scan",
+      "run_id": "20260507-0322-bt377eeb5e8b9ccfb5545c41a042f8f7ae",
+      "estimated_minutes": 15.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T03:24:27",
+      "actual_minutes": 1.3475
+    },
+    {
+      "scenario_id": "s01-rsrs-scan",
+      "run_id": "20260507-0324-bt84435d141c06188fcfdf4031d1fb1c94",
+      "estimated_minutes": 15.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T03:26:22",
+      "actual_minutes": 1.3880000000000001
+    },
+    {
+      "scenario_id": "s01-rsrs-scan",
+      "run_id": "20260507-0326-bteb49d2cd9f2e0aa9814baa2177ac8eaf",
+      "estimated_minutes": 15.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T03:28:15",
+      "actual_minutes": 1.3501666666666667
+    },
+    {
+      "scenario_id": "s02-rsrs-scan-mid",
+      "run_id": "20260507-0341-bt235477ccecbc4cc4949bbccb467a0bde",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T03:43:14",
+      "actual_minutes": 1.3780000000000001
+    },
+    {
+      "scenario_id": "s02-rsrs-scan-mid",
+      "run_id": "20260507-0343-bt7c554142e9a47668c32aa3b07bc07f7b",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T03:45:12",
+      "actual_minutes": 1.3976666666666666
+    },
+    {
+      "scenario_id": "s01-topk-scan",
+      "run_id": "20260507-0424-btfa1fc77dd168c0112656f5b0be1ec58e",
+      "estimated_minutes": 40.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T04:26:05",
+      "actual_minutes": 1.3996666666666668
+    },
+    {
+      "scenario_id": "s01-topk-scan",
+      "run_id": "20260507-0426-bt2796484d1b98e2de0ad70978a41674b1",
+      "estimated_minutes": 40.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T04:28:08",
+      "actual_minutes": 1.3975
+    },
+    {
+      "scenario_id": "s01-rsrsmaxmultiplier-scan",
+      "run_id": "20260507-0509-btb4072def4c657fd2616313f5ac340f6e",
+      "estimated_minutes": 18.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T05:11:23",
+      "actual_minutes": 1.367
+    },
+    {
+      "scenario_id": "s01-rsrsmaxmultiplier-scan",
+      "run_id": "20260507-0511-bt1a8ceadc5305c5048c426f7b939afbf4",
+      "estimated_minutes": 18.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T05:13:17",
+      "actual_minutes": 1.3453333333333333
+    },
+    {
+      "scenario_id": "s01-rsrsmaxmultiplier-scan",
+      "run_id": "20260507-0513-bt736b00d6fe04534f93d136aba47fa12e",
+      "estimated_minutes": 18.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T05:15:12",
+      "actual_minutes": 1.4103333333333334
+    },
+    {
+      "scenario_id": "s01-rsrsmaxmultiplier-scan",
+      "run_id": "20260507-0515-bt4f67065375b4a5783bfec97fa834e419",
+      "estimated_minutes": 18.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T05:17:03",
+      "actual_minutes": 1.4138333333333333
+    },
+    {
+      "scenario_id": "s01-rsrsmaxmultiplier-scan",
+      "run_id": "20260507-0517-bt6513de156ac1567b74a94cff4805067f",
+      "estimated_minutes": 18.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T05:18:57",
+      "actual_minutes": 1.3695
+    },
+    {
+      "scenario_id": "s01-rsrsmaxmultiplier-scan",
+      "run_id": "20260507-0519-bt736ee37bca600a5d26239e618b0bb7a3",
+      "estimated_minutes": 18.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T05:20:54",
+      "actual_minutes": 1.3995
+    },
+    {
+      "scenario_id": "s01-targetvol-scan",
+      "run_id": "20260507-0547-btbac39e64cea76d5fdde490163382884b",
+      "estimated_minutes": 8.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T05:49:19",
+      "actual_minutes": 1.392
+    },
+    {
+      "scenario_id": "s01-targetvol-scan",
+      "run_id": "20260507-0549-bt4255148c5d49ac45b9de48544d417c9b",
+      "estimated_minutes": 8.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T05:51:12",
+      "actual_minutes": 1.3481666666666667
+    },
+    {
+      "scenario_id": "s01-targetvol-scan",
+      "run_id": "20260507-0551-btdb439ed38d3d77f4c341c37c0c7ab9f7",
+      "estimated_minutes": 8.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T05:53:09",
+      "actual_minutes": 1.3853333333333333
+    },
+    {
+      "scenario_id": "s01-targetvol-scan",
+      "run_id": "20260507-0553-bt3d27c9d6a5882f74acf951e2178620d5",
+      "estimated_minutes": 8.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T05:55:04",
+      "actual_minutes": 1.3543333333333334
+    },
+    {
+      "scenario_id": "s01-targetvol-scan",
+      "run_id": "20260507-0555-btb16d6354e885f42ae346a73fcbe52151",
+      "estimated_minutes": 8.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T05:56:58",
+      "actual_minutes": 1.3735
+    },
+    {
+      "scenario_id": "s02-targetvol-scan-low",
+      "run_id": "20260507-0604-bt663a4ac9f81deccf693195dab5dc1e65",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T06:06:25",
+      "actual_minutes": 1.41
+    },
+    {
+      "scenario_id": "s02-targetvol-scan-low",
+      "run_id": "20260507-0606-bt25f2f78931b8c57c8493d5521bcf8139",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T06:08:10",
+      "actual_minutes": 1.3401666666666665
+    },
+    {
+      "scenario_id": "s02-targetvol-scan-low",
+      "run_id": "20260507-0608-bt3987596a420b50632cf796de82c3e4bd",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T06:10:01",
+      "actual_minutes": 1.3641666666666665
+    },
+    {
+      "scenario_id": "s02-targetvol-scan-low",
+      "run_id": "20260507-0610-bt5965d85dd52516580bfbb4a4e5a31b35",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T06:11:54",
+      "actual_minutes": 1.3590000000000002
+    },
+    {
+      "scenario_id": "s03-targetvol-scan-ultralow",
+      "run_id": "20260507-0619-bt1f9e588c3a2891238a06e2013258886d",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T06:21:30",
+      "actual_minutes": 1.3266666666666667
+    },
+    {
+      "scenario_id": "s03-targetvol-scan-ultralow",
+      "run_id": "20260507-0621-bt56a49a22c9649620597d2b1c7223a8ee",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T06:23:21",
+      "actual_minutes": 1.3673333333333335
+    },
+    {
+      "scenario_id": "s03-targetvol-scan-ultralow",
+      "run_id": "20260507-0623-bt0ca77eab09b91548696834a6618c2118",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T06:25:08",
+      "actual_minutes": 1.4018333333333333
+    },
+    {
+      "scenario_id": "s03-targetvol-scan-ultralow",
+      "run_id": "20260507-0625-bt69dc0ff8b24797f86790f58edd568ace",
+      "estimated_minutes": 6.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T06:26:56",
+      "actual_minutes": 1.3995
+    },
+    {
+      "scenario_id": "s01-smoke",
+      "run_id": "20260507-2242-bt3f882f065d574703da0e74f180e2a24b",
+      "estimated_minutes": 5.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T22:42:47",
+      "actual_minutes": 0.07183333333333333
+    },
+    {
+      "scenario_id": "ab-hard-vs-soft-trend-gate-hard_gate_main",
+      "run_id": "20260507-2307-bt199f841dc26f34045a3391110073b7b2",
+      "estimated_minutes": 8.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T23:10:11",
+      "actual_minutes": 1.956
+    },
+    {
+      "scenario_id": "ab-hard-vs-soft-trend-gate-soft_gate_workspace",
+      "run_id": "20260507-2310-btfe11e835821438464da31fd4f4d995e1",
+      "estimated_minutes": 8.0,
+      "status": "completed",
+      "updated_at": "2026-05-07T23:12:14",
+      "actual_minutes": 1.4308333333333332
+    }
+  ]
+}
