@@ -337,7 +337,14 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
     ai_agents = root / "docs" / "rules" / "ai-agents.md"
     if ai_agents.is_file():
         text = ai_agents.read_text(encoding="utf-8", errors="ignore")
-        for token in ("所有进入主干的改动必须通过 PR", "禁止本地合并主干"):
+        for token in (
+            "所有进入主干的改动必须通过 PR",
+            "禁止本地合并主干",
+            "git fetch origin main",
+            "git merge --ff-only origin/main",
+            "git branch -d <branch>",
+            "git push origin --delete <branch>",
+        ):
             if token not in text:
                 findings.append(AuditFinding("governance_gate", "error", f"ai-agents.md missing {token}"))
 

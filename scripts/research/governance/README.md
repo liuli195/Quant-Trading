@@ -37,12 +37,30 @@ use the repository venv from hook context.
 `.githooks/reference-transaction` blocks local updates to `refs/heads/main` and
 `refs/heads/master`, including accidental local `git merge` or `git reset` into
 the protected branch. After a PR has already merged remotely, local main sync is
-an audited break-glass action and must set both environment variables:
+an audited sync action and must set both environment variables. The hook also
+checks that the new local protected-branch SHA equals `refs/remotes/origin/<branch>`
+and that the update is fast-forward:
 
 ```powershell
 $env:ALLOW_MAIN_REF_UPDATE="1"
 $env:MAIN_REF_UPDATE_REASON="sync origin/main after PR merge"
 ```
+
+PR 在 GitHub 云端合并后的本地收尾示例：
+
+```powershell
+git fetch origin main
+$env:ALLOW_MAIN_REF_UPDATE="1"
+$env:MAIN_REF_UPDATE_REASON="sync origin/main after PR #<n> merge"
+git switch main
+git merge --ff-only origin/main
+Remove-Item Env:\ALLOW_MAIN_REF_UPDATE -ErrorAction SilentlyContinue
+Remove-Item Env:\MAIN_REF_UPDATE_REASON -ErrorAction SilentlyContinue
+git branch -d <branch>
+git push origin --delete <branch>
+```
+
+其中 `<branch>` 是已合并 PR 的提交分支。如果 GitHub 已自动删除远端分支，只需确认远端分支不存在；不要用 force delete 掩盖未合并分支。
 
 GitHub `main` must also enforce the same policy with branch protection or a
 ruleset:
