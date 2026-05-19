@@ -113,7 +113,7 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     (root / ".githooks/run-python.sh").write_text(
-        ".venv/bin/python .venv/Scripts/python.exe \"$@\"\n",
+        "uname MINGW MSYS CYGWIN .venv/bin/python .venv/Scripts/python.exe \"$@\"\n",
         encoding="utf-8",
     )
     (root / ".githooks/run-python.ps1").write_text(
@@ -600,6 +600,28 @@ def test_governance_audit_flags_single_platform_hook_python_wrapper(tmp_path) ->
     assert not report.ok
     assert any(
         finding.rule_id == "governance_gate" and "run-python.sh missing .venv/bin/python" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_hook_python_wrapper_without_platform_branch(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/run-python.sh").write_text(
+        "\n".join(
+            [
+                'if [ -x ".venv/bin/python" ]; then',
+                '  exec ".venv/bin/python" "$@"',
+                'elif [ -x ".venv/Scripts/python.exe" ]; then',
+                '  exec ".venv/Scripts/python.exe" "$@"',
+                "fi",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "run-python.sh must choose venv by platform" in finding.message
         for finding in report.findings
     )
 

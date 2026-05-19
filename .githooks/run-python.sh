@@ -2,14 +2,22 @@
 set -eu
 
 REPO_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+OS_NAME=$(uname -s 2>/dev/null || printf '%s' unknown)
 
-if [ -x "$REPO_ROOT/.venv/bin/python" ]; then
-  PYTHON="$REPO_ROOT/.venv/bin/python"
-elif [ -x "$REPO_ROOT/.venv/Scripts/python.exe" ]; then
-  PYTHON="$REPO_ROOT/.venv/Scripts/python.exe"
-else
-  printf '%s\n' "Project virtualenv Python not found. Create or repair .venv before running hooks." >&2
-  printf '%s\n' "Expected: .venv/bin/python or .venv/Scripts/python.exe" >&2
+case "$OS_NAME" in
+  MINGW*|MSYS*|CYGWIN*)
+    PYTHON="$REPO_ROOT/.venv/Scripts/python.exe"
+    EXPECTED=".venv/Scripts/python.exe"
+    ;;
+  *)
+    PYTHON="$REPO_ROOT/.venv/bin/python"
+    EXPECTED=".venv/bin/python"
+    ;;
+esac
+
+if [ ! -x "$PYTHON" ]; then
+  printf '%s\n' "Project virtualenv Python not found for $OS_NAME. Create or repair .venv before running hooks." >&2
+  printf '%s\n' "Expected: $EXPECTED" >&2
   exit 127
 fi
 

@@ -222,6 +222,14 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         for token in (".venv/bin/python", ".venv/Scripts/python.exe", '"$@"'):
             if token not in text:
                 findings.append(AuditFinding("governance_gate", "error", f"run-python.sh missing {token}"))
+        if "uname" not in text or not any(token in text for token in ("MINGW", "MSYS", "CYGWIN")):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "run-python.sh must choose venv by platform",
+                )
+            )
         if re.search(r'PYTHON=["\']?python["\']?', text) or re.search(r"exec\s+python(\s|$)", text):
             findings.append(
                 AuditFinding(
