@@ -1,6 +1,8 @@
 name: Codex Review Monitor
 
 on:
+  pull_request:
+    types: [opened, synchronize, reopened]
   issue_comment:
     types: [created, edited, deleted]
   pull_request_review:
@@ -23,6 +25,7 @@ jobs:
   monitor:
     if: >-
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request' ||
       github.event_name == 'pull_request_review' ||
       github.event_name == 'pull_request_review_comment' ||
       (

@@ -269,6 +269,8 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
     else:
         text = monitor_workflow.read_text(encoding="utf-8", errors="ignore")
         for token in (
+            "pull_request",
+            "synchronize",
             "issue_comment",
             "pull_request_review",
             "pull_request_review_comment",

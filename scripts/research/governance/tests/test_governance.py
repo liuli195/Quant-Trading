@@ -136,7 +136,8 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     (root / ".github/workflows/codex-review-monitor.yml").write_text(
-        "on:\n  issue_comment:\n  pull_request_review:\n  pull_request_review_comment:\n"
+        "on:\n  pull_request:\n    types: [opened, synchronize, reopened]\n"
+        "  issue_comment:\n  pull_request_review:\n  pull_request_review_comment:\n"
         "permissions:\n  statuses: write\nsteps:\n"
         "  - run: python -m scripts.research.governance.codex_review_monitor --sync-comment --sync-status\n",
         encoding="utf-8",
