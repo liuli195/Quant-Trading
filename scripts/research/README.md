@@ -129,7 +129,7 @@
   --dataset-id <id> [--snapshot-id <id>]
 ```
 
-将完整 `backtest_runs/<run_id>` 登记为不可变快照。要求存在 `summary_metrics.json`、`tabs_raw/daily_returns.md`、`tabs_raw/audit_log.jsonl`、`detail_api_export.json` 或 `api_export.json`。输出 `raw/*.gz`、`data/*.parquet` 和 `views/` 摘要，保留原始目录副本用于追溯。
+将完整 `backtest_runs/<run_id>` 登记为不可变快照。要求存在 `summary_metrics.json`、`tabs_raw/daily_returns.md`、`tabs_raw/audit_log.jsonl`、`detail_api_export.json` 或 `api_export.json`。输出 `raw/*.gz`、`data/data.parquet`、`data/audit_events.parquet` 和 `views/` 轻量摘要；使用 `--compact-source` 时，原始 run 中的大文件会替换成数据中心 pointer。
 
 `scripts.tools.jq_automation run/fetch/batch/ab run` 完成抓取后默认调用该 importer，把新 run 写入 `research_datasets/<strategy>_backtest_runs/<run_id>`。需要临时跳过时使用 `--no-dataset-register`。
 

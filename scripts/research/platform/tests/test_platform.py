@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from scripts.research import datasets as datasets_cli
 from scripts.research.platform.contracts import FidelityLevel, validate_baseline_exports
 from scripts.research.platform.batch_executor import execute_batch
 from scripts.research.platform.benchmark_runner import run_smoke_benchmark
@@ -24,6 +25,7 @@ from scripts.research.platform.datasets import (
     import_backtest_run,
     import_joinquant_price_json,
     load_price_frames,
+    migrate_backtest_runs_to_datasets,
 )
 from scripts.research.platform.docs_index import DocsIndexer, EvidenceLinker, ReportRegistry
 from scripts.research.platform.engine import create_project, load_project, promote_run, resume_run, run_project
@@ -46,6 +48,8 @@ from scripts.research.platform.strategy_variants import (
 )
 from scripts.research.platform.workflows import WorkflowTemplateError, load_workflow_templates
 from scripts.research.research_core.metrics import MetricToolkit
+from scripts.research.research_core.metrics import parse_cumulative_returns_md
+from scripts.research.research_core.audit import load_rebalance_events
 from scripts.research.research_core.replay import ReplayResult
 from scripts.research.research_core.robustness import RobustnessToolkit
 from scripts.research.etf_window_research.spec import ETF_CODES
@@ -181,10 +185,11 @@ def test_backtest_run_importer_preserves_run_and_views(tmp_path) -> None:
         snapshot_id="snap-1",
     )
     loader = DataViewLoader(snapshot)
-    assert (snapshot.root / "raw" / "backtest_run" / "summary_metrics.json").is_file()
+    assert (snapshot.root / "raw" / "api_export.json.gz").is_file()
+    assert not (snapshot.root / "raw" / "backtest_run").exists()
     assert (snapshot.root / "raw" / "audit_log.jsonl.gz").is_file()
     assert (snapshot.root / "data" / "data.parquet").is_file()
-    assert (snapshot.root / "data" / "daily_returns.parquet").is_file()
+    assert not (snapshot.root / "data" / "daily_returns.parquet").exists()
     assert (snapshot.root / "data" / "audit_events.parquet").is_file()
     assert loader.summary_metrics()["sharpe"] == 1.2
     assert loader.daily_returns()["cumulative_return"].tolist() == [0.01, 0.03]
@@ -196,6 +201,156 @@ def test_backtest_run_importer_preserves_run_and_views(tmp_path) -> None:
     assert catalog[0]["source_kind"] == "joinquant_backtest_run"
     assert catalog[0]["owner"] == "research-platform"
     assert DatasetRegistry(tmp_path / "research_datasets").validate() == []
+
+
+def test_backtest_run_importer_compresses_large_sources_and_keeps_views(tmp_path) -> None:
+    run_dir = tmp_path / "strategies" / "demo" / "backtest_runs" / "run-1"
+    _write_backtest_run(run_dir)
+    (run_dir / "detail_api_export.json").write_text(json.dumps({"detail": ["x"] * 200}), encoding="utf-8")
+
+    snapshot = import_backtest_run(
+        run_dir,
+        dataset_id="demo_run",
+        snapshot_id="snap-1",
+        datasets_root=tmp_path / "research_datasets",
+    )
+    loader = DataViewLoader(snapshot)
+
+    assert not (snapshot.root / "raw" / "backtest_run").exists()
+    assert (snapshot.root / "raw" / "api_export.json.gz").is_file()
+    assert (snapshot.root / "raw" / "detail_api_export.json.gz").is_file()
+    assert (snapshot.root / "raw" / "audit_log.jsonl.gz").is_file()
+    assert snapshot.metadata["files"]["api_export_source"] == "raw/api_export.json.gz"
+    assert snapshot.metadata["files"]["detail_api_export_source"] == "raw/detail_api_export.json.gz"
+    assert snapshot.metadata["files"]["audit_log_source"] == "raw/audit_log.jsonl.gz"
+    assert loader.summary_metrics()["sharpe"] == 1.2
+    assert loader.daily_returns()["cumulative_return"].tolist() == [0.01, 0.03]
+    assert loader.audit_events()[0]["event"] == "run_start"
+
+
+def test_backtest_run_importer_compacts_three_redundancy_classes(tmp_path) -> None:
+    run_dir = tmp_path / "strategies" / "demo" / "backtest_runs" / "run-1"
+    _write_backtest_run(run_dir)
+    tabs = run_dir / "tabs_raw"
+    (tabs / "positioninfo.md").write_text("| date | code | value |\n| 2026-01-01 | 510300.XSHG | 1 |\n", encoding="utf-8")
+    (tabs / "transactioninfo.md").write_text("| date | code | value |\n| 2026-01-01 | 510300.XSHG | 1 |\n", encoding="utf-8")
+    (tabs / "balances.md").write_text("| date | total |\n| 2026-01-01 | 100000 |\n", encoding="utf-8")
+    (tabs / "period_risks.md").write_text("| period | sharpe |\n| all | 1.2 |\n", encoding="utf-8")
+    (tabs / "logs.md").write_text("2026-01-01 hello\n", encoding="utf-8")
+
+    snapshot = import_backtest_run(
+        run_dir,
+        dataset_id="demo_run",
+        snapshot_id="snap-1",
+        datasets_root=tmp_path / "research_datasets",
+    )
+    loader = DataViewLoader(snapshot)
+
+    assert (snapshot.root / "raw" / "summary_metrics.json.gz").is_file()
+    assert (snapshot.root / "raw" / "daily_returns.md.gz").is_file()
+    assert (snapshot.root / "raw" / "positioninfo.md.gz").is_file()
+    assert not (snapshot.root / "raw" / "summary_metrics.json").exists()
+    assert not (snapshot.root / "raw" / "daily_returns.md").exists()
+    assert not (snapshot.root / "data" / "daily_returns.parquet").exists()
+    assert not (snapshot.root / "views" / "daily_returns.csv").exists()
+    assert snapshot.metadata["files"]["daily_returns"] == "data/data.parquet"
+    assert snapshot.metadata["files"]["canonical"] == "data/data.parquet"
+    assert "daily_returns_sample" not in snapshot.metadata["files"]
+    assert snapshot.metadata["files"]["summary_metrics"] == "raw/summary_metrics.json.gz"
+    assert snapshot.metadata["files"]["positioninfo_source"] == "raw/positioninfo.md.gz"
+    assert snapshot.metadata["raw_file_integrity"]["tabs_raw/positioninfo.md"]["dataset_file"] == "raw/positioninfo.md.gz"
+    assert loader.summary_metrics()["sharpe"] == 1.2
+    assert "510300.XSHG" in loader.raw_text("positioninfo_source")
+    assert DatasetRegistry(tmp_path / "research_datasets").validate() == []
+
+
+def test_backtest_run_importer_accepts_utf8_bom_summary_metrics(tmp_path) -> None:
+    run_dir = tmp_path / "strategies" / "demo" / "backtest_runs" / "run-1"
+    _write_backtest_run(run_dir)
+    (run_dir / "summary_metrics.json").write_bytes(
+        b"\xef\xbb\xbf" + json.dumps({"sharpe": 1.2}).encode("utf-8")
+    )
+
+    snapshot = import_backtest_run(
+        run_dir,
+        dataset_id="demo_run",
+        snapshot_id="snap-1",
+        datasets_root=tmp_path / "research_datasets",
+    )
+
+    assert DataViewLoader(snapshot).summary_metrics()["sharpe"] == 1.2
+
+
+def test_migrate_backtest_runs_to_datasets_compacts_source_run(tmp_path) -> None:
+    run_dir = tmp_path / "strategies" / "demo" / "backtest_runs" / "run-1"
+    _write_backtest_run(run_dir)
+    (run_dir / "detail_api_export.json").write_text(json.dumps({"detail": ["x"] * 200}), encoding="utf-8")
+
+    results = migrate_backtest_runs_to_datasets(
+        strategies_root=tmp_path / "strategies",
+        datasets_root=tmp_path / "research_datasets",
+        compact_source=True,
+    )
+
+    assert len(results) == 1
+    assert results[0].dataset_id == "demo_backtest_runs"
+    assert results[0].snapshot_id == "run-1"
+    assert set(results[0].compacted_files) == {
+        "api_export.json",
+        "detail_api_export.json",
+        "summary_metrics.json",
+        "tabs_raw/audit_log.jsonl",
+        "tabs_raw/daily_returns.md",
+    }
+    api_pointer = json.loads((run_dir / "api_export.json").read_text(encoding="utf-8"))
+    audit_pointer = json.loads((run_dir / "tabs_raw" / "audit_log.jsonl").read_text(encoding="utf-8"))
+    returns_pointer = json.loads((run_dir / "tabs_raw" / "daily_returns.md").read_text(encoding="utf-8"))
+    summary_pointer = json.loads((run_dir / "summary_metrics.json").read_text(encoding="utf-8"))
+    assert api_pointer["kind"] == "data_center_pointer"
+    assert api_pointer["dataset_file"] == "raw/api_export.json.gz"
+    assert "compressed_sha256" in api_pointer
+    assert audit_pointer["kind"] == "data_center_pointer"
+    assert audit_pointer["dataset_file"] == "raw/audit_log.jsonl.gz"
+    assert returns_pointer["dataset_file"] == "raw/daily_returns.md.gz"
+    assert summary_pointer["dataset_file"] == "raw/summary_metrics.json.gz"
+    assert parse_cumulative_returns_md(run_dir / "tabs_raw" / "daily_returns.md").iloc[0] == pytest.approx(0.01)
+    assert load_rebalance_events(run_dir / "tabs_raw" / "audit_log.jsonl")[0]["event"] == "rebalance_signals"
+    assert (tmp_path / "research_datasets" / "demo_backtest_runs" / "run-1" / "dataset.json").is_file()
+
+
+def test_datasets_cli_migrates_backtest_runs(tmp_path) -> None:
+    run_dir = tmp_path / "strategies" / "demo" / "backtest_runs" / "run-1"
+    _write_backtest_run(run_dir)
+
+    exit_code = datasets_cli.main(
+        [
+            "migrate-backtest-runs",
+            "--strategies-root",
+            str(tmp_path / "strategies"),
+            "--datasets-root",
+            str(tmp_path / "research_datasets"),
+            "--compact-source",
+        ]
+    )
+
+    assert exit_code == 0
+    assert (tmp_path / "research_datasets" / "demo_backtest_runs" / "run-1" / "dataset.json").is_file()
+
+
+def test_migrate_backtest_runs_regenerates_incomplete_snapshot_dir(tmp_path) -> None:
+    run_dir = tmp_path / "strategies" / "demo" / "backtest_runs" / "run-1"
+    _write_backtest_run(run_dir)
+    partial = tmp_path / "research_datasets" / "demo_backtest_runs" / "run-1"
+    (partial / "raw").mkdir(parents=True)
+    (partial / "raw" / "source.json.gz").write_bytes(b"incomplete")
+
+    results = migrate_backtest_runs_to_datasets(
+        strategies_root=tmp_path / "strategies",
+        datasets_root=tmp_path / "research_datasets",
+    )
+
+    assert results[0].imported is True
+    assert (partial / "dataset.json").is_file()
 
 
 def test_backtest_run_importer_rejects_missing_required_files_and_duplicate_snapshot(tmp_path) -> None:

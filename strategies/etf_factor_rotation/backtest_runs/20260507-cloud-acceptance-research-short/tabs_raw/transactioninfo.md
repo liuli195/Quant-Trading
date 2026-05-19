@@ -1,11 +1,11 @@
-# 交易详情
-
-- 订单记录：5
-
-| 时间 | 标的 | 方向 | 开平 | 数量 | 成交量 | 价格 | 手续费 | 状态 |
-|------|------|------|------|------|--------|------|--------|------|
-| 2026-03-02 | 人工智能ETF易方达 | long | open | 26400 | 26400 | 1.584 | 4.18 | done |
-| 2026-03-09 | 人工智能ETF易方达 | long | close | 3700 | 3700 | 1.523 | 0.56 | done |
-| 2026-03-16 | 人工智能ETF易方达 | long | close | 22700 | 22700 | 1.517 | 3.44 | done |
-| 2026-03-16 | 黄金ETF | long | open | 2800 | 2800 | 10.63 | 2.98 | done |
-| 2026-03-30 | 黄金ETF | long | close | 2800 | 2800 | 9.496 | 2.66 | done |
+{
+  "kind": "data_center_pointer",
+  "dataset_id": "etf_factor_rotation_backtest_runs",
+  "snapshot_id": "20260507-cloud-acceptance-research-short",
+  "dataset_snapshot": "research_datasets/etf_factor_rotation_backtest_runs/20260507-cloud-acceptance-research-short",
+  "dataset_file": "raw/transactioninfo.md.gz",
+  "original_path": "tabs_raw/transactioninfo.md",
+  "original_sha256": "673ba1dfc9f0f7564822d41a6127c4b321d930b0da5dc01dd2702818efe63820",
+  "compressed_sha256": "4e60767efd4b087c3ae2db1b41e143fd1a16b56859d7e4ce4384a564eb961a24",
+  "original_bytes": 642
+}

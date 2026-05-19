@@ -1,23 +1,11 @@
-﻿{
-    "策略波动率":  "0.149",
-    "胜率":  "0.934",
-    "最大回撤":  "16.92%",
-    "超额收益":  "135.32%",
-    "超额收益最大回撤":  "18.11%",
-    "基准收益":  "24.17%",
-    "超额收益夏普比率":  "1.687",
-    "盈利次数":  "114",
-    "索提诺比率":  "2.991",
-    "策略收益":  "192.19%",
-    "策略年化收益":  "39.57%",
-    "信息比率":  "2.075",
-    "基准波动率":  "0.169",
-    "亏损次数":  "8",
-    "日胜率":  "0.572",
-    "日均超额收益":  "0.11%",
-    "盈亏比":  "169.597",
-    "最大回撤区间":  "2026/01/29,2026/03/23",
-    "阿尔法":  "0.342",
-    "贝塔":  "0.459",
-    "夏普比率":  "2.380"
+{
+  "kind": "data_center_pointer",
+  "dataset_id": "etf_dynamic_rebalance_backtest_runs",
+  "snapshot_id": "etf_threshold_015_20260503_215600_9b64a0ee",
+  "dataset_snapshot": "research_datasets/etf_dynamic_rebalance_backtest_runs/etf_threshold_015_20260503_215600_9b64a0ee",
+  "dataset_file": "raw/summary_metrics.json.gz",
+  "original_path": "summary_metrics.json",
+  "original_sha256": "c8592cfb636630c338abe3a9c610072d3c0005c5224c76d97625da97a96037f6",
+  "compressed_sha256": "d6cf91a6927e188613fdaaf75b172a7554fc897f83556fbc39c878ded2cf273d",
+  "original_bytes": 709
 }

@@ -27,7 +27,10 @@
 .\.venv\Scripts\python.exe -m scripts.research.cli init|run|promote|resume|handoff-cloud|status
 
 # 数据中心
-.\.venv\Scripts\python.exe -m scripts.research.datasets import-price-json|import-audit-log|import-backtest-run|inspect
+.\.venv\Scripts\python.exe -m scripts.research.datasets import-price-json|import-audit-log|import-backtest-run|migrate-backtest-runs|inspect
+
+# 批量迁移并瘦身历史回测 run
+.\.venv\Scripts\python.exe -m scripts.research.datasets migrate-backtest-runs --compact-source
 
 # 文档报告索引
 .\.venv\Scripts\python.exe -m scripts.research.docs index

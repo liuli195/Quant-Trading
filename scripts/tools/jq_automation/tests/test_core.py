@@ -445,6 +445,16 @@ class CoreTests(unittest.TestCase):
             self.assertIsNotNone(snapshot)
             self.assertIsNone(duplicate)
             self.assertTrue((root / "research_datasets" / "demo_backtest_runs" / "r1" / "dataset.json").is_file())
+            api_pointer = json.loads((run_dir / "api_export.json").read_text(encoding="utf-8"))
+            audit_pointer = json.loads((tabs / "audit_log.jsonl").read_text(encoding="utf-8"))
+            summary_pointer = json.loads((run_dir / "summary_metrics.json").read_text(encoding="utf-8"))
+            returns_pointer = json.loads((tabs / "daily_returns.md").read_text(encoding="utf-8"))
+            self.assertEqual(api_pointer["kind"], "data_center_pointer")
+            self.assertEqual(api_pointer["dataset_file"], "raw/api_export.json.gz")
+            self.assertEqual(audit_pointer["kind"], "data_center_pointer")
+            self.assertEqual(audit_pointer["dataset_file"], "raw/audit_log.jsonl.gz")
+            self.assertEqual(summary_pointer["dataset_file"], "raw/summary_metrics.json.gz")
+            self.assertEqual(returns_pointer["dataset_file"], "raw/daily_returns.md.gz")
 
 
     def test_bundle_options_includes_frequency_and_py_version(self) -> None:
