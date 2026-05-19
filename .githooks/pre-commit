@@ -1,5 +1,5 @@
 #!/bin/sh
 set -eu
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".githooks/run-python.ps1" \
+sh .githooks/run-python.sh \
   -m scripts.research.governance gate

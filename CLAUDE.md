@@ -12,7 +12,7 @@
 - AI助手禁止在主分支(main) 上进行任何修改和编辑操作，必须切专用分支进行修改。
 - 所有进入主干的改动必须通过 PR；“合并到主干”默认表示准备或创建 PR，不表示执行本地 `git merge`。
 - 禁止本地合并主干：AI 助手不得执行 `git switch main` 后再 `git merge` / `git reset` 到功能分支提交。
-- 本地 Python 命令必须通过 `.\.venv\Scripts\python.exe`，不使用系统 Python。
+- Windows 本地 Python 命令必须通过 `.\.venv\Scripts\python.exe`，Codex Cloud/Linux 使用 `.venv/bin/python`，hook/自动化入口统一通过 `.githooks/run-python.sh` 选择项目虚拟环境；不使用系统 Python。
 - 本地 Git hook 必须启用：`git config core.hooksPath .githooks`，确保提交、推送和本地主干 ref 更新触发治理门禁。
 - Markdown 内部文件引用采用双轨格式（可点击路径 + `pathref` 注释），确保机器可校验。
 - PR 合并前采用官方 Codex Code Review；无论代码由 Claude、Codex、Cursor、Copilot 或人工提交，都必须按 [review-guidelines.md](docs/rules/review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md --> 评审。

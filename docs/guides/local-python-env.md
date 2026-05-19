@@ -5,13 +5,15 @@
 ## 推荐解释器
 
 - Windows PowerShell：`.\.venv\Scripts\python.exe`
+- Codex Cloud / Linux shell：`.venv/bin/python`
+- Git hook / 自动化入口：`.githooks/run-python.sh`
 - 不建议直接使用系统 `python`，因为本机可能同时存在多个 Python 发行版，且默认 `python` 不一定带有 `pip`。
 - Codex/自动化执行本项目 Python 命令时，默认应请求/使用提权执行项目虚拟环境；不提权可能无法访问 `.venv` 或正确解析项目目录。
 
 ## 当前约定
 
 - 本地策略检查：使用 `.venv` 中的 Python 3.12
-- 自动化代理执行：优先提权调用 `.venv\Scripts\python.exe` 或 `.venv\Scripts\pytest.exe`，避免退回系统 Python
+- 自动化代理执行：Windows 本地优先提权调用 `.venv\Scripts\python.exe`；Codex Cloud/Linux 使用 `.venv/bin/python`；hook 通过 `.githooks/run-python.sh` 自动选择解释器，避免退回系统 Python
 - JoinQuant 云端运行：仍以聚宽环境为准，本地仅做编写、静态检查、单元测试和文档分析
 - `jqlib` 不作为本地依赖安装要求；相关测试通过 stub 或 monkeypatch 隔离
 
@@ -28,6 +30,16 @@ py -3.12 -m venv .venv
 
 ```powershell
 py -3.12 -m venv --upgrade .venv
+```
+
+Codex Cloud 可在 setup script 中使用：
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements.txt
+chmod +x .githooks/pre-commit .githooks/pre-push .githooks/reference-transaction .githooks/run-python.sh
+git config core.hooksPath .githooks
 ```
 
 ## 常用命令

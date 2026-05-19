@@ -109,7 +109,11 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     (root / ".githooks/pre-commit").write_text(
-        "python -m scripts.research.governance gate\n",
+        "sh .githooks/run-python.sh -m scripts.research.governance gate\n",
+        encoding="utf-8",
+    )
+    (root / ".githooks/run-python.sh").write_text(
+        ".venv/bin/python .venv/Scripts/python.exe \"$@\"\n",
         encoding="utf-8",
     )
     (root / ".githooks/run-python.ps1").write_text(
@@ -119,8 +123,8 @@ def _write_minimal_repo(root: Path) -> None:
     (root / ".githooks/pre-push").write_text(
         "\n".join(
             [
-                "python -m scripts.research.governance.branch_protection pre-push",
-                "python -m scripts.research.governance gate",
+                "sh .githooks/run-python.sh -m scripts.research.governance.branch_protection pre-push",
+                "sh .githooks/run-python.sh -m scripts.research.governance gate",
                 "git lfs pre-push",
             ]
         ),
@@ -131,7 +135,7 @@ def _write_minimal_repo(root: Path) -> None:
             [
                 "STATE=${1:-}",
                 'if [ "$STATE" = "prepared" ]; then',
-                "python -m scripts.research.governance.branch_protection reference-transaction",
+                "sh .githooks/run-python.sh -m scripts.research.governance.branch_protection reference-transaction",
                 "fi",
             ]
         ),
@@ -575,13 +579,41 @@ def test_governance_audit_flags_missing_pre_push_branch_protection(tmp_path) -> 
     assert any(finding.rule_id == "governance_gate" and "pre-push" in finding.message for finding in report.findings)
 
 
-def test_governance_audit_flags_missing_hook_python_wrapper(tmp_path) -> None:
+def test_governance_audit_flags_missing_posix_hook_python_wrapper(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
-    (tmp_path / ".githooks/run-python.ps1").unlink()
+    (tmp_path / ".githooks/run-python.sh").unlink()
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "governance_gate" and "run-python.ps1" in finding.message
+        finding.rule_id == "governance_gate" and "run-python.sh" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_single_platform_hook_python_wrapper(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/run-python.sh").write_text(
+        ".venv/Scripts/python.exe \"$@\"\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "run-python.sh missing .venv/bin/python" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_hooks_that_require_powershell(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/pre-commit").write_text(
+        "powershell.exe -NoProfile -File .githooks/run-python.ps1 -m scripts.research.governance gate\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "pre-commit hook must use run-python.sh" in finding.message
         for finding in report.findings
     )
 

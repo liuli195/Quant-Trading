@@ -214,6 +214,15 @@ def _audit_review_guidelines(root: Path) -> list[AuditFinding]:
 
 def _audit_governance_gate(root: Path) -> list[AuditFinding]:
     findings: list[AuditFinding] = []
+    hook_python_sh = root / ".githooks" / "run-python.sh"
+    if not hook_python_sh.is_file():
+        findings.append(AuditFinding("governance_gate", "error", ".githooks/run-python.sh missing"))
+    else:
+        text = hook_python_sh.read_text(encoding="utf-8", errors="ignore")
+        for token in (".venv/bin/python", ".venv/Scripts/python.exe", '"$@"'):
+            if token not in text:
+                findings.append(AuditFinding("governance_gate", "error", f"run-python.sh missing {token}"))
+
     hook_python = root / ".githooks" / "run-python.ps1"
     if not hook_python.is_file():
         findings.append(AuditFinding("governance_gate", "error", ".githooks/run-python.ps1 missing"))
@@ -225,6 +234,8 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         text = hook.read_text(encoding="utf-8", errors="ignore")
         if "scripts.research.governance gate" not in text:
             findings.append(AuditFinding("governance_gate", "error", "pre-commit hook missing governance gate"))
+        if "powershell.exe" in text or ".githooks/run-python.sh" not in text:
+            findings.append(AuditFinding("governance_gate", "error", "pre-commit hook must use run-python.sh"))
 
     pre_push = root / ".githooks" / "pre-push"
     if not pre_push.is_file():
@@ -237,6 +248,8 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             findings.append(AuditFinding("governance_gate", "error", "pre-push hook missing governance gate"))
         if "git lfs pre-push" not in text:
             findings.append(AuditFinding("governance_gate", "error", "pre-push hook missing Git LFS handoff"))
+        if "powershell.exe" in text or ".githooks/run-python.sh" not in text:
+            findings.append(AuditFinding("governance_gate", "error", "pre-push hook must use run-python.sh"))
 
     reference_transaction = root / ".githooks" / "reference-transaction"
     if not reference_transaction.is_file():
@@ -258,6 +271,10 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "error",
                     "reference-transaction hook must validate the prepared phase",
                 )
+            )
+        if "powershell.exe" in text or ".githooks/run-python.sh" not in text:
+            findings.append(
+                AuditFinding("governance_gate", "error", "reference-transaction hook must use run-python.sh")
             )
 
     workflow = root / ".github" / "workflows" / "research-governance.yml"

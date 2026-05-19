@@ -19,8 +19,9 @@ CLAUDE.md 包含：目录结构约定、工具入口与命令、策略代码规�
 
 ### Python 环境
 
-- 本地 Python 命令必须通过 `.\.venv\Scripts\python.exe`，不使用系统 Python。
-- **Codex 环境中须提权执行**，否则可能无法访问 `.venv` 或解析项目目录，导致误用系统 Python。
+- Windows 本地 Python 命令必须通过 `.\.venv\Scripts\python.exe`，Codex Cloud/Linux 使用 `.venv/bin/python`，不使用系统 Python。
+- Git hook 和自动化入口统一通过 `.githooks/run-python.sh` 选择当前平台的项目虚拟环境。
+- **Codex 本地环境中须提权执行**，否则可能无法访问 `.venv` 或解析项目目录，导致误用系统 Python。
 
 ### 输出语言
 

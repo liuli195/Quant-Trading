@@ -31,8 +31,10 @@ git lfs pre-push
 
 It blocks direct pushes to `main` / `master` when remote rulesets are unavailable,
 reruns the full governance gate before push, and preserves the Git LFS hook.
-The shell hooks call `.githooks/run-python.ps1` so Git for Windows can reliably
-use the repository venv from hook context.
+The shell hooks call `.githooks/run-python.sh`, which chooses `.venv/bin/python`
+on Codex Cloud/Linux and `.venv/Scripts/python.exe` on Windows. Keep
+`.githooks/run-python.ps1` as the direct PowerShell helper for local Windows
+commands.
 
 `.githooks/reference-transaction` blocks local updates to `refs/heads/main` and
 `refs/heads/master`, including accidental local `git merge` or `git reset` into

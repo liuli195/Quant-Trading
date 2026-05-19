@@ -2,7 +2,7 @@
 
 ## MUST
 
-- 本地 Python 命令必须通过 `.\.venv\Scripts\python.exe`。
+- Python 命令必须使用项目虚拟环境：Windows 本地用 `.\.venv\Scripts\python.exe`，Codex Cloud/Linux 用 `.venv/bin/python`，hook/自动化入口用 `.githooks/run-python.sh`。
 - 策略代码仅在聚宽云端运行，本地不假装完整复现聚宽交易环境。
 - 策略参数集中定义，避免魔法数字。
 - `initialize` 负责集中配置与注册，`handle_data` 或 `run_daily` 实现调仓。

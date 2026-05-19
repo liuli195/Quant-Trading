@@ -8,6 +8,7 @@
 - `scripts.research.governance gate` 是本地 hook 和 CI 的强门禁入口。
 - PR 必须包含官方 Codex Code Review 的通过结论，CI 必须用 `pr-review-evidence` job 校验该结论，并用 `Codex Review Monitor` status 监听当前 head 的 Codex 评审状态。
 - 本地仓库必须设置 `git config core.hooksPath .githooks`，不能只提交 hook 文件。
+- `.githooks/pre-commit`、`.githooks/pre-push` 和 `.githooks/reference-transaction` 必须通过 `.githooks/run-python.sh` 调用项目虚拟环境，不能硬编码 `powershell.exe` 或单一平台解释器路径。
 - `.githooks/pre-push` 必须调用 `scripts.research.governance.branch_protection pre-push` 和 `scripts.research.governance gate`，并保留 Git LFS pre-push 转交。
 - 在远端 rulesets 不生效的私有仓库中，`.githooks/pre-push` 必须本地阻断推送到 `main` / `master`。
 - `.githooks/reference-transaction` 必须本地阻断 `refs/heads/main` / `refs/heads/master` 更新，防止绕过 PR 的本地 `git merge`、`git reset` 或分支指针改写。
