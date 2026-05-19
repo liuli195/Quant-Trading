@@ -5,7 +5,11 @@ from pathlib import Path
 
 from scripts.research.governance.branch_protection import check_pre_push_input, check_reference_transaction_input
 from scripts.research.governance.codex_review_monitor import build_monitor_report, render_monitor_comment
-from scripts.research.governance.pr_review_evidence import _parse_next_link, validate_pr_body
+from scripts.research.governance.pr_review_evidence import (
+    BLOCKING_CODEX_FINDING_PATTERN,
+    _parse_next_link,
+    validate_pr_body,
+)
 from scripts.research.governance.rules import run_audit
 from scripts.research.registry import default_tool_registry
 
@@ -138,6 +142,7 @@ def _write_minimal_repo(root: Path) -> None:
     (root / ".github/workflows/codex-review-monitor.yml").write_text(
         "on:\n  pull_request:\n    types: [opened, synchronize, reopened]\n"
         "  issue_comment:\n  pull_request_review:\n  pull_request_review_comment:\n"
+        "    types: [created, edited, deleted]\n"
         "permissions:\n  statuses: write\nsteps:\n"
         "  - run: python -m scripts.research.governance.codex_review_monitor --sync-comment --sync-status\n",
         encoding="utf-8",
@@ -438,6 +443,25 @@ def test_governance_audit_flags_governance_docs_without_required_monitor_status(
     assert not report.ok
     assert any(
         finding.rule_id == "governance_gate" and "Codex Review Monitor" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_monitor_without_inline_comment_deleted_event(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".github/workflows/codex-review-monitor.yml").write_text(
+        "on:\n  pull_request:\n    types: [opened, synchronize, reopened]\n"
+        "  issue_comment:\n    types: [created, edited, deleted]\n"
+        "  pull_request_review:\n"
+        "  pull_request_review_comment:\n    types: [created, edited]\n"
+        "permissions:\n  statuses: write\nsteps:\n"
+        "  - run: python -m scripts.research.governance.codex_review_monitor --sync-comment --sync-status\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "codex_review_monitor" and "deleted inline review comments" in finding.message
         for finding in report.findings
     )
 
@@ -1050,6 +1074,34 @@ def test_codex_review_monitor_reports_waiting_for_codex_after_trigger() -> None:
     assert "等待 Codex review" in render_monitor_comment(report)
 
 
+def test_codex_review_monitor_rejects_trigger_before_current_head() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        head_created_at="2026-05-19T01:00:00Z",
+        issue_comments=[
+            {
+                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "created_at": "2026-05-19T00:59:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T01:01:00Z",
+                "body": "### Codex Review\n\nNo blocking findings.",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+    assert report.status == "waiting_for_trigger"
+    assert not report.trigger_found
+
+
 def test_codex_review_monitor_reports_passed_current_head_review() -> None:
     head_sha = "0" * 40
     report = build_monitor_report(
@@ -1101,6 +1153,40 @@ def test_codex_review_monitor_reports_blocked_on_p1_inline_comment() -> None:
     )
     assert report.status == "blocked"
     assert report.blocking_findings == 1
+
+
+def test_codex_review_priority_patterns_match_plain_text_titles() -> None:
+    assert BLOCKING_CODEX_FINDING_PATTERN.search("[P1] blocking finding")
+    assert BLOCKING_CODEX_FINDING_PATTERN.search("**[P0] blocking finding**")
+
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        issue_comments=[
+            {
+                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "created_at": "2026-05-19T01:00:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T01:01:00Z",
+                "body": "### Codex Review",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[
+            {"pull_request_review_id": 4314779358, "body": "[P1] blocking finding"},
+            {"pull_request_review_id": 4314779358, "body": "[P2] advisory finding"},
+        ],
+    )
+    assert report.status == "blocked"
+    assert report.blocking_findings == 1
+    assert report.advisory_findings == 1
 
 
 def test_codex_review_monitor_blocks_on_any_current_head_codex_review() -> None:

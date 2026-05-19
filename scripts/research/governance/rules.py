@@ -281,6 +281,14 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         ):
             if token not in text:
                 findings.append(AuditFinding("codex_review_monitor", "error", f"monitor workflow missing {token}"))
+        if not re.search(r"pull_request_review_comment:\s*\n\s*types:\s*\[[^\]]*deleted", text):
+            findings.append(
+                AuditFinding(
+                    "codex_review_monitor",
+                    "error",
+                    "monitor workflow must listen to deleted inline review comments",
+                )
+            )
 
     claude = root / "CLAUDE.md"
     if claude.is_file():

@@ -8,7 +8,7 @@ on:
   pull_request_review:
     types: [submitted]
   pull_request_review_comment:
-    types: [created, edited]
+    types: [created, edited, deleted]
   workflow_dispatch:
     inputs:
       pr_number:

@@ -19,7 +19,10 @@ CODEX_REVIEW_URL_PATTERN = re.compile(
     r"https://github\.com/(?P<repo>[^/\s]+/[^/\s]+)/pull/(?P<number>\d+)#pullrequestreview-(?P<review_id>\d+)"
 )
 CODEX_REVIEW_AUTHORS = {"chatgpt-codex-connector", "chatgpt-codex-connector[bot]"}
-BLOCKING_CODEX_FINDING_PATTERN = re.compile(r"(?:P[01] Badge|badge/P[01]-)", re.IGNORECASE)
+BLOCKING_CODEX_FINDING_PATTERN = re.compile(
+    r"(?:P[01] Badge|badge/P[01]-|(?:^|\n)\s*(?:\*\*)?\[P[01]\]\s+)",
+    re.IGNORECASE,
+)
 REQUIRED_TRIGGER_TOKENS = ("@codex review", "AGENTS.md", "docs/rules/review-guidelines.md", "docs/rules/*.md")
 
 

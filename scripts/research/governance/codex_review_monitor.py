@@ -21,7 +21,10 @@ from scripts.research.governance.pr_review_evidence import (
 
 MONITOR_MARKER = "<!-- codex-review-monitor -->"
 REQUIRED_TRIGGER_TOKENS = ("@codex review", "AGENTS.md", "docs/rules/review-guidelines.md", "docs/rules/*.md")
-P2_FINDING_PATTERN = re.compile(r"(?:P2 Badge|badge/P2-)", re.IGNORECASE)
+P2_FINDING_PATTERN = re.compile(
+    r"(?:P2 Badge|badge/P2-|(?:^|\n)\s*(?:\*\*)?\[P2\]\s+)",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -45,11 +48,12 @@ def build_monitor_report(
     issue_comments: Sequence[Mapping[str, object]],
     reviews: Sequence[Mapping[str, object]],
     review_comments: Sequence[Mapping[str, object]],
+    head_created_at: str | None = None,
 ) -> MonitorReport:
     """Build a status summary for Codex reviews on the PR head."""
 
     head_sha = _head_sha(pr)
-    trigger_found = _has_required_trigger_comment(issue_comments)
+    trigger_found = _has_required_trigger_comment(issue_comments, head_created_at=head_created_at)
     current_head_reviews = _current_head_codex_reviews(reviews, head_sha=head_sha)
     latest_review = _latest_codex_review(current_head_reviews)
     latest_review_url = _review_url(repo=repo, pr_number=pr_number, review=latest_review) if latest_review else None
@@ -167,12 +171,26 @@ def sync_commit_status(*, repo: str, pr: Mapping[str, object], token: str, repor
     )
 
 
-def _has_required_trigger_comment(issue_comments: Sequence[Mapping[str, object]]) -> bool:
+def _has_required_trigger_comment(
+    issue_comments: Sequence[Mapping[str, object]],
+    *,
+    head_created_at: str | None = None,
+) -> bool:
     for comment in issue_comments:
         body = str(comment.get("body", ""))
         if all(token in body for token in REQUIRED_TRIGGER_TOKENS):
+            if head_created_at and _comment_effective_time(comment) < head_created_at:
+                continue
             return True
     return False
+
+
+def _comment_effective_time(comment: Mapping[str, object]) -> str:
+    created_at = str(comment.get("created_at", "") or "")
+    updated_at = str(comment.get("updated_at", "") or "")
+    if created_at and updated_at:
+        return max(created_at, updated_at)
+    return updated_at or created_at
 
 
 def _current_head_codex_reviews(
@@ -289,6 +307,21 @@ def _fetch_github_json(*, repo: str, path: str, token: str) -> object:
     return payload
 
 
+def _commit_timestamp(commit_metadata: Mapping[str, object] | None) -> str | None:
+    if commit_metadata is None:
+        return None
+    commit = commit_metadata.get("commit")
+    if not isinstance(commit, Mapping):
+        return None
+    committer = commit.get("committer")
+    if isinstance(committer, Mapping) and committer.get("date"):
+        return str(committer.get("date"))
+    author = commit.get("author")
+    if isinstance(author, Mapping) and author.get("date"):
+        return str(author.get("date"))
+    return None
+
+
 def _fetch_github_list(*, repo: str, path: str, token: str) -> list[object]:
     items: list[object] = []
     url: str | None = _api_url(repo=repo, path=path)
@@ -354,6 +387,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--comments-file", type=Path)
     parser.add_argument("--reviews-file", type=Path)
     parser.add_argument("--review-comments-file", type=Path)
+    parser.add_argument("--head-created-at-env")
     return parser
 
 
@@ -371,6 +405,7 @@ def main(argv: list[str] | None = None) -> int:
     issue_comments = _as_mapping_list(_read_json_file(args.comments_file))
     reviews = _as_mapping_list(_read_json_file(args.reviews_file))
     review_comments = _as_mapping_list(_read_json_file(args.review_comments_file))
+    head_created_at = _read_env(args.head_created_at_env)
 
     if token:
         if not pr:
@@ -385,6 +420,10 @@ def main(argv: list[str] | None = None) -> int:
             review_comments = _as_mapping_list(
                 _fetch_github_list(repo=repo, path=f"pulls/{pr_number}/comments", token=token)
             )
+        head_sha = _head_sha(pr)
+        if head_sha and not head_created_at:
+            commit_metadata = _fetch_github_json(repo=repo, path=f"commits/{head_sha}", token=token)
+            head_created_at = _commit_timestamp(_as_mapping(commit_metadata))
 
     report = build_monitor_report(
         repo=repo,
@@ -393,6 +432,7 @@ def main(argv: list[str] | None = None) -> int:
         issue_comments=issue_comments,
         reviews=reviews,
         review_comments=review_comments,
+        head_created_at=head_created_at,
     )
     body = render_monitor_comment(report)
     print(body)
