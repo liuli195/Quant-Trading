@@ -504,7 +504,6 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             )
         for token in (
             "scripts.research.governance gate",
-            "scripts.research.governance.ai_review_gate",
             "ruff",
             "bandit",
             "mypy",

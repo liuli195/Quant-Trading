@@ -193,7 +193,6 @@ def _write_minimal_repo(root: Path) -> None:
         "  - run: python -m mypy scripts strategies\n"
         "  - run: python -m pip_audit\n"
         "  - run: python -m pytest\n"
-        "  - run: python -m scripts.research.governance.ai_review_gate validate --report .local/ai-review/latest.json\n"
         "  - run: python -m scripts.research.governance gate\n"
         "  - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
         encoding="utf-8",
@@ -609,7 +608,7 @@ def test_governance_audit_flags_review_evidence_without_review_dismissed_event(
     )
 
 
-def test_governance_workflow_contains_ai_review_gate(tmp_path: Path) -> None:
+def test_governance_workflow_contains_pr_review_evidence_gate(tmp_path: Path) -> None:
     _write_minimal_repo(tmp_path)
     workflow = tmp_path / ".github/workflows/research-governance.yml"
     workflow.write_text(
@@ -627,7 +626,6 @@ def test_governance_workflow_contains_ai_review_gate(tmp_path: Path) -> None:
         "      - run: python -m mypy scripts strategies\n"
         "      - run: python -m pip_audit\n"
         "      - run: python -m pytest\n"
-        "      - run: python -m scripts.research.governance.ai_review_gate validate --report .local/ai-review/latest.json\n"
         "      - run: python -m scripts.research.governance gate\n"
         "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
         encoding="utf-8",
@@ -638,7 +636,9 @@ def test_governance_workflow_contains_ai_review_gate(tmp_path: Path) -> None:
     assert report.ok, [finding.message for finding in report.findings]
 
 
-def test_governance_audit_flags_workflow_without_ai_review_gate(tmp_path: Path) -> None:
+def test_governance_audit_flags_workflow_without_pr_review_evidence_gate(
+    tmp_path: Path,
+) -> None:
     _write_minimal_repo(tmp_path)
     workflow = tmp_path / ".github/workflows/research-governance.yml"
     workflow.write_text(
@@ -651,8 +651,7 @@ def test_governance_audit_flags_workflow_without_ai_review_gate(tmp_path: Path) 
         "jobs:\n"
         "  governance:\n"
         "    steps:\n"
-        "      - run: python -m scripts.research.governance gate\n"
-        "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
+        "      - run: python -m scripts.research.governance gate\n",
         encoding="utf-8",
     )
 
@@ -660,8 +659,7 @@ def test_governance_audit_flags_workflow_without_ai_review_gate(tmp_path: Path) 
 
     assert not report.ok
     assert any(
-        "CI workflow missing scripts.research.governance.ai_review_gate"
-        in finding.message
+        "CI workflow missing PR review evidence gate" in finding.message
         for finding in report.findings
     )
 

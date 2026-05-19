@@ -29,7 +29,7 @@ make ai-review
 make risk-check
 ```
 
-`make ai-review` 生成 `.local/ai-review/latest.json`、`.local/ai-review/latest.md` 和 `.local/ai-review/codex-review-scope.md`。
+`make ai-review` 校验 `.local/ai-review/latest.json`，并生成 `.local/ai-review/latest.md` 和 `.local/ai-review/codex-review-scope.md`。`.local/` 不入库；CI 通过 PR body 的 `AI Review 风险分级` 和 `pr-review-evidence` job 复验风险证据。
 
 `.githooks/pre-push` calls all required push gates before handing off to Git LFS:
 

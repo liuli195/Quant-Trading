@@ -37,8 +37,6 @@ jobs:
         run: python -m pip_audit
       - name: Tests
         run: python -m pytest scripts/research/governance/tests
-      - name: AI review risk gate
-        run: python -m scripts.research.governance.ai_review_gate validate --report .local/ai-review/latest.json
       - name: Run governance gate
         run: python -m scripts.research.governance gate
 

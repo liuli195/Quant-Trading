@@ -91,13 +91,13 @@ GitHub Actions 复跑扫描、类型、依赖、测试、风险判定
 
 - `.githooks/pre-commit`：保留 governance gate，同时接入 pre-commit。
 - `.github/pull_request_template.md`：新增风险分级、问题评级、P2 保留原因、Review Scope 链接。
-- `.github/workflows/research-governance.yml`：增加静态扫描、类型检查、依赖扫描、测试和 AI review gate。
+- `.github/workflows/research-governance.yml`：增加静态扫描、类型检查、依赖扫描、测试和 PR review evidence gate。
 - `scripts/research/governance/pr_review_evidence.py`：只在高风险或 unknown 时要求官方 Codex Review 证据。
 - `scripts/research/governance/rules.py`：把新的规则文档、模板字段、workflow 入口纳入 governance audit。
 - `scripts/research/governance/tests/test_governance.py`：增加治理规则漂移测试。
 - `docs/rules/pr-workflow.md`：改写 PR review 必须项。
 - `docs/rules/review-guidelines.md`：定义本地 AI review、评级规则和定向官方 review。
-- `docs/rules/governance.md`：定义 `ai-risk-review`、AI review gate 和 required checks。
+- `docs/rules/governance.md`：定义 `ai-risk-review`、本地 AI review gate 和 required checks。
 - `scripts/research/governance/README.md`：补充本地命令和 CI 行为。
 
 `.local/ai-review/` 继续保持不入库；`.gitignore` 已忽略 `.local/`。
@@ -192,8 +192,8 @@ Modify `docs/rules/governance.md`:
 
 ```markdown
 - `scripts.research.governance.ai_review_gate` 是本地 AI review 报告、风险等级和 Codex Review Scope 的统一校验入口。
-- CI 必须校验 AI review 报告；报告缺失或 unknown 时按高风险处理。
-- GitHub `main` 的 required status check 必须覆盖静态扫描、类型检查、依赖漏洞扫描、测试、governance gate 和 AI review gate。
+- CI 必须校验 PR body 中的 `AI Review 风险分级` 和 review 证据；本地 AI review 报告缺失、无法解析或无法证明低风险时，PR body 必须按 high/unknown 处理。
+- GitHub `main` 的 required status check 必须覆盖静态扫描、类型检查、依赖漏洞扫描、测试、governance gate 和 `pr-review-evidence`。
 - `Codex Review Monitor` 只作为高风险或 unknown PR 的 required gate。
 ```
 
@@ -919,12 +919,12 @@ git commit -m "按风险分级校验 PR review 证据"
 - Modify: `scripts/research/governance/rules.py`
 - Modify: `scripts/research/governance/tests/test_governance.py`
 
-- [ ] **Step 1: 写失败测试：workflow 必须包含新 gate**
+- [ ] **Step 1: 写失败测试：workflow 必须包含 PR evidence gate**
 
 Add to `scripts/research/governance/tests/test_governance.py`:
 
 ```python
-def test_governance_workflow_contains_ai_review_gate(tmp_path: Path) -> None:
+def test_governance_workflow_contains_pr_review_evidence_gate(tmp_path: Path) -> None:
     _write_minimal_repo(tmp_path)
     workflow = tmp_path / ".github/workflows/research-governance.yml"
     workflow.write_text(
@@ -934,7 +934,7 @@ def test_governance_workflow_contains_ai_review_gate(tmp_path: Path) -> None:
         "  governance:\n"
         "    steps:\n"
         "      - run: python -m scripts.research.governance gate\n"
-        "      - run: python -m scripts.research.governance.ai_review_gate validate --report .local/ai-review/latest.json\n"
+        "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n"
         "      - run: python -m mypy scripts strategies\n"
         "      - run: python -m pip_audit\n",
         encoding="utf-8",
@@ -962,8 +962,6 @@ In `.github/workflows/research-governance.yml`, update dependencies and jobs:
         run: python -m pip_audit
       - name: Tests
         run: python -m pytest
-      - name: AI review risk gate
-        run: python -m scripts.research.governance.ai_review_gate validate --report .local/ai-review/latest.json
       - name: Run governance gate
         run: python -m scripts.research.governance gate
 ```
@@ -972,12 +970,11 @@ Keep `pr-review-evidence` job, but let the modified Python validator decide whet
 
 - [ ] **Step 3: 扩展 governance audit workflow tokens**
 
-Modify `_audit_governance_gate` in `scripts/research/governance/rules.py`:
+Modify `_audit_governance_gate` in `scripts/research/governance/rules.py`; keep the explicit `scripts.research.governance.pr_review_evidence` check, and audit the static-check tokens:
 
 ```python
         for token in (
             "scripts.research.governance gate",
-            "scripts.research.governance.ai_review_gate",
             "ruff",
             "bandit",
             "mypy",
@@ -993,7 +990,7 @@ Modify `_audit_governance_gate` in `scripts/research/governance/rules.py`:
 Run:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest scripts\research\governance\tests\test_governance.py::test_governance_workflow_contains_ai_review_gate -q
+.\.venv\Scripts\python.exe -m pytest scripts\research\governance\tests\test_governance.py::test_governance_workflow_contains_pr_review_evidence_gate -q
 ```
 
 Expected: `1 passed`.
@@ -1002,7 +999,7 @@ Expected: `1 passed`.
 
 ```bash
 git add .github/workflows/research-governance.yml scripts/research/governance/rules.py scripts/research/governance/tests/test_governance.py
-git commit -m "在 CI 中复验风险分级评审"
+git commit -m "在 CI 中复验 PR review 证据"
 ```
 
 ---
