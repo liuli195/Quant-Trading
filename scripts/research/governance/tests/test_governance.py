@@ -1053,6 +1053,62 @@ def test_pr_review_evidence_accepts_codex_no_major_issues_comment() -> None:
     assert report.ok
 
 
+def test_pr_review_evidence_ignores_later_non_trigger_comment_for_no_major_issues() -> None:
+    head_sha = "0" * 40
+    body = _valid_codex_review_body().replace(
+        "https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
+        "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484229220",
+    )
+    report = validate_pr_body(
+        body,
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        expected_head_created_at="2026-05-19T00:59:00Z",
+        comments=[
+            {
+                "id": 4484212277,
+                "html_url": "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484212277",
+                "body": "@codex review\n\nPlease review according to AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md item by item.",
+                "created_at": "2026-05-19T01:00:00Z",
+            },
+            _codex_no_major_issues_comment(created_at="2026-05-19T01:05:00Z"),
+            {
+                "id": 4484999999,
+                "body": "<!-- codex-review-monitor -->\n## Codex Review Monitor",
+                "created_at": "2026-05-19T01:10:00Z",
+            },
+        ],
+        reviews=[],
+        review_comments=[],
+    )
+    assert report.ok
+
+
+def test_pr_review_evidence_ignores_later_non_trigger_comment_for_completion_reaction() -> None:
+    head_sha = "0" * 40
+    body = _valid_codex_review_body().replace(
+        "#pullrequestreview-4314779358",
+        "#issuecomment-4484023766",
+    )
+    report = validate_pr_body(
+        body,
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        expected_head_created_at="2026-05-19T00:59:00Z",
+        comments=[
+            _codex_completion_comment(created_at="2026-05-19T01:00:00Z"),
+            {
+                "id": 4484999999,
+                "body": "<!-- codex-review-monitor -->\n## Codex Review Monitor",
+                "created_at": "2026-05-19T01:10:00Z",
+            },
+        ],
+        reviews=[],
+        review_comments=[],
+    )
+    assert report.ok
+
+
 def test_pr_review_evidence_rejects_completion_before_latest_required_trigger() -> None:
     head_sha = "0" * 40
     body = _valid_codex_review_body().replace(

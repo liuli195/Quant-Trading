@@ -246,7 +246,7 @@ def _codex_completion_comment_errors(
     if not _has_required_trigger_after_current_head(trigger_comments, expected_head_created_at):
         errors.append("required @codex review trigger must be submitted after the current head")
     latest_trigger_time = _latest_required_trigger_time(
-        comments,
+        trigger_comments,
         expected_head_created_at=expected_head_created_at,
     )
     comment_time = _comment_effective_time(comment)
