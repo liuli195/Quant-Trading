@@ -13,7 +13,7 @@ description: 当用户要求把新增提示词、规则或项目约定加入 AGE
 2. 查找矛盾、重复、过于模糊、过于显然的内容；发现后先问用户，不直接替用户选择。
 3. 判断新增内容归属：
    - 根 [AGENTS.md](../../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->：项目描述、非标准构建/检查命令、每个任务都相关的通用规则、根索引指针。
-   - 根 [CLAUDE.md](../../../CLAUDE.md) <!-- pathref: repo/CLAUDE.md -->：项目描述、Claude Code 专属内容、指向 [AGENTS.md](../../../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 和 [.claude/skills](..) <!-- pathref: repo/.claude/skills --> 的入口指针。
+   - 根 [CLAUDE.md](../../../CLAUDE.md) <!-- pathref: repo/CLAUDE.md -->：只保留 Claude Code 专属指针，至少指向 [AGENTS.md](../../../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 和 [.claude/skills](..) <!-- pathref: repo/.claude/skills -->。
    - 其他内容：按主题更新已有 markdown；没有合适文件时，按仓库文档结构新建主题文件。
 4. 仅在新增或移动文档入口时更新 [indexes.md](../../../indexes.md) <!-- pathref: repo/indexes.md -->。
 5. Markdown 内部链接使用“可点击链接 + `pathref` 注释”。

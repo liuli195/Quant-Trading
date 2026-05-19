@@ -17,9 +17,7 @@ description: 当用户要求重构 AGENTS.md、CLAUDE.md 或 AI 助手入口文�
    - 每个任务都必须知道的通用规则。
    - 指向 [indexes.md](../../../indexes.md) <!-- pathref: repo/indexes.md --> 的一句话。
 4. 提取根 [CLAUDE.md](../../../CLAUDE.md) <!-- pathref: repo/CLAUDE.md --> 的极简内容：
-   - 一句话项目描述。
-   - Claude Code 专属内容。
-   - 指向 [AGENTS.md](../../../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 和 [.claude/skills](..) <!-- pathref: repo/.claude/skills --> 的一句话。
+   - 只保留 Claude Code 专属指针，至少指向 [AGENTS.md](../../../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 和 [.claude/skills](..) <!-- pathref: repo/.claude/skills -->。
 5. 将剩余规则按逻辑主题拆到独立 markdown。优先更新已有文件；需要新建时使用仓库现有文档目录。
 6. 更新根文档索引，确保每个新主题文档能从 [indexes.md](../../../indexes.md) <!-- pathref: repo/indexes.md --> 或规则索引抵达。
 7. 删除重复、不可执行、过于显然的内容。
