@@ -71,8 +71,6 @@ REQUIRED_REVIEW_GUIDELINES_TOKENS = (
     "@codex review",
     "AGENTS.md",
     "docs/rules/review-guidelines.md",
-    "逐条检查",
-    "docs/rules/*.md",
     "P0/P1",
     "scripts.research.governance gate",
     "Codex Review Monitor",

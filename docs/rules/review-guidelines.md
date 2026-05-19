@@ -6,12 +6,12 @@
 
 - 所有 PR 必须完成本地 AI review、问题评级和风险分级。
 - P0/P1 问题未以 `fixed` 或 `false_positive` 关闭前，不得进入下一阶段。
-- 高风险或 unknown PR 的 Codex Code Review 必须由 PR 评论明确触发。评论内容必须包含 `@codex review`，并要求按 `AGENTS.md` 与 `docs/rules/review-guidelines.md` 审查。
+- 高风险或 unknown PR 的 Codex Code Review 必须由 PR 评论明确触发。评论内容必须包含 `@codex review`。
 - Automatic reviews 可以作为补充，但不能替代上面的明确触发评论。
 - PR 中如存在 Codex 标出的 P0/P1 问题，不得填写通过结论。
 - 高风险或 unknown PR 描述必须填写 `Codex Code Review 结论`，且 `结论` 为 `通过`、`阻断问题` 为 `无` 后，才能进入合并。
 - 低风险 PR 可以不触发官方 Codex Code Review，但必须填写 `AI Review 风险分级`、本地 AI review 报告、CI 通过证据和 P2 保留说明。
-- 官方 Codex Code Review 必须逐条检查 [docs/rules](.) <!-- pathref: docs/rules --> 下所有规则文件，并在结论中说明是否发现规则冲突或漂移。
+- 官方 Codex Code Review 应按 PR 中的 Review Scope 聚焦 P0/P1 风险，并在结论中说明是否发现规则冲突或漂移。
 - 必须保留本地检查证据，至少包括 `.\.venv\Scripts\python.exe -m scripts.research.governance gate`。
 - `@codex review` 触发后由 Codex Review Monitor 监听结果。该监控在 PR head 更新、触发评论、Codex review 和 inline review comment 事件上汇总当前 head 的所有 Codex review 状态，并写入 `Codex Review Monitor` commit status；`Codex Review Monitor` 必须列为 GitHub `main` 的 required status check，但它不替代 Codex review 结论和 PR body 证据。
 
@@ -48,9 +48,9 @@
 - 测试风险：相关单测、语法检查、治理 gate、策略或研究工具回归是否缺失。
 - 报告风险：研究结论必须追溯 source table、manifest、audit log、run artifact，不只读最终报告。
 
-## 规则逐条检查
+## 规则关注点
 
-Codex review 必须逐条检查以下规则文件：
+Codex review 发现治理相关风险时，应优先对照以下规则文件定位冲突或漂移：
 
 - [index.md](index.md) <!-- pathref: docs/rules/index.md -->：规则入口、规则分级、ADR 链接是否同步。
 - [pr-workflow.md](pr-workflow.md) <!-- pathref: docs/rules/pr-workflow.md -->：核心 PR 工作流、分支模型、review 与主干同步是否遵守。
@@ -79,7 +79,7 @@ Codex review 必须逐条检查以下规则文件：
 ## Codex Code Review 结论
 
 - Reviewer: `Codex`
-- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`
+- 触发方式: `@codex review`
 - 结论: 通过
 - 阻断问题: 无
 - 关键证据:

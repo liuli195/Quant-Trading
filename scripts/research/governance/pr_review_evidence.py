@@ -35,12 +35,7 @@ CODEX_NO_MAJOR_ISSUES_PATTERN = re.compile(
     r"Codex Review:\s*(?:Didn['’]t|Did not) find any major issues",
     re.IGNORECASE,
 )
-REQUIRED_TRIGGER_TOKENS = (
-    "@codex review",
-    "AGENTS.md",
-    "docs/rules/review-guidelines.md",
-    "docs/rules/*.md",
-)
+REQUIRED_TRIGGER_TOKENS = ("@codex review",)
 
 
 @dataclass(frozen=True)
@@ -83,12 +78,6 @@ def validate_pr_body(
     else:
         if "@codex review" not in normalized_trigger:
             errors.append("触发方式 must include @codex review")
-        if "AGENTS.md" not in normalized_trigger:
-            errors.append("触发方式 must include AGENTS.md")
-        if "docs/rules/review-guidelines.md" not in normalized_trigger:
-            errors.append("触发方式 must include docs/rules/review-guidelines.md")
-        if "docs/rules/*.md" not in normalized_trigger:
-            errors.append("触发方式 must include docs/rules/*.md")
     if _normalize_value(conclusion) != "通过":
         errors.append("结论 must be 通过")
     if _normalize_value(blockers) != "无":

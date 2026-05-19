@@ -24,7 +24,7 @@ from scripts.research.governance.pr_review_evidence import (
 
 
 MONITOR_MARKER = "<!-- codex-review-monitor -->"
-REQUIRED_TRIGGER_TOKENS = ("@codex review", "AGENTS.md", "docs/rules/review-guidelines.md", "docs/rules/*.md")
+REQUIRED_TRIGGER_TOKENS = ("@codex review",)
 P2_FINDING_PATTERN = re.compile(
     r"(?:P2 Badge|badge/P2-|(?:^|\n)\s*(?:\*\*)?\[P2\]\s+)",
     re.IGNORECASE,

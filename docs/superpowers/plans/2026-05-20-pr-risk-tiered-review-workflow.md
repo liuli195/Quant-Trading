@@ -803,7 +803,7 @@ def test_high_risk_pr_body_requires_codex_review() -> None:
 ## Codex Code Review 结论
 
 - Reviewer: `Codex`
-- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`
+- 触发方式: `@codex review`
 - 结论: 未执行
 - 阻断问题: 未确认
 - 关键证据:
@@ -885,7 +885,7 @@ Replace the review section in `.github/pull_request_template.md` with:
 ## Codex Code Review 结论
 
 - Reviewer: `Codex`
-- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`
+- 触发方式: `@codex review`
 - 结论: 未要求 / 未执行 / 通过
 - 阻断问题: 无 / 未确认
 - 关键证据:
@@ -1086,3 +1086,4 @@ git commit -m "同步风险分级评审计划和索引"
 ## 执行建议
 
 按任务顺序执行。每个任务都独立提交，避免一次性改坏完整 PR 链路。先不要改 GitHub required checks；等 CI workflow 和 `pr_review_evidence.py` 在一个测试 PR 中跑通后，再把 required checks 调整为新的组合。
+

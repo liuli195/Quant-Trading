@@ -32,7 +32,7 @@
 ## Codex Code Review 结论
 
 - Reviewer: `Codex`
-- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`
+- 触发方式: `@codex review`
 - 结论: 未要求 / 未执行 / 通过
 - 阻断问题: 无 / 未确认
 - 关键证据:

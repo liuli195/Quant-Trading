@@ -259,8 +259,6 @@ def _write_minimal_repo(root: Path) -> None:
                 "@codex review",
                 "AGENTS.md",
                 "docs/rules/review-guidelines.md",
-                "逐条检查",
-                "docs/rules/*.md",
                 "P0/P1",
                 "scripts.research.governance gate",
                 "Codex Review Monitor",
@@ -1189,7 +1187,7 @@ def _valid_codex_review_body(review_id: int = 4314779358) -> str:
             "## Codex Code Review \u7ed3\u8bba",
             "",
             "- Reviewer: `Codex`",
-            "- \u89e6\u53d1\u65b9\u5f0f: `@codex review \u6309 AGENTS.md \u548c docs/rules/review-guidelines.md \u5ba1\uff1b\u9010\u6761\u68c0\u67e5 docs/rules/*.md`",
+            "- \u89e6\u53d1\u65b9\u5f0f: `@codex review`",
             "- \u7ed3\u8bba: \u901a\u8fc7",
             "- \u963b\u65ad\u95ee\u9898: \u65e0",
             "- \u5173\u952e\u8bc1\u636e:",
@@ -1230,7 +1228,7 @@ def test_high_risk_pr_body_requires_codex_review() -> None:
 ## Codex Code Review 结论
 
 - Reviewer: `Codex`
-- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`
+- 触发方式: `@codex review`
 - 结论: 未执行
 - 阻断问题: 未确认
 - 关键证据:
@@ -1255,7 +1253,7 @@ def _codex_completion_comment(
     return {
         "id": comment_id,
         "html_url": f"https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-{comment_id}",
-        "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+        "body": "@codex review",
         "created_at": created_at,
         "reaction_items": [
             {
@@ -1287,9 +1285,7 @@ def test_pr_review_evidence_accepts_approved_codex_conclusion() -> None:
         _valid_codex_review_body(),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
         expected_head_sha=head_sha,
-        comments=[
-            "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。"
-        ],
+        comments=["@codex review"],
         reviews=[
             {
                 "id": 4314779358,
@@ -1308,10 +1304,17 @@ def test_pr_review_evidence_rejects_unexecuted_codex_conclusion() -> None:
     report = validate_pr_body(
         "\n".join(
             [
+                "## AI Review 风险分级",
+                "",
+                "- 风险等级: high",
+                "- 是否需要官方 Codex Review: 是",
+                "- 本地 AI review: `.local/ai-review/latest.md`",
+                "- P0/P1 未关闭项: 无",
+                "",
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 未执行",
                 "- 阻断问题: 未确认",
                 "- 关键证据:",
@@ -1331,7 +1334,7 @@ def test_pr_review_evidence_rejects_placeholder_codex_review_link() -> None:
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1354,7 +1357,7 @@ def test_pr_review_evidence_rejects_other_pr_review_link() -> None:
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1378,7 +1381,7 @@ def test_pr_review_evidence_rejects_discussion_link_as_review() -> None:
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1402,7 +1405,7 @@ def test_pr_review_evidence_rejects_missing_required_trigger_comment() -> None:
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1411,7 +1414,7 @@ def test_pr_review_evidence_rejects_missing_required_trigger_comment() -> None:
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
-        comments=["@codex review"],
+        comments=["looks good"],
     )
     assert not report.ok
     assert (
@@ -1426,7 +1429,7 @@ def test_pr_review_evidence_rejects_review_from_old_head() -> None:
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1573,7 +1576,7 @@ def test_pr_review_evidence_accepts_codex_no_major_issues_comment() -> None:
             {
                 "id": 4484212277,
                 "html_url": "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484212277",
-                "body": "@codex review\n\nPlease review according to AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md item by item.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T01:00:00Z",
             },
             _codex_no_major_issues_comment(),
@@ -1601,7 +1604,7 @@ def test_pr_review_evidence_ignores_later_non_trigger_comment_for_no_major_issue
             {
                 "id": 4484212277,
                 "html_url": "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484212277",
-                "body": "@codex review\n\nPlease review according to AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md item by item.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T01:00:00Z",
             },
             _codex_no_major_issues_comment(created_at="2026-05-19T01:05:00Z"),
@@ -1658,7 +1661,7 @@ def test_pr_review_evidence_rejects_completion_before_latest_required_trigger() 
         comments=[
             _codex_completion_comment(created_at="2026-05-19T01:00:00Z"),
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T01:05:00Z",
             },
         ],
@@ -1694,7 +1697,7 @@ def test_pr_review_evidence_rejects_codex_review_with_blocking_body_finding() ->
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1729,7 +1732,7 @@ def test_pr_review_evidence_rejects_codex_review_with_blocking_inline_finding() 
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1769,7 +1772,7 @@ def test_pr_review_evidence_rejects_review_before_required_trigger_comment() -> 
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1781,7 +1784,7 @@ def test_pr_review_evidence_rejects_review_before_required_trigger_comment() -> 
         expected_head_sha=head_sha,
         comments=[
             {
-                "body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。",
+                "body": "@codex review",
                 "created_at": "2026-05-19T00:10:00Z",
             }
         ],
@@ -1812,11 +1815,11 @@ def test_pr_review_evidence_waits_for_review_after_latest_required_trigger() -> 
         expected_head_created_at="2026-05-19T00:00:00Z",
         comments=[
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T00:05:00Z",
             },
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T00:15:00Z",
             },
         ],
@@ -1846,7 +1849,7 @@ def test_pr_review_evidence_rejects_trigger_before_current_head() -> None:
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1859,7 +1862,7 @@ def test_pr_review_evidence_rejects_trigger_before_current_head() -> None:
         expected_head_created_at="2026-05-19T00:10:00Z",
         comments=[
             {
-                "body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。",
+                "body": "@codex review",
                 "created_at": "2026-05-19T00:09:00Z",
             }
         ],
@@ -1889,7 +1892,7 @@ def test_pr_review_evidence_uses_comment_updated_at_for_trigger_time() -> None:
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1902,7 +1905,7 @@ def test_pr_review_evidence_uses_comment_updated_at_for_trigger_time() -> None:
         expected_head_created_at="2026-05-19T00:07:00Z",
         comments=[
             {
-                "body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。",
+                "body": "@codex review",
                 "created_at": "2026-05-19T00:08:00Z",
                 "updated_at": "2026-05-19T00:12:00Z",
             }
@@ -1933,7 +1936,7 @@ def test_pr_review_evidence_rejects_any_current_head_blocking_codex_review() -> 
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1945,7 +1948,7 @@ def test_pr_review_evidence_rejects_any_current_head_blocking_codex_review() -> 
         expected_head_sha=head_sha,
         comments=[
             {
-                "body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。",
+                "body": "@codex review",
                 "created_at": "2026-05-19T00:09:00Z",
             }
         ],
@@ -1991,11 +1994,7 @@ def test_codex_review_monitor_reports_waiting_for_codex_after_trigger() -> None:
         repo="liuli195/Quant-Trading",
         pr_number="5",
         pr={"head": {"sha": "0" * 40}},
-        issue_comments=[
-            {
-                "body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。"
-            }
-        ],
+        issue_comments=[{"body": "@codex review"}],
         reviews=[],
         review_comments=[],
     )
@@ -2031,7 +2030,7 @@ def test_codex_review_monitor_passes_on_codex_no_major_issues_comment() -> None:
         head_created_at="2026-05-19T00:59:00Z",
         issue_comments=[
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T01:00:00Z",
             },
             _codex_no_major_issues_comment(),
@@ -2058,7 +2057,7 @@ def test_codex_review_monitor_waits_for_completion_after_latest_required_trigger
         issue_comments=[
             _codex_completion_comment(created_at="2026-05-19T01:00:00Z"),
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T01:05:00Z",
             },
         ],
@@ -2079,7 +2078,7 @@ def test_codex_review_monitor_rejects_trigger_before_current_head() -> None:
         head_created_at="2026-05-19T01:00:00Z",
         issue_comments=[
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T00:59:00Z",
             }
         ],
@@ -2107,7 +2106,7 @@ def test_codex_review_monitor_waits_for_review_after_required_trigger() -> None:
         head_created_at="2026-05-19T01:00:00Z",
         issue_comments=[
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T01:02:00Z",
             }
         ],
@@ -2135,11 +2134,11 @@ def test_codex_review_monitor_waits_for_review_after_latest_required_trigger() -
         head_created_at="2026-05-19T01:00:00Z",
         issue_comments=[
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T01:02:00Z",
             },
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T01:05:00Z",
             },
         ],
@@ -2164,11 +2163,7 @@ def test_codex_review_monitor_reports_passed_current_head_review() -> None:
         repo="liuli195/Quant-Trading",
         pr_number="5",
         pr={"head": {"sha": head_sha}},
-        issue_comments=[
-            {
-                "body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。"
-            }
-        ],
+        issue_comments=[{"body": "@codex review"}],
         reviews=[
             {
                 "id": 4314779358,
@@ -2195,7 +2190,7 @@ def test_codex_review_monitor_ignores_dismissed_reviews() -> None:
         pr={"head": {"sha": head_sha}},
         issue_comments=[
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T01:00:00Z",
             }
         ],
@@ -2221,11 +2216,7 @@ def test_codex_review_monitor_reports_blocked_on_p1_inline_comment() -> None:
         repo="liuli195/Quant-Trading",
         pr_number="5",
         pr={"head": {"sha": head_sha}},
-        issue_comments=[
-            {
-                "body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。"
-            }
-        ],
+        issue_comments=[{"body": "@codex review"}],
         reviews=[
             {
                 "id": 4314779358,
@@ -2257,7 +2248,7 @@ def test_codex_review_priority_patterns_match_plain_text_titles() -> None:
         pr={"head": {"sha": head_sha}},
         issue_comments=[
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T01:00:00Z",
             }
         ],
@@ -2286,11 +2277,7 @@ def test_codex_review_monitor_blocks_on_any_current_head_codex_review() -> None:
         repo="liuli195/Quant-Trading",
         pr_number="5",
         pr={"head": {"sha": head_sha}},
-        issue_comments=[
-            {
-                "body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。"
-            }
-        ],
+        issue_comments=[{"body": "@codex review"}],
         reviews=[
             {
                 "id": 4314779358,
