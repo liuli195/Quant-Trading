@@ -6,6 +6,7 @@ import json
 import re
 import subprocess
 import sys
+from collections.abc import Sequence
 from datetime import date, datetime
 from pathlib import Path
 
@@ -26,6 +27,7 @@ REQUIRED_RULE_DOCS = (
     "docs/rules/index.md",
     "docs/rules/ai-agents.md",
     "docs/rules/governance.md",
+    "docs/rules/review-guidelines.md",
     "docs/rules/research-workflow.md",
     "docs/rules/code-style.md",
     "docs/rules/docs-and-pathref.md",
@@ -35,7 +37,6 @@ REQUIRED_CODEOWNER_PATTERNS = (
     "AGENTS.md",
     "docs/rules/**",
     "docs/adr/**",
-    ".claude/agents/**",
     ".claude/skills/**",
     ".github/workflows/**",
     ".githooks/**",
@@ -49,16 +50,23 @@ PR_TEMPLATE_TOKENS = (
     "影响范围",
     "规则同步",
     "已运行检查",
-    "评审治理 Agent 结论",
-    "pr-governance-review",
+    "Codex Code Review 结论",
+    "Codex",
+    "scripts.research.governance gate",
     "waiver",
     "证据",
 )
-REQUIRED_REVIEW_AGENT_TOKENS = (
-    "name: pr-governance-review",
-    "独立评审 Agent",
+REQUIRED_REVIEW_GUIDELINES_TOKENS = (
+    "Codex Code Review",
+    "@codex review",
+    "AGENTS.md",
+    "docs/rules/review-guidelines.md",
+    "逐条检查",
+    "docs/rules/*.md",
+    "P0/P1",
     "scripts.research.governance gate",
-    "评审治理 Agent 结论",
+    "Codex Review Monitor",
+    "Codex Code Review 结论",
     "结论: 通过",
     "阻断问题: 无",
 )
@@ -74,6 +82,14 @@ WAIVER_REQUIRED_FIELDS = (
 )
 
 
+def _workflow_event_types_include(text: str, event: str, required_types: Sequence[str]) -> bool:
+    match = re.search(rf"{re.escape(event)}:\s*\n\s*types:\s*\[([^\]]*)\]", text)
+    if not match:
+        return False
+    declared = match.group(1)
+    return all(required_type in declared for required_type in required_types)
+
+
 def run_audit(
     repo_root: str | Path = ".",
     *,
@@ -87,7 +103,7 @@ def run_audit(
     findings.extend(_audit_tool_registry(root))
     findings.extend(_audit_layer_docs(root))
     findings.extend(_audit_claude_and_skills(root))
-    findings.extend(_audit_review_agent(root))
+    findings.extend(_audit_review_guidelines(root))
     findings.extend(_audit_governance_gate(root))
     findings.extend(_audit_rule_sources(root))
     findings.extend(_audit_codeowners(root))
@@ -148,8 +164,9 @@ def _audit_claude_and_skills(root: Path) -> list[AuditFinding]:
             "scripts.research.governance",
             "scripts.research.registry",
             "docs/rules/index.md",
+            "docs/rules/review-guidelines.md",
             "docs/adr",
-            "pr-governance-review",
+            "Codex Code Review",
         ):
             if token not in text:
                 findings.append(AuditFinding("claude_sync", "error", f"CLAUDE.md missing {token}"))
@@ -174,16 +191,25 @@ def _audit_claude_and_skills(root: Path) -> list[AuditFinding]:
     return findings
 
 
-def _audit_review_agent(root: Path) -> list[AuditFinding]:
-    path = root / ".claude" / "agents" / "pr-governance-review.md"
+def _audit_review_guidelines(root: Path) -> list[AuditFinding]:
+    findings: list[AuditFinding] = []
+    path = root / "docs" / "rules" / "review-guidelines.md"
     if not path.is_file():
-        return [AuditFinding("review_agent", "error", ".claude/agents/pr-governance-review.md missing")]
+        return [AuditFinding("review_guidelines", "error", "docs/rules/review-guidelines.md missing")]
     text = path.read_text(encoding="utf-8", errors="ignore")
-    return [
-        AuditFinding("review_agent", "error", f"pr-governance-review missing {token}")
-        for token in REQUIRED_REVIEW_AGENT_TOKENS
+    findings.extend(
+        AuditFinding("review_guidelines", "error", f"review-guidelines.md missing {token}")
+        for token in REQUIRED_REVIEW_GUIDELINES_TOKENS
         if token not in text
-    ]
+    )
+
+    agents = root / "AGENTS.md"
+    if agents.is_file():
+        agents_text = agents.read_text(encoding="utf-8", errors="ignore")
+        for token in ("## Review guidelines", "docs/rules/review-guidelines.md"):
+            if token not in agents_text:
+                findings.append(AuditFinding("review_guidelines", "error", f"AGENTS.md missing {token}"))
+    return findings
 
 
 def _audit_governance_gate(root: Path) -> list[AuditFinding]:
@@ -245,6 +271,57 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             findings.append(AuditFinding("governance_gate", "error", "CI workflow missing PR review evidence gate"))
         if "schedule:" not in text:
             findings.append(AuditFinding("governance_gate", "error", "CI workflow missing scheduled drift audit"))
+        if not re.search(r"pull_request_review_comment:\s*\n\s*types:\s*\[[^\]]*deleted", text):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "PR review evidence workflow must listen to deleted inline review comments",
+                )
+            )
+        if not _workflow_event_types_include(text, "pull_request_review", ("submitted", "edited", "dismissed")):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "PR review evidence workflow must listen to Codex review submitted, edited, and dismissed events",
+                )
+            )
+
+    monitor_workflow = root / ".github" / "workflows" / "codex-review-monitor.yml"
+    if not monitor_workflow.is_file():
+        findings.append(AuditFinding("codex_review_monitor", "error", ".github/workflows/codex-review-monitor.yml missing"))
+    else:
+        text = monitor_workflow.read_text(encoding="utf-8", errors="ignore")
+        for token in (
+            "pull_request",
+            "synchronize",
+            "issue_comment",
+            "pull_request_review",
+            "pull_request_review_comment",
+            "statuses: write",
+            "scripts.research.governance.codex_review_monitor",
+            "--sync-comment",
+            "--sync-status",
+        ):
+            if token not in text:
+                findings.append(AuditFinding("codex_review_monitor", "error", f"monitor workflow missing {token}"))
+        if not re.search(r"pull_request_review_comment:\s*\n\s*types:\s*\[[^\]]*deleted", text):
+            findings.append(
+                AuditFinding(
+                    "codex_review_monitor",
+                    "error",
+                    "monitor workflow must listen to deleted inline review comments",
+                )
+            )
+        if not _workflow_event_types_include(text, "pull_request_review", ("submitted", "edited", "dismissed")):
+            findings.append(
+                AuditFinding(
+                    "codex_review_monitor",
+                    "error",
+                    "monitor workflow must listen to Codex review submitted, edited, and dismissed events",
+                )
+            )
 
     claude = root / "CLAUDE.md"
     if claude.is_file():
@@ -267,7 +344,12 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
     governance = root / "docs" / "rules" / "governance.md"
     if governance.is_file():
         text = governance.read_text(encoding="utf-8", errors="ignore")
-        for token in (".githooks/reference-transaction", "ALLOW_MAIN_REF_UPDATE", "MAIN_REF_UPDATE_REASON"):
+        for token in (
+            ".githooks/reference-transaction",
+            "ALLOW_MAIN_REF_UPDATE",
+            "MAIN_REF_UPDATE_REASON",
+            "Codex Review Monitor",
+        ):
             if token not in text:
                 findings.append(AuditFinding("governance_gate", "error", f"governance.md missing {token}"))
     return findings
@@ -310,7 +392,7 @@ def _audit_rule_sources(root: Path) -> list[AuditFinding]:
     governance_readme = root / "scripts" / "research" / "governance" / "README.md"
     if governance_readme.is_file():
         text = governance_readme.read_text(encoding="utf-8", errors="ignore")
-        for token in ("docs/rules/index.md", "docs/adr"):
+        for token in ("docs/rules/index.md", "docs/adr", "Codex Review Monitor"):
             if token not in text:
                 findings.append(AuditFinding("governance_docs", "error", f"governance README missing {token}"))
     return findings

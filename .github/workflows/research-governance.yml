@@ -3,9 +3,19 @@ name: Research Governance
 on:
   push:
   pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+  pull_request_review_comment:
+    types: [created, edited, deleted]
   schedule:
     - cron: "0 2 * * 1"
   workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
 
 jobs:
   governance:
@@ -21,7 +31,10 @@ jobs:
         run: python -m scripts.research.governance gate
 
   pr-review-evidence:
-    if: github.event_name == 'pull_request'
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.event_name == 'pull_request_review' ||
+      github.event_name == 'pull_request_review_comment'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,5 +43,18 @@ jobs:
           python-version: "3.12"
       - name: Validate PR review evidence
         env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-        run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY
+          PR_BODY: ${{ github.event.pull_request.body || github.event.issue.body }}
+          PR_URL: ${{ github.event.pull_request.html_url || format('https://github.com/{0}/pull/{1}', github.repository, github.event.issue.number) }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_UPDATED_AT: ${{ github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.action == 'reopened') && github.event.pull_request.updated_at || '' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          python -m scripts.research.governance.pr_review_evidence
+          --body-env PR_BODY
+          --pr-url-env PR_URL
+          --repo-env GITHUB_REPOSITORY
+          --pr-number-env PR_NUMBER
+          --head-sha-env PR_HEAD_SHA
+          --head-updated-at-env PR_HEAD_UPDATED_AT
+          --github-token-env GITHUB_TOKEN

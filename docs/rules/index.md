@@ -16,6 +16,7 @@
 | --- | --- |
 | [ai-agents.md](ai-agents.md) <!-- pathref: docs/rules/ai-agents.md --> | 多 AI agent 协作、分支模型、规则入口 |
 | [governance.md](governance.md) <!-- pathref: docs/rules/governance.md --> | CI、主干保护、CODEOWNERS、waiver、周期审计 |
+| [review-guidelines.md](review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md --> | Codex Code Review 触发方式、评审重点、PR 证据 |
 | [research-workflow.md](research-workflow.md) <!-- pathref: docs/rules/research-workflow.md --> | 本地研究、云端确认、报告同步 |
 | [code-style.md](code-style.md) <!-- pathref: docs/rules/code-style.md --> | 策略代码、注释、参数、测试 |
 | [docs-and-pathref.md](docs-and-pathref.md) <!-- pathref: docs/rules/docs-and-pathref.md --> | Markdown、pathref、报告索引 |
@@ -25,7 +26,7 @@
 - [0001-rule-source-and-governance-model.md](../adr/0001-rule-source-and-governance-model.md) <!-- pathref: docs/adr/0001-rule-source-and-governance-model.md -->
 - [0002-ai-agent-parallel-work-uses-git-branches.md](../adr/0002-ai-agent-parallel-work-uses-git-branches.md) <!-- pathref: docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md -->
 - [0003-governance-gate-and-main-branch-protection.md](../adr/0003-governance-gate-and-main-branch-protection.md) <!-- pathref: docs/adr/0003-governance-gate-and-main-branch-protection.md -->
-- [0004-independent-pr-review-agent.md](../adr/0004-independent-pr-review-agent.md) <!-- pathref: docs/adr/0004-independent-pr-review-agent.md -->
+- [0004-codex-code-review-governance.md](../adr/0004-codex-code-review-governance.md) <!-- pathref: docs/adr/0004-codex-code-review-governance.md -->
 
 ## 规则变更
 

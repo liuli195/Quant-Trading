@@ -29,3 +29,9 @@ CLAUDE.md 包含：目录结构约定、工具入口与命令、策略代码规�
 ### 文件引用格式
 
 Markdown 内部文件引用采用双轨格式（可点击路径 + `pathref` 注释），确保机器可校验。
+
+## Review guidelines
+
+Before reviewing, read and apply [review-guidelines.md](docs/rules/review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md -->. If you cannot access that file, treat the review as blocked.
+
+完整 AI 助手入口仍以 [CLAUDE.md](CLAUDE.md) <!-- pathref: repo/CLAUDE.md --> 为准。

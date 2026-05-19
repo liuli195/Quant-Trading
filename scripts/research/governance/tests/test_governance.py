@@ -4,7 +4,14 @@ import json
 from pathlib import Path
 
 from scripts.research.governance.branch_protection import check_pre_push_input, check_reference_transaction_input
-from scripts.research.governance.pr_review_evidence import validate_pr_body
+from scripts.research.governance.codex_review_monitor import build_monitor_report, render_monitor_comment
+from scripts.research.governance.pr_review_evidence import (
+    BLOCKING_CODEX_FINDING_PATTERN,
+    head_updated_at_from_monitor_state,
+    _parse_next_link,
+    render_monitor_head_state,
+    validate_pr_body,
+)
 from scripts.research.governance.rules import run_audit
 from scripts.research.registry import default_tool_registry
 
@@ -35,7 +42,6 @@ def _write_minimal_repo(root: Path) -> None:
         "research_datasets",
         ".github/workflows",
         ".githooks",
-        ".claude/agents",
         ".claude/skills/jq-research",
         ".claude/skills/jq-ab-test",
         "research_datasets/demo/snap/raw",
@@ -62,12 +68,14 @@ def _write_minimal_repo(root: Path) -> None:
         "docs/rules/index.md",
         "docs/rules/ai-agents.md",
         "docs/rules/governance.md",
+        "docs/rules/review-guidelines.md",
         "docs/rules/research-workflow.md",
         "docs/rules/code-style.md",
         "docs/rules/docs-and-pathref.md",
         "docs/adr/0001-rule-source-and-governance-model.md",
         "docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md",
         "docs/adr/0003-governance-gate-and-main-branch-protection.md",
+        "docs/adr/0004-codex-code-review-governance.md",
         "research_datasets/README.md",
         "scripts/research/platform/tests/test_platform.py",
         "scripts/research/registry/tests/test_registry.py",
@@ -87,12 +95,15 @@ def _write_minimal_repo(root: Path) -> None:
     (root / "CLAUDE.md").write_text(
         "scripts.research.cli scripts.research.datasets scripts.research.variants "
         "scripts.research.governance scripts.research.governance gate scripts.research.registry "
-        "docs/rules/index.md docs/adr/ pr-governance-review "
+        "docs/rules/index.md docs/rules/review-guidelines.md docs/adr/ Codex Code Review "
         "所有进入主干的改动必须通过 PR 禁止本地合并主干",
         encoding="utf-8",
     )
     (root / "AGENTS.md").write_text(
-        "所有 AI 编码助手统一以 CLAUDE.md 为权威规则源。\n",
+        "所有 AI 编码助手统一以 CLAUDE.md 为权威规则源。\n\n"
+        "## Review guidelines\n\n"
+        "Before reviewing, read and apply docs/rules/review-guidelines.md. "
+        "If you cannot access that file, treat the review as blocked.\n",
         encoding="utf-8",
     )
     (root / ".githooks/pre-commit").write_text(
@@ -125,21 +136,33 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     (root / ".github/workflows/research-governance.yml").write_text(
-        "on:\n  schedule:\n    - cron: '0 2 * * 1'\nsteps:\n"
+        "on:\n  schedule:\n    - cron: '0 2 * * 1'\n"
+        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
+        "  pull_request_review_comment:\n    types: [created, edited, deleted]\nsteps:\n"
         "  - run: python -m scripts.research.governance gate\n"
         "  - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
         encoding="utf-8",
     )
+    (root / ".github/workflows/codex-review-monitor.yml").write_text(
+        "on:\n  pull_request:\n    types: [opened, synchronize, reopened]\n"
+        "  issue_comment:\n  pull_request_review:\n"
+        "    types: [submitted, edited, dismissed]\n"
+        "  pull_request_review_comment:\n"
+        "    types: [created, edited, deleted]\n"
+        "permissions:\n  statuses: write\nsteps:\n"
+        "  - run: python -m scripts.research.governance.codex_review_monitor --sync-comment --sync-status\n",
+        encoding="utf-8",
+    )
     (root / "scripts/research/governance/README.md").write_text(
-        "docs/rules/index.md docs/adr scripts.research.governance gate\n",
+        "docs/rules/index.md docs/adr scripts.research.governance gate Codex Review Monitor\n",
         encoding="utf-8",
     )
     (root / "docs/rules/ai-agents.md").write_text(
-        "所有进入主干的改动必须通过 PR\n禁止本地合并主干\n",
+        "所有进入主干的改动必须通过 PR\n禁止本地合并主干\nCodex Review Monitor\n",
         encoding="utf-8",
     )
     (root / "docs/rules/governance.md").write_text(
-        ".githooks/reference-transaction ALLOW_MAIN_REF_UPDATE MAIN_REF_UPDATE_REASON\n",
+        ".githooks/reference-transaction ALLOW_MAIN_REF_UPDATE MAIN_REF_UPDATE_REASON Codex Review Monitor\n",
         encoding="utf-8",
     )
     (root / "CODEOWNERS").write_text(
@@ -149,7 +172,6 @@ def _write_minimal_repo(root: Path) -> None:
                 "AGENTS.md @research-platform",
                 "docs/rules/** @research-platform",
                 "docs/adr/** @research-platform",
-                ".claude/agents/** @research-platform",
                 ".claude/skills/** @research-platform",
                 ".github/workflows/** @research-platform",
                 ".githooks/** @research-platform",
@@ -162,7 +184,28 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     (root / ".github/pull_request_template.md").write_text(
-        "改动目标\n影响范围\n规则同步\n已运行检查\n评审治理 Agent 结论\npr-governance-review\nwaiver\n证据\n",
+        "改动目标\n影响范围\n规则同步\n已运行检查\nCodex Code Review 结论\n"
+        "Codex\nscripts.research.governance gate\nwaiver\n证据\n",
+        encoding="utf-8",
+    )
+    (root / "docs/rules/review-guidelines.md").write_text(
+        "\n".join(
+            [
+                "# Codex Code Review 指南",
+                "Codex Code Review",
+                "@codex review",
+                "AGENTS.md",
+                "docs/rules/review-guidelines.md",
+                "逐条检查",
+                "docs/rules/*.md",
+                "P0/P1",
+                "scripts.research.governance gate",
+                "Codex Review Monitor",
+                "Codex Code Review 结论",
+                "结论: 通过",
+                "阻断问题: 无",
+            ]
+        ),
         encoding="utf-8",
     )
     (root / "docs/exceptions/active-waivers.yaml").write_text(
@@ -175,21 +218,6 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / ".claude/skills/jq-ab-test/SKILL.md").write_text(
         "variant_id 参数变体 结构变体 scripts.research.variants",
-        encoding="utf-8",
-    )
-    (root / ".claude/agents/pr-governance-review.md").write_text(
-        "\n".join(
-            [
-                "---",
-                "name: pr-governance-review",
-                "---",
-                "独立评审 Agent",
-                "scripts.research.governance gate",
-                "评审治理 Agent 结论",
-                "结论: 通过",
-                "阻断问题: 无",
-            ]
-        ),
         encoding="utf-8",
     )
     (root / "path_aliases.json").write_text(
@@ -380,12 +408,12 @@ def test_governance_audit_flags_invalid_pr_template(tmp_path) -> None:
     assert any(finding.rule_id == "pr_template" and "规则同步" in finding.message for finding in report.findings)
 
 
-def test_governance_audit_flags_missing_review_agent(tmp_path) -> None:
+def test_governance_audit_flags_missing_review_guidelines(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
-    (tmp_path / ".claude/agents/pr-governance-review.md").unlink()
+    (tmp_path / "docs/rules/review-guidelines.md").unlink()
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
-    assert any(finding.rule_id == "review_agent" for finding in report.findings)
+    assert any(finding.rule_id == "review_guidelines" for finding in report.findings)
 
 
 def test_governance_audit_flags_workflow_without_review_evidence_gate(tmp_path) -> None:
@@ -399,6 +427,102 @@ def test_governance_audit_flags_workflow_without_review_evidence_gate(tmp_path) 
     assert not report.ok
     assert any(
         finding.rule_id == "governance_gate" and "PR review evidence" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_review_evidence_without_inline_comment_deleted_event(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".github/workflows/research-governance.yml").write_text(
+        "on:\n  schedule:\n    - cron: '0 2 * * 1'\n"
+        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
+        "  pull_request_review_comment:\n    types: [created, edited]\nsteps:\n"
+        "  - run: python -m scripts.research.governance gate\n"
+        "  - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "deleted inline review comments" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_review_evidence_without_review_dismissed_event(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".github/workflows/research-governance.yml").write_text(
+        "on:\n  schedule:\n    - cron: '0 2 * * 1'\n"
+        "  pull_request_review:\n    types: [submitted, edited]\n"
+        "  pull_request_review_comment:\n    types: [created, edited, deleted]\nsteps:\n"
+        "  - run: python -m scripts.research.governance gate\n"
+        "  - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "dismissed events" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_missing_codex_review_monitor(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".github/workflows/codex-review-monitor.yml").unlink()
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(finding.rule_id == "codex_review_monitor" for finding in report.findings)
+
+
+def test_governance_audit_flags_governance_docs_without_required_monitor_status(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / "docs/rules/governance.md").write_text(
+        ".githooks/reference-transaction ALLOW_MAIN_REF_UPDATE MAIN_REF_UPDATE_REASON\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "Codex Review Monitor" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_monitor_without_inline_comment_deleted_event(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".github/workflows/codex-review-monitor.yml").write_text(
+        "on:\n  pull_request:\n    types: [opened, synchronize, reopened]\n"
+        "  issue_comment:\n    types: [created, edited, deleted]\n"
+        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
+        "  pull_request_review_comment:\n    types: [created, edited]\n"
+        "permissions:\n  statuses: write\nsteps:\n"
+        "  - run: python -m scripts.research.governance.codex_review_monitor --sync-comment --sync-status\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "codex_review_monitor" and "deleted inline review comments" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_monitor_without_review_dismissed_event(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".github/workflows/codex-review-monitor.yml").write_text(
+        "on:\n  pull_request:\n    types: [opened, synchronize, reopened]\n"
+        "  issue_comment:\n    types: [created, edited, deleted]\n"
+        "  pull_request_review:\n    types: [submitted, edited]\n"
+        "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
+        "permissions:\n  statuses: write\nsteps:\n"
+        "  - run: python -m scripts.research.governance.codex_review_monitor --sync-comment --sync-status\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "codex_review_monitor" and "dismissed events" in finding.message
         for finding in report.findings
     )
 
@@ -511,7 +635,7 @@ def test_governance_audit_flags_claude_without_pr_main_merge_rule(tmp_path) -> N
     (tmp_path / "CLAUDE.md").write_text(
         "scripts.research.cli scripts.research.datasets scripts.research.variants "
         "scripts.research.governance scripts.research.governance gate scripts.research.registry "
-        "docs/rules/index.md docs/adr/ pr-governance-review",
+        "docs/rules/index.md docs/rules/review-guidelines.md docs/adr/ Codex Code Review",
         encoding="utf-8",
     )
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
@@ -581,37 +705,1032 @@ def test_reference_transaction_branch_protection_allows_audited_bypass() -> None
     assert violations == []
 
 
-def test_pr_review_evidence_accepts_approved_agent_conclusion() -> None:
+def _valid_codex_review_body(review_id: int = 4314779358) -> str:
+    return "\n".join(
+        [
+            "## Codex Code Review \u7ed3\u8bba",
+            "",
+            "- Reviewer: `Codex`",
+            "- \u89e6\u53d1\u65b9\u5f0f: `@codex review \u6309 AGENTS.md \u548c docs/rules/review-guidelines.md \u5ba1\uff1b\u9010\u6761\u68c0\u67e5 docs/rules/*.md`",
+            "- \u7ed3\u8bba: \u901a\u8fc7",
+            "- \u963b\u65ad\u95ee\u9898: \u65e0",
+            "- \u5173\u952e\u8bc1\u636e:",
+            f"  - Codex review \u94fe\u63a5\uff1ahttps://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-{review_id}",
+            "  - `scripts.research.governance gate`",
+        ]
+    )
+
+
+def _codex_completion_comment(
+    comment_id: int = 4484023766,
+    *,
+    created_at: str = "2026-05-19T01:00:00Z",
+) -> dict[str, object]:
+    return {
+        "id": comment_id,
+        "html_url": f"https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-{comment_id}",
+        "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+        "created_at": created_at,
+        "reaction_items": [
+            {
+                "content": "+1",
+                "created_at": "2026-05-19T01:01:00Z",
+                "user": {"login": "chatgpt-codex-connector"},
+            }
+        ],
+    }
+
+
+def _codex_no_major_issues_comment(
+    comment_id: int = 4484229220,
+    *,
+    created_at: str = "2026-05-19T01:04:00Z",
+) -> dict[str, object]:
+    return {
+        "id": comment_id,
+        "html_url": f"https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-{comment_id}",
+        "body": "Codex Review: Didn't find any major issues. :+1:",
+        "created_at": created_at,
+        "user": {"login": "chatgpt-codex-connector[bot]"},
+    }
+
+
+def test_pr_review_evidence_accepts_approved_codex_conclusion() -> None:
+    head_sha = "0" * 40
     report = validate_pr_body(
         "\n".join(
             [
-                "## 评审治理 Agent 结论",
+                "## Codex Code Review 结论",
                 "",
-                "- Agent: `pr-governance-review`",
+                "- Reviewer: `Codex`",
+                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
+                "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
                 "  - `scripts.research.governance gate`",
             ]
-        )
+        ),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        comments=[
+            "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。"
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "body": "### Codex Review\n\nNo blocking findings.",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
     )
     assert report.ok
     assert report.errors == ()
 
 
-def test_pr_review_evidence_rejects_unexecuted_agent_conclusion() -> None:
+def test_pr_review_evidence_rejects_unexecuted_codex_conclusion() -> None:
     report = validate_pr_body(
         "\n".join(
             [
-                "## 评审治理 Agent 结论",
+                "## Codex Code Review 结论",
                 "",
-                "- Agent: `pr-governance-review`",
+                "- Reviewer: `Codex`",
+                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
                 "- 结论: 未执行",
                 "- 阻断问题: 未确认",
                 "- 关键证据:",
+                "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
                 "  - `scripts.research.governance gate`",
             ]
         )
     )
     assert not report.ok
     assert "结论 must be 通过" in report.errors
+
+
+def test_pr_review_evidence_rejects_placeholder_codex_review_link() -> None:
+    report = validate_pr_body(
+        "\n".join(
+            [
+                "## Codex Code Review 结论",
+                "",
+                "- Reviewer: `Codex`",
+                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 结论: 通过",
+                "- 阻断问题: 无",
+                "- 关键证据:",
+                "  - Codex review 链接：",
+                "  - `scripts.research.governance gate`",
+            ]
+        )
+    )
+    assert not report.ok
+    assert "review evidence must include a real Codex review link for this PR" in report.errors
+
+
+def test_pr_review_evidence_rejects_other_pr_review_link() -> None:
+    report = validate_pr_body(
+        "\n".join(
+            [
+                "## Codex Code Review 结论",
+                "",
+                "- Reviewer: `Codex`",
+                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 结论: 通过",
+                "- 阻断问题: 无",
+                "- 关键证据:",
+                "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/4#pullrequestreview-4314779358",
+                "  - `scripts.research.governance gate`",
+            ]
+        ),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+    )
+    assert not report.ok
+    assert "review evidence must include a real Codex review link for this PR" in report.errors
+
+
+def test_pr_review_evidence_rejects_discussion_link_as_review() -> None:
+    report = validate_pr_body(
+        "\n".join(
+            [
+                "## Codex Code Review 结论",
+                "",
+                "- Reviewer: `Codex`",
+                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 结论: 通过",
+                "- 阻断问题: 无",
+                "- 关键证据:",
+                "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#discussion_r3262925410",
+                "  - `scripts.research.governance gate`",
+            ]
+        ),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+    )
+    assert not report.ok
+    assert "review evidence must include a real Codex review link for this PR" in report.errors
+
+
+def test_pr_review_evidence_rejects_missing_required_trigger_comment() -> None:
+    report = validate_pr_body(
+        "\n".join(
+            [
+                "## Codex Code Review 结论",
+                "",
+                "- Reviewer: `Codex`",
+                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 结论: 通过",
+                "- 阻断问题: 无",
+                "- 关键证据:",
+                "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
+                "  - `scripts.research.governance gate`",
+            ]
+        ),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        comments=["@codex review"],
+    )
+    assert not report.ok
+    assert "PR comments must include the required @codex review trigger" in report.errors
+
+
+def test_pr_review_evidence_rejects_review_from_old_head() -> None:
+    report = validate_pr_body(
+        "\n".join(
+            [
+                "## Codex Code Review 结论",
+                "",
+                "- Reviewer: `Codex`",
+                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 结论: 通过",
+                "- 阻断问题: 无",
+                "- 关键证据:",
+                "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
+                "  - `scripts.research.governance gate`",
+            ]
+        ),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha="1" * 40,
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": "0" * 40,
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+    )
+    assert not report.ok
+    assert "Codex review link must match a Codex review on the current head" in report.errors
+
+
+def test_pr_review_evidence_rejects_dismissed_codex_review_link() -> None:
+    head_sha = "0" * 40
+    report = validate_pr_body(
+        _valid_codex_review_body(),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "state": "DISMISSED",
+                "body": "### Codex Review\n\nNo blocking findings.",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+    assert not report.ok
+    assert "Codex review link must match a Codex review on the current head" in report.errors
+
+
+def test_pr_review_evidence_ignores_dismissed_blocking_codex_review() -> None:
+    head_sha = "0" * 40
+    report = validate_pr_body(
+        _valid_codex_review_body(4314779360),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "state": "DISMISSED",
+                "body": "**![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat) blocking**",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            },
+            {
+                "id": 4314779360,
+                "commit_id": head_sha,
+                "state": "COMMENTED",
+                "body": "### Codex Review\n\nNo blocking findings.",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            },
+        ],
+        review_comments=[],
+    )
+    assert report.ok
+
+
+def test_pr_review_evidence_accepts_changes_requested_review_without_p0_p1() -> None:
+    head_sha = "0" * 40
+    report = validate_pr_body(
+        _valid_codex_review_body(),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "state": "CHANGES_REQUESTED",
+                "body": "### Codex Review\n\nNo badge text.",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+    assert report.ok
+
+
+def test_pr_review_evidence_accepts_codex_completion_reaction_without_review() -> None:
+    head_sha = "0" * 40
+    body = _valid_codex_review_body().replace(
+        "#pullrequestreview-4314779358",
+        "#issuecomment-4484023766",
+    )
+    report = validate_pr_body(
+        body,
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        expected_head_created_at="2026-05-19T00:59:00Z",
+        comments=[_codex_completion_comment()],
+        reviews=[],
+        review_comments=[],
+    )
+    assert report.ok
+
+
+def test_pr_review_evidence_accepts_issue_comment_completion_link() -> None:
+    head_sha = "0" * 40
+    body = _valid_codex_review_body().replace(
+        "https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
+        "https://github.com/liuli195/Quant-Trading/issues/5#issuecomment-4484023766",
+    )
+    report = validate_pr_body(
+        body,
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        expected_head_created_at="2026-05-19T00:59:00Z",
+        comments=[_codex_completion_comment()],
+        reviews=[],
+        review_comments=[],
+    )
+    assert report.ok
+
+
+def test_pr_review_evidence_accepts_codex_no_major_issues_comment() -> None:
+    head_sha = "0" * 40
+    body = _valid_codex_review_body().replace(
+        "https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
+        "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484229220",
+    )
+    report = validate_pr_body(
+        body,
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        expected_head_created_at="2026-05-19T00:59:00Z",
+        comments=[
+            {
+                "id": 4484212277,
+                "html_url": "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484212277",
+                "body": "@codex review\n\nPlease review according to AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md item by item.",
+                "created_at": "2026-05-19T01:00:00Z",
+            },
+            _codex_no_major_issues_comment(),
+        ],
+        reviews=[],
+        review_comments=[],
+    )
+    assert report.ok
+
+
+def test_pr_review_evidence_ignores_later_non_trigger_comment_for_no_major_issues() -> None:
+    head_sha = "0" * 40
+    body = _valid_codex_review_body().replace(
+        "https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
+        "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484229220",
+    )
+    report = validate_pr_body(
+        body,
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        expected_head_created_at="2026-05-19T00:59:00Z",
+        comments=[
+            {
+                "id": 4484212277,
+                "html_url": "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484212277",
+                "body": "@codex review\n\nPlease review according to AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md item by item.",
+                "created_at": "2026-05-19T01:00:00Z",
+            },
+            _codex_no_major_issues_comment(created_at="2026-05-19T01:05:00Z"),
+            {
+                "id": 4484999999,
+                "body": "<!-- codex-review-monitor -->\n## Codex Review Monitor",
+                "created_at": "2026-05-19T01:10:00Z",
+            },
+        ],
+        reviews=[],
+        review_comments=[],
+    )
+    assert report.ok
+
+
+def test_pr_review_evidence_ignores_later_non_trigger_comment_for_completion_reaction() -> None:
+    head_sha = "0" * 40
+    body = _valid_codex_review_body().replace(
+        "#pullrequestreview-4314779358",
+        "#issuecomment-4484023766",
+    )
+    report = validate_pr_body(
+        body,
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        expected_head_created_at="2026-05-19T00:59:00Z",
+        comments=[
+            _codex_completion_comment(created_at="2026-05-19T01:00:00Z"),
+            {
+                "id": 4484999999,
+                "body": "<!-- codex-review-monitor -->\n## Codex Review Monitor",
+                "created_at": "2026-05-19T01:10:00Z",
+            },
+        ],
+        reviews=[],
+        review_comments=[],
+    )
+    assert report.ok
+
+
+def test_pr_review_evidence_rejects_completion_before_latest_required_trigger() -> None:
+    head_sha = "0" * 40
+    body = _valid_codex_review_body().replace(
+        "#pullrequestreview-4314779358",
+        "#issuecomment-4484023766",
+    )
+    report = validate_pr_body(
+        body,
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        expected_head_created_at="2026-05-19T00:59:00Z",
+        comments=[
+            _codex_completion_comment(created_at="2026-05-19T01:00:00Z"),
+            {
+                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "created_at": "2026-05-19T01:05:00Z",
+            },
+        ],
+        reviews=[],
+        review_comments=[],
+    )
+    assert not report.ok
+    assert "Codex completion comment must match the latest required @codex review trigger" in report.errors
+
+
+def test_pr_review_evidence_reads_monitor_head_state_for_head_cutoff() -> None:
+    head_sha = "0" * 40
+    comment = {
+        "body": render_monitor_head_state(
+            head_sha=head_sha,
+            head_updated_at="2026-05-19T02:00:00Z",
+        )
+    }
+    assert (
+        head_updated_at_from_monitor_state([comment], expected_head_sha=head_sha)
+        == "2026-05-19T02:00:00Z"
+    )
+
+
+def test_pr_review_evidence_rejects_codex_review_with_blocking_body_finding() -> None:
+    head_sha = "0" * 40
+    report = validate_pr_body(
+        "\n".join(
+            [
+                "## Codex Code Review 结论",
+                "",
+                "- Reviewer: `Codex`",
+                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 结论: 通过",
+                "- 阻断问题: 无",
+                "- 关键证据:",
+                "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
+                "  - `scripts.research.governance gate`",
+            ]
+        ),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "body": "**![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat) blocking finding**",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+    assert not report.ok
+    assert "Codex review must not contain P0/P1 findings on the current head" in report.errors
+
+
+def test_pr_review_evidence_rejects_codex_review_with_blocking_inline_finding() -> None:
+    head_sha = "0" * 40
+    report = validate_pr_body(
+        "\n".join(
+            [
+                "## Codex Code Review 结论",
+                "",
+                "- Reviewer: `Codex`",
+                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 结论: 通过",
+                "- 阻断问题: 无",
+                "- 关键证据:",
+                "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
+                "  - `scripts.research.governance gate`",
+            ]
+        ),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "body": "### Codex Review",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[
+            {
+                "pull_request_review_id": 4314779358,
+                "body": "**![P0 Badge](https://img.shields.io/badge/P0-red?style=flat) blocking finding**",
+            }
+        ],
+    )
+    assert not report.ok
+    assert "Codex review must not contain P0/P1 findings on the current head" in report.errors
+
+
+def test_pr_review_evidence_rejects_review_before_required_trigger_comment() -> None:
+    head_sha = "0" * 40
+    report = validate_pr_body(
+        "\n".join(
+            [
+                "## Codex Code Review 结论",
+                "",
+                "- Reviewer: `Codex`",
+                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 结论: 通过",
+                "- 阻断问题: 无",
+                "- 关键证据:",
+                "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
+                "  - `scripts.research.governance gate`",
+            ]
+        ),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        comments=[
+            {
+                "body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。",
+                "created_at": "2026-05-19T00:10:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T00:09:00Z",
+                "body": "### Codex Review",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+    assert not report.ok
+    assert "Codex review must be submitted after the required @codex review trigger" in report.errors
+
+
+def test_pr_review_evidence_waits_for_review_after_latest_required_trigger() -> None:
+    head_sha = "0" * 40
+    report = validate_pr_body(
+        _valid_codex_review_body(),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        expected_head_created_at="2026-05-19T00:00:00Z",
+        comments=[
+            {
+                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "created_at": "2026-05-19T00:05:00Z",
+            },
+            {
+                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "created_at": "2026-05-19T00:15:00Z",
+            },
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T00:10:00Z",
+                "body": "### Codex Review",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+    assert not report.ok
+    assert "Codex review must be submitted after the required @codex review trigger" in report.errors
+
+
+def test_pr_review_evidence_rejects_trigger_before_current_head() -> None:
+    head_sha = "0" * 40
+    report = validate_pr_body(
+        "\n".join(
+            [
+                "## Codex Code Review 结论",
+                "",
+                "- Reviewer: `Codex`",
+                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 结论: 通过",
+                "- 阻断问题: 无",
+                "- 关键证据:",
+                "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
+                "  - `scripts.research.governance gate`",
+            ]
+        ),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        expected_head_created_at="2026-05-19T00:10:00Z",
+        comments=[
+            {
+                "body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。",
+                "created_at": "2026-05-19T00:09:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T00:11:00Z",
+                "body": "### Codex Review",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+    assert not report.ok
+    assert "required @codex review trigger must be submitted after the current head" in report.errors
+
+
+def test_pr_review_evidence_uses_comment_updated_at_for_trigger_time() -> None:
+    head_sha = "0" * 40
+    report = validate_pr_body(
+        "\n".join(
+            [
+                "## Codex Code Review 结论",
+                "",
+                "- Reviewer: `Codex`",
+                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 结论: 通过",
+                "- 阻断问题: 无",
+                "- 关键证据:",
+                "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
+                "  - `scripts.research.governance gate`",
+            ]
+        ),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        expected_head_created_at="2026-05-19T00:07:00Z",
+        comments=[
+            {
+                "body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。",
+                "created_at": "2026-05-19T00:08:00Z",
+                "updated_at": "2026-05-19T00:12:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T00:10:00Z",
+                "body": "### Codex Review",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+    assert not report.ok
+    assert "Codex review must be submitted after the required @codex review trigger" in report.errors
+
+
+def test_pr_review_evidence_rejects_any_current_head_blocking_codex_review() -> None:
+    head_sha = "0" * 40
+    report = validate_pr_body(
+        "\n".join(
+            [
+                "## Codex Code Review 结论",
+                "",
+                "- Reviewer: `Codex`",
+                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 结论: 通过",
+                "- 阻断问题: 无",
+                "- 关键证据:",
+                "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
+                "  - `scripts.research.governance gate`",
+            ]
+        ),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        comments=[
+            {
+                "body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。",
+                "created_at": "2026-05-19T00:09:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T00:10:00Z",
+                "body": "### Codex Review",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            },
+            {
+                "id": 4314779360,
+                "commit_id": head_sha,
+                "state": "CHANGES_REQUESTED",
+                "submitted_at": "2026-05-19T00:11:00Z",
+                "body": "**![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat) blocking**",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            },
+        ],
+        review_comments=[],
+    )
+    assert not report.ok
+    assert "Codex review must not contain P0/P1 findings on the current head" in report.errors
+
+
+def test_parse_next_link_finds_github_pagination_next_url() -> None:
+    header = (
+        '<https://api.github.com/repos/liuli195/Quant-Trading/issues/5/comments?page=2>; rel="next", '
+        '<https://api.github.com/repos/liuli195/Quant-Trading/issues/5/comments?page=4>; rel="last"'
+    )
+    assert (
+        _parse_next_link(header)
+        == "https://api.github.com/repos/liuli195/Quant-Trading/issues/5/comments?page=2"
+    )
+
+
+def test_codex_review_monitor_reports_waiting_for_codex_after_trigger() -> None:
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": "0" * 40}},
+        issue_comments=[
+            {"body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。"}
+        ],
+        reviews=[],
+        review_comments=[],
+    )
+    assert report.status == "waiting_for_codex"
+    assert report.trigger_found
+    assert "等待 Codex review" in render_monitor_comment(report)
+
+
+def test_codex_review_monitor_passes_on_codex_completion_reaction() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        head_created_at="2026-05-19T00:59:00Z",
+        issue_comments=[_codex_completion_comment()],
+        reviews=[],
+        review_comments=[],
+    )
+    assert report.status == "passed"
+    assert report.latest_review_url == "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484023766"
+
+
+def test_codex_review_monitor_passes_on_codex_no_major_issues_comment() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        head_created_at="2026-05-19T00:59:00Z",
+        issue_comments=[
+            {
+                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "created_at": "2026-05-19T01:00:00Z",
+            },
+            _codex_no_major_issues_comment(),
+        ],
+        reviews=[],
+        review_comments=[],
+    )
+    assert report.status == "passed"
+    assert report.latest_review_url == "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484229220"
+
+
+def test_codex_review_monitor_waits_for_completion_after_latest_required_trigger() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        head_created_at="2026-05-19T00:59:00Z",
+        issue_comments=[
+            _codex_completion_comment(created_at="2026-05-19T01:00:00Z"),
+            {
+                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "created_at": "2026-05-19T01:05:00Z",
+            },
+        ],
+        reviews=[],
+        review_comments=[],
+    )
+    assert report.status == "waiting_for_codex"
+    assert report.trigger_found
+    assert report.latest_review_url is None
+
+
+def test_codex_review_monitor_rejects_trigger_before_current_head() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        head_created_at="2026-05-19T01:00:00Z",
+        issue_comments=[
+            {
+                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "created_at": "2026-05-19T00:59:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T01:01:00Z",
+                "body": "### Codex Review\n\nNo blocking findings.",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+    assert report.status == "waiting_for_trigger"
+    assert not report.trigger_found
+
+
+def test_codex_review_monitor_waits_for_review_after_required_trigger() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        head_created_at="2026-05-19T01:00:00Z",
+        issue_comments=[
+            {
+                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "created_at": "2026-05-19T01:02:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T01:01:00Z",
+                "body": "### Codex Review\n\nNo blocking findings.",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+    assert report.status == "waiting_for_codex"
+    assert report.trigger_found
+
+
+def test_codex_review_monitor_waits_for_review_after_latest_required_trigger() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        head_created_at="2026-05-19T01:00:00Z",
+        issue_comments=[
+            {
+                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "created_at": "2026-05-19T01:02:00Z",
+            },
+            {
+                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "created_at": "2026-05-19T01:05:00Z",
+            },
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T01:04:00Z",
+                "body": "### Codex Review\n\nNo blocking findings.",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+    assert report.status == "waiting_for_codex"
+    assert report.trigger_found
+
+
+def test_codex_review_monitor_reports_passed_current_head_review() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        issue_comments=[
+            {"body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。"}
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T00:00:00Z",
+                "body": "### Codex Review\n\nNo blocking findings.",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+    assert report.status == "passed"
+    assert report.latest_review_url == "https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358"
+
+
+def test_codex_review_monitor_ignores_dismissed_reviews() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        issue_comments=[
+            {
+                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "created_at": "2026-05-19T01:00:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "state": "DISMISSED",
+                "submitted_at": "2026-05-19T01:01:00Z",
+                "body": "**![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat) blocking**",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+    assert report.status == "waiting_for_codex"
+    assert report.blocking_findings == 0
+
+
+def test_codex_review_monitor_reports_blocked_on_p1_inline_comment() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        issue_comments=[
+            {"body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。"}
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T00:00:00Z",
+                "body": "### Codex Review",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[
+            {
+                "pull_request_review_id": 4314779358,
+                "body": "**![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat) blocking**",
+            }
+        ],
+    )
+    assert report.status == "blocked"
+    assert report.blocking_findings == 1
+
+
+def test_codex_review_priority_patterns_match_plain_text_titles() -> None:
+    assert BLOCKING_CODEX_FINDING_PATTERN.search("[P1] blocking finding")
+    assert BLOCKING_CODEX_FINDING_PATTERN.search("**[P0] blocking finding**")
+
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        issue_comments=[
+            {
+                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "created_at": "2026-05-19T01:00:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T01:01:00Z",
+                "body": "### Codex Review",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[
+            {"pull_request_review_id": 4314779358, "body": "[P1] blocking finding"},
+            {"pull_request_review_id": 4314779358, "body": "[P2] advisory finding"},
+        ],
+    )
+    assert report.status == "blocked"
+    assert report.blocking_findings == 1
+    assert report.advisory_findings == 1
+
+
+def test_codex_review_monitor_blocks_on_any_current_head_codex_review() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        issue_comments=[
+            {"body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。"}
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T00:00:00Z",
+                "body": "**![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat) blocking**",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            },
+            {
+                "id": 4314779360,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T00:01:00Z",
+                "body": "### Codex Review\n\nNo blocking findings.",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            },
+        ],
+        review_comments=[],
+    )
+    assert report.status == "blocked"
+    assert report.blocking_findings == 1
+    assert report.latest_review_url == "https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779360"
