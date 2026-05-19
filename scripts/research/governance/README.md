@@ -53,11 +53,29 @@ ruleset:
 - require review from Code Owners;
 - block force pushes.
 
+## Codex review monitor
+
+`Codex Review Monitor` listens to PR `@codex review` trigger comments, Codex
+review submissions, and Codex inline review comments. It updates one PR comment
+marked with `<!-- codex-review-monitor -->`, reporting whether the current PR
+head is still waiting for Codex, blocked by P0/P1 findings, or ready for the PR
+body evidence to be updated.
+
+Manual inspection is available through workflow dispatch, or locally with:
+
+```powershell
+$env:GITHUB_REPOSITORY="owner/repo"
+$env:PR_NUMBER="<number>"
+$env:GITHUB_TOKEN="<token>"
+.\.venv\Scripts\python.exe -m scripts.research.governance.codex_review_monitor
+```
+
 审计范围：
 
 - 仓库级规则文档 [docs/rules/index.md](../../../docs/rules/index.md) <!-- pathref: docs/rules/index.md --> 是否存在，ADR 目录 [docs/adr](../../../docs/adr) <!-- pathref: docs/adr --> 是否连续编号。
 - `.githooks/pre-push` 是否仍调用代码化主干保护门禁、完整 gate 和 Git LFS 转交。
 - Codex Code Review 规则 [review-guidelines.md](../../../docs/rules/review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md --> 是否存在，PR 模板是否要求 Codex 评审结论。
+- Codex Review Monitor workflow 是否监听 `@codex review`、Codex review 和 inline review comment。
 - `CODEOWNERS` 是否覆盖关键治理路径，`.github/pull_request_template.md` 是否包含规则同步、检查、waiver 和证据项。
 - `docs/exceptions/active-waivers.yaml` 中的 waiver 是否有 owner、批准人、过期时间和迁移计划。
 - 工具是否登记在中央 registry。

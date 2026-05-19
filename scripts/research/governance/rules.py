@@ -64,6 +64,7 @@ REQUIRED_REVIEW_GUIDELINES_TOKENS = (
     "docs/rules/*.md",
     "P0/P1",
     "scripts.research.governance gate",
+    "Codex Review Monitor",
     "Codex Code Review 结论",
     "结论: 通过",
     "阻断问题: 无",
@@ -261,6 +262,21 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             findings.append(AuditFinding("governance_gate", "error", "CI workflow missing PR review evidence gate"))
         if "schedule:" not in text:
             findings.append(AuditFinding("governance_gate", "error", "CI workflow missing scheduled drift audit"))
+
+    monitor_workflow = root / ".github" / "workflows" / "codex-review-monitor.yml"
+    if not monitor_workflow.is_file():
+        findings.append(AuditFinding("codex_review_monitor", "error", ".github/workflows/codex-review-monitor.yml missing"))
+    else:
+        text = monitor_workflow.read_text(encoding="utf-8", errors="ignore")
+        for token in (
+            "issue_comment",
+            "pull_request_review",
+            "pull_request_review_comment",
+            "scripts.research.governance.codex_review_monitor",
+            "--sync-comment",
+        ):
+            if token not in text:
+                findings.append(AuditFinding("codex_review_monitor", "error", f"monitor workflow missing {token}"))
 
     claude = root / "CLAUDE.md"
     if claude.is_file():
