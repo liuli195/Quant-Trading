@@ -17,6 +17,7 @@ from scripts.research.governance.pr_review_evidence import (
     BLOCKING_CODEX_FINDING_PATTERN,
     has_codex_completion_reaction,
     head_updated_at_from_monitor_state,
+    is_codex_completion_comment,
     is_effective_codex_review,
     render_monitor_head_state,
 )
@@ -227,18 +228,29 @@ def _required_trigger_comments(
     return tuple(matched)
 
 
+def _is_required_trigger_comment(comment: Mapping[str, object]) -> bool:
+    body = str(comment.get("body", ""))
+    return all(token in body for token in REQUIRED_TRIGGER_TOKENS)
+
+
 def _latest_codex_completion_comment(
     issue_comments: Sequence[Mapping[str, object]],
     *,
     head_created_at: str | None = None,
     trigger_time: str | None = None,
 ) -> Mapping[str, object] | None:
-    matched = [
-        comment
-        for comment in _required_trigger_comments(issue_comments, head_created_at=head_created_at)
-        if has_codex_completion_reaction(comment)
-        and (trigger_time is None or _comment_effective_time(comment) >= trigger_time)
-    ]
+    matched: list[Mapping[str, object]] = []
+    for comment in issue_comments:
+        comment_time = _comment_effective_time(comment)
+        if head_created_at and comment_time and comment_time < head_created_at:
+            continue
+        if trigger_time and comment_time and comment_time < trigger_time:
+            continue
+        if _is_required_trigger_comment(comment) and has_codex_completion_reaction(comment):
+            matched.append(comment)
+            continue
+        if is_codex_completion_comment(comment):
+            matched.append(comment)
     if not matched:
         return None
     return sorted(matched, key=_comment_effective_time)[-1]

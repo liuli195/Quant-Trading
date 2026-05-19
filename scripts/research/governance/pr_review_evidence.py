@@ -28,6 +28,10 @@ BLOCKING_CODEX_FINDING_PATTERN = re.compile(
     r"(?:P[01] Badge|badge/P[01]-|(?:^|\n)\s*(?:\*\*)?\[P[01]\]\s+)",
     re.IGNORECASE,
 )
+CODEX_NO_MAJOR_ISSUES_PATTERN = re.compile(
+    r"Codex Review:\s*(?:Didn['’]t|Did not) find any major issues",
+    re.IGNORECASE,
+)
 REQUIRED_TRIGGER_TOKENS = ("@codex review", "AGENTS.md", "docs/rules/review-guidelines.md", "docs/rules/*.md")
 
 
@@ -234,11 +238,12 @@ def _codex_completion_comment_errors(
     expected_head_created_at: str | None,
 ) -> tuple[str, ...]:
     comment = _find_comment_by_id(comments, comment_id)
-    if comment is None or not _is_required_trigger_comment(comment):
+    if comment is None:
         return ("Codex review link must match a Codex review on the current head",)
 
     errors: list[str] = []
-    if not _has_required_trigger_after_current_head((comment,), expected_head_created_at):
+    trigger_comments = _required_trigger_comments(comments)
+    if not _has_required_trigger_after_current_head(trigger_comments, expected_head_created_at):
         errors.append("required @codex review trigger must be submitted after the current head")
     latest_trigger_time = _latest_required_trigger_time(
         comments,
@@ -247,8 +252,11 @@ def _codex_completion_comment_errors(
     comment_time = _comment_effective_time(comment)
     if latest_trigger_time and comment_time and comment_time < latest_trigger_time:
         errors.append("Codex completion comment must match the latest required @codex review trigger")
-    if not has_codex_completion_reaction(comment):
-        errors.append("Codex completion comment must include a Codex thumbs-up reaction")
+    if _is_required_trigger_comment(comment):
+        if not has_codex_completion_reaction(comment):
+            errors.append("Codex completion comment must include a Codex thumbs-up reaction")
+    elif not is_codex_completion_comment(comment):
+        return ("Codex review link must match a Codex review on the current head",)
     if _current_head_has_blocking_codex_review(
         reviews,
         review_comments=review_comments,
@@ -348,6 +356,17 @@ def has_codex_completion_reaction(comment: Mapping[str, object]) -> bool:
             continue
         return True
     return False
+
+
+def is_codex_completion_comment(comment: Mapping[str, object]) -> bool:
+    user = comment.get("user")
+    login = user.get("login") if isinstance(user, Mapping) else ""
+    if str(login) not in CODEX_REVIEW_AUTHORS:
+        return False
+    body = str(comment.get("body", ""))
+    if not CODEX_NO_MAJOR_ISSUES_PATTERN.search(body):
+        return False
+    return not BLOCKING_CODEX_FINDING_PATTERN.search(body)
 
 
 def _comment_reaction_items(comment: Mapping[str, object]) -> tuple[Mapping[str, object], ...]:

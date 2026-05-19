@@ -741,6 +741,20 @@ def _codex_completion_comment(
     }
 
 
+def _codex_no_major_issues_comment(
+    comment_id: int = 4484229220,
+    *,
+    created_at: str = "2026-05-19T01:04:00Z",
+) -> dict[str, object]:
+    return {
+        "id": comment_id,
+        "html_url": f"https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-{comment_id}",
+        "body": "Codex Review: Didn't find any major issues. :+1:",
+        "created_at": created_at,
+        "user": {"login": "chatgpt-codex-connector[bot]"},
+    }
+
+
 def test_pr_review_evidence_accepts_approved_codex_conclusion() -> None:
     head_sha = "0" * 40
     report = validate_pr_body(
@@ -1007,6 +1021,32 @@ def test_pr_review_evidence_accepts_issue_comment_completion_link() -> None:
         expected_head_sha=head_sha,
         expected_head_created_at="2026-05-19T00:59:00Z",
         comments=[_codex_completion_comment()],
+        reviews=[],
+        review_comments=[],
+    )
+    assert report.ok
+
+
+def test_pr_review_evidence_accepts_codex_no_major_issues_comment() -> None:
+    head_sha = "0" * 40
+    body = _valid_codex_review_body().replace(
+        "https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
+        "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484229220",
+    )
+    report = validate_pr_body(
+        body,
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        expected_head_created_at="2026-05-19T00:59:00Z",
+        comments=[
+            {
+                "id": 4484212277,
+                "html_url": "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484212277",
+                "body": "@codex review\n\nPlease review according to AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md item by item.",
+                "created_at": "2026-05-19T01:00:00Z",
+            },
+            _codex_no_major_issues_comment(),
+        ],
         reviews=[],
         review_comments=[],
     )
@@ -1360,6 +1400,27 @@ def test_codex_review_monitor_passes_on_codex_completion_reaction() -> None:
     )
     assert report.status == "passed"
     assert report.latest_review_url == "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484023766"
+
+
+def test_codex_review_monitor_passes_on_codex_no_major_issues_comment() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        head_created_at="2026-05-19T00:59:00Z",
+        issue_comments=[
+            {
+                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "created_at": "2026-05-19T01:00:00Z",
+            },
+            _codex_no_major_issues_comment(),
+        ],
+        reviews=[],
+        review_comments=[],
+    )
+    assert report.status == "passed"
+    assert report.latest_review_url == "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484229220"
 
 
 def test_codex_review_monitor_waits_for_completion_after_latest_required_trigger() -> None:
