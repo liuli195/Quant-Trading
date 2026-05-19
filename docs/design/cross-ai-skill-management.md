@@ -82,6 +82,78 @@ MCP 注册
 - 不产生跨工具写入。
 - 不覆盖 `.claude/skills/`。
 
+#### 第 1 步产出：现状盘点
+
+执行范围：只读盘点，不执行 `cc-switch skills sync`，不写入各工具用户级目录，也不修改 [.claude/skills](../../.claude/skills) <!-- pathref: repo/.claude/skills -->。
+
+命令结果：
+
+| 命令 | 结果 | 结论 |
+| --- | --- | --- |
+| `cc-switch skills scan-unmanaged` | `No unmanaged skills found.` | 当前未发现用户级工具目录里的未管理 Skill。 |
+| `cc-switch skills list` | `No installed skills found.` | `cc-switch` SSOT 当前没有已安装的系统级 Skill。 |
+| `cc-switch --app claude skills scan-unmanaged` | `No unmanaged skills found.` | `cc-switch` 没有把 Claude Code 用户 Skill 或插件 Skill 当成未管理 Skill。 |
+| `cc-switch --app claude skills list` | `No installed skills found.` | Claude 目标应用下也没有 `cc-switch` 已安装 Skill。 |
+| `cc-switch --app codex skills scan-unmanaged` | `No unmanaged skills found.` | `cc-switch` 没有把 Codex 运行时内置 Skill 或插件缓存 Skill 当成未管理 Skill。 |
+| `cc-switch --app codex skills list` | `No installed skills found.` | Codex 目标应用下也没有 `cc-switch` 已安装 Skill。 |
+| 磁盘盘点 `C:\Users\liuli\.claude\skills` | 3 个 `SKILL.md` | Claude Code 用户级 Skill 目录存在独立 Skill，但不在 `cc-switch` SSOT 中。 |
+| 磁盘盘点 `C:\Users\liuli\.claude\plugins\installed_plugins.json` | 1 个已安装插件 | 已安装 `chrome-devtools-mcp@claude-plugins-official` 1.0.1。 |
+| 磁盘盘点 `C:\Users\liuli\.claude\plugins\cache\...\chrome-devtools-mcp\1.0.1` | 6 个 `SKILL.md` | 已安装 Claude 插件自带 6 个 Skill，由 Claude Code 插件运行时管理。 |
+| 磁盘盘点 `C:\Users\liuli\.claude\plugins\marketplaces` | 34 个 `SKILL.md` | marketplace 中有可用插件 Skill，但这些目录不等同于已安装插件。 |
+| 磁盘盘点 `C:\Users\liuli\.codex\skills` | 6 个 `SKILL.md` | Codex 用户/系统 Skill 目录存在独立 Skill，但不在 `cc-switch` SSOT 中。 |
+| 磁盘盘点 `C:\Users\liuli\.codex\plugins\cache` | 38 个非 fixture `SKILL.md` | Codex 插件自带 Skill 存在于插件缓存，由 Codex 插件运行时管理，不属于 `cc-switch skills scan-unmanaged` 的发现结果。 |
+
+`cc-switch` 系统级盘点：
+
+| Skill 名称 | 来源 | 目标工具 | 是否依赖 MCP | 是否适合系统级复用 |
+| --- | --- | --- | --- | --- |
+| 无 | `cc-switch` SSOT | 未配置 | 否 | 暂无 `cc-switch` 管理对象；第二步应先定义准入规则，再决定是否安装系统级 Skill。 |
+
+Claude Code 运行时 / 插件 Skill 盘点：
+
+| Skill 组 | 来源 | 目标工具 | 是否依赖 MCP | 是否适合系统级复用 |
+| --- | --- | --- | --- | --- |
+| Claude 用户级 Skill（`create-skill`、`setup-autochrome`、`setup-mcp`） | `C:\Users\liuli\.claude\skills\` | Claude Code 用户级 | `setup-mcp` 和 `setup-autochrome` 涉及 MCP/浏览器配置；`create-skill` 未声明 MCP | 不通过 `cc-switch` 复制；属于用户级 Claude Code 配置，若要复用应先转成 `cc-switch` SSOT 或明确只读导入规则。 |
+| 已安装插件 `chrome-devtools-mcp@claude-plugins-official` 1.0.1 | `C:\Users\liuli\.claude\plugins\cache\claude-plugins-official\chrome-devtools-mcp\1.0.1\` | Claude Code 插件 | 依赖 Chrome DevTools MCP 插件运行时 | 不通过 `cc-switch` 复制；由 Claude Code 插件安装状态管理。 |
+| `chrome-devtools-mcp` 插件 Skill（`a11y-debugging`、`chrome-devtools`、`chrome-devtools-cli`、`debug-optimize-lcp`、`memory-leak-debugging`、`troubleshooting`） | 已安装插件目录 `skills/` | Claude Code 插件 | 依赖 Chrome DevTools MCP 工具或 CLI | 不通过 `cc-switch` 复制；跨工具复用需单独处理 MCP、CLI 和浏览器依赖。 |
+| Claude 插件 marketplace Skill | `C:\Users\liuli\.claude\plugins\marketplaces\` | Claude Code 可安装插件来源 | 取决于具体插件 | marketplace 是可用来源，不是当前已安装插件；第二步不应把 marketplace Skill 当成已启用能力。 |
+
+Codex 运行时 / 插件 Skill 盘点：
+
+| Skill 组 | 来源 | 目标工具 | 是否依赖 MCP | 是否适合系统级复用 |
+| --- | --- | --- | --- | --- |
+| Codex 系统 Skill（`imagegen`、`openai-docs`、`plugin-creator`、`skill-creator`、`skill-installer`） | `C:\Users\liuli\.codex\skills\.system\` | Codex 运行时 | 未在 Skill 元数据中声明 MCP | 不通过 `cc-switch` 复制；这是 Codex 自带系统能力。 |
+| `playwright` | `C:\Users\liuli\.codex\skills\playwright\SKILL.md` | Codex 运行时 | 未在 Skill 元数据中声明 MCP | 暂不纳入 `cc-switch`；如要跨工具复用，应先确认浏览器/CLI 依赖。 |
+| Browser / Chrome 插件 Skill | `C:\Users\liuli\.codex\plugins\cache\openai-bundled\...\skills\` | Codex 插件 | 依赖对应插件运行时，不是 `cc-switch mcp` 依赖 | 不通过 `cc-switch` 复制；由插件安装状态决定。 |
+| CircleCI 插件 Skill（4 个） | `C:\Users\liuli\.codex\plugins\cache\openai-curated\circleci\...\skills\` | Codex 插件 | 依赖对应插件/CLI 能力 | 不通过 `cc-switch` 复制；跨工具复用需单独评估。 |
+| Codex Security 插件 Skill（6 个） | `C:\Users\liuli\.codex\plugins\cache\openai-curated\codex-security\...\skills\` | Codex 插件 | 依赖对应插件流程 | 不通过 `cc-switch` 复制；跨工具复用需单独评估。 |
+| GitHub 插件 Skill（4 个） | `C:\Users\liuli\.codex\plugins\cache\openai-curated\github\...\skills\` | Codex 插件 | 依赖 GitHub 插件、GitHub App 或 `gh` | 不通过 `cc-switch` 复制；跨工具复用需单独评估授权和工具链。 |
+| Plugin Eval 插件 Skill（5 个） | `C:\Users\liuli\.codex\plugins\cache\openai-curated\plugin-eval\...\skills\` | Codex 插件 | 依赖对应插件能力 | 不通过 `cc-switch` 复制；跨工具复用需单独评估。 |
+| Superpowers 插件 Skill（15 个） | `C:\Users\liuli\.codex\plugins\cache\openai-curated\superpowers\...\skills\` | Codex 插件 | 依赖 Codex 技能调度能力，不是 `cc-switch mcp` 依赖 | 不通过 `cc-switch` 复制；当前作为 Codex 插件能力使用。 |
+| Documents / Presentations / Spreadsheets 插件 Skill（3 个） | `C:\Users\liuli\.codex\plugins\cache\openai-primary-runtime\...\skills\` | Codex 插件 | 依赖对应运行时插件 | 不通过 `cc-switch` 复制；跨工具复用需单独评估运行时依赖。 |
+
+仓库级盘点：
+
+| Skill 名称 | 来源 | 目标工具 | 是否依赖 MCP | 是否适合系统级复用 |
+| --- | --- | --- | --- | --- |
+| `agent-doc-add` | [SKILL.md](../../.claude/skills/agent-doc-add/SKILL.md) <!-- pathref: repo/.claude/skills/agent-doc-add/SKILL.md --> | Claude Code 仓库级 | 否 | 暂不直接复用；当前依赖本仓库 `AGENTS.md`、`CLAUDE.md`、索引和治理规则，可在后续抽取通用“入口文档新增”方法。 |
+| `agent-doc-refactor` | [SKILL.md](../../.claude/skills/agent-doc-refactor/SKILL.md) <!-- pathref: repo/.claude/skills/agent-doc-refactor/SKILL.md --> | Claude Code 仓库级 | 否 | 暂不直接复用；当前依赖本仓库入口分层、索引和治理扫描，可在后续抽取通用“入口文档重构”方法。 |
+| `jq-ab-test` | [SKILL.md](../../.claude/skills/jq-ab-test/SKILL.md) <!-- pathref: repo/.claude/skills/jq-ab-test/SKILL.md --> | Claude Code 仓库级 | 否 | 否；依赖 JoinQuant、策略变体库、云端额度和本仓库脚本。 |
+| `jq-analyze` | [SKILL.md](../../.claude/skills/jq-analyze/SKILL.md) <!-- pathref: repo/.claude/skills/jq-analyze/SKILL.md --> | Claude Code 仓库级 | 否 | 否；依赖本仓库回测产物目录、报告模板和 JoinQuant 数据结构。 |
+| `jq-fix` | [SKILL.md](../../.claude/skills/jq-fix/SKILL.md) <!-- pathref: repo/.claude/skills/jq-fix/SKILL.md --> | Claude Code 仓库级 | 否 | 否；依赖本仓库策略代码、测试和 JoinQuant 错误处理流程。 |
+| `jq-param-scan` | [SKILL.md](../../.claude/skills/jq-param-scan/SKILL.md) <!-- pathref: repo/.claude/skills/jq-param-scan/SKILL.md --> | Claude Code 仓库级 | 否 | 否；依赖 `jq-run`、云端额度、扫描配置和本仓库报告模板。 |
+| `jq-research` | [SKILL.md](../../.claude/skills/jq-research/SKILL.md) <!-- pathref: repo/.claude/skills/jq-research/SKILL.md --> | Claude Code 仓库级 | 否 | 否；依赖 `scripts.research.cli`、研究项目结构、候选漏斗和治理审计。 |
+| `jq-run` | [SKILL.md](../../.claude/skills/jq-run/SKILL.md) <!-- pathref: repo/.claude/skills/jq-run/SKILL.md --> | Claude Code 仓库级 | 否 | 否；依赖 `jq-auto`、JoinQuant 云端、Playwright 自动化和本仓库脚本路径。 |
+
+第一步结论：
+
+- `cc-switch-global` 当前为空：`cc-switch` 没有已安装系统级 Skill，也没有发现它能管理的未管理 Skill。
+- `claude-runtime/plugin-managed` 不为空：Claude Code 用户目录中有 3 个用户级 Skill，已安装插件 `chrome-devtools-mcp` 1.0.1 带 6 个 Skill；marketplace 还有 34 个可用 Skill，但不代表已安装。
+- `codex-runtime/plugin-managed` 不为空：Codex 系统目录和插件缓存中存在多组 Skill，但它们由 Codex 运行时或插件安装状态管理，不属于 `cc-switch` SSOT。
+- `repo-local` 当前为 8 个 `.claude/skills` Skill，权威源仍在仓库 Git。
+- 当前仓库级 Skill 均未声明 MCP 依赖；`jq-run` 明确使用 Playwright CLI，不再使用 MCP Chrome DevTools。
+- 第二步应使用四层分类：`cc-switch-global`、`claude-runtime/plugin-managed`、`codex-runtime/plugin-managed`、`repo-local`。先把 8 个仓库 Skill 全部标为 `repo-local`，再单独讨论 `agent-doc-add` 和 `agent-doc-refactor` 是否能抽取出系统级通用版本。
+
 ### 第 2 步：定义 Skill 分层规则
 
 目标：确定哪些 Skill 能进入系统级 SSOT，哪些必须留在仓库。
@@ -98,6 +170,55 @@ MCP 注册
 - 每个现有 Skill 都有明确层级。
 - `AGENTS.md` 不新增大段 Skill 细节。
 - `CLAUDE.md` 继续只保留 Claude 专属指针。
+
+#### 第 2 步产出：分层规则和当前归类
+
+执行范围：只定义分层和准入结论，不执行 `cc-switch skills sync`，不导入运行时或插件 Skill，不修改 [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 或 [CLAUDE.md](../../CLAUDE.md) <!-- pathref: repo/CLAUDE.md -->。
+
+分层定义：
+
+| 层级 | 权威来源 | 管理方式 | 当前结论 |
+| --- | --- | --- | --- |
+| `cc-switch-global` | `cc-switch` SSOT，例如 `~/.cc-switch/skills/` | 通过 `cc-switch skills install/enable/sync` 管理 | 当前为空；只接收已经显式安装到 SSOT、带元数据、可跨至少两个工具复用的 Skill。 |
+| `claude-runtime/plugin-managed` | Claude Code 用户目录或插件目录 | 由 Claude Code 用户配置或插件安装状态管理 | 不自动导入 `cc-switch`；只作为只读盘点对象。 |
+| `codex-runtime/plugin-managed` | Codex 系统 Skill 或插件缓存 | 由 Codex 运行时或插件安装状态管理 | 不自动导入 `cc-switch`；只作为只读盘点对象。 |
+| `repo-local` | 本仓库 [.claude/skills](../../.claude/skills) <!-- pathref: repo/.claude/skills --> | 通过 Git、PR、CODEOWNERS 和治理门禁管理 | 当前 8 个仓库 Skill 全部保持在此层，不允许被用户级 `cc-switch skills sync` 自动覆盖。 |
+
+`cc-switch-global` 准入规则：
+
+- 必须有稳定 `id`、`owner`、`lifecycle`、`target_apps`、`requires_mcp`、`source` 和 `sync_method` 元数据。
+- 必须能脱离本仓库路径、策略目录、JoinQuant 云端流程和本仓库治理门禁独立运行。
+- 必须明确目标工具，且至少有两个目标工具具备相同或等价能力。
+- 如果依赖 MCP、CLI、浏览器或插件运行时，必须先进入第 3 步的依赖校验，不得只复制 Skill 正文。
+- 运行时内置 Skill、插件自带 Skill、marketplace 可用 Skill 不等于系统级可同步 Skill；除非先转成受管 SSOT 副本，否则不进入 `cc-switch-global`。
+
+`repo-local` 保留规则：
+
+- 依赖本仓库路径、脚本、策略代码、报告模板、研究平台、JoinQuant 云端额度或治理审计的 Skill 必须留在 `repo-local`。
+- `repo-local` 的权威文件仍是 `.claude/skills/**/SKILL.md`，变更必须走仓库 Git diff 和 PR 流程。
+- `repo-local` 未来若要跨工具复用，只能先做只读导入或显式导出副本；不得从用户级目录写回仓库。
+- 入口文件继续按 ADR 0005 分层：[AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 只保留通用入口，[CLAUDE.md](../../CLAUDE.md) <!-- pathref: repo/CLAUDE.md --> 只保留 Claude Code 专属指针。
+
+现有仓库 Skill 归类：
+
+| Skill | 当前层级 | 判定依据 | 后续处理 |
+| --- | --- | --- | --- |
+| `agent-doc-add` | `repo-local` | 依赖本仓库 `AGENTS.md`、`CLAUDE.md`、`indexes.md`、pathref 和治理扫描。 | 暂不直接同步；后续可抽取通用“入口文档新增”方法，作为新的系统级 Skill 候选。 |
+| `agent-doc-refactor` | `repo-local` | 依赖本仓库入口分层、规则文档、索引和治理检查。 | 暂不直接同步；后续可抽取通用“入口文档重构”方法，作为新的系统级 Skill 候选。 |
+| `jq-ab-test` | `repo-local` | 依赖策略变体库、JoinQuant 云端额度、`jq-run` 和本仓库 A/B 报告结构。 | 不纳入系统级同步。 |
+| `jq-analyze` | `repo-local` | 依赖本仓库回测产物、报告模板、`tabs_raw` 和 JoinQuant 数据结构。 | 不纳入系统级同步。 |
+| `jq-fix` | `repo-local` | 依赖本仓库策略代码、测试、JoinQuant 错误处理和本地验证流程。 | 不纳入系统级同步。 |
+| `jq-param-scan` | `repo-local` | 依赖 `jq-run`、扫描配置、云端额度和本仓库报告模板。 | 不纳入系统级同步。 |
+| `jq-research` | `repo-local` | 依赖 `scripts.research.cli`、研究项目结构、候选漏斗、治理审计和云端交接规则。 | 不纳入系统级同步。 |
+| `jq-run` | `repo-local` | 依赖 `jq-auto`、JoinQuant 云端、Playwright 自动化和本仓库脚本路径。 | 不纳入系统级同步；其 Playwright 依赖不是 MCP 依赖。 |
+
+第二步结论：
+
+- 当前没有任何现有 Skill 被提升为 `cc-switch-global`。
+- 当前 8 个仓库 Skill 全部明确归为 `repo-local`。
+- `agent-doc-add` 和 `agent-doc-refactor` 只有方法论可抽取为系统级候选，现有文件本身仍留在仓库。
+- Claude / Codex 运行时和插件 Skill 均不自动导入 SSOT，后续若要复用必须先做元数据、依赖和授权评估。
+- 验收标准已满足：每个现有仓库 Skill 已有明确层级；入口文件不需要新增大段 Skill 细节；`CLAUDE.md` 继续只保留 Claude 专属指针。
 
 ### 第 3 步：建立 MCP 依赖规则
 
@@ -126,6 +247,85 @@ cc-switch skills sync
 - 纯文档型、流程型 Skill 不要求 MCP。
 - 依赖 MCP 的 Skill 有前置校验。
 - MCP 注册和 Skill 启用状态能分别审计。
+
+#### 第 3 步产出：依赖门禁与插件 Skill 准入评估
+
+执行范围：只读研究，不执行 `cc-switch skills sync`，不从插件缓存导入 Skill，不写入 `~/.cc-switch/skills/`，也不修改任何工具用户级目录。
+
+命令结果：
+
+| 命令 | 结果 | 结论 |
+| --- | --- | --- |
+| `cc-switch --version` | `cc-switch 5.5.0` | 当前研究基于 5.5.0 行为。 |
+| `cc-switch skills list` | `No installed skills found.` | `cc-switch-global` 仍为空。 |
+| `cc-switch --app codex skills list` | `No installed skills found.` | Codex 目标应用下没有 `cc-switch` 已安装 Skill。 |
+| `cc-switch mcp list` | `No MCP servers found.` | 当前没有可由 `cc-switch mcp` 审计的 MCP 依赖。 |
+
+第 3 步结论需要扩展：这些插件 Skill 大多不是 MCP 依赖，而是 CLI、连接器、插件运行时或 Agent 能力依赖。只看 `requires_mcp` 会误判。
+
+新增依赖字段建议：
+
+| 字段 | 含义 | 示例 |
+| --- | --- | --- |
+| `requires_mcp` | 由 `cc-switch mcp` 管理的 MCP server id | 当前评估对象均未确认需要此字段。 |
+| `requires_cli` | 本机命令行工具 | `npx`、`playwright-cli`、`circleci`、`chunk-cli`、`gh`、`git`、`python`。 |
+| `requires_app_connector` | 工具内置或插件提供的连接器 | GitHub 插件的 GitHub app connector。 |
+| `requires_plugin_runtime` | 必须由特定插件加载的运行时能力 | Codex 插件 Skill、GitHub 插件 Skill、Superpowers Skill 调度。 |
+| `requires_agent_feature` | Agent 平台能力 | Skill 调用、Todo 列表、子 Agent、工作区隔离。 |
+| `distribution_unit` | 同步单位 | `single-skill` 或 `bundle`。 |
+| `permission_scope` | 权限边界 | 只读、本地写入、远端读写、推送/PR、CI 触发。 |
+
+逐组准入判断：
+
+| Skill 组 | 当前来源 | 主要依赖 | 是否可直接进入 `cc-switch-global` | 建议 |
+| --- | --- | --- | --- | --- |
+| `playwright` | `C:\Users\liuli\.codex\skills\playwright\SKILL.md` | `npx`、`@playwright/cli`、`playwright_cli.sh`、浏览器运行环境 | 否 | 可作为第 6 步“无 MCP 试点”候选，但需先改造成与 Codex 路径无关、Windows/macOS/Linux 都可用的 `cc-switch` SSOT 副本。 |
+| CircleCI 插件 Skill（4 个） | `C:\Users\liuli\.codex\plugins\cache\openai-curated\circleci\...\skills\` | CircleCI CLI、Chunk CLI/UI、CircleCI token、组织权限、可能的 GitHub App | 否 | `circleci-builds` 和 `circleci-config` 可抽成通用流程型 Skill；`circleci-cli` 和 `chunk` 必须声明 CLI、认证和远端写入权限。 |
+| Codex Security 插件 Skill（6 个） | `C:\Users\liuli\.codex\plugins\cache\openai-curated\codex-security\...\skills\` | Codex Security 插件流程、跨 Skill 编排、扫描产物路径、仓库读写；插件许可为 Proprietary | 否 | 不应从插件缓存复制到 `cc-switch-global`。若要复用，只能由权利方发布受管 bundle，并先去掉 Codex 专属假设或限制 `target_apps`。 |
+| GitHub 插件 Skill（4 个） | `C:\Users\liuli\.codex\plugins\cache\openai-curated\github\...\skills\` | GitHub app connector、`gh` CLI、`gh` auth、网络、GitHub Actions API、本地 `git` | 否 | 不能只同步 Skill 正文；需先让 `cc-switch` 能表达 `requires_app_connector=github` 和 `requires_cli=gh`，并区分只读与远端写操作。 |
+| Superpowers 插件 Skill（15 个） | `C:\Users\liuli\.codex\plugins\cache\openai-curated\superpowers\...\skills\` | Skill 调用机制、子 Agent、Todo 列表、工作区/分支操作、平台工具映射 | 否 | 最适合做“整包受管候选”，但不能按单个 Skill 零散导入；必须以 bundle 方式保留内部依赖和平台降级规则。 |
+
+细分评估：
+
+| Skill | 主要依赖 | 直接准入结论 | 后续处理 |
+| --- | --- | --- | --- |
+| `playwright` | `npx`、`@playwright/cli`、`playwright_cli.sh`、`CODEX_HOME` 路径 | 否 | 抽取跨平台版本后，可做无 MCP 试点。 |
+| `circleci-builds` | CircleCI pipeline/job 信息、日志、可能的 CLI 或 UI | 否 | 可抽通用诊断流程，但要声明 CircleCI 服务依赖。 |
+| `chunk` | Chunk UI、`chunk-cli`、token、组织级开关、GitHub App | 否 | 需声明 beta 状态、认证和远端权限；暂不进全局。 |
+| `circleci-cli` | `circleci` CLI、token/auth、项目权限、远端 rerun/trigger | 否 | 需 `requires_cli=circleci` 和权限门禁。 |
+| `circleci-config` | `.circleci/config.yml`、CI 指标、CircleCI 配置语义 | 否 | 可抽通用流程型 Skill，但当前仍是插件缓存副本。 |
+| `security-scan` | Codex Security 分阶段编排、其他 4 个安全分析 Skill、扫描产物路径 | 否 | 只能作为安全扫描 bundle 的入口，不能单独导入。 |
+| `threat-model` | 仓库级安全上下文、扫描产物路径、报告写入 | 否 | 可移植方法论，但需去 Codex 化和路径元数据。 |
+| `finding-discovery` | 仓库读文件工具、安全扫描上下文、报告写入 | 否 | 需作为 bundle 内部阶段管理。 |
+| `validation` | 构建/测试/PoC 工具、验证产物路径、仓库写入 | 否 | 需声明本地写入和测试执行权限。 |
+| `attack-path-analysis` | 威胁模型、验证结果、报告写入，可能使用网络确认上下文 | 否 | 需作为 bundle 内部阶段管理。 |
+| `fix-finding` | 代码编辑、回归测试、验证产物 | 否 | 属于高风险写操作 Skill，不能自动全局启用。 |
+| `github` | GitHub app connector、`gh` fallback、本地 `git` | 否 | 等 `cc-switch` 支持连接器依赖后再评估。 |
+| `gh-address-comments` | GitHub app、`gh api graphql`、bundled script、网络 | 否 | 需要连接器和 `gh` 双门禁。 |
+| `gh-fix-ci` | GitHub app、`gh`、GitHub Actions 日志、bundled script | 否 | 需要 `requires_cli=gh`、Actions 权限和网络门禁。 |
+| `yeet` | 本地 `git`、`gh`、GitHub app、push、draft PR | 否 | 远端写操作，必须保持显式授权流程。 |
+| `brainstorming` | Skill 调用链、后续 `writing-plans` | 否 | 可作为 Superpowers bundle 内部 Skill。 |
+| `dispatching-parallel-agents` | 子 Agent 能力、并行任务调度 | 否 | 仅目标工具明确支持子 Agent 时可启用。 |
+| `executing-plans` | Todo 列表、验证步骤、可选子 Agent、`finishing-a-development-branch` | 否 | 需平台能力映射，作为 bundle 管理。 |
+| `finishing-a-development-branch` | `git`、分支/PR/工作区清理、用户选择 | 否 | 涉及合并、删除分支、推送，不能默认启用写操作。 |
+| `receiving-code-review` | 代码审查上下文、验证流程 | 否 | 可作为通用方法论，但需保留 Superpowers 触发规则。 |
+| `requesting-code-review` | 子 Agent 审查流程 | 否 | 仅目标工具支持子 Agent 时可启用。 |
+| `subagent-driven-development` | 子 Agent、Todo 列表、两阶段审查、其他 Superpowers Skill | 否 | 必须 bundle 管理，不能单独同步。 |
+| `systematic-debugging` | 调试流程、验证 Skill | 否 | 可作为通用方法论，但当前仍属插件运行时。 |
+| `test-driven-development` | 测试运行、实现修改、验证 | 否 | 可作为通用方法论，但需目标工具有等价编辑/测试能力。 |
+| `using-git-worktrees` | `git worktree`、分支创建、目录忽略检查、沙箱权限 | 否 | 需显式用户授权和平台工作区规则。 |
+| `using-superpowers` | Skill 加载机制、平台工具映射 | 否 | 只能作为 Superpowers bundle 的入口。 |
+| `verification-before-completion` | 验证命令、测试证据 | 否 | 可作为通用方法论，但需绑定目标工具命令执行能力。 |
+| `writing-plans` | 计划文档、子 Agent 或执行计划 Skill | 否 | 可作为 bundle 内部流程。 |
+| `writing-skills` | Skill 编写规范、子 Agent 测试、示例/模板 | 否 | 可移植，但需目标工具支持 Skill 格式和测试方法。 |
+
+第三步结论：
+
+- 当前评估对象都不应“直接”进入 `cc-switch-global`；原因不是 MCP 缺失，而是它们还没有被转成 `cc-switch` SSOT 副本，也没有依赖元数据。
+- `playwright` 是最适合做下一步无 MCP 小试点的候选，但当前文件硬编码 Codex 用户目录和 shell wrapper，不能原样同步。
+- CircleCI 和 GitHub 属于外部服务 Skill，必须先把 CLI、认证、网络和远端写权限纳入门禁。
+- Codex Security 和 Superpowers 都应按 bundle 管理，不能拆成单个 Skill 零散同步。
+- 第 4 步设计同步命令时，应把 `requires_cli`、`requires_app_connector`、`requires_plugin_runtime`、`requires_agent_feature` 与 `requires_mcp` 一起纳入同步前置检查。
 
 ### 第 4 步：设计同步命令规范
 
@@ -267,4 +467,7 @@ git status --short
 
 - 系统级 Skill 可以通过 `cc-switch` 在多个工具间保持同步。
 - MCP 同步不是必须项，只在 Skill 有 MCP 依赖时作为前置条件。
+- 第三步已确认：插件 Skill 的主要风险不是 MCP，而是 CLI、连接器、插件运行时、Agent 能力和远端权限依赖。
+- 当前重点评估的 30 个 Skill 均不直接进入 `cc-switch-global`；`playwright` 可作为无 MCP 试点候选，Superpowers 可作为 bundle 候选。
 - 仓库级 Skill 目前不建议通过 `cc-switch` 自动同步，应继续由仓库 Git 流程管理。
+- 第二步已确认：当前 8 个 `.claude/skills` Skill 全部为 `repo-local`，暂不提升为 `cc-switch-global`。
