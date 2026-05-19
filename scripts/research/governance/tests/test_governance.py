@@ -1102,6 +1102,34 @@ def test_codex_review_monitor_rejects_trigger_before_current_head() -> None:
     assert not report.trigger_found
 
 
+def test_codex_review_monitor_waits_for_review_after_required_trigger() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        head_created_at="2026-05-19T01:00:00Z",
+        issue_comments=[
+            {
+                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "created_at": "2026-05-19T01:02:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T01:01:00Z",
+                "body": "### Codex Review\n\nNo blocking findings.",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+    assert report.status == "waiting_for_codex"
+    assert report.trigger_found
+
+
 def test_codex_review_monitor_reports_passed_current_head_review() -> None:
     head_sha = "0" * 40
     report = build_monitor_report(

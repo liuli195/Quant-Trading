@@ -53,9 +53,11 @@ def build_monitor_report(
     """Build a status summary for Codex reviews on the PR head."""
 
     head_sha = _head_sha(pr)
-    trigger_found = _has_required_trigger_comment(issue_comments, head_created_at=head_created_at)
+    trigger_time = _required_trigger_time(issue_comments, head_created_at=head_created_at)
+    trigger_found = trigger_time is not None
     current_head_reviews = _current_head_codex_reviews(reviews, head_sha=head_sha)
-    latest_review = _latest_codex_review(current_head_reviews)
+    post_trigger_reviews = _reviews_after_trigger(current_head_reviews, trigger_time=trigger_time)
+    latest_review = _latest_codex_review(post_trigger_reviews) or _latest_codex_review(current_head_reviews)
     latest_review_url = _review_url(repo=repo, pr_number=pr_number, review=latest_review) if latest_review else None
     latest_review_sha = str(latest_review.get("commit_id", "")) if latest_review else None
     blocking_findings = _count_reviews_findings(
@@ -72,12 +74,12 @@ def build_monitor_report(
     if not trigger_found:
         status = "waiting_for_trigger"
         message = "未发现符合规则的 `@codex review` 触发评论。"
-    elif latest_review is None:
-        status = "waiting_for_codex"
-        message = "已发现触发评论，正在等待 Codex 针对当前 head 输出 review。"
     elif blocking_findings:
         status = "blocked"
         message = "Codex review 含 P0/P1 阻断发现，不能填写通过结论。"
+    elif not post_trigger_reviews:
+        status = "waiting_for_codex"
+        message = "已发现触发评论，正在等待 Codex 针对当前 head 输出 review。"
     else:
         status = "passed"
         message = "当前 head 的 Codex review 未发现 P0/P1，可以更新 PR 证据结论。"
@@ -176,13 +178,28 @@ def _has_required_trigger_comment(
     *,
     head_created_at: str | None = None,
 ) -> bool:
+    return _required_trigger_time(issue_comments, head_created_at=head_created_at) is not None
+
+
+def _required_trigger_time(
+    issue_comments: Sequence[Mapping[str, object]],
+    *,
+    head_created_at: str | None = None,
+) -> str | None:
+    matched_times: list[str] = []
     for comment in issue_comments:
         body = str(comment.get("body", ""))
         if all(token in body for token in REQUIRED_TRIGGER_TOKENS):
-            if head_created_at and _comment_effective_time(comment) < head_created_at:
+            effective_time = _comment_effective_time(comment)
+            if not effective_time:
+                if head_created_at:
+                    continue
+                matched_times.append("")
                 continue
-            return True
-    return False
+            if head_created_at and effective_time < head_created_at:
+                continue
+            matched_times.append(effective_time)
+    return min(matched_times) if matched_times else None
 
 
 def _comment_effective_time(comment: Mapping[str, object]) -> str:
@@ -203,6 +220,24 @@ def _current_head_codex_reviews(
         for review in reviews
         if str(review.get("commit_id", "")) == head_sha and _is_codex_author(review.get("user"))
     ]
+
+
+def _reviews_after_trigger(
+    reviews: Sequence[Mapping[str, object]],
+    *,
+    trigger_time: str | None,
+) -> list[Mapping[str, object]]:
+    if trigger_time is None:
+        return []
+    return [review for review in reviews if _review_submitted_at(review) >= trigger_time]
+
+
+def _review_submitted_at(review: Mapping[str, object]) -> str:
+    for key in ("submitted_at", "created_at", "updated_at"):
+        value = review.get(key)
+        if value:
+            return str(value)
+    return ""
 
 
 def _latest_codex_review(reviews: Sequence[Mapping[str, object]]) -> Mapping[str, object] | None:
