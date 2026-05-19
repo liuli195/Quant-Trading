@@ -1,5 +1,9 @@
 #!/bin/sh
 set -eu
 
+if command -v pre-commit >/dev/null 2>&1; then
+  pre-commit run --hook-stage pre-commit
+fi
+
 sh .githooks/run-python.sh \
   -m scripts.research.governance gate

@@ -21,6 +21,16 @@ git config --get core.hooksPath
 
 The second command must print `.githooks`.
 
+## 风险分级评审入口
+
+```powershell
+make pre-pr
+make ai-review
+make risk-check
+```
+
+`make ai-review` 生成 `.local/ai-review/latest.json`、`.local/ai-review/latest.md` 和 `.local/ai-review/codex-review-scope.md`。
+
 `.githooks/pre-push` calls all required push gates before handing off to Git LFS:
 
 ```powershell

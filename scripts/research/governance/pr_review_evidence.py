@@ -15,6 +15,7 @@ from pathlib import Path
 
 REQUIRED_REVIEWER = "Codex"
 SECTION_HEADER = "Codex Code Review 结论"
+AI_REVIEW_SECTION_HEADER = "AI Review 风险分级"
 CODEX_REVIEW_URL_PATTERN = re.compile(
     r"https://github\.com/(?P<repo>[^/\s]+/[^/\s]+)/pull/(?P<number>\d+)#pullrequestreview-(?P<review_id>\d+)"
 )
@@ -23,7 +24,9 @@ CODEX_COMPLETION_COMMENT_URL_PATTERN = re.compile(
 )
 CODEX_REVIEW_AUTHORS = {"chatgpt-codex-connector", "chatgpt-codex-connector[bot]"}
 DISQUALIFIED_CODEX_REVIEW_STATES = {"DISMISSED", "PENDING"}
-MONITOR_STATE_PATTERN = re.compile(r"<!--\s*codex-review-monitor-state\s+(?P<payload>\{.*?\})\s*-->", re.DOTALL)
+MONITOR_STATE_PATTERN = re.compile(
+    r"<!--\s*codex-review-monitor-state\s+(?P<payload>\{.*?\})\s*-->", re.DOTALL
+)
 BLOCKING_CODEX_FINDING_PATTERN = re.compile(
     r"(?:P[01] Badge|badge/P[01]-|(?:^|\n)\s*(?:\*\*)?\[P[01]\]\s+)",
     re.IGNORECASE,
@@ -32,7 +35,12 @@ CODEX_NO_MAJOR_ISSUES_PATTERN = re.compile(
     r"Codex Review:\s*(?:Didn['’]t|Did not) find any major issues",
     re.IGNORECASE,
 )
-REQUIRED_TRIGGER_TOKENS = ("@codex review", "AGENTS.md", "docs/rules/review-guidelines.md", "docs/rules/*.md")
+REQUIRED_TRIGGER_TOKENS = (
+    "@codex review",
+    "AGENTS.md",
+    "docs/rules/review-guidelines.md",
+    "docs/rules/*.md",
+)
 
 
 @dataclass(frozen=True)
@@ -53,10 +61,14 @@ def validate_pr_body(
 ) -> EvidenceReport:
     """Return whether a PR body contains merge-blocking review evidence."""
 
-    errors: list[str] = []
+    official_codex_required, errors = _official_codex_required(body)
+    if not official_codex_required:
+        return EvidenceReport(not errors, tuple(errors))
+
     section = _extract_section(body)
     if section is None:
-        return EvidenceReport(False, (f"PR body missing section: {SECTION_HEADER}",))
+        errors.append(f"PR body missing section: {SECTION_HEADER}")
+        return EvidenceReport(False, tuple(errors))
 
     reviewer = _read_field(section, "Reviewer")
     trigger = _read_field(section, "触发方式")
@@ -86,9 +98,13 @@ def validate_pr_body(
     elif not _has_nonempty_evidence(section):
         errors.append("review evidence must include at least one evidence item")
     else:
-        review_link = _find_codex_evidence_link(section, expected_pr_url=expected_pr_url)
+        review_link = _find_codex_evidence_link(
+            section, expected_pr_url=expected_pr_url
+        )
         if review_link is None:
-            errors.append("review evidence must include a real Codex review link for this PR")
+            errors.append(
+                "review evidence must include a real Codex review link for this PR"
+            )
         elif reviews is not None:
             errors.extend(
                 _codex_review_errors(
@@ -109,10 +125,14 @@ def validate_pr_body(
 
 
 def _extract_section(body: str) -> str | None:
+    return _extract_named_section(body, SECTION_HEADER)
+
+
+def _extract_named_section(body: str, header: str) -> str | None:
     lines = body.splitlines()
     start: int | None = None
     for index, line in enumerate(lines):
-        if re.match(rf"^\s*##+\s+{re.escape(SECTION_HEADER)}\s*$", line):
+        if re.match(rf"^\s*##+\s+{re.escape(header)}\s*$", line):
             start = index + 1
             break
     if start is None:
@@ -126,8 +146,31 @@ def _extract_section(body: str) -> str | None:
     return "\n".join(lines[start:end])
 
 
+def _official_codex_required(body: str) -> tuple[bool, list[str]]:
+    errors: list[str] = []
+    section = _extract_named_section(body, AI_REVIEW_SECTION_HEADER)
+    if section is None:
+        return True, [f"PR body missing section: {AI_REVIEW_SECTION_HEADER}"]
+    risk = _normalize_value(_read_field(section, "风险等级"))
+    requires = _normalize_value(_read_field(section, "是否需要官方 Codex Review"))
+    blockers = _normalize_value(_read_field(section, "P0/P1 未关闭项"))
+    if risk not in {"low", "high", "unknown"}:
+        errors.append("风险等级 must be low, high, or unknown")
+        return True, errors
+    if blockers != "无":
+        errors.append("P0/P1 未关闭项 must be 无")
+    if risk in {"high", "unknown"}:
+        return True, errors
+    if requires not in {"否", "不需要", "false", "False"}:
+        errors.append("低风险 PR must mark 是否需要官方 Codex Review as 否")
+        return True, errors
+    return False, errors
+
+
 def _read_field(section: str, field: str) -> str:
-    pattern = re.compile(rf"^\s*[-*]\s*{re.escape(field)}\s*[:：]\s*(.+?)\s*$", re.MULTILINE)
+    pattern = re.compile(
+        rf"^\s*[-*]\s*{re.escape(field)}\s*[:：]\s*(.+?)\s*$", re.MULTILINE
+    )
     match = pattern.search(section)
     return match.group(1) if match else ""
 
@@ -150,7 +193,9 @@ def _has_nonempty_evidence(section: str) -> bool:
     return False
 
 
-def _find_codex_evidence_link(section: str, *, expected_pr_url: str | None = None) -> str | None:
+def _find_codex_evidence_link(
+    section: str, *, expected_pr_url: str | None = None
+) -> str | None:
     expected = _normalize_pr_url(expected_pr_url)
     expected_issue_url = expected.replace("/pull/", "/issues/") if expected else None
     evidence_start = section.find("关键证据")
@@ -160,12 +205,15 @@ def _find_codex_evidence_link(section: str, *, expected_pr_url: str | None = Non
     for line in evidence:
         if "Codex review 链接" not in line:
             continue
-        match = CODEX_REVIEW_URL_PATTERN.search(line) or CODEX_COMPLETION_COMMENT_URL_PATTERN.search(line)
+        match = CODEX_REVIEW_URL_PATTERN.search(
+            line
+        ) or CODEX_COMPLETION_COMMENT_URL_PATTERN.search(line)
         if not match:
             continue
         url = match.group(0)
         if expected and not (
-            url.startswith(f"{expected}#pullrequestreview-") or url.startswith(f"{expected}#issuecomment-")
+            url.startswith(f"{expected}#pullrequestreview-")
+            or url.startswith(f"{expected}#issuecomment-")
             or url.startswith(f"{expected_issue_url}#issuecomment-")
         ):
             continue
@@ -209,22 +257,32 @@ def _codex_review_errors(
     if matched_review is None:
         return ("Codex review link must match a Codex review on the current head",)
     errors: list[str] = []
-    trigger_comments = _required_trigger_comments(comments) if comments is not None else None
+    trigger_comments = (
+        _required_trigger_comments(comments) if comments is not None else None
+    )
     if trigger_comments is not None:
-        if not _has_required_trigger_after_current_head(trigger_comments, expected_head_created_at):
-            errors.append("required @codex review trigger must be submitted after the current head")
+        if not _has_required_trigger_after_current_head(
+            trigger_comments, expected_head_created_at
+        ):
+            errors.append(
+                "required @codex review trigger must be submitted after the current head"
+            )
         if not _review_is_after_required_trigger(
             matched_review,
             trigger_comments,
             expected_head_created_at=expected_head_created_at,
         ):
-            errors.append("Codex review must be submitted after the required @codex review trigger")
+            errors.append(
+                "Codex review must be submitted after the required @codex review trigger"
+            )
     if _current_head_has_blocking_codex_review(
         reviews,
         review_comments=review_comments,
         expected_head_sha=expected_head_sha,
     ):
-        errors.append("Codex review must not contain P0/P1 findings on the current head")
+        errors.append(
+            "Codex review must not contain P0/P1 findings on the current head"
+        )
     return tuple(errors)
 
 
@@ -243,18 +301,26 @@ def _codex_completion_comment_errors(
 
     errors: list[str] = []
     trigger_comments = _required_trigger_comments(comments)
-    if not _has_required_trigger_after_current_head(trigger_comments, expected_head_created_at):
-        errors.append("required @codex review trigger must be submitted after the current head")
+    if not _has_required_trigger_after_current_head(
+        trigger_comments, expected_head_created_at
+    ):
+        errors.append(
+            "required @codex review trigger must be submitted after the current head"
+        )
     latest_trigger_time = _latest_required_trigger_time(
         trigger_comments,
         expected_head_created_at=expected_head_created_at,
     )
     comment_time = _comment_effective_time(comment)
     if latest_trigger_time and comment_time and comment_time < latest_trigger_time:
-        errors.append("Codex completion comment must match the latest required @codex review trigger")
+        errors.append(
+            "Codex completion comment must match the latest required @codex review trigger"
+        )
     if _is_required_trigger_comment(comment):
         if not has_codex_completion_reaction(comment):
-            errors.append("Codex completion comment must include a Codex thumbs-up reaction")
+            errors.append(
+                "Codex completion comment must include a Codex thumbs-up reaction"
+            )
     elif not is_codex_completion_comment(comment):
         return ("Codex review link must match a Codex review on the current head",)
     if _current_head_has_blocking_codex_review(
@@ -262,7 +328,9 @@ def _codex_completion_comment_errors(
         review_comments=review_comments,
         expected_head_sha=expected_head_sha,
     ):
-        errors.append("Codex review must not contain P0/P1 findings on the current head")
+        errors.append(
+            "Codex review must not contain P0/P1 findings on the current head"
+        )
     return tuple(errors)
 
 
@@ -291,7 +359,9 @@ def _current_head_has_blocking_codex_review(
             continue
         if expected_head_sha and str(review.get("commit_id", "")) != expected_head_sha:
             continue
-        if _review_has_blocking_findings(review, review_id=str(review.get("id", "")), review_comments=review_comments):
+        if _review_has_blocking_findings(
+            review, review_id=str(review.get("id", "")), review_comments=review_comments
+        ):
             return True
     return False
 
@@ -333,7 +403,9 @@ def _comment_body(comment: object) -> str:
     return ""
 
 
-def _find_comment_by_id(comments: Sequence[object], comment_id: str) -> Mapping[str, object] | None:
+def _find_comment_by_id(
+    comments: Sequence[object], comment_id: str
+) -> Mapping[str, object] | None:
     for comment in comments:
         if not isinstance(comment, Mapping):
             continue
@@ -369,7 +441,9 @@ def is_codex_completion_comment(comment: Mapping[str, object]) -> bool:
     return not BLOCKING_CODEX_FINDING_PATTERN.search(body)
 
 
-def _comment_reaction_items(comment: Mapping[str, object]) -> tuple[Mapping[str, object], ...]:
+def _comment_reaction_items(
+    comment: Mapping[str, object],
+) -> tuple[Mapping[str, object], ...]:
     for key in ("reactions_detail", "reaction_items"):
         value = comment.get(key)
         if isinstance(value, list):
@@ -431,10 +505,13 @@ def _has_required_trigger_after_current_head(
 ) -> bool:
     if not expected_head_created_at:
         return True
-    return _latest_required_trigger_time(
-        trigger_comments,
-        expected_head_created_at=expected_head_created_at,
-    ) is not None
+    return (
+        _latest_required_trigger_time(
+            trigger_comments,
+            expected_head_created_at=expected_head_created_at,
+        )
+        is not None
+    )
 
 
 def _latest_required_trigger_time(
@@ -449,7 +526,9 @@ def _latest_required_trigger_time(
     ]
     trigger_times = [value for value in trigger_times if value]
     if expected_head_created_at:
-        trigger_times = [value for value in trigger_times if expected_head_created_at <= value]
+        trigger_times = [
+            value for value in trigger_times if expected_head_created_at <= value
+        ]
     return max(trigger_times) if trigger_times else None
 
 
@@ -496,7 +575,9 @@ def _fetch_github_json_url(*, url: str, token: str) -> tuple[object, str | None]
 
 
 def _fetch_github_json(*, repo: str, path: str, token: str) -> object:
-    payload, _ = _fetch_github_json_url(url=_github_api_url(repo=repo, path=path), token=token)
+    payload, _ = _fetch_github_json_url(
+        url=_github_api_url(repo=repo, path=path), token=token
+    )
     return payload
 
 
@@ -524,13 +605,19 @@ def _parse_next_link(header: str) -> str | None:
     return None
 
 
-def _fetch_pr_metadata(*, repo: str, pr_number: str, token: str) -> Mapping[str, object] | None:
+def _fetch_pr_metadata(
+    *, repo: str, pr_number: str, token: str
+) -> Mapping[str, object] | None:
     payload = _fetch_github_json(repo=repo, path=f"pulls/{pr_number}", token=token)
     return payload if isinstance(payload, Mapping) else None
 
 
-def _fetch_pr_comments(*, repo: str, pr_number: str, token: str) -> list[Mapping[str, object]]:
-    payload = _fetch_github_list(repo=repo, path=f"issues/{pr_number}/comments", token=token)
+def _fetch_pr_comments(
+    *, repo: str, pr_number: str, token: str
+) -> list[Mapping[str, object]]:
+    payload = _fetch_github_list(
+        repo=repo, path=f"issues/{pr_number}/comments", token=token
+    )
     return _enrich_required_trigger_reactions(
         [item for item in payload if isinstance(item, Mapping)],
         repo=repo,
@@ -554,23 +641,37 @@ def _enrich_required_trigger_reactions(
             enriched.append(comment)
             continue
         item = dict(comment)
-        item["reaction_items"] = _fetch_issue_comment_reactions(repo=repo, comment_id=str(comment_id), token=token)
+        item["reaction_items"] = _fetch_issue_comment_reactions(
+            repo=repo, comment_id=str(comment_id), token=token
+        )
         enriched.append(item)
     return enriched
 
 
-def _fetch_issue_comment_reactions(*, repo: str, comment_id: str, token: str) -> list[Mapping[str, object]]:
-    payload = _fetch_github_list(repo=repo, path=f"issues/comments/{comment_id}/reactions", token=token)
+def _fetch_issue_comment_reactions(
+    *, repo: str, comment_id: str, token: str
+) -> list[Mapping[str, object]]:
+    payload = _fetch_github_list(
+        repo=repo, path=f"issues/comments/{comment_id}/reactions", token=token
+    )
     return [item for item in payload if isinstance(item, Mapping)]
 
 
-def _fetch_pr_reviews(*, repo: str, pr_number: str, token: str) -> list[Mapping[str, object]]:
-    payload = _fetch_github_list(repo=repo, path=f"pulls/{pr_number}/reviews", token=token)
+def _fetch_pr_reviews(
+    *, repo: str, pr_number: str, token: str
+) -> list[Mapping[str, object]]:
+    payload = _fetch_github_list(
+        repo=repo, path=f"pulls/{pr_number}/reviews", token=token
+    )
     return [item for item in payload if isinstance(item, Mapping)]
 
 
-def _fetch_pr_review_comments(*, repo: str, pr_number: str, token: str) -> list[Mapping[str, object]]:
-    payload = _fetch_github_list(repo=repo, path=f"pulls/{pr_number}/comments", token=token)
+def _fetch_pr_review_comments(
+    *, repo: str, pr_number: str, token: str
+) -> list[Mapping[str, object]]:
+    payload = _fetch_github_list(
+        repo=repo, path=f"pulls/{pr_number}/comments", token=token
+    )
     return [item for item in payload if isinstance(item, Mapping)]
 
 
@@ -640,15 +741,24 @@ def main(argv: list[str] | None = None) -> int:
     review_comments = _coerce_reviews(_read_optional_file(args.review_comments_file))
     expected_pr_url = _read_env(args.pr_url_env)
     expected_head_sha = _read_env(args.head_sha_env)
-    expected_head_created_at = _read_env(args.head_updated_at_env) or _read_env(args.head_created_at_env)
+    expected_head_created_at = _read_env(args.head_updated_at_env) or _read_env(
+        args.head_created_at_env
+    )
 
     repo = _read_env(args.repo_env)
     pr_number = _read_env(args.pr_number_env)
     token = _read_env(args.github_token_env)
     if repo and pr_number and token:
         pr_metadata: Mapping[str, object] | None = None
-        if not body or not expected_pr_url or not expected_head_sha or not expected_head_created_at:
-            pr_metadata = _fetch_pr_metadata(repo=repo, pr_number=pr_number, token=token)
+        if (
+            not body
+            or not expected_pr_url
+            or not expected_head_sha
+            or not expected_head_created_at
+        ):
+            pr_metadata = _fetch_pr_metadata(
+                repo=repo, pr_number=pr_number, token=token
+            )
             if pr_metadata is not None:
                 if not body:
                     body = str(pr_metadata.get("body", ""))
@@ -667,7 +777,9 @@ def main(argv: list[str] | None = None) -> int:
         if reviews is None:
             reviews = _fetch_pr_reviews(repo=repo, pr_number=pr_number, token=token)
         if review_comments is None:
-            review_comments = _fetch_pr_review_comments(repo=repo, pr_number=pr_number, token=token)
+            review_comments = _fetch_pr_review_comments(
+                repo=repo, pr_number=pr_number, token=token
+            )
 
     if not expected_head_created_at:
         expected_head_created_at = head_updated_at_from_monitor_state(

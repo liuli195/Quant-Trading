@@ -6,11 +6,15 @@
 
 - 多个 AI agent 并行写入时，每个 agent 使用独立 Git 分支。
 - 不允许多个 agent 在同一写入分支上并行修改 repo-tracked 文件。
-- PR review 使用官方 Codex Code Review，不使用本地子 Agent 作为合并前评审门禁；无论实现者是 Claude、Codex、Cursor、Copilot 或人工，都必须走同一套 review。
+- PR 合并前必须完成本地静态扫描、本地 AI review 和问题评级；P0/P1 问题未关闭时禁止进入下一阶段。
 - 所有进入主干的改动必须通过 PR，除非用户在当前对话中显式授权使用“直写主干”链路。
 - “合并到主干”默认含义是创建、更新或准备 PR，不是本地合并 `main`。
 - 禁止本地合并主干；AI 助手不得用 `git switch main` 后接 `git merge` / `git reset` 把功能分支提交写入本地 `main`。
-- PR 合并前必须有 Codex Code Review 的通过结论，并通过 CI 的 `pr-review-evidence` job 与 `Codex Review Monitor` status。
+- 低风险 PR 可以不触发官方 Codex Code Review，但必须提供本地 AI review 报告、CI 通过证据和 P2 保留说明。
+- 高风险或 unknown PR 必须加 `ai-risk-review`，并触发官方 Codex Code Review。
+- 大型 PR 的官方 Codex Code Review 必须使用 `Codex Review Scope`，只审高风险目录和高风险规则命中改动的 P0/P1 逻辑风险。
+- 无法生成明确 `Codex Review Scope` 的大型 PR，应拆分 PR；未拆分时按全量高风险 PR 处理。
+- 高风险或 unknown PR 合并前必须有 Codex Code Review 的通过结论，并通过 CI 的 `pr-review-evidence` job 与 `Codex Review Monitor` status。
 - 本地推送主干由 `.githooks/pre-push` 的代码化门禁阻断；如用户显式授权直写主干，必须在对应命令上设置 `ALLOW_DIRECT_MAIN_WRITE=1` 和 `DIRECT_MAIN_WRITE_REASON=<reason>`。
 - 本地主干 ref 更新由 `.githooks/reference-transaction` 阻断；如用户显式授权直写主干，可设置 `ALLOW_DIRECT_MAIN_WRITE=1` 和 `DIRECT_MAIN_WRITE_REASON=<reason>`，但只允许 fast-forward 更新，禁止 reset、删除或 force rewrite。
 - PR 在 GitHub 云端合并后，本地 `main` 必须先 `git fetch origin main`，再显式设置 `ALLOW_MAIN_REF_UPDATE=1` 和 `MAIN_REF_UPDATE_REASON`，并只用 `git merge --ff-only origin/main` 或等价 fast-forward 命令同步到 `origin/main`。

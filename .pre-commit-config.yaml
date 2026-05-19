@@ -1,0 +1,21 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.6
+    hooks:
+      - id: ruff
+        files: ^scripts/research/governance/(ai_review_gate|pr_review_evidence|rules)\.py$|^scripts/research/governance/tests/(test_ai_review_gate|test_governance)\.py$
+        args: [--fix]
+      - id: ruff-format
+        files: ^scripts/research/governance/(ai_review_gate|pr_review_evidence|rules)\.py$|^scripts/research/governance/tests/(test_ai_review_gate|test_governance)\.py$
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.6
+    hooks:
+      - id: bandit
+        args: [-q, -r, scripts/research/governance, -x, scripts/research/governance/tests, -s, "B310,B404,B603,B607"]
+        pass_filenames: false
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.28.0
+    hooks:
+      - id: gitleaks

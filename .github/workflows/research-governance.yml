@@ -26,7 +26,19 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt
+        run: python -m pip install -r requirements-dev.txt
+      - name: Ruff
+        run: python -m ruff check scripts/research/governance
+      - name: Bandit
+        run: python -m bandit -q -r scripts/research/governance -x scripts/research/governance/tests -s B310,B404,B603,B607
+      - name: Mypy
+        run: python -m mypy --explicit-package-bases --follow-imports=skip --ignore-missing-imports scripts/research/governance
+      - name: Pip audit
+        run: python -m pip_audit
+      - name: Tests
+        run: python -m pytest scripts/research/governance/tests
+      - name: AI review risk gate
+        run: python -m scripts.research.governance.ai_review_gate validate --report .local/ai-review/latest.json
       - name: Run governance gate
         run: python -m scripts.research.governance gate
 
