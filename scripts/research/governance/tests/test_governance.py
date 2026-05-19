@@ -721,6 +721,26 @@ def _valid_codex_review_body(review_id: int = 4314779358) -> str:
     )
 
 
+def _codex_completion_comment(
+    comment_id: int = 4484023766,
+    *,
+    created_at: str = "2026-05-19T01:00:00Z",
+) -> dict[str, object]:
+    return {
+        "id": comment_id,
+        "html_url": f"https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-{comment_id}",
+        "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+        "created_at": created_at,
+        "reaction_items": [
+            {
+                "content": "+1",
+                "created_at": "2026-05-19T01:01:00Z",
+                "user": {"login": "chatgpt-codex-connector"},
+            }
+        ],
+    }
+
+
 def test_pr_review_evidence_accepts_approved_codex_conclusion() -> None:
     head_sha = "0" * 40
     report = validate_pr_body(
@@ -937,7 +957,7 @@ def test_pr_review_evidence_ignores_dismissed_blocking_codex_review() -> None:
     assert report.ok
 
 
-def test_pr_review_evidence_rejects_changes_requested_codex_review_link() -> None:
+def test_pr_review_evidence_accepts_changes_requested_review_without_p0_p1() -> None:
     head_sha = "0" * 40
     report = validate_pr_body(
         _valid_codex_review_body(),
@@ -954,8 +974,25 @@ def test_pr_review_evidence_rejects_changes_requested_codex_review_link() -> Non
         ],
         review_comments=[],
     )
-    assert not report.ok
-    assert "Codex review link must match a Codex review on the current head" in report.errors
+    assert report.ok
+
+
+def test_pr_review_evidence_accepts_codex_completion_reaction_without_review() -> None:
+    head_sha = "0" * 40
+    body = _valid_codex_review_body().replace(
+        "#pullrequestreview-4314779358",
+        "#issuecomment-4484023766",
+    )
+    report = validate_pr_body(
+        body,
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        expected_head_created_at="2026-05-19T00:59:00Z",
+        comments=[_codex_completion_comment()],
+        reviews=[],
+        review_comments=[],
+    )
+    assert report.ok
 
 
 def test_pr_review_evidence_reads_monitor_head_state_for_head_cutoff() -> None:
@@ -1228,6 +1265,7 @@ def test_pr_review_evidence_rejects_any_current_head_blocking_codex_review() -> 
             {
                 "id": 4314779360,
                 "commit_id": head_sha,
+                "state": "CHANGES_REQUESTED",
                 "submitted_at": "2026-05-19T00:11:00Z",
                 "body": "**![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat) blocking**",
                 "user": {"login": "chatgpt-codex-connector[bot]"},
@@ -1264,6 +1302,21 @@ def test_codex_review_monitor_reports_waiting_for_codex_after_trigger() -> None:
     assert report.status == "waiting_for_codex"
     assert report.trigger_found
     assert "等待 Codex review" in render_monitor_comment(report)
+
+
+def test_codex_review_monitor_passes_on_codex_completion_reaction() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        head_created_at="2026-05-19T00:59:00Z",
+        issue_comments=[_codex_completion_comment()],
+        reviews=[],
+        review_comments=[],
+    )
+    assert report.status == "passed"
+    assert report.latest_review_url == "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484023766"
 
 
 def test_codex_review_monitor_rejects_trigger_before_current_head() -> None:

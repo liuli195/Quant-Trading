@@ -15,6 +15,7 @@ from pathlib import Path
 
 from scripts.research.governance.pr_review_evidence import (
     BLOCKING_CODEX_FINDING_PATTERN,
+    has_codex_completion_reaction,
     head_updated_at_from_monitor_state,
     is_effective_codex_review,
     render_monitor_head_state,
@@ -61,8 +62,12 @@ def build_monitor_report(
     current_head_reviews = _current_head_codex_reviews(reviews, head_sha=head_sha)
     post_trigger_reviews = _reviews_after_trigger(current_head_reviews, trigger_time=trigger_time)
     latest_review = _latest_codex_review(post_trigger_reviews) or _latest_codex_review(current_head_reviews)
+    completion_comment = _latest_codex_completion_comment(issue_comments, head_created_at=head_created_at)
     latest_review_url = _review_url(repo=repo, pr_number=pr_number, review=latest_review) if latest_review else None
     latest_review_sha = str(latest_review.get("commit_id", "")) if latest_review else None
+    if latest_review_url is None and completion_comment is not None:
+        latest_review_url = _issue_comment_url(repo=repo, pr_number=pr_number, comment=completion_comment)
+        latest_review_sha = head_sha
     blocking_findings = _count_reviews_findings(
         current_head_reviews,
         review_comments=review_comments,
@@ -80,7 +85,7 @@ def build_monitor_report(
     elif blocking_findings:
         status = "blocked"
         message = "Codex review 含 P0/P1 阻断发现，不能填写通过结论。"
-    elif not post_trigger_reviews:
+    elif not post_trigger_reviews and completion_comment is None:
         status = "waiting_for_codex"
         message = "已发现触发评论，正在等待 Codex 针对当前 head 输出 review。"
     else:
@@ -191,20 +196,46 @@ def _required_trigger_time(
     *,
     head_created_at: str | None = None,
 ) -> str | None:
-    matched_times: list[str] = []
+    matched_times = [
+        _comment_effective_time(comment)
+        for comment in _required_trigger_comments(issue_comments, head_created_at=head_created_at)
+    ]
+    return max(matched_times) if matched_times else None
+
+
+def _required_trigger_comments(
+    issue_comments: Sequence[Mapping[str, object]],
+    *,
+    head_created_at: str | None = None,
+) -> tuple[Mapping[str, object], ...]:
+    matched: list[Mapping[str, object]] = []
     for comment in issue_comments:
         body = str(comment.get("body", ""))
-        if all(token in body for token in REQUIRED_TRIGGER_TOKENS):
-            effective_time = _comment_effective_time(comment)
-            if not effective_time:
-                if head_created_at:
-                    continue
-                matched_times.append("")
+        if not all(token in body for token in REQUIRED_TRIGGER_TOKENS):
+            continue
+        effective_time = _comment_effective_time(comment)
+        if not effective_time:
+            if head_created_at:
                 continue
-            if head_created_at and effective_time < head_created_at:
-                continue
-            matched_times.append(effective_time)
-    return max(matched_times) if matched_times else None
+        elif head_created_at and effective_time < head_created_at:
+            continue
+        matched.append(comment)
+    return tuple(matched)
+
+
+def _latest_codex_completion_comment(
+    issue_comments: Sequence[Mapping[str, object]],
+    *,
+    head_created_at: str | None = None,
+) -> Mapping[str, object] | None:
+    matched = [
+        comment
+        for comment in _required_trigger_comments(issue_comments, head_created_at=head_created_at)
+        if has_codex_completion_reaction(comment)
+    ]
+    if not matched:
+        return None
+    return sorted(matched, key=_comment_effective_time)[-1]
 
 
 def _comment_effective_time(comment: Mapping[str, object]) -> str:
@@ -261,6 +292,10 @@ def _review_sort_key(review: Mapping[str, object]) -> str:
 
 def _review_url(*, repo: str, pr_number: str, review: Mapping[str, object]) -> str:
     return f"https://github.com/{repo}/pull/{pr_number}#pullrequestreview-{review.get('id')}"
+
+
+def _issue_comment_url(*, repo: str, pr_number: str, comment: Mapping[str, object]) -> str:
+    return str(comment.get("html_url", "")) or f"https://github.com/{repo}/pull/{pr_number}#issuecomment-{comment.get('id')}"
 
 
 def _count_review_findings(
@@ -353,6 +388,30 @@ def _fetch_github_list(*, repo: str, path: str, token: str) -> list[object]:
     return items
 
 
+def _enrich_required_trigger_reactions(
+    comments: Sequence[Mapping[str, object]],
+    *,
+    repo: str,
+    token: str,
+) -> list[Mapping[str, object]]:
+    enriched: list[Mapping[str, object]] = []
+    for comment in comments:
+        body = str(comment.get("body", ""))
+        if not all(token_text in body for token_text in REQUIRED_TRIGGER_TOKENS):
+            enriched.append(comment)
+            continue
+        comment_id = comment.get("id")
+        if comment_id is None:
+            enriched.append(comment)
+            continue
+        item = dict(comment)
+        item["reaction_items"] = _as_mapping_list(
+            _fetch_github_list(repo=repo, path=f"issues/comments/{comment_id}/reactions", token=token)
+        )
+        enriched.append(item)
+    return enriched
+
+
 def _parse_next_link(header: str) -> str | None:
     for part in header.split(","):
         pieces = part.split(";")
@@ -435,6 +494,7 @@ def main(argv: list[str] | None = None) -> int:
             issue_comments = _as_mapping_list(
                 _fetch_github_list(repo=repo, path=f"issues/{pr_number}/comments", token=token)
             )
+        issue_comments = _enrich_required_trigger_reactions(issue_comments, repo=repo, token=token)
         if not reviews:
             reviews = _as_mapping_list(_fetch_github_list(repo=repo, path=f"pulls/{pr_number}/reviews", token=token))
         if not review_comments:
