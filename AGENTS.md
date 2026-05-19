@@ -1,38 +1,28 @@
 # AGENTS.md
 
-## 项目身份
+本仓库是基于 Python 的 A 股/场内基金量化策略仓库，交易与回测环境为聚宽 JoinQuant。
 
-基于 Python 的 A 股/场内基金量化交易策略仓库，交易与回测环境为 **聚宽 (JoinQuant)**。
-策略代码仅在聚宽云端可运行；本地负责编写、静态检查、单元测试、文档维护、回测结果分析。
+## 通用入口
 
-## 规则入口
+本文件是所有 AI 编码助手的通用入口；根文档索引见 [indexes.md](indexes.md) <!-- pathref: repo/indexes.md -->。
 
-所有 AI 编码助手（Claude Code、Cursor、Copilot、Codex 等）统一以 **[CLAUDE.md](CLAUDE.md) 为权威规则源**。
+Claude Code 专属补充见 [CLAUDE.md](CLAUDE.md) <!-- pathref: repo/CLAUDE.md -->。
 
-CLAUDE.md 是 AI 助手入口。仓库级规则正文在 **[docs/rules/index.md](docs/rules/index.md) <!-- pathref: docs/rules/index.md -->**，重大规则和治理决策记录在 **[docs/adr](docs/adr) <!-- pathref: docs/adr -->**。
+## 通用规则
 
-CLAUDE.md 包含：目录结构约定、工具入口与命令、策略代码规范、注释与文档约定、提交前检查清单、Skills 说明。
-
-本文件仅记录跨工具通用的补充约束，内容稳定不随项目迭代频繁变更。
-
-## 跨工具约束
-
-### Python 环境
-
-- Windows 本地 Python 命令必须通过 `.\.venv\Scripts\python.exe`，Codex Cloud/Linux 使用 `.venv/bin/python`，不使用系统 Python。
-- Git hook 和自动化入口统一通过 `.githooks/run-python.sh` 选择当前平台的项目虚拟环境。
-- **Codex 本地环境中须提权执行**，否则可能无法访问 `.venv` 或解析项目目录，导致误用系统 Python。
-
-### 输出语言
-
-所有回答和输出使用简体中文。
-
-### 文件引用格式
-
-Markdown 内部文件引用采用双轨格式（可点击路径 + `pathref` 注释），确保机器可校验。
+- 所有回答和输出使用简体中文；对话风格简洁直白，不要过度使用专业词汇。
+- 策略代码仅在聚宽云端运行；本地负责编写、静态检查、单元测试、文档维护、回测结果分析。
+- 使用项目虚拟环境运行 Python，遇到沙箱/权限阻断时申请提权；使用项目.venv 运行 Python 时，必须申请提权。具体命令见 [commands.md](docs/rules/commands.md) <!-- pathref: docs/rules/commands.md -->。
+- 先调查： 切勿对未读过的代码进行推测。在提出主张前，请先阅读文件并根据根文档索引搜索相关用法。若不确定，请如实说明并提出验证方法。
+- 请求范围： 只做要求的事情；不多做。当要求不明确时，默认为研究和建议——仅在明确要求时进行编辑。不要重构相邻的代码，也不要为单一用途创建抽象。
+- 完成前验证： 重新检查每个要求。运行测试和代码检查。说明变更内容、已验证项以及无法验证的部分。
+- 所有进入主干的改动必须通过 PR；禁止本地合并主干，细则见 [pr-workflow.md](docs/rules/pr-workflow.md) <!-- pathref: docs/rules/pr-workflow.md -->。
+- 所有GIT分支名称和GIT提交说明都使用简体中文。
+- 文件规范： 在原有文件上直接编辑。除非必要，否则不要创建新文件。每次任务后清理临时产物。
+- 安全性： 执行破坏性操作前需确认（删除文件/分支、强制推送、硬重置、--no-verify）
+- 效率： 并行化独立工具调用；串行化依赖项调用
+- Markdown 内部文件引用使用“可点击链接 + `pathref` 注释”的双轨格式。
 
 ## Review guidelines
 
 Before reviewing, read and apply [review-guidelines.md](docs/rules/review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md -->. If you cannot access that file, treat the review as blocked.
-
-完整 AI 助手入口仍以 [CLAUDE.md](CLAUDE.md) <!-- pathref: repo/CLAUDE.md --> 为准。

@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "catalog_type": "documents",
-  "generated_at": "2026-05-18T21:30:00+00:00",
-  "count": 361,
+  "generated_at": "2026-05-19T15:02:58+00:00",
+  "count": 365,
   "reports": [
     {
       "path": "docs/README.md",
@@ -12,7 +12,8 @@
       "date": null,
       "tags": [],
       "pathrefs": [
-        "repo/CLAUDE.md",
+        "repo/AGENTS.md",
+        "repo/indexes.md",
         "docs/rules",
         "docs/rules/index.md",
         "docs/adr",
@@ -30,7 +31,7 @@
         "docs/indexes",
         "docs/indexes/docs_catalog.json"
       ],
-      "updated_at": "2026-05-18T21:27:24+00:00"
+      "updated_at": "2026-05-19T14:15:31+00:00"
     },
     {
       "path": "docs/adr/0001-rule-source-and-governance-model.md",
@@ -40,11 +41,14 @@
       "date": null,
       "tags": [],
       "pathrefs": [
+        "docs/adr/0005-ai-entry-progressive-disclosure.md",
         "repo/CLAUDE.md",
+        "docs/adr/0005-ai-entry-progressive-disclosure.md",
+        "repo/AGENTS.md",
         "docs/rules",
         "docs/adr"
       ],
-      "updated_at": "2026-05-18T20:55:48+00:00"
+      "updated_at": "2026-05-19T13:52:30+00:00"
     },
     {
       "path": "docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md",
@@ -54,7 +58,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-18T20:55:48+00:00"
+      "updated_at": "2026-05-19T05:16:21+00:00"
     },
     {
       "path": "docs/adr/0003-governance-gate-and-main-branch-protection.md",
@@ -64,7 +68,45 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-18T21:16:25+00:00"
+      "updated_at": "2026-05-19T05:16:21+00:00"
+    },
+    {
+      "path": "docs/adr/0004-codex-code-review-governance.md",
+      "title": "ADR 0004: 使用官方 Codex Code Review 作为 PR 评审门禁",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "docs/adr/0005-ai-entry-progressive-disclosure.md",
+        "repo/AGENTS.md",
+        "docs/rules/review-guidelines.md",
+        "docs/adr/0005-ai-entry-progressive-disclosure.md",
+        "repo/indexes.md",
+        "repo/CLAUDE.md",
+        "docs/adr/0005-ai-entry-progressive-disclosure.md"
+      ],
+      "updated_at": "2026-05-19T14:16:22+00:00"
+    },
+    {
+      "path": "docs/adr/0005-ai-entry-progressive-disclosure.md",
+      "title": "ADR 0005: AI 入口采用渐进式披露",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "repo/AGENTS.md",
+        "repo/indexes.md",
+        "repo/CLAUDE.md",
+        "docs/rules",
+        "docs/rules/commands.md",
+        "repo/AGENTS.md",
+        "docs/rules/commands.md",
+        "repo/AGENTS.md",
+        "docs/rules/index.md"
+      ],
+      "updated_at": "2026-05-19T14:31:28+00:00"
     },
     {
       "path": "docs/architecture/research-platform-architecture.md",
@@ -94,7 +136,7 @@
         "docs/indexes/reports.md",
         "scripts/research/layers"
       ],
-      "updated_at": "2026-05-18T21:29:06+00:00"
+      "updated_at": "2026-05-19T14:16:58+00:00"
     },
     {
       "path": "docs/design/本地研究平台重构.md",
@@ -104,7 +146,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-18T21:29:31+00:00"
+      "updated_at": "2026-05-18T21:37:05+00:00"
     },
     {
       "path": "docs/design/本地研究平台重构技术实施方案.md",
@@ -121,7 +163,7 @@
         "docs/guides/research-workflow-migration.md",
         "repo/CLAUDE.md"
       ],
-      "updated_at": "2026-05-18T21:29:26+00:00"
+      "updated_at": "2026-05-18T21:37:05+00:00"
     },
     {
       "path": "docs/design/长期项目防止开发规则漂移方案.md",
@@ -140,7 +182,7 @@
         "docs/exceptions/active-waivers.yaml",
         "scripts/research/governance"
       ],
-      "updated_at": "2026-05-18T21:29:06+00:00"
+      "updated_at": "2026-05-18T21:37:05+00:00"
     },
     {
       "path": "docs/guides/local-python-env.md",
@@ -150,10 +192,9 @@
       "date": null,
       "tags": [],
       "pathrefs": [
-        "repo/.venv",
         "repo/requirements.txt"
       ],
-      "updated_at": "2026-05-18T21:29:06+00:00"
+      "updated_at": "2026-05-19T06:47:01+00:00"
     },
     {
       "path": "docs/guides/research-workflow-migration.md",
@@ -163,7 +204,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-17T14:31:18+00:00"
+      "updated_at": "2026-05-18T21:37:05+00:00"
     },
     {
       "path": "docs/guides/research-workflow.md",
@@ -182,7 +223,7 @@
         "scripts/research/platform",
         "docs/architecture/research-platform-architecture.md"
       ],
-      "updated_at": "2026-05-18T21:29:06+00:00"
+      "updated_at": "2026-05-18T21:37:05+00:00"
     },
     {
       "path": "docs/joinquant-data/JQ_Alpha101.md",
@@ -371,7 +412,7 @@
         "docs_images/1e7d7bab_1e7d7bab.png",
         "docs_images/img_2901ea6b.png"
       ],
-      "updated_at": "2026-05-18T21:29:07+00:00"
+      "updated_at": "2026-05-18T21:37:05+00:00"
     },
     {
       "path": "docs/reference/joinquant-parameter-analysis-framework.md",
@@ -384,20 +425,7 @@
         "docs/guides/research-workflow.md",
         "docs/guides/research-workflow-migration.md"
       ],
-      "updated_at": "2026-05-18T21:29:07+00:00"
-    },
-    {
-      "path": "docs/rules/ai-agents.md",
-      "title": "多 AI Agent 协作规则",
-      "category": "docs",
-      "strategy": null,
-      "date": null,
-      "tags": [],
-      "pathrefs": [
-        "repo/CLAUDE.md",
-        "repo/AGENTS.md"
-      ],
-      "updated_at": "2026-05-18T21:16:16+00:00"
+      "updated_at": "2026-05-18T21:37:05+00:00"
     },
     {
       "path": "docs/rules/code-style.md",
@@ -406,8 +434,25 @@
       "strategy": null,
       "date": null,
       "tags": [],
-      "pathrefs": [],
-      "updated_at": "2026-05-18T20:55:48+00:00"
+      "pathrefs": [
+        "docs/rules/commands.md"
+      ],
+      "updated_at": "2026-05-19T13:53:20+00:00"
+    },
+    {
+      "path": "docs/rules/commands.md",
+      "title": "命令和本地环境规则",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "repo/AGENTS.md",
+        "scripts/tools/jq_automation/README.md",
+        "scripts/tools/path_tools/README.md",
+        "docs/guides/research-workflow.md"
+      ],
+      "updated_at": "2026-05-19T14:14:49+00:00"
     },
     {
       "path": "docs/rules/docs-and-pathref.md",
@@ -417,7 +462,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-18T20:55:48+00:00"
+      "updated_at": "2026-05-18T21:37:05+00:00"
     },
     {
       "path": "docs/rules/governance.md",
@@ -426,8 +471,11 @@
       "strategy": null,
       "date": null,
       "tags": [],
-      "pathrefs": [],
-      "updated_at": "2026-05-18T21:16:11+00:00"
+      "pathrefs": [
+        "repo/AGENTS.md",
+        "repo/CLAUDE.md"
+      ],
+      "updated_at": "2026-05-19T14:15:31+00:00"
     },
     {
       "path": "docs/rules/index.md",
@@ -437,18 +485,37 @@
       "date": null,
       "tags": [],
       "pathrefs": [
+        "repo/AGENTS.md",
+        "repo/indexes.md",
         "repo/CLAUDE.md",
         "docs/adr",
-        "docs/rules/ai-agents.md",
+        "docs/rules/pr-workflow.md",
         "docs/rules/governance.md",
+        "docs/rules/review-guidelines.md",
+        "docs/rules/commands.md",
         "docs/rules/research-workflow.md",
         "docs/rules/code-style.md",
         "docs/rules/docs-and-pathref.md",
         "docs/adr/0001-rule-source-and-governance-model.md",
         "docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md",
-        "docs/adr/0003-governance-gate-and-main-branch-protection.md"
+        "docs/adr/0003-governance-gate-and-main-branch-protection.md",
+        "docs/adr/0004-codex-code-review-governance.md",
+        "docs/adr/0005-ai-entry-progressive-disclosure.md"
       ],
-      "updated_at": "2026-05-18T20:55:48+00:00"
+      "updated_at": "2026-05-19T14:57:08+00:00"
+    },
+    {
+      "path": "docs/rules/pr-workflow.md",
+      "title": "PR 工作流规则",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "repo/AGENTS.md",
+        "repo/CLAUDE.md"
+      ],
+      "updated_at": "2026-05-19T14:57:08+00:00"
     },
     {
       "path": "docs/rules/research-workflow.md",
@@ -458,7 +525,29 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-18T20:55:48+00:00"
+      "updated_at": "2026-05-18T21:37:05+00:00"
+    },
+    {
+      "path": "docs/rules/review-guidelines.md",
+      "title": "Codex Code Review 指南",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "repo/AGENTS.md",
+        "repo/CLAUDE.md",
+        "docs/rules",
+        "docs/rules/index.md",
+        "docs/rules/pr-workflow.md",
+        "docs/rules/governance.md",
+        "docs/rules/review-guidelines.md",
+        "docs/rules/commands.md",
+        "docs/rules/research-workflow.md",
+        "docs/rules/code-style.md",
+        "docs/rules/docs-and-pathref.md"
+      ],
+      "updated_at": "2026-05-19T14:57:08+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/attribution-analysis.md",
@@ -702,7 +791,7 @@
       "date": "2026-05-03",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-18T21:28:32+00:00"
+      "updated_at": "2026-05-18T21:37:05+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/reports/量化交易策略研究.md",
@@ -2933,7 +3022,7 @@
         "joinquant_data/JQ_场内基金数据.md",
         "repo/CLAUDE.md"
       ],
-      "updated_at": "2026-05-18T21:28:39+00:00"
+      "updated_at": "2026-05-18T21:37:05+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/reports/design/2026-05-17-cash-utilization-optimization-plan.md",
@@ -3002,7 +3091,7 @@
         "joinquant_data/JQ_场内基金数据.md",
         "strategy_reports(strategy=etf_factor_rotation)/testing/测试方案设计文档.md"
       ],
-      "updated_at": "2026-05-18T21:28:40+00:00"
+      "updated_at": "2026-05-18T21:37:05+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/reports/design/ETF轮动策略方案说明书.md",
@@ -3681,7 +3770,7 @@
         "strategy_reports(strategy=etf_factor_rotation)/design/ETF轮动策略方案说明书.md",
         "docs/reference/joinquant-api.md"
       ],
-      "updated_at": "2026-05-18T21:28:40+00:00"
+      "updated_at": "2026-05-18T21:37:05+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/test_batches/20260505-0000-etf-factor-rotation-full-test/report/batch-comparison.md",

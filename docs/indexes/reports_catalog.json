@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "catalog_type": "reports",
-  "generated_at": "2026-05-18T21:30:00+00:00",
+  "generated_at": "2026-05-19T15:02:58+00:00",
   "count": 327,
   "reports": [
     {
@@ -246,7 +246,7 @@
       "date": "2026-05-03",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-18T21:28:32+00:00"
+      "updated_at": "2026-05-18T21:37:05+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/reports/量化交易策略研究.md",
@@ -2477,7 +2477,7 @@
         "joinquant_data/JQ_场内基金数据.md",
         "repo/CLAUDE.md"
       ],
-      "updated_at": "2026-05-18T21:28:39+00:00"
+      "updated_at": "2026-05-18T21:37:05+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/reports/design/2026-05-17-cash-utilization-optimization-plan.md",
@@ -2546,7 +2546,7 @@
         "joinquant_data/JQ_场内基金数据.md",
         "strategy_reports(strategy=etf_factor_rotation)/testing/测试方案设计文档.md"
       ],
-      "updated_at": "2026-05-18T21:28:40+00:00"
+      "updated_at": "2026-05-18T21:37:05+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/reports/design/ETF轮动策略方案说明书.md",
@@ -3225,7 +3225,7 @@
         "strategy_reports(strategy=etf_factor_rotation)/design/ETF轮动策略方案说明书.md",
         "docs/reference/joinquant-api.md"
       ],
-      "updated_at": "2026-05-18T21:28:40+00:00"
+      "updated_at": "2026-05-18T21:37:05+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/test_batches/20260505-0000-etf-factor-rotation-full-test/report/batch-comparison.md",

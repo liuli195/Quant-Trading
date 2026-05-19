@@ -1,6 +1,6 @@
 # 文档入口
 
-`docs/` 根目录只保留文档入口。具体文档按用途放入子目录；仓库级规则入口仍以 [CLAUDE.md](../CLAUDE.md) <!-- pathref: repo/CLAUDE.md --> 为准。
+`docs/` 根目录只保留文档入口。具体文档按用途放入子目录；AI 助手通用入口以 [AGENTS.md](../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 为准，根文档索引见 [indexes.md](../indexes.md) <!-- pathref: repo/indexes.md -->。
 
 ## 目录分层
 
