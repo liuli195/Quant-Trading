@@ -2,7 +2,7 @@ name: Codex Review Monitor
 
 on:
   issue_comment:
-    types: [created, edited]
+    types: [created, edited, deleted]
   pull_request_review:
     types: [submitted]
   pull_request_review_comment:
@@ -17,6 +17,7 @@ permissions:
   contents: read
   issues: write
   pull-requests: read
+  statuses: write
 
 jobs:
   monitor:
@@ -27,7 +28,7 @@ jobs:
       (
         github.event_name == 'issue_comment' &&
         github.event.issue.pull_request &&
-        contains(github.event.comment.body, '@codex review') &&
+        (github.event.action == 'deleted' || contains(github.event.comment.body, '@codex review')) &&
         github.event.comment.user.login != 'github-actions[bot]'
       )
     runs-on: windows-latest
@@ -43,3 +44,4 @@ jobs:
         run: >-
           python -m scripts.research.governance.codex_review_monitor
           --sync-comment
+          --sync-status

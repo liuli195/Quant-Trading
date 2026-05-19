@@ -137,6 +137,34 @@ def sync_monitor_comment(*, repo: str, pr_number: str, token: str, report: Monit
         )
 
 
+def sync_commit_status(*, repo: str, pr: Mapping[str, object], token: str, report: MonitorReport) -> None:
+    state = {
+        "waiting_for_trigger": "failure",
+        "waiting_for_codex": "pending",
+        "blocked": "failure",
+        "passed": "success",
+    }.get(report.status, "error")
+    pr_url = str(pr.get("html_url", "")) or f"https://github.com/{repo}/pull/{report.pr_number}"
+    target_url = report.latest_review_url or pr_url
+    description = {
+        "waiting_for_trigger": "Waiting for required @codex review trigger",
+        "waiting_for_codex": "Waiting for Codex review on current head",
+        "blocked": "Codex review has P0/P1 findings",
+        "passed": "Codex review has no P0/P1 findings",
+    }.get(report.status, "Codex review monitor status unavailable")
+    _request_json(
+        method="POST",
+        url=f"https://api.github.com/repos/{repo}/statuses/{report.head_sha}",
+        token=token,
+        payload={
+            "state": state,
+            "target_url": target_url,
+            "description": description[:140],
+            "context": "Codex Review Monitor",
+        },
+    )
+
+
 def _has_required_trigger_comment(issue_comments: Sequence[Mapping[str, object]]) -> bool:
     for comment in issue_comments:
         body = str(comment.get("body", ""))
@@ -294,6 +322,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--github-token-env", default="GITHUB_TOKEN")
     parser.add_argument("--summary-file-env", default="GITHUB_STEP_SUMMARY")
     parser.add_argument("--sync-comment", action="store_true")
+    parser.add_argument("--sync-status", action="store_true")
     parser.add_argument("--pr-file", type=Path)
     parser.add_argument("--comments-file", type=Path)
     parser.add_argument("--reviews-file", type=Path)
@@ -349,6 +378,11 @@ def main(argv: list[str] | None = None) -> int:
             print("error: GITHUB_TOKEN is required when --sync-comment is used", file=sys.stderr)
             return 2
         sync_monitor_comment(repo=repo, pr_number=pr_number, token=token, report=report)
+    if args.sync_status:
+        if not token:
+            print("error: GITHUB_TOKEN is required when --sync-status is used", file=sys.stderr)
+            return 2
+        sync_commit_status(repo=repo, pr=pr, token=token, report=report)
     return 0
 
 

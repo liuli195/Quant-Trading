@@ -59,7 +59,9 @@ ruleset:
 review submissions, and Codex inline review comments. It updates one PR comment
 marked with `<!-- codex-review-monitor -->`, reporting whether the current PR
 head is still waiting for Codex, blocked by P0/P1 findings, or ready for the PR
-body evidence to be updated.
+body evidence to be updated. It also writes the commit status context `Codex
+Review Monitor` to the PR head, so trigger-comment deletion can invalidate the
+head status instead of only updating a PR discussion comment.
 
 Manual inspection is available through workflow dispatch, or locally with:
 

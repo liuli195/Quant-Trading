@@ -6,8 +6,6 @@ on:
     types: [opened, synchronize, reopened, edited, ready_for_review]
   pull_request_review:
     types: [submitted]
-  issue_comment:
-    types: [created, edited]
   schedule:
     - cron: "0 2 * * 1"
   workflow_dispatch:
@@ -33,13 +31,7 @@ jobs:
   pr-review-evidence:
     if: >-
       github.event_name == 'pull_request' ||
-      github.event_name == 'pull_request_review' ||
-      (
-        github.event_name == 'issue_comment' &&
-        github.event.issue.pull_request &&
-        contains(github.event.comment.body, '@codex review') &&
-        github.event.comment.user.login != 'github-actions[bot]'
-      )
+      github.event_name == 'pull_request_review'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

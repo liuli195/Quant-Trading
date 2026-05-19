@@ -20,6 +20,7 @@ CODEX_REVIEW_URL_PATTERN = re.compile(
 )
 CODEX_REVIEW_AUTHORS = {"chatgpt-codex-connector", "chatgpt-codex-connector[bot]"}
 BLOCKING_CODEX_FINDING_PATTERN = re.compile(r"(?:P[01] Badge|badge/P[01]-)", re.IGNORECASE)
+REQUIRED_TRIGGER_TOKENS = ("@codex review", "AGENTS.md", "docs/rules/review-guidelines.md", "docs/rules/*.md")
 
 
 @dataclass(frozen=True)
@@ -33,7 +34,7 @@ def validate_pr_body(
     *,
     expected_pr_url: str | None = None,
     expected_head_sha: str | None = None,
-    comments: Sequence[str] | None = None,
+    comments: Sequence[object] | None = None,
     reviews: Sequence[Mapping[str, object]] | None = None,
     review_comments: Sequence[Mapping[str, object]] | None = None,
 ) -> EvidenceReport:
@@ -82,9 +83,10 @@ def validate_pr_body(
                     reviews=reviews,
                     review_comments=review_comments,
                     expected_head_sha=expected_head_sha,
+                    trigger_comments=_required_trigger_comments(comments) if comments is not None else None,
                 )
             )
-    if comments is not None and not _has_required_trigger_comment(comments):
+    if comments is not None and not _required_trigger_comments(comments):
         errors.append("PR comments must include the required @codex review trigger")
     if "scripts.research.governance gate" not in section:
         errors.append("review evidence must include governance gate command")
@@ -159,24 +161,35 @@ def _codex_review_errors(
     reviews: Sequence[Mapping[str, object]],
     review_comments: Sequence[Mapping[str, object]] | None,
     expected_head_sha: str | None,
+    trigger_comments: Sequence[object] | None,
 ) -> tuple[str, ...]:
     match = CODEX_REVIEW_URL_PATTERN.fullmatch(review_link)
     if not match:
         return ("Codex review link must match a Codex review on the current head",)
     review_id = match.group("review_id")
+    matched_review: Mapping[str, object] | None = None
     for review in reviews:
         if str(review.get("id", "")) != review_id:
             continue
+        matched_review = review
         author = review.get("user")
         login = author.get("login") if isinstance(author, Mapping) else ""
         if str(login) not in CODEX_REVIEW_AUTHORS:
             return ("Codex review link must match a Codex review on the current head",)
         if expected_head_sha and str(review.get("commit_id", "")) != expected_head_sha:
             return ("Codex review link must match a Codex review on the current head",)
-        if _review_has_blocking_findings(review, review_id=review_id, review_comments=review_comments):
-            return ("Codex review must not contain P0/P1 findings",)
-        return ()
-    return ("Codex review link must match a Codex review on the current head",)
+        break
+    if matched_review is None:
+        return ("Codex review link must match a Codex review on the current head",)
+    if trigger_comments is not None and not _review_is_after_required_trigger(matched_review, trigger_comments):
+        return ("Codex review must be submitted after the required @codex review trigger",)
+    if _current_head_has_blocking_codex_review(
+        reviews,
+        review_comments=review_comments,
+        expected_head_sha=expected_head_sha,
+    ):
+        return ("Codex review must not contain P0/P1 findings on the current head",)
+    return ()
 
 
 def _review_has_blocking_findings(
@@ -193,9 +206,60 @@ def _review_has_blocking_findings(
     return any(BLOCKING_CODEX_FINDING_PATTERN.search(text) for text in texts)
 
 
-def _has_required_trigger_comment(comments: Sequence[str]) -> bool:
-    required = ("@codex review", "AGENTS.md", "docs/rules/review-guidelines.md", "docs/rules/*.md")
-    return any(all(token in comment for token in required) for comment in comments)
+def _current_head_has_blocking_codex_review(
+    reviews: Sequence[Mapping[str, object]],
+    *,
+    review_comments: Sequence[Mapping[str, object]] | None,
+    expected_head_sha: str | None,
+) -> bool:
+    for review in reviews:
+        author = review.get("user")
+        login = author.get("login") if isinstance(author, Mapping) else ""
+        if str(login) not in CODEX_REVIEW_AUTHORS:
+            continue
+        if expected_head_sha and str(review.get("commit_id", "")) != expected_head_sha:
+            continue
+        if _review_has_blocking_findings(review, review_id=str(review.get("id", "")), review_comments=review_comments):
+            return True
+    return False
+
+
+def _required_trigger_comments(comments: Sequence[object]) -> tuple[object, ...]:
+    matched: list[object] = []
+    for comment in comments:
+        body = _comment_body(comment)
+        if all(token in body for token in REQUIRED_TRIGGER_TOKENS):
+            matched.append(comment)
+    return tuple(matched)
+
+
+def _comment_body(comment: object) -> str:
+    if isinstance(comment, str):
+        return comment
+    if isinstance(comment, Mapping):
+        return str(comment.get("body", ""))
+    return ""
+
+
+def _review_is_after_required_trigger(review: Mapping[str, object], trigger_comments: Sequence[object]) -> bool:
+    review_time = _first_value(review, "submitted_at", "created_at")
+    trigger_times = [
+        _first_value(comment, "created_at", "updated_at")
+        for comment in trigger_comments
+        if isinstance(comment, Mapping)
+    ]
+    trigger_times = [value for value in trigger_times if value]
+    if not review_time or not trigger_times:
+        return True
+    return any(trigger_time <= review_time for trigger_time in trigger_times)
+
+
+def _first_value(item: Mapping[str, object], *keys: str) -> str:
+    for key in keys:
+        value = item.get(key)
+        if value:
+            return str(value)
+    return ""
 
 
 def _normalize_pr_url(value: str | None) -> str | None:
@@ -258,9 +322,9 @@ def _fetch_pr_metadata(*, repo: str, pr_number: str, token: str) -> Mapping[str,
     return payload if isinstance(payload, Mapping) else None
 
 
-def _fetch_pr_comments(*, repo: str, pr_number: str, token: str) -> list[str]:
+def _fetch_pr_comments(*, repo: str, pr_number: str, token: str) -> list[Mapping[str, object]]:
     payload = _fetch_github_list(repo=repo, path=f"issues/{pr_number}/comments", token=token)
-    return [str(item.get("body", "")) for item in payload if isinstance(item, Mapping)]
+    return [item for item in payload if isinstance(item, Mapping)]
 
 
 def _fetch_pr_reviews(*, repo: str, pr_number: str, token: str) -> list[Mapping[str, object]]:
@@ -286,17 +350,17 @@ def _read_optional_file(path: Path | None) -> object | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _coerce_comments(payload: object | None) -> Sequence[str] | None:
+def _coerce_comments(payload: object | None) -> Sequence[object] | None:
     if payload is None:
         return None
     if not isinstance(payload, list):
         return ()
-    comments: list[str] = []
+    comments: list[object] = []
     for item in payload:
         if isinstance(item, str):
             comments.append(item)
         elif isinstance(item, Mapping):
-            comments.append(str(item.get("body", "")))
+            comments.append(item)
     return comments
 
 

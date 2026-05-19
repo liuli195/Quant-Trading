@@ -272,8 +272,10 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             "issue_comment",
             "pull_request_review",
             "pull_request_review_comment",
+            "statuses: write",
             "scripts.research.governance.codex_review_monitor",
             "--sync-comment",
+            "--sync-status",
         ):
             if token not in text:
                 findings.append(AuditFinding("codex_review_monitor", "error", f"monitor workflow missing {token}"))

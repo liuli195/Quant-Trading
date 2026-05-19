@@ -11,7 +11,7 @@
 - PR 描述必须填写 `Codex Code Review 结论`，且 `结论` 为 `通过`、`阻断问题` 为 `无` 后，才能进入合并。
 - Codex Code Review 必须逐条检查 [docs/rules](.) <!-- pathref: docs/rules --> 下所有规则文件，并在结论中说明是否发现规则冲突或漂移。
 - 必须保留本地检查证据，至少包括 `.\.venv\Scripts\python.exe -m scripts.research.governance gate`。
-- `@codex review` 触发后由 Codex Review Monitor 监听结果。该监控只负责汇总当前 head 的 Codex review 状态，不替代 Codex review 结论和 PR body 证据。
+- `@codex review` 触发后由 Codex Review Monitor 监听结果。该监控汇总当前 head 的 Codex review 状态，并写入 `Codex Review Monitor` commit status；它不替代 Codex review 结论和 PR body 证据。
 
 ## 评审重点
 
