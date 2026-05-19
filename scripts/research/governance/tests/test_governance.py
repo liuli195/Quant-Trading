@@ -7,8 +7,9 @@ from scripts.research.governance.branch_protection import check_pre_push_input, 
 from scripts.research.governance.codex_review_monitor import build_monitor_report, render_monitor_comment
 from scripts.research.governance.pr_review_evidence import (
     BLOCKING_CODEX_FINDING_PATTERN,
-    _pr_updated_at,
+    head_updated_at_from_monitor_state,
     _parse_next_link,
+    render_monitor_head_state,
     validate_pr_body,
 )
 from scripts.research.governance.rules import run_audit
@@ -936,8 +937,39 @@ def test_pr_review_evidence_ignores_dismissed_blocking_codex_review() -> None:
     assert report.ok
 
 
-def test_pr_review_evidence_uses_pr_update_time_for_head_cutoff() -> None:
-    assert _pr_updated_at({"updated_at": "2026-05-19T02:00:00Z"}) == "2026-05-19T02:00:00Z"
+def test_pr_review_evidence_rejects_changes_requested_codex_review_link() -> None:
+    head_sha = "0" * 40
+    report = validate_pr_body(
+        _valid_codex_review_body(),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "state": "CHANGES_REQUESTED",
+                "body": "### Codex Review\n\nNo badge text.",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+    assert not report.ok
+    assert "Codex review link must match a Codex review on the current head" in report.errors
+
+
+def test_pr_review_evidence_reads_monitor_head_state_for_head_cutoff() -> None:
+    head_sha = "0" * 40
+    comment = {
+        "body": render_monitor_head_state(
+            head_sha=head_sha,
+            head_updated_at="2026-05-19T02:00:00Z",
+        )
+    }
+    assert (
+        head_updated_at_from_monitor_state([comment], expected_head_sha=head_sha)
+        == "2026-05-19T02:00:00Z"
+    )
 
 
 def test_pr_review_evidence_rejects_codex_review_with_blocking_body_finding() -> None:
@@ -1038,6 +1070,38 @@ def test_pr_review_evidence_rejects_review_before_required_trigger_comment() -> 
                 "id": 4314779358,
                 "commit_id": head_sha,
                 "submitted_at": "2026-05-19T00:09:00Z",
+                "body": "### Codex Review",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+    assert not report.ok
+    assert "Codex review must be submitted after the required @codex review trigger" in report.errors
+
+
+def test_pr_review_evidence_waits_for_review_after_latest_required_trigger() -> None:
+    head_sha = "0" * 40
+    report = validate_pr_body(
+        _valid_codex_review_body(),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        expected_head_created_at="2026-05-19T00:00:00Z",
+        comments=[
+            {
+                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "created_at": "2026-05-19T00:05:00Z",
+            },
+            {
+                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "created_at": "2026-05-19T00:15:00Z",
+            },
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T00:10:00Z",
                 "body": "### Codex Review",
                 "user": {"login": "chatgpt-codex-connector[bot]"},
             }
@@ -1248,6 +1312,38 @@ def test_codex_review_monitor_waits_for_review_after_required_trigger() -> None:
                 "id": 4314779358,
                 "commit_id": head_sha,
                 "submitted_at": "2026-05-19T01:01:00Z",
+                "body": "### Codex Review\n\nNo blocking findings.",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+    assert report.status == "waiting_for_codex"
+    assert report.trigger_found
+
+
+def test_codex_review_monitor_waits_for_review_after_latest_required_trigger() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        head_created_at="2026-05-19T01:00:00Z",
+        issue_comments=[
+            {
+                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "created_at": "2026-05-19T01:02:00Z",
+            },
+            {
+                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "created_at": "2026-05-19T01:05:00Z",
+            },
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T01:04:00Z",
                 "body": "### Codex Review\n\nNo blocking findings.",
                 "user": {"login": "chatgpt-codex-connector[bot]"},
             }

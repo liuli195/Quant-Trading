@@ -48,7 +48,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number || github.event.issue.number }}
-          PR_HEAD_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
+          PR_HEAD_UPDATED_AT: ${{ github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.action == 'reopened') && github.event.pull_request.updated_at || '' }}
         run: >-
           python -m scripts.research.governance.codex_review_monitor
           --head-updated-at-env PR_HEAD_UPDATED_AT

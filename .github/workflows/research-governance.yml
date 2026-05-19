@@ -47,7 +47,7 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url || format('https://github.com/{0}/pull/{1}', github.repository, github.event.issue.number) }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_HEAD_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
+          PR_HEAD_UPDATED_AT: ${{ github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.action == 'reopened') && github.event.pull_request.updated_at || '' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
           python -m scripts.research.governance.pr_review_evidence

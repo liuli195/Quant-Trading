@@ -19,7 +19,8 @@ CODEX_REVIEW_URL_PATTERN = re.compile(
     r"https://github\.com/(?P<repo>[^/\s]+/[^/\s]+)/pull/(?P<number>\d+)#pullrequestreview-(?P<review_id>\d+)"
 )
 CODEX_REVIEW_AUTHORS = {"chatgpt-codex-connector", "chatgpt-codex-connector[bot]"}
-DISQUALIFIED_CODEX_REVIEW_STATES = {"DISMISSED", "PENDING"}
+DISQUALIFIED_CODEX_REVIEW_STATES = {"CHANGES_REQUESTED", "DISMISSED", "PENDING"}
+MONITOR_STATE_PATTERN = re.compile(r"<!--\s*codex-review-monitor-state\s+(?P<payload>\{.*?\})\s*-->", re.DOTALL)
 BLOCKING_CODEX_FINDING_PATTERN = re.compile(
     r"(?:P[01] Badge|badge/P[01]-|(?:^|\n)\s*(?:\*\*)?\[P[01]\]\s+)",
     re.IGNORECASE,
@@ -264,6 +265,38 @@ def _comment_body(comment: object) -> str:
     return ""
 
 
+def render_monitor_head_state(*, head_sha: str, head_updated_at: str | None) -> str:
+    payload = {
+        "head_sha": head_sha,
+        "head_updated_at": head_updated_at or "",
+    }
+    return f"<!-- codex-review-monitor-state {json.dumps(payload, ensure_ascii=True, separators=(',', ':'))} -->"
+
+
+def head_updated_at_from_monitor_state(
+    comments: Sequence[object] | None,
+    *,
+    expected_head_sha: str | None,
+) -> str | None:
+    if comments is None or not expected_head_sha:
+        return None
+    matched: list[str] = []
+    for comment in comments:
+        for payload in MONITOR_STATE_PATTERN.findall(_comment_body(comment)):
+            try:
+                state = json.loads(payload)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(state, Mapping):
+                continue
+            if str(state.get("head_sha", "")) != expected_head_sha:
+                continue
+            head_updated_at = str(state.get("head_updated_at", "") or "")
+            if head_updated_at:
+                matched.append(head_updated_at)
+    return max(matched) if matched else None
+
+
 def _review_is_after_required_trigger(
     review: Mapping[str, object],
     trigger_comments: Sequence[object],
@@ -271,17 +304,13 @@ def _review_is_after_required_trigger(
     expected_head_created_at: str | None,
 ) -> bool:
     review_time = _first_value(review, "submitted_at", "created_at")
-    trigger_times = [
-        _comment_effective_time(comment)
-        for comment in trigger_comments
-        if isinstance(comment, Mapping)
-    ]
-    trigger_times = [value for value in trigger_times if value]
-    if expected_head_created_at:
-        trigger_times = [value for value in trigger_times if expected_head_created_at <= value]
-    if not review_time or not trigger_times:
+    trigger_time = _latest_required_trigger_time(
+        trigger_comments,
+        expected_head_created_at=expected_head_created_at,
+    )
+    if not review_time or not trigger_time:
         return True
-    return any(trigger_time <= review_time for trigger_time in trigger_times)
+    return trigger_time <= review_time
 
 
 def _has_required_trigger_after_current_head(
@@ -290,15 +319,26 @@ def _has_required_trigger_after_current_head(
 ) -> bool:
     if not expected_head_created_at:
         return True
+    return _latest_required_trigger_time(
+        trigger_comments,
+        expected_head_created_at=expected_head_created_at,
+    ) is not None
+
+
+def _latest_required_trigger_time(
+    trigger_comments: Sequence[object],
+    *,
+    expected_head_created_at: str | None,
+) -> str | None:
     trigger_times = [
         _comment_effective_time(comment)
         for comment in trigger_comments
         if isinstance(comment, Mapping)
     ]
     trigger_times = [value for value in trigger_times if value]
-    if not trigger_times:
-        return True
-    return any(expected_head_created_at <= trigger_time for trigger_time in trigger_times)
+    if expected_head_created_at:
+        trigger_times = [value for value in trigger_times if expected_head_created_at <= value]
+    return max(trigger_times) if trigger_times else None
 
 
 def _comment_effective_time(comment: Mapping[str, object]) -> str:
@@ -375,13 +415,6 @@ def _parse_next_link(header: str) -> str | None:
 def _fetch_pr_metadata(*, repo: str, pr_number: str, token: str) -> Mapping[str, object] | None:
     payload = _fetch_github_json(repo=repo, path=f"pulls/{pr_number}", token=token)
     return payload if isinstance(payload, Mapping) else None
-
-
-def _pr_updated_at(pr_metadata: Mapping[str, object] | None) -> str | None:
-    if pr_metadata is None:
-        return None
-    updated_at = pr_metadata.get("updated_at")
-    return str(updated_at) if updated_at else None
 
 
 def _fetch_pr_comments(*, repo: str, pr_number: str, token: str) -> list[Mapping[str, object]]:
@@ -482,14 +515,23 @@ def main(argv: list[str] | None = None) -> int:
                 head = pr_metadata.get("head")
                 if not expected_head_sha and isinstance(head, Mapping):
                     expected_head_sha = str(head.get("sha", ""))
-                if not expected_head_created_at:
-                    expected_head_created_at = _pr_updated_at(pr_metadata)
         if comments is None:
             comments = _fetch_pr_comments(repo=repo, pr_number=pr_number, token=token)
+        if not expected_head_created_at:
+            expected_head_created_at = head_updated_at_from_monitor_state(
+                comments,
+                expected_head_sha=expected_head_sha,
+            )
         if reviews is None:
             reviews = _fetch_pr_reviews(repo=repo, pr_number=pr_number, token=token)
         if review_comments is None:
             review_comments = _fetch_pr_review_comments(repo=repo, pr_number=pr_number, token=token)
+
+    if not expected_head_created_at:
+        expected_head_created_at = head_updated_at_from_monitor_state(
+            comments,
+            expected_head_sha=expected_head_sha,
+        )
 
     report = validate_pr_body(
         body,

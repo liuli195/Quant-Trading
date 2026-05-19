@@ -15,7 +15,9 @@ from pathlib import Path
 
 from scripts.research.governance.pr_review_evidence import (
     BLOCKING_CODEX_FINDING_PATTERN,
+    head_updated_at_from_monitor_state,
     is_effective_codex_review,
+    render_monitor_head_state,
 )
 
 
@@ -38,6 +40,7 @@ class MonitorReport:
     blocking_findings: int
     advisory_findings: int
     message: str
+    head_updated_at: str | None = None
 
 
 def build_monitor_report(
@@ -94,6 +97,7 @@ def build_monitor_report(
         blocking_findings=blocking_findings,
         advisory_findings=advisory_findings,
         message=message,
+        head_updated_at=head_created_at,
     )
 
 
@@ -109,6 +113,7 @@ def render_monitor_comment(report: MonitorReport) -> str:
     return "\n".join(
         [
             MONITOR_MARKER,
+            render_monitor_head_state(head_sha=report.head_sha, head_updated_at=report.head_updated_at),
             "## Codex Review Monitor",
             "",
             f"- PR: `#{report.pr_number}`",
@@ -199,7 +204,7 @@ def _required_trigger_time(
             if head_created_at and effective_time < head_created_at:
                 continue
             matched_times.append(effective_time)
-    return min(matched_times) if matched_times else None
+    return max(matched_times) if matched_times else None
 
 
 def _comment_effective_time(comment: Mapping[str, object]) -> str:
@@ -337,11 +342,6 @@ def _fetch_github_json(*, repo: str, path: str, token: str) -> object:
     return payload
 
 
-def _pr_updated_at(pr: Mapping[str, object]) -> str | None:
-    updated_at = pr.get("updated_at")
-    return str(updated_at) if updated_at else None
-
-
 def _fetch_github_list(*, repo: str, path: str, token: str) -> list[object]:
     items: list[object] = []
     url: str | None = _api_url(repo=repo, path=path)
@@ -442,7 +442,16 @@ def main(argv: list[str] | None = None) -> int:
                 _fetch_github_list(repo=repo, path=f"pulls/{pr_number}/comments", token=token)
             )
         if not head_created_at:
-            head_created_at = _pr_updated_at(pr)
+            head_created_at = head_updated_at_from_monitor_state(
+                issue_comments,
+                expected_head_sha=_head_sha(pr),
+            )
+
+    if not head_created_at:
+        head_created_at = head_updated_at_from_monitor_state(
+            issue_comments,
+            expected_head_sha=_head_sha(pr),
+        )
 
     report = build_monitor_report(
         repo=repo,
