@@ -18,6 +18,7 @@
 - waiver 必须登记 `id`、`rule_id`、`path`、`reason`、`owner`、`approved_by`、`expires_at`、`migration_plan`。
 - 过期 waiver、无 owner、无批准人、无迁移计划的 waiver 必须阻断。
 - 规则入口、Skill、README、workflow、registry、catalog、pathref 不能漂移。
+- [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 是 AI 助手通用入口；[CLAUDE.md](../../CLAUDE.md) <!-- pathref: repo/CLAUDE.md --> 只保留 Claude Code 专属指针。
 
 ## SHOULD
 
@@ -32,6 +33,7 @@
 
 - `CLAUDE.md`
 - `AGENTS.md`
+- `indexes.md`
 - `docs/rules/**`
 - `docs/adr/**`
 - `.claude/skills/**`

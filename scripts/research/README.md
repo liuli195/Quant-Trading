@@ -195,7 +195,7 @@
 .\.venv\Scripts\python.exe -m scripts.research.governance gate
 ```
 
-审计工具登记、README、CLI help、workflow template schema、`CLAUDE.md`、`jq-research`/`jq-ab-test` Skill、数据 catalog、报告 catalog 和 pathref。`gate` 是本地 hook 和 CI 的固定入口。
+审计工具登记、README、CLI help、workflow template schema、`AGENTS.md`、`indexes.md`、`CLAUDE.md`、`jq-research`/`jq-ab-test` Skill、数据 catalog、报告 catalog 和 pathref。`gate` 是本地 hook 和 CI 的固定入口。
 
 ## 库模块
 

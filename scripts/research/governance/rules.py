@@ -25,9 +25,10 @@ from scripts.tools.path_tools.aliases import validate_config_file as validate_pa
 
 REQUIRED_RULE_DOCS = (
     "docs/rules/index.md",
-    "docs/rules/ai-agents.md",
+    "docs/rules/pr-workflow.md",
     "docs/rules/governance.md",
     "docs/rules/review-guidelines.md",
+    "docs/rules/commands.md",
     "docs/rules/research-workflow.md",
     "docs/rules/code-style.md",
     "docs/rules/docs-and-pathref.md",
@@ -35,6 +36,7 @@ REQUIRED_RULE_DOCS = (
 REQUIRED_CODEOWNER_PATTERNS = (
     "CLAUDE.md",
     "AGENTS.md",
+    "indexes.md",
     "docs/rules/**",
     "docs/adr/**",
     ".claude/skills/**",
@@ -69,6 +71,49 @@ REQUIRED_REVIEW_GUIDELINES_TOKENS = (
     "Codex Code Review 结论",
     "结论: 通过",
     "阻断问题: 无",
+)
+REQUIRED_COMMAND_RULE_TOKENS = (
+    "scripts.research.cli",
+    "scripts.research.datasets",
+    "scripts.research.variants",
+    "scripts.research.governance",
+    "scripts.research.registry",
+    "scripts.tools.path_tools.refactor",
+    ".\\.venv\\Scripts\\python.exe",
+    ".venv/bin/python",
+    ".githooks/run-python.sh",
+)
+REQUIRED_AGENT_ENTRY_TOKENS = (
+    "indexes.md",
+    "docs/rules/review-guidelines.md",
+    "所有回答和输出使用简体中文",
+    "策略代码仅在聚宽云端运行",
+    "使用项目虚拟环境运行 Python",
+    "docs/rules/commands.md",
+    "所有进入主干的改动必须通过 PR",
+    "禁止本地合并主干",
+    "docs/rules/pr-workflow.md",
+    "Markdown 内部文件引用使用",
+    "pathref",
+    "遇到沙箱/权限阻断时申请提权",
+    "每次任务后清理临时产物",
+)
+FORBIDDEN_AGENT_DETAIL_TOKENS = (
+    "scripts.research.cli",
+    "scripts.research.datasets",
+    "scripts.research.variants",
+    "git fetch origin main",
+    "git merge --ff-only origin/main",
+    "git branch -d <branch>",
+    "git push origin --delete <branch>",
+    ".\\.venv\\Scripts\\python.exe",
+    ".venv/bin/python",
+)
+FORBIDDEN_CLAUDE_TOKENS = (
+    "遇到沙箱/权限阻断",
+    "Codex Code Review",
+    "自审",
+    "docs/rules/review-guidelines.md",
 )
 WAIVER_REQUIRED_FIELDS = (
     "id",
@@ -152,24 +197,54 @@ def _audit_layer_docs(root: Path) -> list[AuditFinding]:
 
 def _audit_claude_and_skills(root: Path) -> list[AuditFinding]:
     findings: list[AuditFinding] = []
+    agents = root / "AGENTS.md"
+    if not agents.is_file():
+        findings.append(AuditFinding("agent_entry_sync", "error", "AGENTS.md missing"))
+    else:
+        text = agents.read_text(encoding="utf-8", errors="ignore")
+        for token in REQUIRED_AGENT_ENTRY_TOKENS:
+            if token not in text:
+                findings.append(AuditFinding("agent_entry_sync", "error", f"AGENTS.md missing {token}"))
+        for token in FORBIDDEN_AGENT_DETAIL_TOKENS:
+            if token in text:
+                findings.append(
+                    AuditFinding(
+                        "agent_entry_sync",
+                        "error",
+                        f"AGENTS.md should not duplicate detailed rules: {token}",
+                    )
+                )
+
     claude = root / "CLAUDE.md"
     if not claude.is_file():
         findings.append(AuditFinding("claude_sync", "error", "CLAUDE.md missing"))
     else:
         text = claude.read_text(encoding="utf-8", errors="ignore")
         for token in (
-            "scripts.research.cli",
-            "scripts.research.datasets",
-            "scripts.research.variants",
-            "scripts.research.governance",
-            "scripts.research.registry",
-            "docs/rules/index.md",
-            "docs/rules/review-guidelines.md",
-            "docs/adr",
-            "Codex Code Review",
+            "Claude Code",
+            "AGENTS.md",
+            ".claude/skills",
         ):
             if token not in text:
                 findings.append(AuditFinding("claude_sync", "error", f"CLAUDE.md missing {token}"))
+        for token in FORBIDDEN_CLAUDE_TOKENS:
+            if token in text:
+                findings.append(
+                    AuditFinding(
+                        "claude_sync",
+                        "error",
+                        f"CLAUDE.md contains Codex-only or standard review rules: {token}",
+                    )
+                )
+
+    commands = root / "docs" / "rules" / "commands.md"
+    if not commands.is_file():
+        findings.append(AuditFinding("command_rules", "error", "docs/rules/commands.md missing"))
+    else:
+        text = commands.read_text(encoding="utf-8", errors="ignore")
+        for token in REQUIRED_COMMAND_RULE_TOKENS:
+            if token not in text:
+                findings.append(AuditFinding("command_rules", "error", f"commands.md missing {token}"))
 
     skill = root / ".claude" / "skills" / "jq-research" / "SKILL.md"
     if not skill.is_file():
@@ -356,20 +431,9 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                 )
             )
 
-    claude = root / "CLAUDE.md"
-    if claude.is_file():
-        text = claude.read_text(encoding="utf-8", errors="ignore")
-        for token in (
-            "scripts.research.governance gate",
-            "所有进入主干的改动必须通过 PR",
-            "禁止本地合并主干",
-        ):
-            if token not in text:
-                findings.append(AuditFinding("governance_gate", "error", f"CLAUDE.md missing {token}"))
-
-    ai_agents = root / "docs" / "rules" / "ai-agents.md"
-    if ai_agents.is_file():
-        text = ai_agents.read_text(encoding="utf-8", errors="ignore")
+    pr_workflow = root / "docs" / "rules" / "pr-workflow.md"
+    if pr_workflow.is_file():
+        text = pr_workflow.read_text(encoding="utf-8", errors="ignore")
         for token in (
             "所有进入主干的改动必须通过 PR",
             "禁止本地合并主干",
@@ -379,7 +443,7 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             "git push origin --delete <branch>",
         ):
             if token not in text:
-                findings.append(AuditFinding("governance_gate", "error", f"ai-agents.md missing {token}"))
+                findings.append(AuditFinding("governance_gate", "error", f"pr-workflow.md missing {token}"))
 
     governance = root / "docs" / "rules" / "governance.md"
     if governance.is_file():
@@ -400,6 +464,15 @@ def _audit_rule_sources(root: Path) -> list[AuditFinding]:
     for rel_path in REQUIRED_RULE_DOCS:
         if not (root / rel_path).is_file():
             findings.append(AuditFinding("rule_source", "error", f"rule doc missing: {rel_path}"))
+
+    root_index = root / "indexes.md"
+    if not root_index.is_file():
+        findings.append(AuditFinding("root_index", "error", "indexes.md missing"))
+    else:
+        text = root_index.read_text(encoding="utf-8", errors="ignore")
+        for token in ("AGENTS.md", "CLAUDE.md", "docs/adr", *REQUIRED_RULE_DOCS):
+            if token not in text:
+                findings.append(AuditFinding("root_index", "error", f"indexes.md missing {token}"))
 
     adr_root = root / "docs" / "adr"
     if not adr_root.is_dir():
@@ -425,7 +498,7 @@ def _audit_rule_sources(root: Path) -> list[AuditFinding]:
         findings.append(AuditFinding("agent_rule_source", "error", "AGENTS.md missing"))
     else:
         text = agents.read_text(encoding="utf-8", errors="ignore")
-        for token in ("CLAUDE.md", "权威规则源"):
+        for token in ("AGENTS.md", "通用入口", "indexes.md"):
             if token not in text:
                 findings.append(AuditFinding("agent_rule_source", "error", f"AGENTS.md missing {token}"))
 

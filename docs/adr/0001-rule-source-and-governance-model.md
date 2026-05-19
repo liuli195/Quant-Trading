@@ -2,7 +2,7 @@
 
 ## 状态
 
-Accepted
+Superseded by [ADR 0005](0005-ai-entry-progressive-disclosure.md) <!-- pathref: docs/adr/0005-ai-entry-progressive-disclosure.md -->
 
 ## 背景
 
@@ -10,7 +10,7 @@ Accepted
 
 ## 决策
 
-- [CLAUDE.md](../../CLAUDE.md) <!-- pathref: repo/CLAUDE.md --> 是 AI 助手的统一入口。
+- [CLAUDE.md](../../CLAUDE.md) <!-- pathref: repo/CLAUDE.md --> 是 AI 助手的统一入口。此入口模型已由 [ADR 0005](0005-ai-entry-progressive-disclosure.md) <!-- pathref: docs/adr/0005-ai-entry-progressive-disclosure.md --> 更新为 [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 通用入口。
 - [docs/rules](../rules) <!-- pathref: docs/rules --> 是仓库级规则正文。
 - [docs/adr](.) <!-- pathref: docs/adr --> 记录重大规则和架构决策原因。
 - `scripts.research.governance gate` 将规则入口、registry、catalog、workflow、CODEOWNERS、PR 模板、waiver 和 pathref 纳入自动检查。

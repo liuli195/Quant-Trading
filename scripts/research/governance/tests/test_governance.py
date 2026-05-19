@@ -66,9 +66,10 @@ def _write_minimal_repo(root: Path) -> None:
         "docs/guides/research-workflow.md",
         "docs/architecture/research-platform-architecture.md",
         "docs/rules/index.md",
-        "docs/rules/ai-agents.md",
+        "docs/rules/pr-workflow.md",
         "docs/rules/governance.md",
         "docs/rules/review-guidelines.md",
+        "docs/rules/commands.md",
         "docs/rules/research-workflow.md",
         "docs/rules/code-style.md",
         "docs/rules/docs-and-pathref.md",
@@ -76,6 +77,7 @@ def _write_minimal_repo(root: Path) -> None:
         "docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md",
         "docs/adr/0003-governance-gate-and-main-branch-protection.md",
         "docs/adr/0004-codex-code-review-governance.md",
+        "docs/adr/0005-ai-entry-progressive-disclosure.md",
         "research_datasets/README.md",
         "scripts/research/platform/tests/test_platform.py",
         "scripts/research/registry/tests/test_registry.py",
@@ -93,19 +95,35 @@ def _write_minimal_repo(root: Path) -> None:
         target.write_text("placeholder\n", encoding="utf-8")
 
     (root / "CLAUDE.md").write_text(
-        "scripts.research.cli scripts.research.datasets scripts.research.variants "
-        "scripts.research.governance scripts.research.governance gate scripts.research.registry "
-        "docs/rules/index.md docs/rules/review-guidelines.md docs/adr/ Codex Code Review "
-        "所有进入主干的改动必须通过 PR 禁止本地合并主干 "
-        "git fetch origin main git merge --ff-only origin/main "
-        "git branch -d <branch> git push origin --delete <branch>",
+        "Claude Code 专用指针。先读 AGENTS.md；Claude Code 专属内容见 .claude/skills。",
         encoding="utf-8",
     )
     (root / "AGENTS.md").write_text(
-        "所有 AI 编码助手统一以 CLAUDE.md 为权威规则源。\n\n"
+        "所有 AI 编码助手统一以 AGENTS.md 为通用入口。\n\n"
+        "本仓库是基于 Python 的 A 股/场内基金量化策略仓库。\n\n"
+        "规则索引见 indexes.md。所有回答和输出使用简体中文。"
+        "策略代码仅在聚宽云端运行。"
+        "使用项目虚拟环境运行 Python，具体命令见 docs/rules/commands.md。"
+        "所有进入主干的改动必须通过 PR；禁止本地合并主干，细则见 docs/rules/pr-workflow.md。"
+        "Markdown 内部文件引用使用 pathref。"
+        "遇到沙箱/权限阻断时申请提权。"
+        "每次任务后清理临时产物。\n\n"
         "## Review guidelines\n\n"
         "Before reviewing, read and apply docs/rules/review-guidelines.md. "
         "If you cannot access that file, treat the review as blocked.\n",
+        encoding="utf-8",
+    )
+    (root / "indexes.md").write_text(
+        "AGENTS.md CLAUDE.md docs/rules/index.md docs/rules/commands.md "
+        "docs/rules/review-guidelines.md docs/rules/pr-workflow.md docs/rules/governance.md "
+        "docs/rules/code-style.md docs/rules/research-workflow.md docs/rules/docs-and-pathref.md docs/adr",
+        encoding="utf-8",
+    )
+    (root / "docs/rules/commands.md").write_text(
+        "scripts.research.cli scripts.research.datasets scripts.research.variants "
+        "scripts.research.governance scripts.research.governance gate scripts.research.registry "
+        "scripts.tools.path_tools.refactor .\\.venv\\Scripts\\python.exe .venv/bin/python "
+        ".githooks/run-python.sh",
         encoding="utf-8",
     )
     (root / ".githooks/pre-commit").write_text(
@@ -165,7 +183,7 @@ def _write_minimal_repo(root: Path) -> None:
         "git branch -d <branch> git push origin --delete <branch>\n",
         encoding="utf-8",
     )
-    (root / "docs/rules/ai-agents.md").write_text(
+    (root / "docs/rules/pr-workflow.md").write_text(
         "所有进入主干的改动必须通过 PR\n禁止本地合并主干\nCodex Review Monitor\n"
         "git fetch origin main\ngit merge --ff-only origin/main\n"
         "git branch -d <branch>\ngit push origin --delete <branch>\n",
@@ -182,6 +200,7 @@ def _write_minimal_repo(root: Path) -> None:
             [
                 "CLAUDE.md @research-platform",
                 "AGENTS.md @research-platform",
+                "indexes.md @research-platform",
                 "docs/rules/** @research-platform",
                 "docs/adr/** @research-platform",
                 ".claude/skills/** @research-platform",
@@ -717,25 +736,68 @@ def test_governance_audit_flags_reference_transaction_without_branch_protection(
     )
 
 
-def test_governance_audit_flags_claude_without_pr_main_merge_rule(tmp_path) -> None:
+def test_governance_audit_flags_agents_with_detailed_rule_duplication(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
-    (tmp_path / "CLAUDE.md").write_text(
-        "scripts.research.cli scripts.research.datasets scripts.research.variants "
-        "scripts.research.governance scripts.research.governance gate scripts.research.registry "
-        "docs/rules/index.md docs/rules/review-guidelines.md docs/adr/ Codex Code Review",
+    (tmp_path / "AGENTS.md").write_text(
+        "所有 AI 编码助手统一以 AGENTS.md 为通用入口。\n\n"
+        "规则索引见 indexes.md。scripts.research.cli git fetch origin main\n\n"
+        "## Review guidelines\n\n"
+        "Before reviewing, read and apply docs/rules/review-guidelines.md. "
+        "If you cannot access that file, treat the review as blocked.\n",
         encoding="utf-8",
     )
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "governance_gate" and "禁止本地合并主干" in finding.message
+        finding.rule_id == "agent_entry_sync" and "should not duplicate detailed rules" in finding.message
         for finding in report.findings
     )
 
 
+def test_governance_audit_flags_agents_without_sandbox_escalation_rule(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / "AGENTS.md").write_text(
+        "所有 AI 编码助手统一以 AGENTS.md 为通用入口。\n\n"
+        "规则索引见 indexes.md。所有回答和输出使用简体中文。\n\n"
+        "## Review guidelines\n\n"
+        "Before reviewing, read and apply docs/rules/review-guidelines.md. "
+        "If you cannot access that file, treat the review as blocked.\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "agent_entry_sync" and "遇到沙箱/权限阻断时申请提权" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_claude_with_codex_or_review_rules(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / "CLAUDE.md").write_text(
+        "Claude Code 专用指针。先读 AGENTS.md；Claude Code 专属内容见 .claude/skills。"
+        "遇到沙箱/权限阻断时申请提权。Claude Code 不能用自审替代官方 Codex Code Review。",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "claude_sync" and "Codex-only or standard review rules" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_missing_root_indexes(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / "indexes.md").unlink()
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(finding.rule_id == "root_index" for finding in report.findings)
+
+
 def test_governance_audit_flags_missing_pr_cleanup_workflow_tokens(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
-    (tmp_path / "docs/rules/ai-agents.md").write_text(
+    (tmp_path / "docs/rules/pr-workflow.md").write_text(
         "所有进入主干的改动必须通过 PR\n禁止本地合并主干\nCodex Review Monitor\n"
         "git fetch origin main\ngit merge --ff-only origin/main\n",
         encoding="utf-8",

@@ -1,4 +1,6 @@
-# 多 AI Agent 协作规则
+# PR 工作流规则
+
+本文件是本仓库的核心 PR 工作流规则，覆盖分支协作、评审门禁、主干同步和分支清理。
 
 ## MUST
 
@@ -13,7 +15,7 @@
 - 本地主干 ref 更新由 `.githooks/reference-transaction` 阻断；PR 在 GitHub 云端合并后，本地 `main` 必须先 `git fetch origin main`，再显式设置 `ALLOW_MAIN_REF_UPDATE=1` 和 `MAIN_REF_UPDATE_REASON`，并只用 `git merge --ff-only origin/main` 或等价 fast-forward 命令同步到 `origin/main`。
 - PR 合并后必须删除提交分支的本地和远端引用：先确认已不在该分支，再执行 `git branch -d <branch>` 和 `git push origin --delete <branch>`；远端分支已由 GitHub 自动删除时，必须确认其不存在。
 - 不采用任务登记作为主要协作机制。Git 分支、commit、diff、PR 和 review 承担协作追踪。
-- AI 工具入口统一指向 [CLAUDE.md](../../CLAUDE.md) <!-- pathref: repo/CLAUDE.md -->；[AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 只记录跨工具补充约束，不另立规则源。
+- AI 工具通用入口统一指向 [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->；[CLAUDE.md](../../CLAUDE.md) <!-- pathref: repo/CLAUDE.md --> 只保留 Claude Code 专属指针。
 
 ## SHOULD
 

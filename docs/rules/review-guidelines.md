@@ -1,10 +1,11 @@
 # Codex Code Review 指南
 
-本文件是仓库级 Codex Code Review 规则。AI 助手主入口仍是 [CLAUDE.md](../../CLAUDE.md) <!-- pathref: repo/CLAUDE.md -->；[AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 只保留给 Codex 读取的 Review guidelines 指向。
+本文件是仓库级 Codex Code Review 规则。AI 助手通用入口是 [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->；[CLAUDE.md](../../CLAUDE.md) <!-- pathref: repo/CLAUDE.md --> 只保留 Claude Code 专属指针。
 
 ## MUST
 
 - PR 合并前必须完成官方 Codex Code Review，不再使用 `.claude/agents/pr-governance-review.md` 子 Agent 作为评审门禁。
+- 实现者不得用自审替代官方 Codex Code Review；这条规则适用于 Claude Code、Codex、Cursor、Copilot 或人工提交的代码。
 - Codex Code Review 必须由 PR 评论明确触发。评论内容必须包含 `@codex review`，并要求按 `AGENTS.md` 与 `docs/rules/review-guidelines.md` 审查。
 - Automatic reviews 可以作为补充，但不能替代上面的明确触发评论。
 - PR 中如存在 Codex 标出的 P0/P1 问题，不得填写通过结论。
@@ -26,9 +27,10 @@
 Codex review 必须逐条检查以下规则文件：
 
 - [index.md](index.md) <!-- pathref: docs/rules/index.md -->：规则入口、规则分级、ADR 链接是否同步。
-- [ai-agents.md](ai-agents.md) <!-- pathref: docs/rules/ai-agents.md -->：多 AI 协作、分支模型、主干禁止本地合并是否遵守。
+- [pr-workflow.md](pr-workflow.md) <!-- pathref: docs/rules/pr-workflow.md -->：核心 PR 工作流、分支模型、review 与主干同步是否遵守。
 - [governance.md](governance.md) <!-- pathref: docs/rules/governance.md -->：CI、主干保护、CODEOWNERS、waiver、周期审计是否遵守。
 - [review-guidelines.md](review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md -->：Codex Code Review 触发、范围和证据是否遵守。
+- [commands.md](commands.md) <!-- pathref: docs/rules/commands.md -->：本地环境、虚拟环境和常用命令是否遵守。
 - [research-workflow.md](research-workflow.md) <!-- pathref: docs/rules/research-workflow.md -->：本地研究、云端确认、报告同步是否遵守。
 - [code-style.md](code-style.md) <!-- pathref: docs/rules/code-style.md -->：策略代码、注释、参数、测试是否遵守。
 - [docs-and-pathref.md](docs-and-pathref.md) <!-- pathref: docs/rules/docs-and-pathref.md -->：Markdown、pathref、报告索引是否遵守。

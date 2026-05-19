@@ -2,15 +2,17 @@
 
 | category | strategy | title | path | pathrefs |
 | --- | --- | --- | --- | ---: |
-| docs |  | 文档入口 | `docs/README.md` | 17 |
-| docs |  | ADR 0001: 规则来源和治理模型 | `docs/adr/0001-rule-source-and-governance-model.md` | 3 |
+| docs |  | 文档入口 | `docs/README.md` | 18 |
+| docs |  | ADR 0001: 规则来源和治理模型 | `docs/adr/0001-rule-source-and-governance-model.md` | 6 |
 | docs |  | ADR 0002: 多 AI Agent 并行工作使用 Git 分支 | `docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md` | 0 |
 | docs |  | ADR 0003: Governance Gate 和主干保护 | `docs/adr/0003-governance-gate-and-main-branch-protection.md` | 0 |
+| docs |  | ADR 0004: 使用官方 Codex Code Review 作为 PR 评审门禁 | `docs/adr/0004-codex-code-review-governance.md` | 7 |
+| docs |  | ADR 0005: AI 入口采用渐进式披露 | `docs/adr/0005-ai-entry-progressive-disclosure.md` | 9 |
 | docs |  | 本地研究平台架构 | `docs/architecture/research-platform-architecture.md` | 19 |
 | docs |  | 本地研究平台重构 | `docs/design/本地研究平台重构.md` | 0 |
 | docs |  | 本地研究平台重构技术实施方案 | `docs/design/本地研究平台重构技术实施方案.md` | 6 |
 | docs |  | 长期项目防止开发规则漂移方案 | `docs/design/长期项目防止开发规则漂移方案.md` | 8 |
-| docs |  | 本地 Python 环境说明 | `docs/guides/local-python-env.md` | 2 |
+| docs |  | 本地 Python 环境说明 | `docs/guides/local-python-env.md` | 1 |
 | docs |  | 旧研究项目迁移指南 | `docs/guides/research-workflow-migration.md` | 0 |
 | docs |  | 本地优先研究流程 | `docs/guides/research-workflow.md` | 8 |
 | docs |  | 导入 Alpha101 库 | `docs/joinquant-data/JQ_Alpha101.md` | 0 |
@@ -30,12 +32,14 @@
 | docs |  | JQ_行业概念数据 | `docs/joinquant-data/JQ_行业概念数据.md` | 0 |
 | docs |  | 定义一个全局变量, 保存要操作的股票 | `docs/reference/joinquant-api.md` | 28 |
 | docs |  | JoinQuant 参数分析框架分析报告 | `docs/reference/joinquant-parameter-analysis-framework.md` | 2 |
-| docs |  | 多 AI Agent 协作规则 | `docs/rules/ai-agents.md` | 2 |
-| docs |  | 代码风格和策略实现规则 | `docs/rules/code-style.md` | 0 |
+| docs |  | 代码风格和策略实现规则 | `docs/rules/code-style.md` | 1 |
+| docs |  | 命令和本地环境规则 | `docs/rules/commands.md` | 4 |
 | docs |  | 文档和 Pathref 规则 | `docs/rules/docs-and-pathref.md` | 0 |
-| docs |  | 治理门禁规则 | `docs/rules/governance.md` | 0 |
-| docs |  | 仓库规则总索引 | `docs/rules/index.md` | 10 |
+| docs |  | 治理门禁规则 | `docs/rules/governance.md` | 2 |
+| docs |  | 仓库规则总索引 | `docs/rules/index.md` | 16 |
+| docs |  | PR 工作流规则 | `docs/rules/pr-workflow.md` | 2 |
 | docs |  | 研究流程规则 | `docs/rules/research-workflow.md` | 0 |
+| docs |  | Codex Code Review 指南 | `docs/rules/review-guidelines.md` | 11 |
 | backtest_run | etf_dynamic_rebalance | 回测归因分析 — ETF 动态调仓策略 | `strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/attribution-analysis.md` | 0 |
 | backtest_run | etf_dynamic_rebalance | 回测报告 — ETF 动态调仓策略 | `strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/backtest_report.md` | 3 |
 | backtest_run | etf_dynamic_rebalance | 性能分析报告 — ETF 动态调仓策略 | `strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/performance-analysis.md` | 0 |
