@@ -134,7 +134,8 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     (root / ".github/workflows/research-governance.yml").write_text(
-        "on:\n  schedule:\n    - cron: '0 2 * * 1'\nsteps:\n"
+        "on:\n  schedule:\n    - cron: '0 2 * * 1'\n"
+        "  pull_request_review_comment:\n    types: [created, edited, deleted]\nsteps:\n"
         "  - run: python -m scripts.research.governance gate\n"
         "  - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
         encoding="utf-8",
@@ -421,6 +422,23 @@ def test_governance_audit_flags_workflow_without_review_evidence_gate(tmp_path) 
     assert not report.ok
     assert any(
         finding.rule_id == "governance_gate" and "PR review evidence" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_review_evidence_without_inline_comment_deleted_event(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".github/workflows/research-governance.yml").write_text(
+        "on:\n  schedule:\n    - cron: '0 2 * * 1'\n"
+        "  pull_request_review_comment:\n    types: [created, edited]\nsteps:\n"
+        "  - run: python -m scripts.research.governance gate\n"
+        "  - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "deleted inline review comments" in finding.message
         for finding in report.findings
     )
 

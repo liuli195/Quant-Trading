@@ -67,6 +67,10 @@ body evidence to be updated. It also writes the commit status context `Codex
 Review Monitor` to the PR head, so trigger-comment deletion can invalidate the
 head status instead of only updating a PR discussion comment.
 
+`Research Governance / pr-review-evidence` reruns on PR metadata updates,
+Codex review submissions, and inline review comment create/edit/delete events so
+its evidence decision is refreshed when Codex findings are edited or removed.
+
 Manual inspection is available through workflow dispatch, or locally with:
 
 ```powershell

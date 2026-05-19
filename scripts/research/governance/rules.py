@@ -262,6 +262,14 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             findings.append(AuditFinding("governance_gate", "error", "CI workflow missing PR review evidence gate"))
         if "schedule:" not in text:
             findings.append(AuditFinding("governance_gate", "error", "CI workflow missing scheduled drift audit"))
+        if not re.search(r"pull_request_review_comment:\s*\n\s*types:\s*\[[^\]]*deleted", text):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "PR review evidence workflow must listen to deleted inline review comments",
+                )
+            )
 
     monitor_workflow = root / ".github" / "workflows" / "codex-review-monitor.yml"
     if not monitor_workflow.is_file():
