@@ -25,6 +25,7 @@
 - 阻断问题: 未确认
 - 关键证据:
   - Codex review 链接：https://github.com/<owner>/<repo>/pull/<number>#pullrequestreview-<id>
+  - `.\.venv\Scripts\python.exe -m scripts.research.governance gate`
 
 ## waiver
 

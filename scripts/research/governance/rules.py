@@ -51,6 +51,7 @@ PR_TEMPLATE_TOKENS = (
     "已运行检查",
     "Codex Code Review 结论",
     "Codex",
+    "scripts.research.governance gate",
     "waiver",
     "证据",
 )

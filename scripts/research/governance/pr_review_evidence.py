@@ -19,6 +19,7 @@ CODEX_REVIEW_URL_PATTERN = re.compile(
     r"https://github\.com/(?P<repo>[^/\s]+/[^/\s]+)/pull/(?P<number>\d+)#pullrequestreview-(?P<review_id>\d+)"
 )
 CODEX_REVIEW_AUTHORS = {"chatgpt-codex-connector", "chatgpt-codex-connector[bot]"}
+BLOCKING_CODEX_FINDING_PATTERN = re.compile(r"(?:P[01] Badge|badge/P[01]-)", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,7 @@ def validate_pr_body(
     expected_head_sha: str | None = None,
     comments: Sequence[str] | None = None,
     reviews: Sequence[Mapping[str, object]] | None = None,
+    review_comments: Sequence[Mapping[str, object]] | None = None,
 ) -> EvidenceReport:
     """Return whether a PR body contains merge-blocking review evidence."""
 
@@ -73,12 +75,15 @@ def validate_pr_body(
         review_link = _find_codex_review_link(section, expected_pr_url=expected_pr_url)
         if review_link is None:
             errors.append("review evidence must include a real Codex review link for this PR")
-        elif reviews is not None and not _matches_codex_review(
-            review_link,
-            reviews=reviews,
-            expected_head_sha=expected_head_sha,
-        ):
-            errors.append("Codex review link must match a Codex review on the current head")
+        elif reviews is not None:
+            errors.extend(
+                _codex_review_errors(
+                    review_link,
+                    reviews=reviews,
+                    review_comments=review_comments,
+                    expected_head_sha=expected_head_sha,
+                )
+            )
     if comments is not None and not _has_required_trigger_comment(comments):
         errors.append("PR comments must include the required @codex review trigger")
     if "scripts.research.governance gate" not in section:
@@ -148,15 +153,16 @@ def _find_codex_review_link(section: str, *, expected_pr_url: str | None = None)
     return None
 
 
-def _matches_codex_review(
+def _codex_review_errors(
     review_link: str,
     *,
     reviews: Sequence[Mapping[str, object]],
+    review_comments: Sequence[Mapping[str, object]] | None,
     expected_head_sha: str | None,
-) -> bool:
+) -> tuple[str, ...]:
     match = CODEX_REVIEW_URL_PATTERN.fullmatch(review_link)
     if not match:
-        return False
+        return ("Codex review link must match a Codex review on the current head",)
     review_id = match.group("review_id")
     for review in reviews:
         if str(review.get("id", "")) != review_id:
@@ -164,11 +170,27 @@ def _matches_codex_review(
         author = review.get("user")
         login = author.get("login") if isinstance(author, Mapping) else ""
         if str(login) not in CODEX_REVIEW_AUTHORS:
-            return False
+            return ("Codex review link must match a Codex review on the current head",)
         if expected_head_sha and str(review.get("commit_id", "")) != expected_head_sha:
-            return False
-        return True
-    return False
+            return ("Codex review link must match a Codex review on the current head",)
+        if _review_has_blocking_findings(review, review_id=review_id, review_comments=review_comments):
+            return ("Codex review must not contain P0/P1 findings",)
+        return ()
+    return ("Codex review link must match a Codex review on the current head",)
+
+
+def _review_has_blocking_findings(
+    review: Mapping[str, object],
+    *,
+    review_id: str,
+    review_comments: Sequence[Mapping[str, object]] | None,
+) -> bool:
+    texts = [str(review.get("body", ""))]
+    if review_comments is not None:
+        for comment in review_comments:
+            if str(comment.get("pull_request_review_id", "")) == review_id:
+                texts.append(str(comment.get("body", "")))
+    return any(BLOCKING_CODEX_FINDING_PATTERN.search(text) for text in texts)
 
 
 def _has_required_trigger_comment(comments: Sequence[str]) -> bool:
@@ -182,9 +204,14 @@ def _normalize_pr_url(value: str | None) -> str | None:
     return value.strip().rstrip("/") or None
 
 
-def _fetch_github_json(*, repo: str, path: str, token: str) -> object:
+def _github_api_url(*, repo: str, path: str) -> str:
+    separator = "&" if "?" in path else "?"
+    return f"https://api.github.com/repos/{repo}/{path}{separator}per_page=100"
+
+
+def _fetch_github_json_url(*, url: str, token: str) -> tuple[object, str | None]:
     request = urllib.request.Request(
-        f"https://api.github.com/repos/{repo}/{path}",
+        url,
         headers={
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {token}",
@@ -192,20 +219,57 @@ def _fetch_github_json(*, repo: str, path: str, token: str) -> object:
         },
     )
     with urllib.request.urlopen(request, timeout=30) as response:
-        return json.loads(response.read().decode("utf-8"))
+        payload = json.loads(response.read().decode("utf-8"))
+        next_url = _parse_next_link(response.headers.get("Link", ""))
+        return payload, next_url
+
+
+def _fetch_github_json(*, repo: str, path: str, token: str) -> object:
+    payload, _ = _fetch_github_json_url(url=_github_api_url(repo=repo, path=path), token=token)
+    return payload
+
+
+def _fetch_github_list(*, repo: str, path: str, token: str) -> list[object]:
+    items: list[object] = []
+    url: str | None = _github_api_url(repo=repo, path=path)
+    while url:
+        payload, url = _fetch_github_json_url(url=url, token=token)
+        if not isinstance(payload, list):
+            return items
+        items.extend(payload)
+    return items
+
+
+def _parse_next_link(header: str) -> str | None:
+    for part in header.split(","):
+        pieces = part.split(";")
+        if len(pieces) < 2:
+            continue
+        if not any(piece.strip() == 'rel="next"' for piece in pieces[1:]):
+            continue
+        url = pieces[0].strip()
+        if url.startswith("<") and url.endswith(">"):
+            return url[1:-1]
+    return None
+
+
+def _fetch_pr_metadata(*, repo: str, pr_number: str, token: str) -> Mapping[str, object] | None:
+    payload = _fetch_github_json(repo=repo, path=f"pulls/{pr_number}", token=token)
+    return payload if isinstance(payload, Mapping) else None
 
 
 def _fetch_pr_comments(*, repo: str, pr_number: str, token: str) -> list[str]:
-    payload = _fetch_github_json(repo=repo, path=f"issues/{pr_number}/comments", token=token)
-    if not isinstance(payload, list):
-        return []
+    payload = _fetch_github_list(repo=repo, path=f"issues/{pr_number}/comments", token=token)
     return [str(item.get("body", "")) for item in payload if isinstance(item, Mapping)]
 
 
 def _fetch_pr_reviews(*, repo: str, pr_number: str, token: str) -> list[Mapping[str, object]]:
-    payload = _fetch_github_json(repo=repo, path=f"pulls/{pr_number}/reviews", token=token)
-    if not isinstance(payload, list):
-        return []
+    payload = _fetch_github_list(repo=repo, path=f"pulls/{pr_number}/reviews", token=token)
+    return [item for item in payload if isinstance(item, Mapping)]
+
+
+def _fetch_pr_review_comments(*, repo: str, pr_number: str, token: str) -> list[Mapping[str, object]]:
+    payload = _fetch_github_list(repo=repo, path=f"pulls/{pr_number}/comments", token=token)
     return [item for item in payload if isinstance(item, Mapping)]
 
 
@@ -256,6 +320,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--github-token-env")
     parser.add_argument("--comments-file", type=Path)
     parser.add_argument("--reviews-file", type=Path)
+    parser.add_argument("--review-comments-file", type=Path)
     return parser
 
 
@@ -269,22 +334,38 @@ def main(argv: list[str] | None = None) -> int:
 
     comments = _coerce_comments(_read_optional_file(args.comments_file))
     reviews = _coerce_reviews(_read_optional_file(args.reviews_file))
+    review_comments = _coerce_reviews(_read_optional_file(args.review_comments_file))
+    expected_pr_url = _read_env(args.pr_url_env)
+    expected_head_sha = _read_env(args.head_sha_env)
 
     repo = _read_env(args.repo_env)
     pr_number = _read_env(args.pr_number_env)
     token = _read_env(args.github_token_env)
     if repo and pr_number and token:
+        if not body or not expected_pr_url or not expected_head_sha:
+            pr_metadata = _fetch_pr_metadata(repo=repo, pr_number=pr_number, token=token)
+            if pr_metadata is not None:
+                if not body:
+                    body = str(pr_metadata.get("body", ""))
+                if not expected_pr_url:
+                    expected_pr_url = str(pr_metadata.get("html_url", ""))
+                head = pr_metadata.get("head")
+                if not expected_head_sha and isinstance(head, Mapping):
+                    expected_head_sha = str(head.get("sha", ""))
         if comments is None:
             comments = _fetch_pr_comments(repo=repo, pr_number=pr_number, token=token)
         if reviews is None:
             reviews = _fetch_pr_reviews(repo=repo, pr_number=pr_number, token=token)
+        if review_comments is None:
+            review_comments = _fetch_pr_review_comments(repo=repo, pr_number=pr_number, token=token)
 
     report = validate_pr_body(
         body,
-        expected_pr_url=_read_env(args.pr_url_env),
-        expected_head_sha=_read_env(args.head_sha_env),
+        expected_pr_url=expected_pr_url,
+        expected_head_sha=expected_head_sha,
         comments=comments,
         reviews=reviews,
+        review_comments=review_comments,
     )
     if report.ok:
         print("PR review evidence ok")
