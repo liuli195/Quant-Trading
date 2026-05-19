@@ -222,6 +222,14 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         for token in (".venv/bin/python", ".venv/Scripts/python.exe", '"$@"'):
             if token not in text:
                 findings.append(AuditFinding("governance_gate", "error", f"run-python.sh missing {token}"))
+        if re.search(r'PYTHON=["\']?python["\']?', text) or re.search(r"exec\s+python(\s|$)", text):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "run-python.sh must not fall back to system Python",
+                )
+            )
 
     hook_python = root / ".githooks" / "run-python.ps1"
     if not hook_python.is_file():

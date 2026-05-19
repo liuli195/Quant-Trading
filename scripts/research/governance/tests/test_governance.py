@@ -604,6 +604,31 @@ def test_governance_audit_flags_single_platform_hook_python_wrapper(tmp_path) ->
     )
 
 
+def test_governance_audit_flags_hook_python_wrapper_system_python_fallback(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/run-python.sh").write_text(
+        "\n".join(
+            [
+                'if [ -x ".venv/bin/python" ]; then',
+                '  PYTHON=".venv/bin/python"',
+                'elif [ -x ".venv/Scripts/python.exe" ]; then',
+                '  PYTHON=".venv/Scripts/python.exe"',
+                "else",
+                '  PYTHON="python"',
+                "fi",
+                'exec "$PYTHON" "$@"',
+            ]
+        ),
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "run-python.sh must not fall back to system Python" in finding.message
+        for finding in report.findings
+    )
+
+
 def test_governance_audit_flags_hooks_that_require_powershell(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / ".githooks/pre-commit").write_text(
