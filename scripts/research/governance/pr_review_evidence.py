@@ -34,6 +34,7 @@ def validate_pr_body(
     *,
     expected_pr_url: str | None = None,
     expected_head_sha: str | None = None,
+    expected_head_created_at: str | None = None,
     comments: Sequence[object] | None = None,
     reviews: Sequence[Mapping[str, object]] | None = None,
     review_comments: Sequence[Mapping[str, object]] | None = None,
@@ -83,6 +84,7 @@ def validate_pr_body(
                     reviews=reviews,
                     review_comments=review_comments,
                     expected_head_sha=expected_head_sha,
+                    expected_head_created_at=expected_head_created_at,
                     trigger_comments=_required_trigger_comments(comments) if comments is not None else None,
                 )
             )
@@ -161,6 +163,7 @@ def _codex_review_errors(
     reviews: Sequence[Mapping[str, object]],
     review_comments: Sequence[Mapping[str, object]] | None,
     expected_head_sha: str | None,
+    expected_head_created_at: str | None,
     trigger_comments: Sequence[object] | None,
 ) -> tuple[str, ...]:
     match = CODEX_REVIEW_URL_PATTERN.fullmatch(review_link)
@@ -181,15 +184,23 @@ def _codex_review_errors(
         break
     if matched_review is None:
         return ("Codex review link must match a Codex review on the current head",)
-    if trigger_comments is not None and not _review_is_after_required_trigger(matched_review, trigger_comments):
-        return ("Codex review must be submitted after the required @codex review trigger",)
+    errors: list[str] = []
+    if trigger_comments is not None:
+        if not _has_required_trigger_after_current_head(trigger_comments, expected_head_created_at):
+            errors.append("required @codex review trigger must be submitted after the current head")
+        if not _review_is_after_required_trigger(
+            matched_review,
+            trigger_comments,
+            expected_head_created_at=expected_head_created_at,
+        ):
+            errors.append("Codex review must be submitted after the required @codex review trigger")
     if _current_head_has_blocking_codex_review(
         reviews,
         review_comments=review_comments,
         expected_head_sha=expected_head_sha,
     ):
-        return ("Codex review must not contain P0/P1 findings on the current head",)
-    return ()
+        errors.append("Codex review must not contain P0/P1 findings on the current head")
+    return tuple(errors)
 
 
 def _review_has_blocking_findings(
@@ -241,17 +252,49 @@ def _comment_body(comment: object) -> str:
     return ""
 
 
-def _review_is_after_required_trigger(review: Mapping[str, object], trigger_comments: Sequence[object]) -> bool:
+def _review_is_after_required_trigger(
+    review: Mapping[str, object],
+    trigger_comments: Sequence[object],
+    *,
+    expected_head_created_at: str | None,
+) -> bool:
     review_time = _first_value(review, "submitted_at", "created_at")
     trigger_times = [
-        _first_value(comment, "created_at", "updated_at")
+        _comment_effective_time(comment)
         for comment in trigger_comments
         if isinstance(comment, Mapping)
     ]
     trigger_times = [value for value in trigger_times if value]
+    if expected_head_created_at:
+        trigger_times = [value for value in trigger_times if expected_head_created_at <= value]
     if not review_time or not trigger_times:
         return True
     return any(trigger_time <= review_time for trigger_time in trigger_times)
+
+
+def _has_required_trigger_after_current_head(
+    trigger_comments: Sequence[object],
+    expected_head_created_at: str | None,
+) -> bool:
+    if not expected_head_created_at:
+        return True
+    trigger_times = [
+        _comment_effective_time(comment)
+        for comment in trigger_comments
+        if isinstance(comment, Mapping)
+    ]
+    trigger_times = [value for value in trigger_times if value]
+    if not trigger_times:
+        return True
+    return any(expected_head_created_at <= trigger_time for trigger_time in trigger_times)
+
+
+def _comment_effective_time(comment: Mapping[str, object]) -> str:
+    created_at = _first_value(comment, "created_at")
+    updated_at = _first_value(comment, "updated_at")
+    if created_at and updated_at:
+        return max(created_at, updated_at)
+    return updated_at or created_at
 
 
 def _first_value(item: Mapping[str, object], *keys: str) -> str:
@@ -322,6 +365,26 @@ def _fetch_pr_metadata(*, repo: str, pr_number: str, token: str) -> Mapping[str,
     return payload if isinstance(payload, Mapping) else None
 
 
+def _fetch_commit_metadata(*, repo: str, commit_sha: str, token: str) -> Mapping[str, object] | None:
+    payload = _fetch_github_json(repo=repo, path=f"commits/{commit_sha}", token=token)
+    return payload if isinstance(payload, Mapping) else None
+
+
+def _commit_timestamp(commit_metadata: Mapping[str, object] | None) -> str | None:
+    if commit_metadata is None:
+        return None
+    commit = commit_metadata.get("commit")
+    if not isinstance(commit, Mapping):
+        return None
+    committer = commit.get("committer")
+    if isinstance(committer, Mapping) and committer.get("date"):
+        return str(committer.get("date"))
+    author = commit.get("author")
+    if isinstance(author, Mapping) and author.get("date"):
+        return str(author.get("date"))
+    return None
+
+
 def _fetch_pr_comments(*, repo: str, pr_number: str, token: str) -> list[Mapping[str, object]]:
     payload = _fetch_github_list(repo=repo, path=f"issues/{pr_number}/comments", token=token)
     return [item for item in payload if isinstance(item, Mapping)]
@@ -381,6 +444,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--repo-env")
     parser.add_argument("--pr-number-env")
     parser.add_argument("--head-sha-env")
+    parser.add_argument("--head-created-at-env")
     parser.add_argument("--github-token-env")
     parser.add_argument("--comments-file", type=Path)
     parser.add_argument("--reviews-file", type=Path)
@@ -401,6 +465,7 @@ def main(argv: list[str] | None = None) -> int:
     review_comments = _coerce_reviews(_read_optional_file(args.review_comments_file))
     expected_pr_url = _read_env(args.pr_url_env)
     expected_head_sha = _read_env(args.head_sha_env)
+    expected_head_created_at = _read_env(args.head_created_at_env)
 
     repo = _read_env(args.repo_env)
     pr_number = _read_env(args.pr_number_env)
@@ -416,6 +481,9 @@ def main(argv: list[str] | None = None) -> int:
                 head = pr_metadata.get("head")
                 if not expected_head_sha and isinstance(head, Mapping):
                     expected_head_sha = str(head.get("sha", ""))
+        if expected_head_sha and not expected_head_created_at:
+            commit_metadata = _fetch_commit_metadata(repo=repo, commit_sha=expected_head_sha, token=token)
+            expected_head_created_at = _commit_timestamp(commit_metadata)
         if comments is None:
             comments = _fetch_pr_comments(repo=repo, pr_number=pr_number, token=token)
         if reviews is None:
@@ -427,6 +495,7 @@ def main(argv: list[str] | None = None) -> int:
         body,
         expected_pr_url=expected_pr_url,
         expected_head_sha=expected_head_sha,
+        expected_head_created_at=expected_head_created_at,
         comments=comments,
         reviews=reviews,
         review_comments=review_comments,

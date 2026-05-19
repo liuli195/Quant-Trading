@@ -12,7 +12,7 @@
 - Codex Code Review 必须由 PR 评论 `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md` 明确触发。
 - Automatic reviews 可以作为补充，但不能替代上面的明确触发评论。
 - PR 描述必须包含 `Codex Code Review 结论`，CI job `pr-review-evidence` 校验该结论。
-- GitHub `main` 的 required checks 必须包含 `Research Governance / governance` 和 `Research Governance / pr-review-evidence`。
+- GitHub `main` 的 required checks 必须包含 `Research Governance / governance`、`Research Governance / pr-review-evidence` 和 `Codex Review Monitor`。
 
 ## 后果
 

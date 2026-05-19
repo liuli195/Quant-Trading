@@ -301,7 +301,12 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
     governance = root / "docs" / "rules" / "governance.md"
     if governance.is_file():
         text = governance.read_text(encoding="utf-8", errors="ignore")
-        for token in (".githooks/reference-transaction", "ALLOW_MAIN_REF_UPDATE", "MAIN_REF_UPDATE_REASON"):
+        for token in (
+            ".githooks/reference-transaction",
+            "ALLOW_MAIN_REF_UPDATE",
+            "MAIN_REF_UPDATE_REASON",
+            "Codex Review Monitor",
+        ):
             if token not in text:
                 findings.append(AuditFinding("governance_gate", "error", f"governance.md missing {token}"))
     return findings
@@ -344,7 +349,7 @@ def _audit_rule_sources(root: Path) -> list[AuditFinding]:
     governance_readme = root / "scripts" / "research" / "governance" / "README.md"
     if governance_readme.is_file():
         text = governance_readme.read_text(encoding="utf-8", errors="ignore")
-        for token in ("docs/rules/index.md", "docs/adr"):
+        for token in ("docs/rules/index.md", "docs/adr", "Codex Review Monitor"):
             if token not in text:
                 findings.append(AuditFinding("governance_docs", "error", f"governance README missing {token}"))
     return findings

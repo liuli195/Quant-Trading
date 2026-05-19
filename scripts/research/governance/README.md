@@ -50,6 +50,7 @@ ruleset:
 - require pull request before merging;
 - require status check `Research Governance / governance`;
 - require status check `Research Governance / pr-review-evidence`;
+- require status check `Codex Review Monitor`;
 - require review from Code Owners;
 - block force pushes.
 

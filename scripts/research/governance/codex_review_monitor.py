@@ -45,20 +45,21 @@ def build_monitor_report(
     reviews: Sequence[Mapping[str, object]],
     review_comments: Sequence[Mapping[str, object]],
 ) -> MonitorReport:
-    """Build a status summary for the latest Codex review on the PR head."""
+    """Build a status summary for Codex reviews on the PR head."""
 
     head_sha = _head_sha(pr)
     trigger_found = _has_required_trigger_comment(issue_comments)
-    latest_review = _latest_codex_review(reviews, head_sha=head_sha)
+    current_head_reviews = _current_head_codex_reviews(reviews, head_sha=head_sha)
+    latest_review = _latest_codex_review(current_head_reviews)
     latest_review_url = _review_url(repo=repo, pr_number=pr_number, review=latest_review) if latest_review else None
     latest_review_sha = str(latest_review.get("commit_id", "")) if latest_review else None
-    blocking_findings = _count_review_findings(
-        latest_review,
+    blocking_findings = _count_reviews_findings(
+        current_head_reviews,
         review_comments=review_comments,
         pattern=BLOCKING_CODEX_FINDING_PATTERN,
     )
-    advisory_findings = _count_review_findings(
-        latest_review,
+    advisory_findings = _count_reviews_findings(
+        current_head_reviews,
         review_comments=review_comments,
         pattern=P2_FINDING_PATTERN,
     )
@@ -173,15 +174,22 @@ def _has_required_trigger_comment(issue_comments: Sequence[Mapping[str, object]]
     return False
 
 
-def _latest_codex_review(reviews: Sequence[Mapping[str, object]], *, head_sha: str) -> Mapping[str, object] | None:
-    current_head_reviews = [
+def _current_head_codex_reviews(
+    reviews: Sequence[Mapping[str, object]],
+    *,
+    head_sha: str,
+) -> list[Mapping[str, object]]:
+    return [
         review
         for review in reviews
         if str(review.get("commit_id", "")) == head_sha and _is_codex_author(review.get("user"))
     ]
-    if not current_head_reviews:
+
+
+def _latest_codex_review(reviews: Sequence[Mapping[str, object]]) -> Mapping[str, object] | None:
+    if not reviews:
         return None
-    return sorted(current_head_reviews, key=_review_sort_key)[-1]
+    return sorted(reviews, key=_review_sort_key)[-1]
 
 
 def _is_codex_author(user: object) -> bool:
@@ -215,6 +223,18 @@ def _count_review_findings(
         if str(comment.get("pull_request_review_id", "")) == review_id:
             texts.append(str(comment.get("body", "")))
     return sum(1 for text in texts if pattern.search(text))
+
+
+def _count_reviews_findings(
+    reviews: Sequence[Mapping[str, object]],
+    *,
+    review_comments: Sequence[Mapping[str, object]],
+    pattern: re.Pattern[str],
+) -> int:
+    return sum(
+        _count_review_findings(review, review_comments=review_comments, pattern=pattern)
+        for review in reviews
+    )
 
 
 def _find_monitor_comment_id(comments: Sequence[object]) -> int | None:
