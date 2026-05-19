@@ -64,6 +64,25 @@ git push origin --delete <branch>
 
 其中 `<branch>` 是已合并 PR 的提交分支。如果 GitHub 已自动删除远端分支，只需确认远端分支不存在；不要用 force delete 掩盖未合并分支。
 
+用户在当前对话中显式授权直接提交和推送主干时，使用独立的直写主干链路。该链路仍要求先检查 diff、运行相关测试和 governance gate，并且只允许 fast-forward 更新；禁止 reset、删除或 force rewrite：
+
+```powershell
+git fetch origin main
+git switch main
+git status --short --branch
+
+$env:ALLOW_DIRECT_MAIN_WRITE="1"
+$env:DIRECT_MAIN_WRITE_REASON="user explicitly authorized direct main commit: <reason>"
+git commit -m "<简体中文提交说明>"
+
+$env:ALLOW_DIRECT_MAIN_WRITE="1"
+$env:DIRECT_MAIN_WRITE_REASON="user explicitly authorized direct main push: <reason>"
+git push origin main
+
+Remove-Item Env:\ALLOW_DIRECT_MAIN_WRITE -ErrorAction SilentlyContinue
+Remove-Item Env:\DIRECT_MAIN_WRITE_REASON -ErrorAction SilentlyContinue
+```
+
 GitHub `main` must also enforce the same policy with branch protection or a
 ruleset:
 

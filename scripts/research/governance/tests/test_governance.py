@@ -104,7 +104,8 @@ def _write_minimal_repo(root: Path) -> None:
         "规则索引见 indexes.md。所有回答和输出使用简体中文。"
         "策略代码仅在聚宽云端运行。"
         "使用项目虚拟环境运行 Python，具体命令见 docs/rules/commands.md。"
-        "所有进入主干的改动必须通过 PR；禁止本地合并主干，细则见 docs/rules/pr-workflow.md。"
+        "所有进入主干的改动必须通过 PR；如用户显式授权，可以按直写主干链路直接提交和推送主干；"
+        "禁止本地合并主干，细则见 docs/rules/pr-workflow.md。"
         "Markdown 内部文件引用使用 pathref。"
         "遇到沙箱/权限阻断时申请提权。"
         "每次任务后清理临时产物。\n\n"
@@ -184,13 +185,15 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     (root / "docs/rules/pr-workflow.md").write_text(
-        "所有进入主干的改动必须通过 PR\n禁止本地合并主干\nCodex Review Monitor\n"
+        "所有进入主干的改动必须通过 PR\n直写主干 ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON\n"
+        "禁止本地合并主干\nCodex Review Monitor\n"
         "git fetch origin main\ngit merge --ff-only origin/main\n"
         "git branch -d <branch>\ngit push origin --delete <branch>\n",
         encoding="utf-8",
     )
     (root / "docs/rules/governance.md").write_text(
-        ".githooks/reference-transaction ALLOW_MAIN_REF_UPDATE MAIN_REF_UPDATE_REASON Codex Review Monitor "
+        ".githooks/reference-transaction ALLOW_MAIN_REF_UPDATE MAIN_REF_UPDATE_REASON "
+        "ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON Codex Review Monitor "
         "git fetch origin main git merge --ff-only origin/main "
         "git branch -d <branch> git push origin --delete <branch> force delete\n",
         encoding="utf-8",
@@ -798,7 +801,8 @@ def test_governance_audit_flags_missing_root_indexes(tmp_path) -> None:
 def test_governance_audit_flags_missing_pr_cleanup_workflow_tokens(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / "docs/rules/pr-workflow.md").write_text(
-        "所有进入主干的改动必须通过 PR\n禁止本地合并主干\nCodex Review Monitor\n"
+        "所有进入主干的改动必须通过 PR\n直写主干 ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON\n"
+        "禁止本地合并主干\nCodex Review Monitor\n"
         "git fetch origin main\ngit merge --ff-only origin/main\n",
         encoding="utf-8",
     )
@@ -829,9 +833,39 @@ def test_pre_push_branch_protection_allows_feature_branch() -> None:
 def test_pre_push_branch_protection_allows_explicit_bypass() -> None:
     violations = check_pre_push_input(
         "refs/heads/topic abc123 refs/heads/main def456\n",
-        environ={"ALLOW_PROTECTED_BRANCH_PUSH": "1"},
+        environ={
+            "ALLOW_PROTECTED_BRANCH_PUSH": "1",
+            "PROTECTED_BRANCH_PUSH_REASON": "emergency user-approved push",
+        },
     )
     assert violations == []
+
+
+def test_pre_push_branch_protection_requires_explicit_bypass_reason() -> None:
+    violations = check_pre_push_input(
+        "refs/heads/topic abc123 refs/heads/main def456\n",
+        environ={"ALLOW_PROTECTED_BRANCH_PUSH": "1"},
+    )
+    assert violations == ["main"]
+
+
+def test_pre_push_branch_protection_allows_direct_main_write() -> None:
+    violations = check_pre_push_input(
+        "refs/heads/main abc123 refs/heads/main def456\n",
+        environ={
+            "ALLOW_DIRECT_MAIN_WRITE": "1",
+            "DIRECT_MAIN_WRITE_REASON": "user explicitly authorized direct main sync",
+        },
+    )
+    assert violations == []
+
+
+def test_pre_push_branch_protection_requires_direct_main_reason() -> None:
+    violations = check_pre_push_input(
+        "refs/heads/main abc123 refs/heads/main def456\n",
+        environ={"ALLOW_DIRECT_MAIN_WRITE": "1"},
+    )
+    assert violations == ["main"]
 
 
 def test_reference_transaction_branch_protection_blocks_main_update() -> None:
@@ -854,6 +888,42 @@ def test_reference_transaction_branch_protection_requires_bypass_reason() -> Non
     violations = check_reference_transaction_input(
         "0" * 40 + " " + "1" * 40 + " refs/heads/main\n",
         environ={"ALLOW_MAIN_REF_UPDATE": "1"},
+    )
+    assert violations == ["main"]
+
+
+def test_reference_transaction_branch_protection_allows_direct_main_fast_forward() -> None:
+    violations = check_reference_transaction_input(
+        "1" * 40 + " " + "2" * 40 + " refs/heads/main\n",
+        environ={
+            "ALLOW_DIRECT_MAIN_WRITE": "1",
+            "DIRECT_MAIN_WRITE_REASON": "user explicitly authorized direct main commit",
+        },
+        remote_heads={"main": "1" * 40},
+        is_ancestor=lambda _old_sha, _new_sha: True,
+    )
+    assert violations == []
+
+
+def test_reference_transaction_branch_protection_requires_direct_main_reason() -> None:
+    violations = check_reference_transaction_input(
+        "1" * 40 + " " + "2" * 40 + " refs/heads/main\n",
+        environ={"ALLOW_DIRECT_MAIN_WRITE": "1"},
+        remote_heads={"main": "1" * 40},
+        is_ancestor=lambda _old_sha, _new_sha: True,
+    )
+    assert violations == ["main"]
+
+
+def test_reference_transaction_branch_protection_blocks_direct_main_non_fast_forward() -> None:
+    violations = check_reference_transaction_input(
+        "2" * 40 + " " + "1" * 40 + " refs/heads/main\n",
+        environ={
+            "ALLOW_DIRECT_MAIN_WRITE": "1",
+            "DIRECT_MAIN_WRITE_REASON": "user explicitly authorized direct main commit",
+        },
+        remote_heads={"main": "2" * 40},
+        is_ancestor=lambda _old_sha, _new_sha: False,
     )
     assert violations == ["main"]
 

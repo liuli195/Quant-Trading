@@ -2,16 +2,16 @@
 
 ## MUST
 
-- 主干禁止直接 push 和 force push。
-- 所有主干改动必须通过 PR，并通过 required status checks。
+- 主干默认禁止直接 push 和 force push；用户在当前对话中显式授权“直写主干”时，只允许 fast-forward 直写，仍禁止 force push。
+- 所有主干改动必须通过 PR，并通过 required status checks；例外是用户显式授权的直写主干链路。
 - 关键路径必须由 CODEOWNERS 覆盖并经过 owner review。
 - `scripts.research.governance gate` 是本地 hook 和 CI 的强门禁入口。
 - PR 必须包含官方 Codex Code Review 的通过结论，CI 必须用 `pr-review-evidence` job 校验该结论，并用 `Codex Review Monitor` status 监听当前 head 的 Codex 评审状态。
 - 本地仓库必须设置 `git config core.hooksPath .githooks`，不能只提交 hook 文件。
 - `.githooks/pre-commit`、`.githooks/pre-push` 和 `.githooks/reference-transaction` 必须通过 `.githooks/run-python.sh` 调用项目虚拟环境，不能硬编码 `powershell.exe` 或单一平台解释器路径。
 - `.githooks/pre-push` 必须调用 `scripts.research.governance.branch_protection pre-push` 和 `scripts.research.governance gate`，并保留 Git LFS pre-push 转交。
-- 在远端 rulesets 不生效的私有仓库中，`.githooks/pre-push` 必须本地阻断推送到 `main` / `master`。
-- `.githooks/reference-transaction` 必须本地阻断 `refs/heads/main` / `refs/heads/master` 更新，防止绕过 PR 的本地 `git merge`、`git reset` 或分支指针改写。
+- 在远端 rulesets 不生效的私有仓库中，`.githooks/pre-push` 必须本地阻断推送到 `main` / `master`；用户显式授权直写主干时，必须设置 `ALLOW_DIRECT_MAIN_WRITE=1` 和 `DIRECT_MAIN_WRITE_REASON=<reason>`。
+- `.githooks/reference-transaction` 必须本地阻断 `refs/heads/main` / `refs/heads/master` 更新，防止绕过 PR 的本地 `git merge`、`git reset` 或分支指针改写；用户显式授权直写主干时，必须设置 `ALLOW_DIRECT_MAIN_WRITE=1` 和 `DIRECT_MAIN_WRITE_REASON=<reason>`，且只允许 fast-forward 更新。
 - PR 在 GitHub 云端合并后，同步本地 `main` 到 `origin/main` 时，必须先 `git fetch origin main`，再显式设置 `ALLOW_MAIN_REF_UPDATE=1` 和 `MAIN_REF_UPDATE_REASON=<reason>`，并只允许 fast-forward 更新。
 - PR 合并收尾必须删除已合并提交分支的本地和远端引用；不得用 force delete 掩盖未合并分支。
 - GitHub `main` 必须配置 branch protection 或 ruleset：Require pull request、Require status checks（`Research Governance / governance`、`Research Governance / pr-review-evidence` 与 `Codex Review Monitor`）、Require review from Code Owners、Block force pushes。

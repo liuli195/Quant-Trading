@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "catalog_type": "docs",
-  "generated_at": "2026-05-19T15:02:58+00:00",
-  "count": 38,
+  "generated_at": "2026-05-19T17:25:48+00:00",
+  "count": 40,
   "reports": [
     {
       "path": "docs/README.md",
@@ -31,7 +31,7 @@
         "docs/indexes",
         "docs/indexes/docs_catalog.json"
       ],
-      "updated_at": "2026-05-19T14:15:31+00:00"
+      "updated_at": "2026-05-19T15:28:55+00:00"
     },
     {
       "path": "docs/adr/0001-rule-source-and-governance-model.md",
@@ -48,7 +48,7 @@
         "docs/rules",
         "docs/adr"
       ],
-      "updated_at": "2026-05-19T13:52:30+00:00"
+      "updated_at": "2026-05-19T15:28:55+00:00"
     },
     {
       "path": "docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md",
@@ -86,7 +86,7 @@
         "repo/CLAUDE.md",
         "docs/adr/0005-ai-entry-progressive-disclosure.md"
       ],
-      "updated_at": "2026-05-19T14:16:22+00:00"
+      "updated_at": "2026-05-19T15:28:55+00:00"
     },
     {
       "path": "docs/adr/0005-ai-entry-progressive-disclosure.md",
@@ -106,7 +106,7 @@
         "repo/AGENTS.md",
         "docs/rules/index.md"
       ],
-      "updated_at": "2026-05-19T14:31:28+00:00"
+      "updated_at": "2026-05-19T15:28:55+00:00"
     },
     {
       "path": "docs/architecture/research-platform-architecture.md",
@@ -136,7 +136,34 @@
         "docs/indexes/reports.md",
         "scripts/research/layers"
       ],
-      "updated_at": "2026-05-19T14:16:58+00:00"
+      "updated_at": "2026-05-19T15:28:55+00:00"
+    },
+    {
+      "path": "docs/cc-switch-cli.md",
+      "title": "CC-Switch CLI",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-19T17:13:34+00:00"
+    },
+    {
+      "path": "docs/design/cross-ai-skill-management.md",
+      "title": "跨 AI 工具 Skill 管理实施计划",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "docs/cc-switch-cli.md",
+        "repo/AGENTS.md",
+        "repo/CLAUDE.md",
+        "docs/adr/0005-ai-entry-progressive-disclosure.md",
+        "docs/rules/governance.md",
+        "docs/rules/docs-and-pathref.md"
+      ],
+      "updated_at": "2026-05-19T17:16:04+00:00"
     },
     {
       "path": "docs/design/本地研究平台重构.md",
@@ -437,7 +464,7 @@
       "pathrefs": [
         "docs/rules/commands.md"
       ],
-      "updated_at": "2026-05-19T13:53:20+00:00"
+      "updated_at": "2026-05-19T15:28:55+00:00"
     },
     {
       "path": "docs/rules/commands.md",
@@ -452,7 +479,7 @@
         "scripts/tools/path_tools/README.md",
         "docs/guides/research-workflow.md"
       ],
-      "updated_at": "2026-05-19T14:14:49+00:00"
+      "updated_at": "2026-05-19T15:28:55+00:00"
     },
     {
       "path": "docs/rules/docs-and-pathref.md",
@@ -475,7 +502,7 @@
         "repo/AGENTS.md",
         "repo/CLAUDE.md"
       ],
-      "updated_at": "2026-05-19T14:15:31+00:00"
+      "updated_at": "2026-05-19T17:24:36+00:00"
     },
     {
       "path": "docs/rules/index.md",
@@ -502,7 +529,7 @@
         "docs/adr/0004-codex-code-review-governance.md",
         "docs/adr/0005-ai-entry-progressive-disclosure.md"
       ],
-      "updated_at": "2026-05-19T14:57:08+00:00"
+      "updated_at": "2026-05-19T15:28:55+00:00"
     },
     {
       "path": "docs/rules/pr-workflow.md",
@@ -515,7 +542,7 @@
         "repo/AGENTS.md",
         "repo/CLAUDE.md"
       ],
-      "updated_at": "2026-05-19T14:57:08+00:00"
+      "updated_at": "2026-05-19T17:24:26+00:00"
     },
     {
       "path": "docs/rules/research-workflow.md",
@@ -547,7 +574,7 @@
         "docs/rules/code-style.md",
         "docs/rules/docs-and-pathref.md"
       ],
-      "updated_at": "2026-05-19T14:57:08+00:00"
+      "updated_at": "2026-05-19T15:28:55+00:00"
     }
   ]
 }

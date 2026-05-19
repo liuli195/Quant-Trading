@@ -11,6 +11,9 @@ from collections.abc import Callable, Mapping
 
 PROTECTED_BRANCHES = {"main", "master"}
 BYPASS_ENV = "ALLOW_PROTECTED_BRANCH_PUSH"
+BYPASS_REASON_ENV = "PROTECTED_BRANCH_PUSH_REASON"
+DIRECT_MAIN_WRITE_ENV = "ALLOW_DIRECT_MAIN_WRITE"
+DIRECT_MAIN_WRITE_REASON_ENV = "DIRECT_MAIN_WRITE_REASON"
 REF_UPDATE_BYPASS_ENV = "ALLOW_MAIN_REF_UPDATE"
 REF_UPDATE_REASON_ENV = "MAIN_REF_UPDATE_REASON"
 ZERO_SHA = "0" * 40
@@ -20,7 +23,9 @@ def check_pre_push_input(input_text: str, *, environ: dict[str, str] | None = No
     """Return protected branch push violations from Git pre-push stdin."""
 
     env = environ if environ is not None else os.environ
-    if env.get(BYPASS_ENV) == "1":
+    if _env_pair_enabled(env, DIRECT_MAIN_WRITE_ENV, DIRECT_MAIN_WRITE_REASON_ENV):
+        return []
+    if _env_pair_enabled(env, BYPASS_ENV, BYPASS_REASON_ENV):
         return []
 
     violations: list[str] = []
@@ -50,6 +55,15 @@ def check_reference_transaction_input(
 
     env = environ if environ is not None else os.environ
     branches = sorted({branch for _old_sha, _new_sha, branch in updates})
+    if _env_pair_enabled(env, DIRECT_MAIN_WRITE_ENV, DIRECT_MAIN_WRITE_REASON_ENV):
+        return sorted(
+            {
+                branch
+                for old_sha, new_sha, branch in updates
+                if not _is_fast_forward_update(old_sha, new_sha, is_ancestor=is_ancestor)
+            }
+        )
+
     if env.get(REF_UPDATE_BYPASS_ENV) != "1" or not env.get(REF_UPDATE_REASON_ENV, "").strip():
         return branches
 
@@ -112,6 +126,10 @@ def _is_fast_forward_update(
     return result.returncode == 0
 
 
+def _env_pair_enabled(env: Mapping[str, str], flag: str, reason: str) -> bool:
+    return env.get(flag) == "1" and bool(env.get(reason, "").strip())
+
+
 def _branch_from_ref(ref: str) -> str | None:
     prefix = "refs/heads/"
     if not ref.startswith(prefix):
@@ -137,14 +155,22 @@ def _cmd_pre_push(_args: argparse.Namespace) -> int:
     if not violations:
         return 0
     branches = ", ".join(violations)
+    message = [f"error: direct push to protected branch blocked: {branches}"]
+    if os.environ.get(DIRECT_MAIN_WRITE_ENV) == "1" and not os.environ.get(DIRECT_MAIN_WRITE_REASON_ENV, "").strip():
+        message.append(f"error: {DIRECT_MAIN_WRITE_REASON_ENV} is required when {DIRECT_MAIN_WRITE_ENV}=1")
+    if os.environ.get(BYPASS_ENV) == "1" and not os.environ.get(BYPASS_REASON_ENV, "").strip():
+        message.append(f"error: {BYPASS_REASON_ENV} is required when {BYPASS_ENV}=1")
+    message.extend(
+        [
+            "Create a feature branch and open a PR instead.",
+            (
+                f"Explicit direct-main path: set {DIRECT_MAIN_WRITE_ENV}=1 and "
+                f"{DIRECT_MAIN_WRITE_REASON_ENV}=<reason> for this command."
+            ),
+        ]
+    )
     print(
-        "\n".join(
-            [
-                f"error: direct push to protected branch blocked: {branches}",
-                "Create a feature branch and open a PR instead.",
-                f"Emergency bypass: set {BYPASS_ENV}=1 for this command and record the reason in the PR/audit trail.",
-            ]
-        ),
+        "\n".join(message),
         file=sys.stderr,
     )
     return 1
@@ -160,12 +186,18 @@ def _cmd_reference_transaction(_args: argparse.Namespace) -> int:
     message = [
         f"error: local update to protected branch blocked: {branches}",
         "Do not merge feature branches into main/master locally; open a PR instead.",
+        (
+            f"Explicit direct-main path: set {DIRECT_MAIN_WRITE_ENV}=1 and "
+            f"{DIRECT_MAIN_WRITE_REASON_ENV}=<reason>; only fast-forward local updates are allowed."
+        ),
         "After a remote PR merge, local main/master may only fast-forward to refs/remotes/origin/<branch>.",
         (
             f"Audited sync bypass: set {REF_UPDATE_BYPASS_ENV}=1 and "
             f"{REF_UPDATE_REASON_ENV}=<reason> for this command."
         ),
     ]
+    if os.environ.get(DIRECT_MAIN_WRITE_ENV) == "1" and not os.environ.get(DIRECT_MAIN_WRITE_REASON_ENV, "").strip():
+        message.insert(1, f"error: {DIRECT_MAIN_WRITE_REASON_ENV} is required when {DIRECT_MAIN_WRITE_ENV}=1")
     if os.environ.get(REF_UPDATE_BYPASS_ENV) == "1" and not os.environ.get(REF_UPDATE_REASON_ENV, "").strip():
         message.insert(1, f"error: {REF_UPDATE_REASON_ENV} is required when {REF_UPDATE_BYPASS_ENV}=1")
     print("\n".join(message), file=sys.stderr)

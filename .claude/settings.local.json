@@ -327,7 +327,9 @@
       "Bash(python -c \"import json; d=json.load\\(open\\(r'strategies\\\\etf_factor_rotation\\\\backtest_runs\\\\20260518-1650-bt623fbd8857ee042d2af47036ae25a61b\\\\api_export.json',encoding='utf-8'\\)\\); orders=d['orders']; print\\('Order count:',len\\(orders\\)\\); print\\('First 5 orders:'\\); import pprint; pprint.pprint\\(orders[:5]\\)\")",
       "Bash(python -c \"import json; d=json.load\\(open\\(r'strategies\\\\etf_factor_rotation\\\\backtest_runs\\\\20260518-1650-bt623fbd8857ee042d2af47036ae25a61b\\\\api_export.json',encoding='utf-8'\\)\\); print\\('counts:',json.dumps\\(d['counts'],ensure_ascii=False\\)\\); print\\('partial:',json.dumps\\(d['partial'],ensure_ascii=False\\)\\); print\\('risk keys:',list\\(d['risk'].keys\\(\\)\\)\\)\")",
       "Bash(python -c \"import json; d=json.load\\(open\\(r'strategies\\\\etf_factor_rotation\\\\backtest_runs\\\\20260518-1650-bt623fbd8857ee042d2af47036ae25a61b\\\\api_export.json',encoding='utf-8'\\)\\); pos=d['positions']; print\\('Position count:',len\\(pos\\)\\); print\\('First 3 positions:'\\); import pprint; pprint.pprint\\(pos[:3]\\)\")",
-      "PowerShell($content = Get-Content \"d:\\\\My Project\\\\Quant Trading\\\\docs\\\\joinquant-data\\\\常见问题 - JoinQuant \\(2026_5_18 21：50：07\\).html\" -Raw -Encoding UTF8; $content.Substring\\(0, 5000\\))"
+      "PowerShell($content = Get-Content \"d:\\\\My Project\\\\Quant Trading\\\\docs\\\\joinquant-data\\\\常见问题 - JoinQuant \\(2026_5_18 21：50：07\\).html\" -Raw -Encoding UTF8; $content.Substring\\(0, 5000\\))",
+      "Bash(ALLOW_MAIN_REF_UPDATE=1 MAIN_REF_UPDATE_REASON='sync after PR #10 merge' git merge --ff-only origin/main)",
+      "Bash(Select-String \"cc-switch\")"
     ],
     "additionalDirectories": [
       "d:\\My Project\\Quant Trading\\.claude\\skills\\jq-param-scan"

@@ -91,6 +91,7 @@ REQUIRED_AGENT_ENTRY_TOKENS = (
     "使用项目虚拟环境运行 Python",
     "docs/rules/commands.md",
     "所有进入主干的改动必须通过 PR",
+    "直写主干",
     "禁止本地合并主干",
     "docs/rules/pr-workflow.md",
     "Markdown 内部文件引用使用",
@@ -436,6 +437,9 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         text = pr_workflow.read_text(encoding="utf-8", errors="ignore")
         for token in (
             "所有进入主干的改动必须通过 PR",
+            "直写主干",
+            "ALLOW_DIRECT_MAIN_WRITE",
+            "DIRECT_MAIN_WRITE_REASON",
             "禁止本地合并主干",
             "git fetch origin main",
             "git merge --ff-only origin/main",
@@ -452,6 +456,8 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             ".githooks/reference-transaction",
             "ALLOW_MAIN_REF_UPDATE",
             "MAIN_REF_UPDATE_REASON",
+            "ALLOW_DIRECT_MAIN_WRITE",
+            "DIRECT_MAIN_WRITE_REASON",
             "Codex Review Monitor",
         ):
             if token not in text:

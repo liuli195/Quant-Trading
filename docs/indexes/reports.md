@@ -9,6 +9,8 @@
 | docs |  | ADR 0004: 使用官方 Codex Code Review 作为 PR 评审门禁 | `docs/adr/0004-codex-code-review-governance.md` | 7 |
 | docs |  | ADR 0005: AI 入口采用渐进式披露 | `docs/adr/0005-ai-entry-progressive-disclosure.md` | 9 |
 | docs |  | 本地研究平台架构 | `docs/architecture/research-platform-architecture.md` | 19 |
+| docs |  | CC-Switch CLI | `docs/cc-switch-cli.md` | 0 |
+| docs |  | 跨 AI 工具 Skill 管理实施计划 | `docs/design/cross-ai-skill-management.md` | 6 |
 | docs |  | 本地研究平台重构 | `docs/design/本地研究平台重构.md` | 0 |
 | docs |  | 本地研究平台重构技术实施方案 | `docs/design/本地研究平台重构技术实施方案.md` | 6 |
 | docs |  | 长期项目防止开发规则漂移方案 | `docs/design/长期项目防止开发规则漂移方案.md` | 8 |
