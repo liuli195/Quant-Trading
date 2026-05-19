@@ -15,8 +15,9 @@ VALID_SEVERITIES = {"P0", "P1", "P2", "P3"}
 VALID_STATUSES = {"open", "fixed", "false_positive", "accepted"}
 HIGH_RISK_PREFIXES = (
     "strategies/",
+    "scripts/research/platform/",
     "scripts/research/governance/",
-    ".github/workflows/",
+    ".github/",
     ".githooks/",
     "docs/rules/",
     "docs/adr/",
@@ -200,8 +201,18 @@ def render_markdown_report(payload: dict[str, Any]) -> str:
 
 
 def _is_high_risk_path(path: str) -> bool:
-    normalized = path.replace("\\", "/").lstrip("./")
+    normalized = path.replace("\\", "/")
+    if normalized.startswith("./"):
+        normalized = normalized[2:]
+    normalized = normalized.lstrip("/")
+    if _is_generated_strategy_artifact(normalized):
+        return False
     return any(normalized.startswith(prefix) for prefix in HIGH_RISK_PREFIXES)
+
+
+def _is_generated_strategy_artifact(path: str) -> bool:
+    parts = path.split("/")
+    return len(parts) >= 3 and parts[0] == "strategies" and parts[2] == "backtest_runs"
 
 
 def _string_list(value: Any) -> list[str]:

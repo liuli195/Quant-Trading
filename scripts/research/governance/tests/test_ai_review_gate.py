@@ -102,6 +102,40 @@ def test_high_risk_scope_mentions_changed_file(tmp_path: Path) -> None:
     assert "只审以下高风险范围的 P0/P1 逻辑风险" in result.review_scope
 
 
+def test_high_risk_scope_excludes_generated_strategy_artifacts(
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 1,
+            "tool": "codex",
+            "reviewers": ["superpowers", "codex-security"],
+            "risk_level": "high",
+            "requires_official_codex_review": True,
+            "changed_files": [
+                "strategies/etf_factor_rotation/backtest_runs/run/api_export.json",
+                "strategies/etf_factor_rotation/etf_factor_rotation.py",
+                "scripts/research/platform/datasets.py",
+                ".github/pull_request_template.md",
+            ],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert result.ok, result.errors
+    assert "backtest_runs/run/api_export.json" not in result.review_scope
+    assert (
+        "strategies/etf_factor_rotation/etf_factor_rotation.py" in result.review_scope
+    )
+    assert "scripts/research/platform/datasets.py" in result.review_scope
+    assert ".github/pull_request_template.md" in result.review_scope
+
+
 def test_markdown_summary_lists_risk_and_findings() -> None:
     payload = {
         "schema_version": 1,
