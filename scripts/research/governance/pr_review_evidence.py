@@ -19,6 +19,7 @@ CODEX_REVIEW_URL_PATTERN = re.compile(
     r"https://github\.com/(?P<repo>[^/\s]+/[^/\s]+)/pull/(?P<number>\d+)#pullrequestreview-(?P<review_id>\d+)"
 )
 CODEX_REVIEW_AUTHORS = {"chatgpt-codex-connector", "chatgpt-codex-connector[bot]"}
+DISQUALIFIED_CODEX_REVIEW_STATES = {"DISMISSED", "PENDING"}
 BLOCKING_CODEX_FINDING_PATTERN = re.compile(
     r"(?:P[01] Badge|badge/P[01]-|(?:^|\n)\s*(?:\*\*)?\[P[01]\]\s+)",
     re.IGNORECASE,
@@ -178,9 +179,7 @@ def _codex_review_errors(
         if str(review.get("id", "")) != review_id:
             continue
         matched_review = review
-        author = review.get("user")
-        login = author.get("login") if isinstance(author, Mapping) else ""
-        if str(login) not in CODEX_REVIEW_AUTHORS:
+        if not is_effective_codex_review(review):
             return ("Codex review link must match a Codex review on the current head",)
         if expected_head_sha and str(review.get("commit_id", "")) != expected_head_sha:
             return ("Codex review link must match a Codex review on the current head",)
@@ -227,15 +226,25 @@ def _current_head_has_blocking_codex_review(
     expected_head_sha: str | None,
 ) -> bool:
     for review in reviews:
-        author = review.get("user")
-        login = author.get("login") if isinstance(author, Mapping) else ""
-        if str(login) not in CODEX_REVIEW_AUTHORS:
+        if not is_effective_codex_review(review):
             continue
         if expected_head_sha and str(review.get("commit_id", "")) != expected_head_sha:
             continue
         if _review_has_blocking_findings(review, review_id=str(review.get("id", "")), review_comments=review_comments):
             return True
     return False
+
+
+def is_effective_codex_review(review: Mapping[str, object]) -> bool:
+    author = review.get("user")
+    login = author.get("login") if isinstance(author, Mapping) else ""
+    if str(login) not in CODEX_REVIEW_AUTHORS:
+        return False
+    return _review_state(review) not in DISQUALIFIED_CODEX_REVIEW_STATES
+
+
+def _review_state(review: Mapping[str, object]) -> str:
+    return str(review.get("state", "") or "").upper()
 
 
 def _required_trigger_comments(comments: Sequence[object]) -> tuple[object, ...]:
@@ -368,24 +377,11 @@ def _fetch_pr_metadata(*, repo: str, pr_number: str, token: str) -> Mapping[str,
     return payload if isinstance(payload, Mapping) else None
 
 
-def _fetch_commit_metadata(*, repo: str, commit_sha: str, token: str) -> Mapping[str, object] | None:
-    payload = _fetch_github_json(repo=repo, path=f"commits/{commit_sha}", token=token)
-    return payload if isinstance(payload, Mapping) else None
-
-
-def _commit_timestamp(commit_metadata: Mapping[str, object] | None) -> str | None:
-    if commit_metadata is None:
+def _pr_updated_at(pr_metadata: Mapping[str, object] | None) -> str | None:
+    if pr_metadata is None:
         return None
-    commit = commit_metadata.get("commit")
-    if not isinstance(commit, Mapping):
-        return None
-    committer = commit.get("committer")
-    if isinstance(committer, Mapping) and committer.get("date"):
-        return str(committer.get("date"))
-    author = commit.get("author")
-    if isinstance(author, Mapping) and author.get("date"):
-        return str(author.get("date"))
-    return None
+    updated_at = pr_metadata.get("updated_at")
+    return str(updated_at) if updated_at else None
 
 
 def _fetch_pr_comments(*, repo: str, pr_number: str, token: str) -> list[Mapping[str, object]]:
@@ -447,7 +443,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--repo-env")
     parser.add_argument("--pr-number-env")
     parser.add_argument("--head-sha-env")
-    parser.add_argument("--head-created-at-env")
+    parser.add_argument("--head-updated-at-env")
+    parser.add_argument("--head-created-at-env", help=argparse.SUPPRESS)
     parser.add_argument("--github-token-env")
     parser.add_argument("--comments-file", type=Path)
     parser.add_argument("--reviews-file", type=Path)
@@ -468,13 +465,14 @@ def main(argv: list[str] | None = None) -> int:
     review_comments = _coerce_reviews(_read_optional_file(args.review_comments_file))
     expected_pr_url = _read_env(args.pr_url_env)
     expected_head_sha = _read_env(args.head_sha_env)
-    expected_head_created_at = _read_env(args.head_created_at_env)
+    expected_head_created_at = _read_env(args.head_updated_at_env) or _read_env(args.head_created_at_env)
 
     repo = _read_env(args.repo_env)
     pr_number = _read_env(args.pr_number_env)
     token = _read_env(args.github_token_env)
     if repo and pr_number and token:
-        if not body or not expected_pr_url or not expected_head_sha:
+        pr_metadata: Mapping[str, object] | None = None
+        if not body or not expected_pr_url or not expected_head_sha or not expected_head_created_at:
             pr_metadata = _fetch_pr_metadata(repo=repo, pr_number=pr_number, token=token)
             if pr_metadata is not None:
                 if not body:
@@ -484,9 +482,8 @@ def main(argv: list[str] | None = None) -> int:
                 head = pr_metadata.get("head")
                 if not expected_head_sha and isinstance(head, Mapping):
                     expected_head_sha = str(head.get("sha", ""))
-        if expected_head_sha and not expected_head_created_at:
-            commit_metadata = _fetch_commit_metadata(repo=repo, commit_sha=expected_head_sha, token=token)
-            expected_head_created_at = _commit_timestamp(commit_metadata)
+                if not expected_head_created_at:
+                    expected_head_created_at = _pr_updated_at(pr_metadata)
         if comments is None:
             comments = _fetch_pr_comments(repo=repo, pr_number=pr_number, token=token)
         if reviews is None:

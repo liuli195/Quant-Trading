@@ -57,10 +57,10 @@ ruleset:
 ## Codex review monitor
 
 `Codex Review Monitor` listens to PR head updates, PR `@codex review` trigger
-comments, Codex review submissions, and Codex inline review comments, including
-inline comment deletion. Trigger comments are counted only when their effective
-time is after the current PR head commit, and a passing review must be submitted
-after that trigger. It updates one PR comment
+comments, Codex review submitted/edited/dismissed events, and Codex inline
+review comments, including inline comment deletion. Trigger comments are counted
+only when their effective time is after the current PR head update, and a
+passing review must be submitted after that trigger. It updates one PR comment
 marked with `<!-- codex-review-monitor -->`, reporting whether the current PR
 head is still waiting for Codex, blocked by P0/P1 findings, or ready for the PR
 body evidence to be updated. It also writes the commit status context `Codex
@@ -68,8 +68,9 @@ Review Monitor` to the PR head, so trigger-comment deletion can invalidate the
 head status instead of only updating a PR discussion comment.
 
 `Research Governance / pr-review-evidence` reruns on PR metadata updates,
-Codex review submissions, and inline review comment create/edit/delete events so
-its evidence decision is refreshed when Codex findings are edited or removed.
+Codex review submitted/edited/dismissed events, and inline review comment
+create/edit/delete events so its evidence decision is refreshed when Codex
+findings are edited, removed, or dismissed.
 
 Manual inspection is available through workflow dispatch, or locally with:
 

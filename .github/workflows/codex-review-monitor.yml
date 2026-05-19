@@ -6,7 +6,7 @@ on:
   issue_comment:
     types: [created, edited, deleted]
   pull_request_review:
-    types: [submitted]
+    types: [submitted, edited, dismissed]
   pull_request_review_comment:
     types: [created, edited, deleted]
   workflow_dispatch:
@@ -48,7 +48,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number || github.event.issue.number }}
+          PR_HEAD_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
         run: >-
           python -m scripts.research.governance.codex_review_monitor
+          --head-updated-at-env PR_HEAD_UPDATED_AT
           --sync-comment
           --sync-status

@@ -6,6 +6,7 @@ import json
 import re
 import subprocess
 import sys
+from collections.abc import Sequence
 from datetime import date, datetime
 from pathlib import Path
 
@@ -79,6 +80,14 @@ WAIVER_REQUIRED_FIELDS = (
     "expires_at",
     "migration_plan",
 )
+
+
+def _workflow_event_types_include(text: str, event: str, required_types: Sequence[str]) -> bool:
+    match = re.search(rf"{re.escape(event)}:\s*\n\s*types:\s*\[([^\]]*)\]", text)
+    if not match:
+        return False
+    declared = match.group(1)
+    return all(required_type in declared for required_type in required_types)
 
 
 def run_audit(
@@ -270,6 +279,14 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "PR review evidence workflow must listen to deleted inline review comments",
                 )
             )
+        if not _workflow_event_types_include(text, "pull_request_review", ("submitted", "edited", "dismissed")):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "PR review evidence workflow must listen to Codex review submitted, edited, and dismissed events",
+                )
+            )
 
     monitor_workflow = root / ".github" / "workflows" / "codex-review-monitor.yml"
     if not monitor_workflow.is_file():
@@ -295,6 +312,14 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "codex_review_monitor",
                     "error",
                     "monitor workflow must listen to deleted inline review comments",
+                )
+            )
+        if not _workflow_event_types_include(text, "pull_request_review", ("submitted", "edited", "dismissed")):
+            findings.append(
+                AuditFinding(
+                    "codex_review_monitor",
+                    "error",
+                    "monitor workflow must listen to Codex review submitted, edited, and dismissed events",
                 )
             )
 

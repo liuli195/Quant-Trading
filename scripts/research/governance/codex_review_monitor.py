@@ -15,7 +15,7 @@ from pathlib import Path
 
 from scripts.research.governance.pr_review_evidence import (
     BLOCKING_CODEX_FINDING_PATTERN,
-    CODEX_REVIEW_AUTHORS,
+    is_effective_codex_review,
 )
 
 
@@ -218,7 +218,7 @@ def _current_head_codex_reviews(
     return [
         review
         for review in reviews
-        if str(review.get("commit_id", "")) == head_sha and _is_codex_author(review.get("user"))
+        if str(review.get("commit_id", "")) == head_sha and is_effective_codex_review(review)
     ]
 
 
@@ -244,11 +244,6 @@ def _latest_codex_review(reviews: Sequence[Mapping[str, object]]) -> Mapping[str
     if not reviews:
         return None
     return sorted(reviews, key=_review_sort_key)[-1]
-
-
-def _is_codex_author(user: object) -> bool:
-    login = user.get("login") if isinstance(user, Mapping) else ""
-    return str(login) in CODEX_REVIEW_AUTHORS
 
 
 def _review_sort_key(review: Mapping[str, object]) -> str:
@@ -342,19 +337,9 @@ def _fetch_github_json(*, repo: str, path: str, token: str) -> object:
     return payload
 
 
-def _commit_timestamp(commit_metadata: Mapping[str, object] | None) -> str | None:
-    if commit_metadata is None:
-        return None
-    commit = commit_metadata.get("commit")
-    if not isinstance(commit, Mapping):
-        return None
-    committer = commit.get("committer")
-    if isinstance(committer, Mapping) and committer.get("date"):
-        return str(committer.get("date"))
-    author = commit.get("author")
-    if isinstance(author, Mapping) and author.get("date"):
-        return str(author.get("date"))
-    return None
+def _pr_updated_at(pr: Mapping[str, object]) -> str | None:
+    updated_at = pr.get("updated_at")
+    return str(updated_at) if updated_at else None
 
 
 def _fetch_github_list(*, repo: str, path: str, token: str) -> list[object]:
@@ -422,7 +407,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--comments-file", type=Path)
     parser.add_argument("--reviews-file", type=Path)
     parser.add_argument("--review-comments-file", type=Path)
-    parser.add_argument("--head-created-at-env")
+    parser.add_argument("--head-updated-at-env")
+    parser.add_argument("--head-created-at-env", help=argparse.SUPPRESS)
     return parser
 
 
@@ -440,7 +426,7 @@ def main(argv: list[str] | None = None) -> int:
     issue_comments = _as_mapping_list(_read_json_file(args.comments_file))
     reviews = _as_mapping_list(_read_json_file(args.reviews_file))
     review_comments = _as_mapping_list(_read_json_file(args.review_comments_file))
-    head_created_at = _read_env(args.head_created_at_env)
+    head_created_at = _read_env(args.head_updated_at_env) or _read_env(args.head_created_at_env)
 
     if token:
         if not pr:
@@ -455,10 +441,8 @@ def main(argv: list[str] | None = None) -> int:
             review_comments = _as_mapping_list(
                 _fetch_github_list(repo=repo, path=f"pulls/{pr_number}/comments", token=token)
             )
-        head_sha = _head_sha(pr)
-        if head_sha and not head_created_at:
-            commit_metadata = _fetch_github_json(repo=repo, path=f"commits/{head_sha}", token=token)
-            head_created_at = _commit_timestamp(_as_mapping(commit_metadata))
+        if not head_created_at:
+            head_created_at = _pr_updated_at(pr)
 
     report = build_monitor_report(
         repo=repo,

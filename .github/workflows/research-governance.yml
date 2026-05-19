@@ -5,7 +5,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, edited, ready_for_review]
   pull_request_review:
-    types: [submitted]
+    types: [submitted, edited, dismissed]
   pull_request_review_comment:
     types: [created, edited, deleted]
   schedule:
@@ -47,6 +47,7 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url || format('https://github.com/{0}/pull/{1}', github.repository, github.event.issue.number) }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
           python -m scripts.research.governance.pr_review_evidence
@@ -55,4 +56,5 @@ jobs:
           --repo-env GITHUB_REPOSITORY
           --pr-number-env PR_NUMBER
           --head-sha-env PR_HEAD_SHA
+          --head-updated-at-env PR_HEAD_UPDATED_AT
           --github-token-env GITHUB_TOKEN
