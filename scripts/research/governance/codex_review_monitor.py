@@ -325,6 +325,12 @@ def _read_json_file(path: Path | None) -> object | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _configure_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
+
+
 def _as_mapping(payload: object | None) -> Mapping[str, object]:
     return payload if isinstance(payload, Mapping) else {}
 
@@ -351,6 +357,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _configure_stdio()
     args = build_parser().parse_args(argv)
     repo = _read_env(args.repo_env)
     pr_number = _read_env(args.pr_number_env)
