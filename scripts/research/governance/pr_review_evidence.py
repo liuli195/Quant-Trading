@@ -19,7 +19,7 @@ CODEX_REVIEW_URL_PATTERN = re.compile(
     r"https://github\.com/(?P<repo>[^/\s]+/[^/\s]+)/pull/(?P<number>\d+)#pullrequestreview-(?P<review_id>\d+)"
 )
 CODEX_COMPLETION_COMMENT_URL_PATTERN = re.compile(
-    r"https://github\.com/(?P<repo>[^/\s]+/[^/\s]+)/pull/(?P<number>\d+)#issuecomment-(?P<comment_id>\d+)"
+    r"https://github\.com/(?P<repo>[^/\s]+/[^/\s]+)/(?:pull|issues)/(?P<number>\d+)#issuecomment-(?P<comment_id>\d+)"
 )
 CODEX_REVIEW_AUTHORS = {"chatgpt-codex-connector", "chatgpt-codex-connector[bot]"}
 DISQUALIFIED_CODEX_REVIEW_STATES = {"DISMISSED", "PENDING"}
@@ -148,6 +148,7 @@ def _has_nonempty_evidence(section: str) -> bool:
 
 def _find_codex_evidence_link(section: str, *, expected_pr_url: str | None = None) -> str | None:
     expected = _normalize_pr_url(expected_pr_url)
+    expected_issue_url = expected.replace("/pull/", "/issues/") if expected else None
     evidence_start = section.find("关键证据")
     if evidence_start < 0:
         return None
@@ -161,6 +162,7 @@ def _find_codex_evidence_link(section: str, *, expected_pr_url: str | None = Non
         url = match.group(0)
         if expected and not (
             url.startswith(f"{expected}#pullrequestreview-") or url.startswith(f"{expected}#issuecomment-")
+            or url.startswith(f"{expected_issue_url}#issuecomment-")
         ):
             continue
         return url
