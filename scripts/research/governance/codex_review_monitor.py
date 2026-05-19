@@ -7,6 +7,7 @@ import json
 import os
 import re
 import sys
+import urllib.error
 import urllib.request
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -400,16 +401,21 @@ def main(argv: list[str] | None = None) -> int:
     if summary_file:
         Path(summary_file).write_text(body + "\n", encoding="utf-8")
 
-    if args.sync_comment:
-        if not token:
-            print("error: GITHUB_TOKEN is required when --sync-comment is used", file=sys.stderr)
-            return 2
-        sync_monitor_comment(repo=repo, pr_number=pr_number, token=token, report=report)
     if args.sync_status:
         if not token:
             print("error: GITHUB_TOKEN is required when --sync-status is used", file=sys.stderr)
             return 2
         sync_commit_status(repo=repo, pr=pr, token=token, report=report)
+    if args.sync_comment:
+        if not token:
+            print("error: GITHUB_TOKEN is required when --sync-comment is used", file=sys.stderr)
+            return 2
+        try:
+            sync_monitor_comment(repo=repo, pr_number=pr_number, token=token, report=report)
+        except urllib.error.HTTPError as error:
+            if error.code != 403:
+                raise
+            print("warning: unable to sync monitor PR comment: HTTP 403", file=sys.stderr)
     return 0
 
 
