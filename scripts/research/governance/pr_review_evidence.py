@@ -238,6 +238,13 @@ def _codex_completion_comment_errors(
     errors: list[str] = []
     if not _has_required_trigger_after_current_head((comment,), expected_head_created_at):
         errors.append("required @codex review trigger must be submitted after the current head")
+    latest_trigger_time = _latest_required_trigger_time(
+        comments,
+        expected_head_created_at=expected_head_created_at,
+    )
+    comment_time = _comment_effective_time(comment)
+    if latest_trigger_time and comment_time and comment_time < latest_trigger_time:
+        errors.append("Codex completion comment must match the latest required @codex review trigger")
     if not has_codex_completion_reaction(comment):
         errors.append("Codex completion comment must include a Codex thumbs-up reaction")
     if _current_head_has_blocking_codex_review(

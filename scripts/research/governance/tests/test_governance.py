@@ -995,6 +995,31 @@ def test_pr_review_evidence_accepts_codex_completion_reaction_without_review() -
     assert report.ok
 
 
+def test_pr_review_evidence_rejects_completion_before_latest_required_trigger() -> None:
+    head_sha = "0" * 40
+    body = _valid_codex_review_body().replace(
+        "#pullrequestreview-4314779358",
+        "#issuecomment-4484023766",
+    )
+    report = validate_pr_body(
+        body,
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        expected_head_created_at="2026-05-19T00:59:00Z",
+        comments=[
+            _codex_completion_comment(created_at="2026-05-19T01:00:00Z"),
+            {
+                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "created_at": "2026-05-19T01:05:00Z",
+            },
+        ],
+        reviews=[],
+        review_comments=[],
+    )
+    assert not report.ok
+    assert "Codex completion comment must match the latest required @codex review trigger" in report.errors
+
+
 def test_pr_review_evidence_reads_monitor_head_state_for_head_cutoff() -> None:
     head_sha = "0" * 40
     comment = {
@@ -1317,6 +1342,28 @@ def test_codex_review_monitor_passes_on_codex_completion_reaction() -> None:
     )
     assert report.status == "passed"
     assert report.latest_review_url == "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484023766"
+
+
+def test_codex_review_monitor_waits_for_completion_after_latest_required_trigger() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        head_created_at="2026-05-19T00:59:00Z",
+        issue_comments=[
+            _codex_completion_comment(created_at="2026-05-19T01:00:00Z"),
+            {
+                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "created_at": "2026-05-19T01:05:00Z",
+            },
+        ],
+        reviews=[],
+        review_comments=[],
+    )
+    assert report.status == "waiting_for_codex"
+    assert report.trigger_found
+    assert report.latest_review_url is None
 
 
 def test_codex_review_monitor_rejects_trigger_before_current_head() -> None:

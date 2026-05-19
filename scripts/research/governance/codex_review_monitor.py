@@ -62,7 +62,11 @@ def build_monitor_report(
     current_head_reviews = _current_head_codex_reviews(reviews, head_sha=head_sha)
     post_trigger_reviews = _reviews_after_trigger(current_head_reviews, trigger_time=trigger_time)
     latest_review = _latest_codex_review(post_trigger_reviews) or _latest_codex_review(current_head_reviews)
-    completion_comment = _latest_codex_completion_comment(issue_comments, head_created_at=head_created_at)
+    completion_comment = _latest_codex_completion_comment(
+        issue_comments,
+        head_created_at=head_created_at,
+        trigger_time=trigger_time,
+    )
     latest_review_url = _review_url(repo=repo, pr_number=pr_number, review=latest_review) if latest_review else None
     latest_review_sha = str(latest_review.get("commit_id", "")) if latest_review else None
     if latest_review_url is None and completion_comment is not None:
@@ -227,11 +231,13 @@ def _latest_codex_completion_comment(
     issue_comments: Sequence[Mapping[str, object]],
     *,
     head_created_at: str | None = None,
+    trigger_time: str | None = None,
 ) -> Mapping[str, object] | None:
     matched = [
         comment
         for comment in _required_trigger_comments(issue_comments, head_created_at=head_created_at)
         if has_codex_completion_reaction(comment)
+        and (trigger_time is None or _comment_effective_time(comment) >= trigger_time)
     ]
     if not matched:
         return None
