@@ -64,7 +64,9 @@ git config core.hooksPath .githooks
 
 PR 必须用评论 `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md` 触发 review。PR 必须填入 `Codex Code Review 结论`，并通过 CI 的 `pr-review-evidence` 检查。
 
-本地 `main` 只用于同步 `origin/main`。如需在 PR 合并后同步本地主干，必须使用带审计说明的显式绕过：`ALLOW_MAIN_REF_UPDATE=1` 与 `MAIN_REF_UPDATE_REASON=<reason>`。
+本地 `main` 只用于同步 `origin/main`。PR 在 GitHub 云端合并后，必须先 `git fetch origin main`，再使用带审计说明的显式绕过：`ALLOW_MAIN_REF_UPDATE=1` 与 `MAIN_REF_UPDATE_REASON=<reason>`，并且只允许用 `git merge --ff-only origin/main` 或等价的 fast-forward 命令同步本地主干。
+
+PR 合并后还必须清理提交分支：确认已不在该分支后，用 `git branch -d <branch>` 删除本地分支，并用 `git push origin --delete <branch>` 删除远端分支；如果 GitHub 已自动删除远端分支，只需确认远端分支不存在。
 
 ## 目录速查
 

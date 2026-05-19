@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 import sys
+from collections.abc import Callable, Mapping
 
 
 PROTECTED_BRANCHES = {"main", "master"}
 BYPASS_ENV = "ALLOW_PROTECTED_BRANCH_PUSH"
 REF_UPDATE_BYPASS_ENV = "ALLOW_MAIN_REF_UPDATE"
 REF_UPDATE_REASON_ENV = "MAIN_REF_UPDATE_REASON"
+ZERO_SHA = "0" * 40
 
 
 def check_pre_push_input(input_text: str, *, environ: dict[str, str] | None = None) -> list[str]:
@@ -32,30 +35,81 @@ def check_pre_push_input(input_text: str, *, environ: dict[str, str] | None = No
     return sorted(set(violations))
 
 
-def check_reference_transaction_input(input_text: str, *, environ: dict[str, str] | None = None) -> list[str]:
+def check_reference_transaction_input(
+    input_text: str,
+    *,
+    environ: dict[str, str] | None = None,
+    remote_heads: Mapping[str, str | None] | None = None,
+    is_ancestor: Callable[[str, str], bool] | None = None,
+) -> list[str]:
     """Return protected local branch ref updates from Git reference-transaction stdin."""
 
-    violations = _protected_branches_from_reference_transaction(input_text)
-    if not violations:
+    updates = _protected_branch_updates_from_reference_transaction(input_text)
+    if not updates:
         return []
 
     env = environ if environ is not None else os.environ
-    if env.get(REF_UPDATE_BYPASS_ENV) == "1" and env.get(REF_UPDATE_REASON_ENV, "").strip():
-        return []
-    return violations
+    branches = sorted({branch for _old_sha, _new_sha, branch in updates})
+    if env.get(REF_UPDATE_BYPASS_ENV) != "1" or not env.get(REF_UPDATE_REASON_ENV, "").strip():
+        return branches
 
-
-def _protected_branches_from_reference_transaction(input_text: str) -> list[str]:
     violations: list[str] = []
+    for old_sha, new_sha, branch in updates:
+        remote_sha = _remote_head_for_branch(branch, remote_heads=remote_heads)
+        if remote_sha != new_sha or not _is_fast_forward_update(old_sha, new_sha, is_ancestor=is_ancestor):
+            violations.append(branch)
+    return sorted(set(violations))
+
+
+def _protected_branch_updates_from_reference_transaction(input_text: str) -> list[tuple[str, str, str]]:
+    updates: list[tuple[str, str, str]] = []
     for line in input_text.splitlines():
         parts = line.split()
         if len(parts) < 3:
             continue
-        _old_sha, _new_sha, ref = parts[:3]
+        old_sha, new_sha, ref = parts[:3]
         branch = _branch_from_ref(ref)
         if branch in PROTECTED_BRANCHES:
-            violations.append(branch)
-    return sorted(set(violations))
+            updates.append((old_sha, new_sha, branch))
+    return updates
+
+
+def _remote_head_for_branch(branch: str, *, remote_heads: Mapping[str, str | None] | None = None) -> str | None:
+    if remote_heads is not None:
+        return remote_heads.get(branch)
+
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", f"refs/remotes/origin/{branch}^{{commit}}"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip()
+
+
+def _is_fast_forward_update(
+    old_sha: str,
+    new_sha: str,
+    *,
+    is_ancestor: Callable[[str, str], bool] | None = None,
+) -> bool:
+    if old_sha == ZERO_SHA:
+        return True
+    if new_sha == ZERO_SHA:
+        return False
+    if is_ancestor is not None:
+        return is_ancestor(old_sha, new_sha)
+
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", old_sha, new_sha],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    return result.returncode == 0
 
 
 def _branch_from_ref(ref: str) -> str | None:
@@ -106,8 +160,9 @@ def _cmd_reference_transaction(_args: argparse.Namespace) -> int:
     message = [
         f"error: local update to protected branch blocked: {branches}",
         "Do not merge feature branches into main/master locally; open a PR instead.",
+        "After a remote PR merge, local main/master may only fast-forward to refs/remotes/origin/<branch>.",
         (
-            f"Audited sync/break-glass bypass: set {REF_UPDATE_BYPASS_ENV}=1 and "
+            f"Audited sync bypass: set {REF_UPDATE_BYPASS_ENV}=1 and "
             f"{REF_UPDATE_REASON_ENV}=<reason> for this command."
         ),
     ]

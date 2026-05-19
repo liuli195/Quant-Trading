@@ -96,7 +96,9 @@ def _write_minimal_repo(root: Path) -> None:
         "scripts.research.cli scripts.research.datasets scripts.research.variants "
         "scripts.research.governance scripts.research.governance gate scripts.research.registry "
         "docs/rules/index.md docs/rules/review-guidelines.md docs/adr/ Codex Code Review "
-        "所有进入主干的改动必须通过 PR 禁止本地合并主干",
+        "所有进入主干的改动必须通过 PR 禁止本地合并主干 "
+        "git fetch origin main git merge --ff-only origin/main "
+        "git branch -d <branch> git push origin --delete <branch>",
         encoding="utf-8",
     )
     (root / "AGENTS.md").write_text(
@@ -154,15 +156,21 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     (root / "scripts/research/governance/README.md").write_text(
-        "docs/rules/index.md docs/adr scripts.research.governance gate Codex Review Monitor\n",
+        "docs/rules/index.md docs/adr scripts.research.governance gate Codex Review Monitor "
+        "git fetch origin main git merge --ff-only origin/main "
+        "git branch -d <branch> git push origin --delete <branch>\n",
         encoding="utf-8",
     )
     (root / "docs/rules/ai-agents.md").write_text(
-        "所有进入主干的改动必须通过 PR\n禁止本地合并主干\nCodex Review Monitor\n",
+        "所有进入主干的改动必须通过 PR\n禁止本地合并主干\nCodex Review Monitor\n"
+        "git fetch origin main\ngit merge --ff-only origin/main\n"
+        "git branch -d <branch>\ngit push origin --delete <branch>\n",
         encoding="utf-8",
     )
     (root / "docs/rules/governance.md").write_text(
-        ".githooks/reference-transaction ALLOW_MAIN_REF_UPDATE MAIN_REF_UPDATE_REASON Codex Review Monitor\n",
+        ".githooks/reference-transaction ALLOW_MAIN_REF_UPDATE MAIN_REF_UPDATE_REASON Codex Review Monitor "
+        "git fetch origin main git merge --ff-only origin/main "
+        "git branch -d <branch> git push origin --delete <branch> force delete\n",
         encoding="utf-8",
     )
     (root / "CODEOWNERS").write_text(
@@ -646,6 +654,21 @@ def test_governance_audit_flags_claude_without_pr_main_merge_rule(tmp_path) -> N
     )
 
 
+def test_governance_audit_flags_missing_pr_cleanup_workflow_tokens(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / "docs/rules/ai-agents.md").write_text(
+        "所有进入主干的改动必须通过 PR\n禁止本地合并主干\nCodex Review Monitor\n"
+        "git fetch origin main\ngit merge --ff-only origin/main\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate" and "git push origin --delete <branch>" in finding.message
+        for finding in report.findings
+    )
+
+
 def test_pre_push_branch_protection_blocks_main() -> None:
     violations = check_pre_push_input(
         "refs/heads/topic abc123 refs/heads/main def456\n",
@@ -701,8 +724,35 @@ def test_reference_transaction_branch_protection_allows_audited_bypass() -> None
             "ALLOW_MAIN_REF_UPDATE": "1",
             "MAIN_REF_UPDATE_REASON": "sync origin/main after PR merge",
         },
+        remote_heads={"main": "1" * 40},
     )
     assert violations == []
+
+
+def test_reference_transaction_branch_protection_blocks_audited_non_origin_update() -> None:
+    violations = check_reference_transaction_input(
+        "1" * 40 + " " + "3" * 40 + " refs/heads/main\n",
+        environ={
+            "ALLOW_MAIN_REF_UPDATE": "1",
+            "MAIN_REF_UPDATE_REASON": "sync origin/main after PR merge",
+        },
+        remote_heads={"main": "2" * 40},
+        is_ancestor=lambda _old_sha, _new_sha: True,
+    )
+    assert violations == ["main"]
+
+
+def test_reference_transaction_branch_protection_blocks_audited_non_fast_forward_update() -> None:
+    violations = check_reference_transaction_input(
+        "2" * 40 + " " + "1" * 40 + " refs/heads/main\n",
+        environ={
+            "ALLOW_MAIN_REF_UPDATE": "1",
+            "MAIN_REF_UPDATE_REASON": "sync origin/main after PR merge",
+        },
+        remote_heads={"main": "1" * 40},
+        is_ancestor=lambda _old_sha, _new_sha: False,
+    )
+    assert violations == ["main"]
 
 
 def _valid_codex_review_body(review_id: int = 4314779358) -> str:
