@@ -409,6 +409,34 @@ def test_sender_masks_webhook_url_in_request_exception_log(monkeypatch):
     assert "<webhook>" in joined_logs
 
 
+def test_sender_masks_webhook_and_secret_in_response_failure_log(monkeypatch):
+    webhook_url = "https://open.feishu.cn/open-apis/bot/v2/hook/sensitive-token"
+    secret = "unit-test-secret"
+    payload = {
+        "code": 1,
+        "msg": "bad https://open.feishu.cn/open-apis/bot/v2/hook/sensitive-token unit-test-secret",
+    }
+    post = Mock(return_value=FakeResponse(status_code=400, payload=payload))
+    module = load_module(monkeypatch, request=post)
+    module.feishu_enabled = True
+    module.WEBHOOK_URL = webhook_url
+    module.WEBHOOK_SECRET = secret
+    module.RETRY_DELAYS_SECONDS = []
+    logs = []
+    monkeypatch.setattr(module, "_print", lambda message: logs.append(message))
+    outbox = module._Outbox("path.jsonl", read_file_func=module.read_file, write_file_func=module.write_file)
+    sender = module._FeishuSender(outbox=outbox)
+
+    sender.send("message", orders=[{"security": "A"}])
+
+    joined_logs = "\n".join(logs)
+    assert webhook_url not in joined_logs
+    assert "sensitive-token" not in joined_logs
+    assert secret not in joined_logs
+    assert "<webhook>" in joined_logs
+    assert "<secret>" in joined_logs
+
+
 def test_sender_uses_rate_limit_reset_for_retry(monkeypatch):
     post = Mock(return_value=FakeResponse(status_code=429, payload={"code": 999, "msg": "rate"}, headers={"x-ogw-ratelimit-reset": "9"}))
     module = load_module(monkeypatch, request=post)

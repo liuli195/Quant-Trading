@@ -372,7 +372,11 @@ class _FeishuSender:
                 return False, int(reset)
             except Exception:
                 return False, None
-        _log("飞书发送失败: http=%s code=%s msg=%s" % (response.status_code, body.get("code"), body.get("msg")))
+        _log("飞书发送失败: http=%s code=%s msg=%s" % (
+            response.status_code,
+            body.get("code"),
+            _safe_error_text(body.get("msg")),
+        ))
         return False, None
 
     def _schedule_retry(self, message, replay, retry_index, batch_id, orders, retry_delay=None):
