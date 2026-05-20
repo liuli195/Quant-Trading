@@ -61,6 +61,22 @@ def _build_feishu_payload(text, secret=None, timestamp=None):
     return payload
 
 
+def _json_dumps(row):
+    return json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n"
+
+
+def _make_batch_id(strategy_name, trade_date, lines):
+    raw = "%s|%s|%s|%s" % (strategy_name, trade_date, len(lines), "\n".join(lines))
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
+    safe_strategy = str(strategy_name).replace("/", "_").replace("\\", "_")
+    return "%s-%s-%s-%s" % (safe_strategy, trade_date, len(lines), digest)
+
+
+def _resolve_outbox_path(strategy_name):
+    safe_strategy = str(strategy_name).replace("/", "_").replace("\\", "_")
+    return OUTBOX_PATH.format(strategy=safe_strategy)
+
+
 def _get_strategy_name(strategy_file="/tmp/strategy/user_code.py"):
     if STRATEGY_NAME:
         return STRATEGY_NAME
@@ -146,6 +162,58 @@ def _build_message(strategy_name, lines, security_keyword=""):
     if security_keyword and security_keyword not in title:
         title = "%s %s" % (security_keyword, title)
     return title + "\n" + ("\n" + "-" * 28 + "\n").join(lines)
+
+
+class _Outbox:
+    def __init__(self, path, read_file_func=None, write_file_func=None):
+        self.path = path
+        self.read_file = read_file_func or globals().get("read_file")
+        self.write_file = write_file_func or globals().get("write_file")
+
+    def write_pending(self, batch_id, message, orders):
+        row = {
+            "status": "pending",
+            "batch_id": batch_id,
+            "message": message,
+            "orders": orders,
+            "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        self._append(row)
+
+    def write_acked(self, batch_id):
+        self._append({"status": "acked", "batch_id": batch_id, "created_at": time.strftime("%Y-%m-%d %H:%M:%S")})
+
+    def _append(self, row):
+        if self.write_file is None:
+            raise RuntimeError("write_file unavailable")
+        self.write_file(self.path, _json_dumps(row), append=True)
+
+    def load_unacked(self, limit):
+        if self.read_file is None:
+            return []
+        try:
+            text = self.read_file(self.path) or ""
+        except Exception as exc:
+            _log("outbox 读取失败: %s" % exc)
+            return []
+        pending = {}
+        acked = set()
+        for line in text.splitlines():
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except Exception:
+                continue
+            batch_id = row.get("batch_id")
+            if not batch_id:
+                continue
+            if row.get("status") == "pending":
+                pending[batch_id] = row
+            elif row.get("status") == "acked":
+                acked.add(batch_id)
+        batches = [row for batch_id, row in pending.items() if batch_id not in acked]
+        return batches[-int(limit):]
 
 
 class _OrderBuffer:

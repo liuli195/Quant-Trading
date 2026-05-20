@@ -229,6 +229,48 @@ def test_send_exception_is_logged(monkeypatch):
     assert any("发送通知异常" in item and "boom" in item for item in logs)
 
 
+def test_outbox_writes_pending_then_acked(monkeypatch):
+    module = load_module(monkeypatch)
+    outbox = module._Outbox("feishu_relay_outbox/S.jsonl", read_file_func=lambda path: "", write_file_func=module.write_file)
+
+    outbox.write_pending("batch-1", "message", [{"security": "A"}])
+    outbox.write_acked("batch-1")
+
+    rows = [json.loads(content) for _, content, append in module._test_writes]
+    assert rows[0]["status"] == "pending"
+    assert rows[0]["batch_id"] == "batch-1"
+    assert rows[1]["status"] == "acked"
+    assert rows[1]["batch_id"] == "batch-1"
+    assert all(call[2] is True for call in module._test_writes)
+
+
+def test_outbox_loads_unacked_batches(monkeypatch):
+    pending = json.dumps({"status": "pending", "batch_id": "batch-1", "message": "m1"}, ensure_ascii=False)
+    acked = json.dumps({"status": "acked", "batch_id": "batch-2"}, ensure_ascii=False)
+    read_text = "\n".join([
+        pending,
+        json.dumps({"status": "pending", "batch_id": "batch-2", "message": "m2"}, ensure_ascii=False),
+        acked,
+    ])
+    module = load_module(monkeypatch, read_text=read_text)
+    outbox = module._Outbox("path.jsonl", read_file_func=module.read_file, write_file_func=module.write_file)
+
+    batches = outbox.load_unacked(limit=20)
+
+    assert [item["batch_id"] for item in batches] == ["batch-1"]
+    assert batches[0]["message"] == "m1"
+
+
+def test_batch_id_is_stable_for_same_message(monkeypatch):
+    module = load_module(monkeypatch)
+
+    first = module._make_batch_id("S", "2026-05-20", ["a", "b"])
+    second = module._make_batch_id("S", "2026-05-20", ["a", "b"])
+
+    assert first == second
+    assert first.startswith("S-2026-05-20-2-")
+
+
 def test_jitter_send_exception_is_logged(monkeypatch):
     module = load_module(monkeypatch)
     logs = []
