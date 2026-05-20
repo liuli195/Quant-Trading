@@ -4,10 +4,10 @@ r"""稳健性验证：黄金 CrowdStart 0.60→0.80 的配对 bootstrap + 滚动
   .\.venv\Scripts\python.exe strategies/etf_factor_rotation/scripts/robustness_verify.py
 """
 
-import json
-import re
 from pathlib import Path
 import numpy as np
+
+from scripts.research.research_core.pointers import read_text_file
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKTEST_DIR = ROOT / "backtest_runs"
@@ -27,7 +27,7 @@ def parse_cumulative_returns(path: Path):
     daily_returns.md 中的策略收益是累计收益（从起始日至今），
     需要转换为逐日收益：daily[i] = (1 + cum[i]) / (1 + cum[i-1]) - 1
     """
-    text = path.read_text(encoding="utf-8")
+    text = read_text_file(path)
     dates, cum_vals = [], []
     for line in text.split("\n"):
         parts = line.strip("| \n").split("|")
@@ -215,9 +215,9 @@ def main():
     lines = [
         "# 稳健性验证：黄金 CrowdStart 0.60 → 0.80",
         "",
-        f"- **对比**: gold-baseline → gold-start-080",
+        "- **对比**: gold-baseline → gold-start-080",
         f"- **交易日数**: {n}",
-        f"- **回测窗口**: 2021-01-01 → 2026-04-30",
+        "- **回测窗口**: 2021-01-01 → 2026-04-30",
         f"- **方法**: 配对 Block Bootstrap ({N_BOOTSTRAP} reps, block={BLOCK_SIZE}) + 滚动 {ROLLING_WINDOW}日子样本 + 年度分解",
         f"- **Seed**: {SEED}",
         "",
@@ -305,7 +305,7 @@ def main():
         f"| 配对 Bootstrap | p={p_val:.3f}, 0∈CI95 | → | 日频差异不显著，但点估计方向为正向（Variant 更优） |",
         f"| 滚动子样本 | {pct_v_better_sharpe:.0f}% Sharpe胜率 | ↑ | 改善方向贯穿全周期，不依赖特定时段 |",
         f"| 年度分解 | {sum(1 for _,_,sb,sv,_,_,_,_ in year_stats if sv>sb)}/{len(year_stats)} 年 Sharpe改善 | ↑ | 多数年度 Variant 更优 |",
-        f"| AB 标准指标 | Sharpe +0.7%, 年化 +0.32pp | ↑ | 点估计优势（原报告） |",
+        "| AB 标准指标 | Sharpe +0.7%, 年化 +0.32pp | ↑ | 点估计优势（原报告） |",
         "",
         "**最终评估**：gold-start-080 在所有 4 个验证层级上方向一致（正向），"
         "但均未达到传统统计显著水平（p > 0.05）。结论应表述为 "

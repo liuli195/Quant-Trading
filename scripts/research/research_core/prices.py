@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import gzip
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
 import pandas as pd
+
+from .pointers import read_json_object
 
 
 @dataclass(frozen=True)
@@ -42,11 +42,7 @@ def _field_frame(payload: dict, codes: tuple[str, ...], field: str, calendar: pd
 def load_price_bundle(path: str | Path, codes: Iterable[str] | None = None) -> PriceFrames:
     """Load the repository's canonical JoinQuant price export JSON."""
 
-    bundle_path = Path(path)
-    if bundle_path.suffix == ".gz":
-        payload = json.loads(gzip.decompress(bundle_path.read_bytes()).decode("utf-8"))
-    else:
-        payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+    payload = read_json_object(path)
     inferred_codes = tuple(payload.get("prices", {}).keys())
     selected_codes = tuple(codes) if codes is not None else inferred_codes
     calendar = pd.DatetimeIndex(pd.to_datetime(payload["calendar"]).normalize())

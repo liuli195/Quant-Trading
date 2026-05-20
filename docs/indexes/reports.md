@@ -10,7 +10,7 @@
 | docs |  | ADR 0005: AI 入口采用渐进式披露 | `docs/adr/0005-ai-entry-progressive-disclosure.md` | 9 |
 | docs |  | 本地研究平台架构 | `docs/architecture/research-platform-architecture.md` | 19 |
 | docs |  | CC-Switch CLI | `docs/cc-switch-cli.md` | 0 |
-| docs |  | 跨 AI 工具 Skill 管理实施计划 | `docs/design/cross-ai-skill-management.md` | 6 |
+| docs |  | 跨 AI 工具 Skill 管理实施计划 | `docs/design/cross-ai-skill-management.md` | 20 |
 | docs |  | 本地研究平台重构 | `docs/design/本地研究平台重构.md` | 0 |
 | docs |  | 本地研究平台重构技术实施方案 | `docs/design/本地研究平台重构技术实施方案.md` | 6 |
 | docs |  | 长期项目防止开发规则漂移方案 | `docs/design/长期项目防止开发规则漂移方案.md` | 8 |
@@ -42,6 +42,7 @@
 | docs |  | PR 工作流规则 | `docs/rules/pr-workflow.md` | 2 |
 | docs |  | 研究流程规则 | `docs/rules/research-workflow.md` | 0 |
 | docs |  | Codex Code Review 指南 | `docs/rules/review-guidelines.md` | 11 |
+| docs |  | 回测数据冗余压缩实施计划 | `docs/superpowers/plans/2026-05-20-backtest-data-redundancy-compaction.md` | 7 |
 | backtest_run | etf_dynamic_rebalance | 回测归因分析 — ETF 动态调仓策略 | `strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/attribution-analysis.md` | 0 |
 | backtest_run | etf_dynamic_rebalance | 回测报告 — ETF 动态调仓策略 | `strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/backtest_report.md` | 3 |
 | backtest_run | etf_dynamic_rebalance | 性能分析报告 — ETF 动态调仓策略 | `strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/performance-analysis.md` | 0 |

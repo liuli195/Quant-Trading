@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "dataset_id": "etf_dynamic_rebalance_backtest_runs",
+  "snapshot_id": "etf_threshold_005_20260503_214900_8c080de9",
+  "fingerprint": "sha256:ddf6c0aa8d7be5c3522bff06802a6ddbee31ae370cb1dc00342bab7c0da0e05b",
+  "created_at": "2026-05-19T19:51:21+00:00",
+  "owner": "research-platform",
+  "created_by": "research-platform",
+  "lifecycle": "active",
+  "source": {
+    "kind": "joinquant_backtest_run",
+    "path": "strategies/etf_dynamic_rebalance/backtest_runs/etf_threshold_005_20260503_214900_8c080de9"
+  },
+  "storage": {
+    "canonical": "parquet",
+    "compression": "zstd",
+    "raw": "json.gz/jsonl.gz/md.gz"
+  },
+  "row_count": 0,
+  "date_range": [
+    "",
+    ""
+  ],
+  "run_id": "etf_threshold_005_20260503_214900_8c080de9",
+  "partial": true,
+  "missing_required_files": [
+    "tabs_raw/daily_returns.md",
+    "tabs_raw/audit_log.jsonl",
+    "detail_api_export.json or api_export.json"
+  ],
+  "summary_metrics": {
+    "策略波动率": "0.148",
+    "胜率": "0.866",
+    "最大回撤": "16.01%",
+    "超额收益": "142.40%",
+    "超额收益最大回撤": "17.80%",
+    "基准收益": "24.17%",
+    "超额收益夏普比率": "1.781",
+    "盈利次数": "381",
+    "索提诺比率": "3.193",
+    "策略收益": "200.98%",
+    "策略年化收益": "40.86%",
+    "信息比率": "2.178",
+    "基准波动率": "0.169",
+    "亏损次数": "59",
+    "日胜率": "0.581",
+    "日均超额收益": "0.12%",
+    "盈亏比": "31.397",
+    "最大回撤区间": "2026/01/29,2026/03/23",
+    "阿尔法": "0.355",
+    "贝塔": "0.458",
+    "夏普比率": "2.496"
+  },
+  "source_metadata": {
+    "backtestId": "8c080de9278b81da01bf7ab3d5281680",
+    "strategy_name": "ETF动态调仓_阈值005",
+    "jq_strategy_name": "ETF动态调仓_阈值005",
+    "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=8c080de9278b81da01bf7ab3d5281680",
+    "capital": "500000",
+    "status": "completed",
+    "threshold": 0.05,
+    "strategy_file": "strategies/etf_dynamic_rebalance/etf_dynamic_rebalance_threshold_005__upload.py",
+    "start_date": "2023-01-01",
+    "end_date": "2026-04-30",
+    "need_performance": false,
+    "timestamp": "2026-05-03T21:49:00"
+  },
+  "audit_line_count": 0,
+  "audit_date_range": [
+    "",
+    ""
+  ],
+  "audit_event_counts": {},
+  "etf_pool": [],
+  "report_files": [
+    "backtest_report.md",
+    "performance-analysis.md",
+    "strategy-analysis.md"
+  ],
+  "files": {
+    "raw": "raw/source.json.gz",
+    "profile_json": "views/profile.json",
+    "audit_events": "data/audit_events.parquet",
+    "daily_returns": "data/data.parquet",
+    "canonical": "data/data.parquet",
+    "sample": "views/sample.csv",
+    "summary_metrics": "raw/summary_metrics.json.gz",
+    "positioninfo_source": "raw/positioninfo.md.gz",
+    "transactioninfo_source": "raw/transactioninfo.md.gz",
+    "logs_source": "raw/logs.md.gz"
+  },
+  "raw_file_integrity": {
+    "summary_metrics.json": {
+      "dataset_file": "raw/summary_metrics.json.gz",
+      "original_sha256": "299fec33bd57270b7e147109a657023d52a3013b3aaa3d61f4d33fda6745bbaf",
+      "compressed_sha256": "d44bba2c9bcc2d4efa1cf02418f22559be816764016961746591b009fcd0e1ef",
+      "original_bytes": 709
+    },
+    "tabs_raw/positioninfo.md": {
+      "dataset_file": "raw/positioninfo.md.gz",
+      "original_sha256": "ce32ba7bb55c5a1fcf7609356d99ccf143090b95759a3c25dc7b1ae9912bcbb2",
+      "compressed_sha256": "8f402509d42679f72ea1b22d6e8202b26345f5843e923d898252ea058452e062",
+      "original_bytes": 16139
+    },
+    "tabs_raw/transactioninfo.md": {
+      "dataset_file": "raw/transactioninfo.md.gz",
+      "original_sha256": "5afc6a0ddf206bece44474cf24cb5a78dad4b7b9f6f1269b5ae935df36639405",
+      "compressed_sha256": "37a8b8a39aee15e9d7ae9f49a5ad9b74b6b9f8bdcce402f9b1552b028a61b223",
+      "original_bytes": 11135
+    },
+    "tabs_raw/logs.md": {
+      "dataset_file": "raw/logs.md.gz",
+      "original_sha256": "73cd12324fc34efab87ed3a558b309dfc37973e82d3ac537d87d96c2d05d659b",
+      "compressed_sha256": "e994b82e75700d005de83f9507335bdf0c0a97be5edf40fe7d7f854c92580323",
+      "original_bytes": 3651
+    }
+  }
+}

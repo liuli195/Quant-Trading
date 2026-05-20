@@ -48,13 +48,13 @@ candidate -> in_research -> cloud_confirmed -> merge_ready -> merged_pending_val
 新增能力：
 
 - `DatasetRegistry` 读取和校验 `catalog.json`。
-- `BacktestRunImporter` 对应 `import-backtest-run`，把完整 `backtest_runs/<run_id>` 登记为不可变快照。
+- `BacktestRunImporter` 对应 `import-backtest-run`，把 `backtest_runs/<run_id>` 登记为不可变快照，并把大文件压缩保存到数据中心。
 - `DataViewLoader` 统一读取 `summary_metrics`、`daily_returns`、`audit_log` 等常用视图。
 
-完整回测 run 快照会生成 `raw/source.json.gz`、`raw/audit_log.jsonl.gz`、`raw/daily_returns.md`、`data/data.parquet`、`data/daily_returns.parquet`、`data/audit_events.parquet` 和 `views/` 摘要。
+回测 run 快照会生成 `raw/source.json.gz`、`raw/*.gz`、`data/data.parquet`、`data/audit_events.parquet` 和 `views/` 轻量摘要。原始回测文件压缩保存在本地数据中心，不进入 Git；`data/daily_returns.parquet` 和 `views/daily_returns.csv` 不再生成。
 
-历史 `backtest_runs/` 不强搬迁；需要复用时导入数据中心。
-新增云端回测抓取完成后，`scripts.tools.jq_automation run/fetch/batch/ab run` 默认会把完整 run 登记到 `research_datasets/<strategy>_backtest_runs/<run_id>`；只有显式传入 `--no-dataset-register` 才跳过。
+历史 `backtest_runs/` 使用 `scripts.research.datasets migrate-backtest-runs --compact-source` 迁移到数据中心；迁移后 run 目录只保留轻量索引、报告和 pointer。
+新增云端回测抓取完成后，`scripts.tools.jq_automation run/fetch/batch/ab run` 默认会把 run 登记到 `research_datasets/<strategy>_backtest_runs/<run_id>`，并把 `api_export.json`、`detail_api_export.json`、`summary_metrics.json`、`tabs_raw/audit_log.jsonl`、`tabs_raw/daily_returns.md` 和明细 Markdown 替换为数据中心 pointer；只有显式传入 `--no-dataset-register` 才跳过登记。
 
 ## 流程编排层
 

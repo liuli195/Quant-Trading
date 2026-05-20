@@ -1,5 +1,7 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
+import gzip
+import json
 from datetime import date
 
 import numpy as np
@@ -13,6 +15,7 @@ from scripts.research.momentum_tilt_research.analysis import (
     default_raw_price_path,
     evaluate_phase1_gate,
     evaluate_phase2_gate,
+    _parse_cloud_summary,
 )
 from scripts.research.momentum_tilt_research.cli import _cmd_ab_plan
 from scripts.research.momentum_tilt_research.replay import (
@@ -149,3 +152,39 @@ def test_default_raw_price_path_points_to_research_tree() -> None:
         "raw",
         "etf_window_research_prices.json",
     )
+
+
+def test_parse_cloud_summary_reads_data_center_pointer(tmp_path, monkeypatch) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    snapshot = tmp_path / "research_datasets" / "demo" / "run"
+    (snapshot / "raw").mkdir(parents=True)
+    summary = {
+        "策略年化收益": "12.50%",
+        "夏普比率": "1.350",
+        "最大回撤": "-8.20%",
+    }
+    (snapshot / "raw" / "summary_metrics.json.gz").write_bytes(
+        gzip.compress(json.dumps(summary, ensure_ascii=False).encode("utf-8"))
+    )
+    (run_dir / "summary_metrics.json").write_text(
+        json.dumps(
+            {
+                "kind": "data_center_pointer",
+                "dataset_snapshot": snapshot.as_posix(),
+                "dataset_file": "raw/summary_metrics.json.gz",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "scripts.research.momentum_tilt_research.analysis.backtest_run_dir",
+        lambda run_id: run_dir,
+    )
+
+    result = _parse_cloud_summary("run")
+
+    assert result["annual_return"] == 0.125
+    assert result["sharpe"] == 1.35
+    assert abs(result["max_drawdown"] - 0.082) < 1e-12

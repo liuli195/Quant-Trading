@@ -1,55 +1,11 @@
-# 策略日志
-
-- INFO: 122  |  WARNING: 3  |  ERROR: 0
-- 触发调仓日: 2  |  跳过调仓日: 15
-
-```
-日志输出错误日志
-
-2023-01-03 09:30:00 - INFO  - 年化波动率: G=0.0943, A=0.2600, N=0.2642
-
-2023-01-03 09:30:00 - INFO  - 因子得分: s_G=0.784, s_A=-0.086, s_N=0.510
-
-2023-01-03 09:30:00 - INFO  - 纯风险平价: G=0.581, A=0.211, N=0.208
-
-2023-01-03 09:30:00 - INFO  - 因子调整后: G=0.617, A=0.177, N=0.206
-
-2023-01-03 09:30:00 - WARNING - Security(code=518880.XSHG) 在 positions 中不存在, 为了保持兼容, 我们返回空的 Position 对象, amount/price/avg_cost/acc_avg_cost 都是 0
-
-2023-01-03 09:30:00 - WARNING - Security(code=159819.XSHE) 在 positions 中不存在, 为了保持兼容, 我们返回空的 Position 对象, amount/price/avg_cost/acc_avg_cost 都是 0
-
-2023-01-03 09:30:00 - WARNING - Security(code=513100.XSHG) 在 positions 中不存在, 为了保持兼容, 我们返回空的 Position 对象, amount/price/avg_cost/acc_avg_cost 都是 0
-
-2023-01-03 09:30:00 - INFO  - 当前权重: G=0.000, A=0.000, N=0.000
-
-2023-01-03 09:30:00 - INFO  - 初始建仓：偏离度 1.0000，执行调仓
-
-2023-01-03 09:30:00 - INFO  - 最终权重: G=0.600, A=0.185, N=0.215
-
-2023-01-03 09:30:00 - INFO  - 开仓数量必须是100的整数倍，调整为 75300: Order(security=518880.XSHG mode=OrderTargetValue: _value=300000.0 style=MarketOrderStyle: _limit_price=0.0 side=long margin=False entrust_time=None finish_time=None)
-
-2023-01-03 09:30:00 - INFO  - 下单检查标的数量：StockOrder(entrust_id=1777816587 security=518880.XSHG mode=OrderTargetValue: _value=300000.0 style=MarketOrderStyle: _limit_price=0.0 side=long action=open margin=False entrust_time=2023-01-03 09:30:00 cancel_time=None finish_time=None comment= error=开仓数量必须是 100 的整数倍，调整为 75300)
-
-2023-01-03 09:30:00 - INFO  - order StockOrder(entrust_id=1777816587 security=518880.XSHG mode=OrderTargetValue: _value=300000.0 style=MarketOrderStyle: _limit_price=0.0 side=long action=open margin=False entrust_time=2023-01-03 09:30:00 cancel_time=None finish_time=None comment= error=开仓数量必须是 100 的整数倍，调整为 75300) trade price: 3.983, amount:75300, commission: 29.991990000000005
-
-2023-01-03 09:30:00 - INFO  - 订单已委托：StockOrder(entrust_id=1777816587 security=518880.XSHG mode=OrderTargetValue: _value=300000.0 style=MarketOrderStyle: _limit_price=0.0 side=long action=open margin=False entrust_time=2023-01-03 09:30:00 cancel_time=None finish_time=2023-01-03 09:30:00 comment= error=开仓数量必须是 100 的整数倍，调整为 75300)
-
-
-... (221 more lines) ...
-
-2023-02-01 09:30:00 - INFO  - 纯风险平价: G=0.539, A=0.221, N=0.240
-
-2023-02-01 09:30:00 - INFO  - 因子调整后: G=0.505, A=0.248, N=0.247
-
-2023-02-01 09:30:00 - INFO  - 当前权重: G=0.587, A=0.197, N=0.216
-
-2023-02-01 09:30:00 - INFO  - 偏离度 0.1640 > 阈值 0.15，触发调仓
-
-2023-02-01 09:30:00 - INFO  - 最终权重: G=0.505, A=0.248, N=0.247
-
-2023-02-01 09:30:00 - INFO  - 下单检查标的数量：StockOrder(entrust_id=1777816590 security=518880.XSHG mode=OrderTargetValue: _value=264633.09346734534 style=MarketOrderStyle: _limit_price=0.0 side=long action=close margin=False entrust_time=2023-02-01 09:30:00 cancel_time=None finish_time=None comment= error=平仓数量必须是 100 的整数倍，调整为 10500)
-
-2023-02-01 09:30:00 - INFO  - order StockOrder(entrust_id=1777816590 security=518880.XSHG mode=OrderTargetValue: _value=264633.09346734534 style=MarketOrderStyle: _limit_price=0.0 side=long action=close margin=False entrust_time=2023-02-01 09:30:00 cancel_time=None finish_time=None comment= error=平仓数量必须是 100 的整数倍，调整为 10500) trade price: 4.084, amount:10500, commission: 4.2882
-
-2023-02-01 09:30:00 - INFO  - 订单已委托：StockOrder(entrust_id=1777816590 securit
-```
+{
+  "kind": "data_center_pointer",
+  "dataset_id": "etf_dynamic_rebalance_backtest_runs",
+  "snapshot_id": "etf_threshold_015_20260503_215600_9b64a0ee",
+  "dataset_snapshot": "research_datasets/etf_dynamic_rebalance_backtest_runs/etf_threshold_015_20260503_215600_9b64a0ee",
+  "dataset_file": "raw/logs.md.gz",
+  "original_path": "tabs_raw/logs.md",
+  "original_sha256": "15c1c8cdeeb685d27c02d6deb05907c8e91e8b921c427e3aa2e0ce59ffd1c265",
+  "compressed_sha256": "e61b811f032919d7430730f9b39c8cffd75e5cbf2b8b5f87b4e7f5dcd74a4edc",
+  "original_bytes": 3953
+}

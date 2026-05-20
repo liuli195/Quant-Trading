@@ -15,6 +15,24 @@ from pathlib import Path
 
 REQUIRED_REVIEWER = "Codex"
 SECTION_HEADER = "Codex Code Review 结论"
+AI_REVIEW_SECTION_HEADER = "AI Review 风险分级"
+P2_SECTION_HEADER = "P2 保留项"
+REQUIRED_CROSS_REVIEW_TOKENS = (
+    "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
+    "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
+)
+HIGH_RISK_PREFIXES = (
+    "strategies/",
+    "scripts/research/platform/",
+    "scripts/research/governance/",
+    ".github/",
+    ".githooks/",
+    "docs/rules/",
+    "docs/adr/",
+)
+REVIEWER_NAMES_PATTERN = re.compile(
+    r"reviewers?\s*[:：]\s*(?P<names>[^；;\n]+)", re.IGNORECASE
+)
 CODEX_REVIEW_URL_PATTERN = re.compile(
     r"https://github\.com/(?P<repo>[^/\s]+/[^/\s]+)/pull/(?P<number>\d+)#pullrequestreview-(?P<review_id>\d+)"
 )
@@ -23,7 +41,9 @@ CODEX_COMPLETION_COMMENT_URL_PATTERN = re.compile(
 )
 CODEX_REVIEW_AUTHORS = {"chatgpt-codex-connector", "chatgpt-codex-connector[bot]"}
 DISQUALIFIED_CODEX_REVIEW_STATES = {"DISMISSED", "PENDING"}
-MONITOR_STATE_PATTERN = re.compile(r"<!--\s*codex-review-monitor-state\s+(?P<payload>\{.*?\})\s*-->", re.DOTALL)
+MONITOR_STATE_PATTERN = re.compile(
+    r"<!--\s*codex-review-monitor-state\s+(?P<payload>\{.*?\})\s*-->", re.DOTALL
+)
 BLOCKING_CODEX_FINDING_PATTERN = re.compile(
     r"(?:P[01] Badge|badge/P[01]-|(?:^|\n)\s*(?:\*\*)?\[P[01]\]\s+)",
     re.IGNORECASE,
@@ -32,7 +52,7 @@ CODEX_NO_MAJOR_ISSUES_PATTERN = re.compile(
     r"Codex Review:\s*(?:Didn['’]t|Did not) find any major issues",
     re.IGNORECASE,
 )
-REQUIRED_TRIGGER_TOKENS = ("@codex review", "AGENTS.md", "docs/rules/review-guidelines.md", "docs/rules/*.md")
+REQUIRED_TRIGGER_TOKENS = ("@codex review",)
 
 
 @dataclass(frozen=True)
@@ -50,13 +70,29 @@ def validate_pr_body(
     comments: Sequence[object] | None = None,
     reviews: Sequence[Mapping[str, object]] | None = None,
     review_comments: Sequence[Mapping[str, object]] | None = None,
+    review_threads: Sequence[Mapping[str, object]] | None = None,
+    changed_files: Sequence[str] | None = None,
+    labels: Sequence[str] | None = None,
 ) -> EvidenceReport:
     """Return whether a PR body contains merge-blocking review evidence."""
 
-    errors: list[str] = []
+    official_codex_required, errors = _official_codex_required(
+        body, changed_files=changed_files, labels=labels
+    )
+    if (
+        review_threads is not None
+        and unresolved_blocking_codex_thread_count(review_threads) > 0
+    ):
+        errors.append(
+            "Codex review must not have unresolved non-outdated P0/P1 threads"
+        )
+    if not official_codex_required:
+        return EvidenceReport(not errors, tuple(errors))
+
     section = _extract_section(body)
     if section is None:
-        return EvidenceReport(False, (f"PR body missing section: {SECTION_HEADER}",))
+        errors.append(f"PR body missing section: {SECTION_HEADER}")
+        return EvidenceReport(False, tuple(errors))
 
     reviewer = _read_field(section, "Reviewer")
     trigger = _read_field(section, "触发方式")
@@ -71,12 +107,6 @@ def validate_pr_body(
     else:
         if "@codex review" not in normalized_trigger:
             errors.append("触发方式 must include @codex review")
-        if "AGENTS.md" not in normalized_trigger:
-            errors.append("触发方式 must include AGENTS.md")
-        if "docs/rules/review-guidelines.md" not in normalized_trigger:
-            errors.append("触发方式 must include docs/rules/review-guidelines.md")
-        if "docs/rules/*.md" not in normalized_trigger:
-            errors.append("触发方式 must include docs/rules/*.md")
     if _normalize_value(conclusion) != "通过":
         errors.append("结论 must be 通过")
     if _normalize_value(blockers) != "无":
@@ -86,9 +116,13 @@ def validate_pr_body(
     elif not _has_nonempty_evidence(section):
         errors.append("review evidence must include at least one evidence item")
     else:
-        review_link = _find_codex_evidence_link(section, expected_pr_url=expected_pr_url)
+        review_link = _find_codex_evidence_link(
+            section, expected_pr_url=expected_pr_url
+        )
         if review_link is None:
-            errors.append("review evidence must include a real Codex review link for this PR")
+            errors.append(
+                "review evidence must include a real Codex review link for this PR"
+            )
         elif reviews is not None:
             errors.extend(
                 _codex_review_errors(
@@ -109,10 +143,14 @@ def validate_pr_body(
 
 
 def _extract_section(body: str) -> str | None:
+    return _extract_named_section(body, SECTION_HEADER)
+
+
+def _extract_named_section(body: str, header: str) -> str | None:
     lines = body.splitlines()
     start: int | None = None
     for index, line in enumerate(lines):
-        if re.match(rf"^\s*##+\s+{re.escape(SECTION_HEADER)}\s*$", line):
+        if re.match(rf"^\s*##+\s+{re.escape(header)}\s*$", line):
             start = index + 1
             break
     if start is None:
@@ -126,8 +164,219 @@ def _extract_section(body: str) -> str | None:
     return "\n".join(lines[start:end])
 
 
+def _official_codex_required(
+    body: str,
+    *,
+    changed_files: Sequence[str] | None,
+    labels: Sequence[str] | None,
+) -> tuple[bool, list[str]]:
+    errors: list[str] = []
+    section = _extract_named_section(body, AI_REVIEW_SECTION_HEADER)
+    if section is None:
+        return True, [f"PR body missing section: {AI_REVIEW_SECTION_HEADER}"]
+    risk = _normalize_value(_read_field(section, "风险等级"))
+    requires = _normalize_value(_read_field(section, "是否需要官方 Codex Review"))
+    local_review = _normalize_value(_read_field(section, "本地 AI review"))
+    cross_review = _normalize_value(_read_field(section, "子 agent 交叉评审"))
+    task_dispatch = _normalize_value(_read_field(section, "任务分发说明"))
+    blockers = _normalize_value(_read_field(section, "P0/P1 未关闭项"))
+    if risk not in {"low", "high", "unknown"}:
+        errors.append("风险等级 must be low, high, or unknown")
+        return True, errors
+    if _is_unfilled_ai_review_field(local_review):
+        errors.append("本地 AI review must be filled")
+    elif ".local/ai-review/latest.md" not in local_review:
+        errors.append("本地 AI review must reference .local/ai-review/latest.md")
+    errors.extend(_cross_review_field_errors(cross_review))
+    errors.extend(_task_dispatch_errors(task_dispatch))
+    errors.extend(_p2_section_errors(body))
+    if blockers != "无":
+        errors.append("P0/P1 未关闭项 must be 无")
+    high_risk_files = _high_risk_changed_files(changed_files)
+    if high_risk_files:
+        if risk == "low" or requires in {"否", "不需要", "false", "False"}:
+            errors.append("high-risk changed files require official Codex Review")
+        return True, errors
+    if _has_ai_risk_review_label(labels):
+        if risk == "low" or requires in {"否", "不需要", "false", "False"}:
+            errors.append("ai-risk-review label requires official Codex Review")
+        return True, errors
+    if risk in {"high", "unknown"}:
+        return True, errors
+    if requires in {"是", "需要", "true", "True"}:
+        return True, errors
+    if requires in {"否", "不需要", "false", "False"}:
+        return False, errors
+    errors.append("低风险 PR must mark 是否需要官方 Codex Review as 是 or 否")
+    return True, errors
+
+
+def _is_unfilled_ai_review_field(value: str) -> bool:
+    if not value:
+        return True
+    placeholders = ("填写", "已分发 / 未分发")
+    return any(token in value for token in placeholders)
+
+
+def _cross_review_field_errors(value: str) -> list[str]:
+    if _is_unfilled_ai_review_field(value):
+        return ["子 agent 交叉评审 must be filled"]
+    errors: list[str] = []
+    missing = [token for token in REQUIRED_CROSS_REVIEW_TOKENS if token not in value]
+    if missing:
+        errors.append(
+            "子 agent 交叉评审 must include "
+            + " and ".join(REQUIRED_CROSS_REVIEW_TOKENS)
+        )
+    reviewer_names = _cross_review_reviewer_names(value)
+    if any(_is_placeholder_reviewer_name(name) for name in reviewer_names):
+        errors.append("子 agent 交叉评审 must not include invalid reviewer names")
+    if _cross_review_reviewer_count(reviewer_names) < 2:
+        errors.append("子 agent 交叉评审 must include two reviewer names")
+    return errors
+
+
+def _task_dispatch_errors(value: str) -> list[str]:
+    if _is_unfilled_ai_review_field(value):
+        return ["任务分发说明 must be filled"]
+    if "已分发" in value:
+        if not _has_meaningful_dispatched_detail(value):
+            return ["任务分发说明 must include dispatched task detail"]
+        return []
+    if "未分发" in value:
+        if not _task_dispatch_has_reason(value):
+            return ["任务分发说明 must include reason when 未分发"]
+        return []
+    return ["任务分发说明 must state 已分发 or 未分发"]
+
+
+def _has_meaningful_dispatched_detail(value: str) -> bool:
+    normalized = value.replace("无未分发项", "")
+    normalized = normalized.replace("已分发", "")
+    normalized = normalized.replace("给", "")
+    normalized = normalized.strip().strip("`\"'。.!！；;:：,，- ")
+    return len(normalized) >= 3
+
+
+def _task_dispatch_has_reason(value: str) -> bool:
+    if "未分发" not in value:
+        return True
+    match = re.search(r"(?:原因|理由)\s*[:：]\s*(?P<reason>.*)$", value)
+    if not match:
+        match = re.search(r"未分发\s*[,，;；:：-]+\s*(?P<reason>.*)$", value)
+    if not match:
+        return False
+    return _has_meaningful_dispatch_reason(match.group("reason"))
+
+
+def _has_meaningful_dispatch_reason(value: str) -> bool:
+    normalized = value.strip().strip("`\"'。.!！；;:：,，- ")
+    if not normalized:
+        return False
+    return normalized.casefold() not in {"无", "none", "n/a", "na", "null"}
+
+
+def _p2_section_errors(body: str) -> list[str]:
+    section = _extract_named_section(body, P2_SECTION_HEADER)
+    if section is None:
+        return [f"PR body missing section: {P2_SECTION_HEADER}"]
+    normalized = section.strip()
+    if not normalized:
+        return ["P2 保留项 must be filled"]
+    if _p2_section_declares_none_only(section):
+        return []
+    errors: list[str] = []
+    if not _section_contains_any(section, ("defer_reason", "不修原因")):
+        errors.append("P2 保留项 must include defer_reason or 不修原因")
+    if not _section_contains_any(section, ("risk_acceptance", "风险接受理由")):
+        errors.append("P2 保留项 must include risk_acceptance or 风险接受理由")
+    if not _section_contains_any(section, ("handling", "处理方式")):
+        errors.append("P2 保留项 must include handling or 处理方式")
+    return errors
+
+
+def _section_contains_any(section: str, tokens: Sequence[str]) -> bool:
+    return any(token in section for token in tokens)
+
+
+def _p2_section_declares_none_only(section: str) -> bool:
+    lines = [line.strip() for line in section.splitlines() if line.strip()]
+    return lines == ["- 无"] or lines == ["* 无"]
+
+
+def _high_risk_changed_files(changed_files: Sequence[str] | None) -> tuple[str, ...]:
+    if changed_files is None:
+        return ()
+    return tuple(path for path in changed_files if _is_high_risk_path(path))
+
+
+def _is_high_risk_path(path: str) -> bool:
+    normalized = path.replace("\\", "/")
+    if normalized.startswith("./"):
+        normalized = normalized[2:]
+    normalized = normalized.lstrip("/")
+    if _is_generated_strategy_artifact(normalized):
+        return False
+    return any(normalized.startswith(prefix) for prefix in HIGH_RISK_PREFIXES)
+
+
+def _is_generated_strategy_artifact(path: str) -> bool:
+    parts = path.split("/")
+    return len(parts) >= 3 and parts[0] == "strategies" and parts[2] == "backtest_runs"
+
+
+def _has_ai_risk_review_label(labels: Sequence[str] | None) -> bool:
+    if labels is None:
+        return False
+    return any(str(label).casefold() == "ai-risk-review" for label in labels)
+
+
+def _cross_review_reviewer_names(value: str) -> tuple[str, ...]:
+    match = REVIEWER_NAMES_PATTERN.search(value)
+    if not match:
+        return ()
+    return tuple(
+        name.strip()
+        for name in re.split(r"[,，、+/]+", match.group("names"))
+        if name.strip()
+    )
+
+
+def _cross_review_reviewer_count(names: Sequence[str]) -> int:
+    names = [name for name in names if not _is_placeholder_reviewer_name(name)]
+    return len({_normalize_reviewer_identity(name) for name in names})
+
+
+def _is_placeholder_reviewer_name(value: str) -> bool:
+    normalized = value.strip().strip("`\"'")
+    if normalized.startswith("<") and normalized.endswith(">"):
+        return True
+    compact = _normalize_reviewer_identity(normalized.strip("<>"))
+    return compact in {
+        "a",
+        "b",
+        "reviewera",
+        "reviewerb",
+        "controller",
+        "coordinator",
+        "implementer",
+        "mainagent",
+        "mainsession",
+        "主会话",
+        "实现者",
+        "规格评审子agent",
+        "代码质量评审子agent",
+    }
+
+
+def _normalize_reviewer_identity(value: str) -> str:
+    return "".join(value.strip().strip("`\"'").split()).casefold()
+
+
 def _read_field(section: str, field: str) -> str:
-    pattern = re.compile(rf"^\s*[-*]\s*{re.escape(field)}\s*[:：]\s*(.+?)\s*$", re.MULTILINE)
+    pattern = re.compile(
+        rf"^\s*[-*]\s*{re.escape(field)}\s*[:：]\s*(.+?)\s*$", re.MULTILINE
+    )
     match = pattern.search(section)
     return match.group(1) if match else ""
 
@@ -150,7 +399,9 @@ def _has_nonempty_evidence(section: str) -> bool:
     return False
 
 
-def _find_codex_evidence_link(section: str, *, expected_pr_url: str | None = None) -> str | None:
+def _find_codex_evidence_link(
+    section: str, *, expected_pr_url: str | None = None
+) -> str | None:
     expected = _normalize_pr_url(expected_pr_url)
     expected_issue_url = expected.replace("/pull/", "/issues/") if expected else None
     evidence_start = section.find("关键证据")
@@ -160,12 +411,15 @@ def _find_codex_evidence_link(section: str, *, expected_pr_url: str | None = Non
     for line in evidence:
         if "Codex review 链接" not in line:
             continue
-        match = CODEX_REVIEW_URL_PATTERN.search(line) or CODEX_COMPLETION_COMMENT_URL_PATTERN.search(line)
+        match = CODEX_REVIEW_URL_PATTERN.search(
+            line
+        ) or CODEX_COMPLETION_COMMENT_URL_PATTERN.search(line)
         if not match:
             continue
         url = match.group(0)
         if expected and not (
-            url.startswith(f"{expected}#pullrequestreview-") or url.startswith(f"{expected}#issuecomment-")
+            url.startswith(f"{expected}#pullrequestreview-")
+            or url.startswith(f"{expected}#issuecomment-")
             or url.startswith(f"{expected_issue_url}#issuecomment-")
         ):
             continue
@@ -209,22 +463,32 @@ def _codex_review_errors(
     if matched_review is None:
         return ("Codex review link must match a Codex review on the current head",)
     errors: list[str] = []
-    trigger_comments = _required_trigger_comments(comments) if comments is not None else None
+    trigger_comments = (
+        _required_trigger_comments(comments) if comments is not None else None
+    )
     if trigger_comments is not None:
-        if not _has_required_trigger_after_current_head(trigger_comments, expected_head_created_at):
-            errors.append("required @codex review trigger must be submitted after the current head")
+        if not _has_required_trigger_after_current_head(
+            trigger_comments, expected_head_created_at
+        ):
+            errors.append(
+                "required @codex review trigger must be submitted after the current head"
+            )
         if not _review_is_after_required_trigger(
             matched_review,
             trigger_comments,
             expected_head_created_at=expected_head_created_at,
         ):
-            errors.append("Codex review must be submitted after the required @codex review trigger")
+            errors.append(
+                "Codex review must be submitted after the required @codex review trigger"
+            )
     if _current_head_has_blocking_codex_review(
         reviews,
         review_comments=review_comments,
         expected_head_sha=expected_head_sha,
     ):
-        errors.append("Codex review must not contain P0/P1 findings on the current head")
+        errors.append(
+            "Codex review must not contain P0/P1 findings on the current head"
+        )
     return tuple(errors)
 
 
@@ -243,18 +507,26 @@ def _codex_completion_comment_errors(
 
     errors: list[str] = []
     trigger_comments = _required_trigger_comments(comments)
-    if not _has_required_trigger_after_current_head(trigger_comments, expected_head_created_at):
-        errors.append("required @codex review trigger must be submitted after the current head")
+    if not _has_required_trigger_after_current_head(
+        trigger_comments, expected_head_created_at
+    ):
+        errors.append(
+            "required @codex review trigger must be submitted after the current head"
+        )
     latest_trigger_time = _latest_required_trigger_time(
         trigger_comments,
         expected_head_created_at=expected_head_created_at,
     )
     comment_time = _comment_effective_time(comment)
     if latest_trigger_time and comment_time and comment_time < latest_trigger_time:
-        errors.append("Codex completion comment must match the latest required @codex review trigger")
+        errors.append(
+            "Codex completion comment must match the latest required @codex review trigger"
+        )
     if _is_required_trigger_comment(comment):
         if not has_codex_completion_reaction(comment):
-            errors.append("Codex completion comment must include a Codex thumbs-up reaction")
+            errors.append(
+                "Codex completion comment must include a Codex thumbs-up reaction"
+            )
     elif not is_codex_completion_comment(comment):
         return ("Codex review link must match a Codex review on the current head",)
     if _current_head_has_blocking_codex_review(
@@ -262,8 +534,73 @@ def _codex_completion_comment_errors(
         review_comments=review_comments,
         expected_head_sha=expected_head_sha,
     ):
-        errors.append("Codex review must not contain P0/P1 findings on the current head")
+        errors.append(
+            "Codex review must not contain P0/P1 findings on the current head"
+        )
     return tuple(errors)
+
+
+def unresolved_blocking_codex_thread_count(
+    review_threads: Sequence[Mapping[str, object]],
+) -> int:
+    """Count unresolved, non-outdated Codex review threads with P0/P1 findings."""
+
+    count = 0
+    for thread in review_threads:
+        if _thread_is_resolved(thread) or _thread_is_outdated(thread):
+            continue
+        if _thread_has_blocking_codex_comment(thread):
+            count += 1
+    return count
+
+
+def _thread_is_resolved(thread: Mapping[str, object]) -> bool:
+    return bool(_first_thread_value(thread, "isResolved", "is_resolved"))
+
+
+def _thread_is_outdated(thread: Mapping[str, object]) -> bool:
+    return bool(_first_thread_value(thread, "isOutdated", "is_outdated"))
+
+
+def _first_thread_value(thread: Mapping[str, object], *keys: str) -> object:
+    for key in keys:
+        if key in thread:
+            return thread[key]
+    return False
+
+
+def _thread_has_blocking_codex_comment(thread: Mapping[str, object]) -> bool:
+    for comment in _thread_comments(thread):
+        author = comment.get("author")
+        if not isinstance(author, Mapping):
+            author = comment.get("user")
+        login = author.get("login") if isinstance(author, Mapping) else ""
+        if str(login) not in CODEX_REVIEW_AUTHORS:
+            continue
+        if BLOCKING_CODEX_FINDING_PATTERN.search(str(comment.get("body", ""))):
+            return True
+    return False
+
+
+def _thread_comments(thread: Mapping[str, object]) -> tuple[Mapping[str, object], ...]:
+    comments = thread.get("comments")
+    if isinstance(comments, list):
+        return tuple(item for item in comments if isinstance(item, Mapping))
+    if isinstance(comments, Mapping):
+        nodes = comments.get("nodes")
+        if isinstance(nodes, list):
+            return tuple(item for item in nodes if isinstance(item, Mapping))
+        edges = comments.get("edges")
+        if isinstance(edges, list):
+            extracted: list[Mapping[str, object]] = []
+            for edge in edges:
+                if not isinstance(edge, Mapping):
+                    continue
+                node = edge.get("node")
+                if isinstance(node, Mapping):
+                    extracted.append(node)
+            return tuple(extracted)
+    return ()
 
 
 def _review_has_blocking_findings(
@@ -291,7 +628,9 @@ def _current_head_has_blocking_codex_review(
             continue
         if expected_head_sha and str(review.get("commit_id", "")) != expected_head_sha:
             continue
-        if _review_has_blocking_findings(review, review_id=str(review.get("id", "")), review_comments=review_comments):
+        if _review_has_blocking_findings(
+            review, review_id=str(review.get("id", "")), review_comments=review_comments
+        ):
             return True
     return False
 
@@ -321,6 +660,11 @@ def _required_trigger_comments(comments: Sequence[object]) -> tuple[object, ...]
 
 
 def _is_required_trigger_comment(comment: object) -> bool:
+    if isinstance(comment, Mapping):
+        user = comment.get("user")
+        login = user.get("login") if isinstance(user, Mapping) else ""
+        if str(login) in CODEX_REVIEW_AUTHORS:
+            return False
     body = _comment_body(comment)
     return all(token in body for token in REQUIRED_TRIGGER_TOKENS)
 
@@ -333,7 +677,9 @@ def _comment_body(comment: object) -> str:
     return ""
 
 
-def _find_comment_by_id(comments: Sequence[object], comment_id: str) -> Mapping[str, object] | None:
+def _find_comment_by_id(
+    comments: Sequence[object], comment_id: str
+) -> Mapping[str, object] | None:
     for comment in comments:
         if not isinstance(comment, Mapping):
             continue
@@ -369,7 +715,9 @@ def is_codex_completion_comment(comment: Mapping[str, object]) -> bool:
     return not BLOCKING_CODEX_FINDING_PATTERN.search(body)
 
 
-def _comment_reaction_items(comment: Mapping[str, object]) -> tuple[Mapping[str, object], ...]:
+def _comment_reaction_items(
+    comment: Mapping[str, object],
+) -> tuple[Mapping[str, object], ...]:
     for key in ("reactions_detail", "reaction_items"):
         value = comment.get(key)
         if isinstance(value, list):
@@ -431,10 +779,13 @@ def _has_required_trigger_after_current_head(
 ) -> bool:
     if not expected_head_created_at:
         return True
-    return _latest_required_trigger_time(
-        trigger_comments,
-        expected_head_created_at=expected_head_created_at,
-    ) is not None
+    return (
+        _latest_required_trigger_time(
+            trigger_comments,
+            expected_head_created_at=expected_head_created_at,
+        )
+        is not None
+    )
 
 
 def _latest_required_trigger_time(
@@ -449,7 +800,9 @@ def _latest_required_trigger_time(
     ]
     trigger_times = [value for value in trigger_times if value]
     if expected_head_created_at:
-        trigger_times = [value for value in trigger_times if expected_head_created_at <= value]
+        trigger_times = [
+            value for value in trigger_times if expected_head_created_at <= value
+        ]
     return max(trigger_times) if trigger_times else None
 
 
@@ -496,8 +849,28 @@ def _fetch_github_json_url(*, url: str, token: str) -> tuple[object, str | None]
 
 
 def _fetch_github_json(*, repo: str, path: str, token: str) -> object:
-    payload, _ = _fetch_github_json_url(url=_github_api_url(repo=repo, path=path), token=token)
+    payload, _ = _fetch_github_json_url(
+        url=_github_api_url(repo=repo, path=path), token=token
+    )
     return payload
+
+
+def _fetch_github_graphql(
+    *, query: str, variables: Mapping[str, object], token: str
+) -> Mapping[str, object]:
+    request = urllib.request.Request(
+        "https://api.github.com/graphql",
+        data=json.dumps({"query": query, "variables": dict(variables)}).encode("utf-8"),
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    return payload if isinstance(payload, Mapping) else {}
 
 
 def _fetch_github_list(*, repo: str, path: str, token: str) -> list[object]:
@@ -524,13 +897,19 @@ def _parse_next_link(header: str) -> str | None:
     return None
 
 
-def _fetch_pr_metadata(*, repo: str, pr_number: str, token: str) -> Mapping[str, object] | None:
+def _fetch_pr_metadata(
+    *, repo: str, pr_number: str, token: str
+) -> Mapping[str, object] | None:
     payload = _fetch_github_json(repo=repo, path=f"pulls/{pr_number}", token=token)
     return payload if isinstance(payload, Mapping) else None
 
 
-def _fetch_pr_comments(*, repo: str, pr_number: str, token: str) -> list[Mapping[str, object]]:
-    payload = _fetch_github_list(repo=repo, path=f"issues/{pr_number}/comments", token=token)
+def _fetch_pr_comments(
+    *, repo: str, pr_number: str, token: str
+) -> list[Mapping[str, object]]:
+    payload = _fetch_github_list(
+        repo=repo, path=f"issues/{pr_number}/comments", token=token
+    )
     return _enrich_required_trigger_reactions(
         [item for item in payload if isinstance(item, Mapping)],
         repo=repo,
@@ -554,24 +933,145 @@ def _enrich_required_trigger_reactions(
             enriched.append(comment)
             continue
         item = dict(comment)
-        item["reaction_items"] = _fetch_issue_comment_reactions(repo=repo, comment_id=str(comment_id), token=token)
+        item["reaction_items"] = _fetch_issue_comment_reactions(
+            repo=repo, comment_id=str(comment_id), token=token
+        )
         enriched.append(item)
     return enriched
 
 
-def _fetch_issue_comment_reactions(*, repo: str, comment_id: str, token: str) -> list[Mapping[str, object]]:
-    payload = _fetch_github_list(repo=repo, path=f"issues/comments/{comment_id}/reactions", token=token)
+def _fetch_issue_comment_reactions(
+    *, repo: str, comment_id: str, token: str
+) -> list[Mapping[str, object]]:
+    payload = _fetch_github_list(
+        repo=repo, path=f"issues/comments/{comment_id}/reactions", token=token
+    )
     return [item for item in payload if isinstance(item, Mapping)]
 
 
-def _fetch_pr_reviews(*, repo: str, pr_number: str, token: str) -> list[Mapping[str, object]]:
-    payload = _fetch_github_list(repo=repo, path=f"pulls/{pr_number}/reviews", token=token)
+def _fetch_pr_reviews(
+    *, repo: str, pr_number: str, token: str
+) -> list[Mapping[str, object]]:
+    payload = _fetch_github_list(
+        repo=repo, path=f"pulls/{pr_number}/reviews", token=token
+    )
     return [item for item in payload if isinstance(item, Mapping)]
 
 
-def _fetch_pr_review_comments(*, repo: str, pr_number: str, token: str) -> list[Mapping[str, object]]:
-    payload = _fetch_github_list(repo=repo, path=f"pulls/{pr_number}/comments", token=token)
+def _fetch_pr_review_comments(
+    *, repo: str, pr_number: str, token: str
+) -> list[Mapping[str, object]]:
+    payload = _fetch_github_list(
+        repo=repo, path=f"pulls/{pr_number}/comments", token=token
+    )
     return [item for item in payload if isinstance(item, Mapping)]
+
+
+def _fetch_pr_changed_files(
+    *, repo: str, pr_number: str, token: str
+) -> tuple[str, ...]:
+    payload = _fetch_github_list(
+        repo=repo, path=f"pulls/{pr_number}/files", token=token
+    )
+    return tuple(
+        str(item.get("filename", ""))
+        for item in payload
+        if isinstance(item, Mapping) and str(item.get("filename", "")).strip()
+    )
+
+
+def _fetch_issue_metadata(
+    *, repo: str, pr_number: str, token: str
+) -> Mapping[str, object]:
+    payload = _fetch_github_json(repo=repo, path=f"issues/{pr_number}", token=token)
+    return payload if isinstance(payload, Mapping) else {}
+
+
+def _issue_label_names(issue: Mapping[str, object]) -> tuple[str, ...]:
+    labels = issue.get("labels")
+    if not isinstance(labels, list):
+        return ()
+    names: list[str] = []
+    for label in labels:
+        if isinstance(label, Mapping):
+            name = str(label.get("name", "")).strip()
+        else:
+            name = str(label).strip()
+        if name:
+            names.append(name)
+    return tuple(names)
+
+
+def _fetch_pr_review_threads(
+    *, repo: str, pr_number: str, token: str
+) -> list[Mapping[str, object]]:
+    owner, name = repo.split("/", 1)
+    query = """
+    query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+      repository(owner: $owner, name: $name) {
+        pullRequest(number: $number) {
+          reviewThreads(first: 100, after: $cursor) {
+            nodes {
+              isResolved
+              isOutdated
+              comments(first: 50) {
+                nodes {
+                  body
+                  author {
+                    login
+                  }
+                }
+              }
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+          }
+        }
+      }
+    }
+    """
+    threads: list[Mapping[str, object]] = []
+    cursor: str | None = None
+    while True:
+        payload = _fetch_github_graphql(
+            query=query,
+            variables={
+                "owner": owner,
+                "name": name,
+                "number": int(pr_number),
+                "cursor": cursor,
+            },
+            token=token,
+        )
+        connection = _graphql_review_threads_connection(payload)
+        nodes = connection.get("nodes")
+        if isinstance(nodes, list):
+            threads.extend(item for item in nodes if isinstance(item, Mapping))
+        page_info = connection.get("pageInfo")
+        if not isinstance(page_info, Mapping) or not bool(page_info.get("hasNextPage")):
+            break
+        cursor = str(page_info.get("endCursor", "") or "")
+        if not cursor:
+            break
+    return threads
+
+
+def _graphql_review_threads_connection(
+    payload: Mapping[str, object],
+) -> Mapping[str, object]:
+    data = payload.get("data")
+    if not isinstance(data, Mapping):
+        return {}
+    repository = data.get("repository")
+    if not isinstance(repository, Mapping):
+        return {}
+    pull_request = repository.get("pullRequest")
+    if not isinstance(pull_request, Mapping):
+        return {}
+    review_threads = pull_request.get("reviewThreads")
+    return review_threads if isinstance(review_threads, Mapping) else {}
 
 
 def _read_env(name: str | None) -> str | None:
@@ -609,6 +1109,12 @@ def _coerce_reviews(payload: object | None) -> Sequence[Mapping[str, object]] | 
     return [item for item in payload if isinstance(item, Mapping)]
 
 
+def _coerce_review_threads(
+    payload: object | None,
+) -> Sequence[Mapping[str, object]] | None:
+    return _coerce_reviews(payload)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     source = parser.add_mutually_exclusive_group(required=True)
@@ -624,6 +1130,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--comments-file", type=Path)
     parser.add_argument("--reviews-file", type=Path)
     parser.add_argument("--review-comments-file", type=Path)
+    parser.add_argument("--review-threads-file", type=Path)
     return parser
 
 
@@ -638,17 +1145,31 @@ def main(argv: list[str] | None = None) -> int:
     comments = _coerce_comments(_read_optional_file(args.comments_file))
     reviews = _coerce_reviews(_read_optional_file(args.reviews_file))
     review_comments = _coerce_reviews(_read_optional_file(args.review_comments_file))
+    review_threads = _coerce_review_threads(
+        _read_optional_file(args.review_threads_file)
+    )
+    changed_files: Sequence[str] | None = None
+    labels: Sequence[str] | None = None
     expected_pr_url = _read_env(args.pr_url_env)
     expected_head_sha = _read_env(args.head_sha_env)
-    expected_head_created_at = _read_env(args.head_updated_at_env) or _read_env(args.head_created_at_env)
+    expected_head_created_at = _read_env(args.head_updated_at_env) or _read_env(
+        args.head_created_at_env
+    )
 
     repo = _read_env(args.repo_env)
     pr_number = _read_env(args.pr_number_env)
     token = _read_env(args.github_token_env)
     if repo and pr_number and token:
         pr_metadata: Mapping[str, object] | None = None
-        if not body or not expected_pr_url or not expected_head_sha or not expected_head_created_at:
-            pr_metadata = _fetch_pr_metadata(repo=repo, pr_number=pr_number, token=token)
+        if (
+            not body
+            or not expected_pr_url
+            or not expected_head_sha
+            or not expected_head_created_at
+        ):
+            pr_metadata = _fetch_pr_metadata(
+                repo=repo, pr_number=pr_number, token=token
+            )
             if pr_metadata is not None:
                 if not body:
                     body = str(pr_metadata.get("body", ""))
@@ -667,7 +1188,19 @@ def main(argv: list[str] | None = None) -> int:
         if reviews is None:
             reviews = _fetch_pr_reviews(repo=repo, pr_number=pr_number, token=token)
         if review_comments is None:
-            review_comments = _fetch_pr_review_comments(repo=repo, pr_number=pr_number, token=token)
+            review_comments = _fetch_pr_review_comments(
+                repo=repo, pr_number=pr_number, token=token
+            )
+        if review_threads is None:
+            review_threads = _fetch_pr_review_threads(
+                repo=repo, pr_number=pr_number, token=token
+            )
+        changed_files = _fetch_pr_changed_files(
+            repo=repo, pr_number=pr_number, token=token
+        )
+        labels = _issue_label_names(
+            _fetch_issue_metadata(repo=repo, pr_number=pr_number, token=token)
+        )
 
     if not expected_head_created_at:
         expected_head_created_at = head_updated_at_from_monitor_state(
@@ -683,6 +1216,9 @@ def main(argv: list[str] | None = None) -> int:
         comments=comments,
         reviews=reviews,
         review_comments=review_comments,
+        review_threads=review_threads,
+        changed_files=changed_files,
+        labels=labels,
     )
     if report.ok:
         print("PR review evidence ok")

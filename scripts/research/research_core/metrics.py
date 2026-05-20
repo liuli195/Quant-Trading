@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+from .pointers import read_text_file
 
 
 def parse_cumulative_returns_md(path: str | Path) -> pd.Series:
@@ -14,7 +15,7 @@ def parse_cumulative_returns_md(path: str | Path) -> pd.Series:
 
     dates: list[pd.Timestamp] = []
     cumulative: list[float] = []
-    for line in Path(path).read_text(encoding="utf-8").splitlines():
+    for line in read_text_file(path).splitlines():
         parts = [part.strip() for part in line.strip("| ").split("|")]
         if len(parts) < 2 or not parts[0].startswith("20"):
             continue
@@ -30,7 +31,6 @@ def parse_cumulative_returns_md(path: str | Path) -> pd.Series:
     daily[0] = cum[0]
     daily[1:] = (1.0 + cum[1:]) / (1.0 + cum[:-1]) - 1.0
     return pd.Series(daily, index=pd.DatetimeIndex(dates), name="daily_return")
-
 
 def performance_metrics(returns: pd.Series | np.ndarray) -> dict[str, float]:
     """Compute compact strategy metrics from daily returns."""

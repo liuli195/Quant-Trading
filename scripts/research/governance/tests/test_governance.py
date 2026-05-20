@@ -3,11 +3,18 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from scripts.research.governance.branch_protection import check_pre_push_input, check_reference_transaction_input
-from scripts.research.governance.codex_review_monitor import build_monitor_report, render_monitor_comment
+from scripts.research.governance.branch_protection import (
+    check_pre_push_input,
+    check_reference_transaction_input,
+)
+from scripts.research.governance.codex_review_monitor import (
+    build_monitor_report,
+    render_monitor_comment,
+)
 from scripts.research.governance.pr_review_evidence import (
     BLOCKING_CODEX_FINDING_PATTERN,
     head_updated_at_from_monitor_state,
+    _issue_label_names,
     _parse_next_link,
     render_monitor_head_state,
     validate_pr_body,
@@ -106,6 +113,7 @@ def _write_minimal_repo(root: Path) -> None:
         "使用项目虚拟环境运行 Python，具体命令见 docs/rules/commands.md。"
         "所有进入主干的改动必须通过 PR；如用户显式授权，可以按直写主干链路直接提交和推送主干；"
         "禁止本地合并主干，细则见 docs/rules/pr-workflow.md。"
+        "效率：所有任务默认优先分发给子agent，主会话只负责流程编排。"
         "Markdown 内部文件引用使用 pathref。"
         "遇到沙箱/权限阻断时申请提权。"
         "每次任务后清理临时产物。\n\n"
@@ -128,11 +136,29 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     (root / ".githooks/pre-commit").write_text(
+        "pre-commit run --hook-stage pre-commit\n"
         "sh .githooks/run-python.sh -m scripts.research.governance gate\n",
         encoding="utf-8",
     )
+    (root / "Makefile").write_text(
+        "pre-pr:\n\tpre-commit run --all-files\n"
+        "ai-review:\n\tpython -m scripts.research.governance.ai_review_gate validate --report .local/ai-review/latest.json\n"
+        "risk-check:\n\tpython -m scripts.research.governance.ai_review_gate risk --report .local/ai-review/latest.json\n",
+        encoding="utf-8",
+    )
+    (root / ".pre-commit-config.yaml").write_text(
+        "repos:\n"
+        "  - repo: https://github.com/astral-sh/ruff-pre-commit\n"
+        "  - repo: https://github.com/PyCQA/bandit\n"
+        "  - repo: https://github.com/gitleaks/gitleaks\n",
+        encoding="utf-8",
+    )
+    (root / "requirements-dev.txt").write_text(
+        "pre-commit\nruff\nbandit\nmypy\npip-audit\n",
+        encoding="utf-8",
+    )
     (root / ".githooks/run-python.sh").write_text(
-        "uname MINGW MSYS CYGWIN .venv/bin/python .venv/Scripts/python.exe \"$@\"\n",
+        'uname MINGW MSYS CYGWIN .venv/bin/python .venv/Scripts/python.exe "$@"\n',
         encoding="utf-8",
     )
     (root / ".githooks/run-python.ps1").write_text(
@@ -162,8 +188,15 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / ".github/workflows/research-governance.yml").write_text(
         "on:\n  schedule:\n    - cron: '0 2 * * 1'\n"
+        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
         "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
-        "  pull_request_review_comment:\n    types: [created, edited, deleted]\nsteps:\n"
+        "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
+        "steps:\n"
+        "  - run: python -m ruff check scripts strategies\n"
+        "  - run: python -m bandit -q -r scripts strategies\n"
+        "  - run: python -m mypy scripts strategies\n"
+        "  - run: python -m pip_audit\n"
+        "  - run: python -m pytest\n"
         "  - run: python -m scripts.research.governance gate\n"
         "  - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
         encoding="utf-8",
@@ -187,6 +220,10 @@ def _write_minimal_repo(root: Path) -> None:
     (root / "docs/rules/pr-workflow.md").write_text(
         "所有进入主干的改动必须通过 PR\n直写主干 ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON\n"
         "禁止本地合并主干\nCodex Review Monitor\n"
+        "主会话只负责流程编排\n任务优先分发给子agent执行\n子 agent 交叉评审\n"
+        "superpowers:subagent-driven-development/spec-reviewer-prompt.md\n"
+        "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md\n"
+        "reviewers:\n"
         "git fetch origin main\ngit merge --ff-only origin/main\n"
         "git branch -d <branch>\ngit push origin --delete <branch>\n",
         encoding="utf-8",
@@ -218,7 +255,11 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     (root / ".github/pull_request_template.md").write_text(
-        "改动目标\n影响范围\n规则同步\n已运行检查\nCodex Code Review 结论\n"
+        "改动目标\n影响范围\n规则同步\n已运行检查\n子 agent 交叉评审\n"
+        "superpowers:subagent-driven-development/spec-reviewer-prompt.md\n"
+        "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md\n"
+        "reviewers:\n"
+        "任务分发说明\nCodex Code Review 结论\n"
         "Codex\nscripts.research.governance gate\nwaiver\n证据\n",
         encoding="utf-8",
     )
@@ -230,11 +271,14 @@ def _write_minimal_repo(root: Path) -> None:
                 "@codex review",
                 "AGENTS.md",
                 "docs/rules/review-guidelines.md",
-                "逐条检查",
-                "docs/rules/*.md",
                 "P0/P1",
                 "scripts.research.governance gate",
                 "Codex Review Monitor",
+                "至少两个独立 reviewer",
+                "子 agent 交叉评审",
+                "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
+                "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
+                "reviewers:",
                 "Codex Code Review 结论",
                 "结论: 通过",
                 "阻断问题: 无",
@@ -260,7 +304,11 @@ def _write_minimal_repo(root: Path) -> None:
                 "schema_version": 1,
                 "owner": "research-platform",
                 "lifecycle": "active",
-                "roots": {"repo": ".", "strategies": "strategies", "research_datasets": "research_datasets"},
+                "roots": {
+                    "repo": ".",
+                    "strategies": "strategies",
+                    "research_datasets": "research_datasets",
+                },
                 "aliases": {"strategy_dir": "{strategies}/{strategy}"},
             }
         ),
@@ -309,7 +357,9 @@ def _write_minimal_repo(root: Path) -> None:
         "datasets_catalog.json",
         "variants_catalog.json",
     ):
-        (root / "docs/indexes" / name).write_text(json.dumps({"reports": []}), encoding="utf-8")
+        (root / "docs/indexes" / name).write_text(
+            json.dumps({"reports": []}), encoding="utf-8"
+        )
 
     for template in (
         "factor_scan",
@@ -336,11 +386,55 @@ def _write_minimal_repo(root: Path) -> None:
     default_tool_registry().write_layer_docs(root / "scripts/research/layers")
 
 
-def test_governance_audit_passes_minimal_repo_without_expensive_checks(tmp_path) -> None:
+def test_governance_audit_passes_minimal_repo_without_expensive_checks(
+    tmp_path,
+) -> None:
     _write_minimal_repo(tmp_path)
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert report.ok
     assert report.findings == ()
+
+
+def test_local_review_entrypoints_are_tracked(tmp_path: Path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / "Makefile").write_text(
+        "pre-pr:\n\tpre-commit run --all-files\n"
+        "ai-review:\n\tpython -m scripts.research.governance.ai_review_gate validate --report .local/ai-review/latest.json\n"
+        "risk-check:\n\tpython -m scripts.research.governance.ai_review_gate risk --report .local/ai-review/latest.json\n",
+        encoding="utf-8",
+    )
+    (tmp_path / ".pre-commit-config.yaml").write_text(
+        "repos:\n"
+        "  - repo: https://github.com/astral-sh/ruff-pre-commit\n"
+        "  - repo: https://github.com/PyCQA/bandit\n"
+        "  - repo: https://github.com/gitleaks/gitleaks\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "requirements-dev.txt").write_text(
+        "pre-commit\nruff\nbandit\nmypy\npip-audit\n",
+        encoding="utf-8",
+    )
+    (tmp_path / ".githooks/pre-commit").write_text(
+        "pre-commit run --hook-stage pre-commit\n"
+        "sh .githooks/run-python.sh -m scripts.research.governance gate\n",
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert report.ok, [finding.message for finding in report.findings]
+
+
+def test_governance_audit_flags_missing_local_review_entrypoints(
+    tmp_path: Path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / "Makefile").unlink()
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(finding.rule_id == "local_review" for finding in report.findings)
 
 
 def test_governance_audit_flags_catalog_drift(tmp_path) -> None:
@@ -380,7 +474,9 @@ def test_governance_audit_flags_unregistered_cli_module(tmp_path) -> None:
 
 def test_governance_audit_flags_stale_layer_docs(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
-    (tmp_path / "scripts/research/layers/strategy_library.md").write_text("stale\n", encoding="utf-8")
+    (tmp_path / "scripts/research/layers/strategy_library.md").write_text(
+        "stale\n", encoding="utf-8"
+    )
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(finding.rule_id == "layer_docs" for finding in report.findings)
@@ -389,7 +485,15 @@ def test_governance_audit_flags_stale_layer_docs(tmp_path) -> None:
 def test_governance_audit_flags_invalid_path_aliases(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / "path_aliases.json").write_text(
-        json.dumps({"schema_version": 1, "owner": "", "lifecycle": "active", "roots": {}, "aliases": {}}),
+        json.dumps(
+            {
+                "schema_version": 1,
+                "owner": "",
+                "lifecycle": "active",
+                "roots": {},
+                "aliases": {},
+            }
+        ),
         encoding="utf-8",
     )
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
@@ -423,23 +527,36 @@ def test_governance_audit_flags_project_config_without_owner(tmp_path) -> None:
     )
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
-    assert any(finding.rule_id == "project_config" and "owner is required" in finding.message for finding in report.findings)
+    assert any(
+        finding.rule_id == "project_config" and "owner is required" in finding.message
+        for finding in report.findings
+    )
 
 
 def test_governance_audit_flags_missing_codeowners_coverage(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
-    (tmp_path / "CODEOWNERS").write_text("CLAUDE.md @research-platform\n", encoding="utf-8")
+    (tmp_path / "CODEOWNERS").write_text(
+        "CLAUDE.md @research-platform\n", encoding="utf-8"
+    )
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
-    assert any(finding.rule_id == "codeowners" and "docs/rules/**" in finding.message for finding in report.findings)
+    assert any(
+        finding.rule_id == "codeowners" and "docs/rules/**" in finding.message
+        for finding in report.findings
+    )
 
 
 def test_governance_audit_flags_invalid_pr_template(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
-    (tmp_path / ".github/pull_request_template.md").write_text("改动目标\n", encoding="utf-8")
+    (tmp_path / ".github/pull_request_template.md").write_text(
+        "改动目标\n", encoding="utf-8"
+    )
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
-    assert any(finding.rule_id == "pr_template" and "规则同步" in finding.message for finding in report.findings)
+    assert any(
+        finding.rule_id == "pr_template" and "规则同步" in finding.message
+        for finding in report.findings
+    )
 
 
 def test_governance_audit_flags_missing_review_guidelines(tmp_path) -> None:
@@ -465,7 +582,9 @@ def test_governance_audit_flags_workflow_without_review_evidence_gate(tmp_path) 
     )
 
 
-def test_governance_audit_flags_review_evidence_without_inline_comment_deleted_event(tmp_path) -> None:
+def test_governance_audit_flags_review_evidence_without_inline_comment_deleted_event(
+    tmp_path,
+) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / ".github/workflows/research-governance.yml").write_text(
         "on:\n  schedule:\n    - cron: '0 2 * * 1'\n"
@@ -478,12 +597,15 @@ def test_governance_audit_flags_review_evidence_without_inline_comment_deleted_e
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "governance_gate" and "deleted inline review comments" in finding.message
+        finding.rule_id == "governance_gate"
+        and "deleted inline review comments" in finding.message
         for finding in report.findings
     )
 
 
-def test_governance_audit_flags_review_evidence_without_review_dismissed_event(tmp_path) -> None:
+def test_governance_audit_flags_review_evidence_without_review_dismissed_event(
+    tmp_path,
+) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / ".github/workflows/research-governance.yml").write_text(
         "on:\n  schedule:\n    - cron: '0 2 * * 1'\n"
@@ -501,6 +623,84 @@ def test_governance_audit_flags_review_evidence_without_review_dismissed_event(t
     )
 
 
+def test_governance_audit_flags_review_evidence_without_label_events(
+    tmp_path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".github/workflows/research-governance.yml").write_text(
+        "on:\n  schedule:\n    - cron: '0 2 * * 1'\n"
+        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review]\n"
+        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
+        "  pull_request_review_comment:\n    types: [created, edited, deleted]\nsteps:\n"
+        "  - run: python -m scripts.research.governance gate\n"
+        "  - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "labeled and unlabeled events" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_workflow_contains_pr_review_evidence_gate(tmp_path: Path) -> None:
+    _write_minimal_repo(tmp_path)
+    workflow = tmp_path / ".github/workflows/research-governance.yml"
+    workflow.write_text(
+        "name: Research Governance\n"
+        "on:\n"
+        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
+        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
+        "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
+        "  schedule:\n    - cron: '0 2 * * 1'\n"
+        "jobs:\n"
+        "  governance:\n"
+        "    steps:\n"
+        "      - run: python -m ruff check scripts strategies\n"
+        "      - run: python -m bandit -q -r scripts strategies\n"
+        "      - run: python -m mypy scripts strategies\n"
+        "      - run: python -m pip_audit\n"
+        "      - run: python -m pytest\n"
+        "      - run: python -m scripts.research.governance gate\n"
+        "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert report.ok, [finding.message for finding in report.findings]
+
+
+def test_governance_audit_flags_workflow_without_pr_review_evidence_gate(
+    tmp_path: Path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    workflow = tmp_path / ".github/workflows/research-governance.yml"
+    workflow.write_text(
+        "name: Research Governance\n"
+        "on:\n"
+        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
+        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
+        "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
+        "  schedule:\n    - cron: '0 2 * * 1'\n"
+        "jobs:\n"
+        "  governance:\n"
+        "    steps:\n"
+        "      - run: python -m scripts.research.governance gate\n",
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        "CI workflow missing PR review evidence gate" in finding.message
+        for finding in report.findings
+    )
+
+
 def test_governance_audit_flags_missing_codex_review_monitor(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / ".github/workflows/codex-review-monitor.yml").unlink()
@@ -509,7 +709,9 @@ def test_governance_audit_flags_missing_codex_review_monitor(tmp_path) -> None:
     assert any(finding.rule_id == "codex_review_monitor" for finding in report.findings)
 
 
-def test_governance_audit_flags_governance_docs_without_required_monitor_status(tmp_path) -> None:
+def test_governance_audit_flags_governance_docs_without_required_monitor_status(
+    tmp_path,
+) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / "docs/rules/governance.md").write_text(
         ".githooks/reference-transaction ALLOW_MAIN_REF_UPDATE MAIN_REF_UPDATE_REASON\n",
@@ -518,12 +720,15 @@ def test_governance_audit_flags_governance_docs_without_required_monitor_status(
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "governance_gate" and "Codex Review Monitor" in finding.message
+        finding.rule_id == "governance_gate"
+        and "Codex Review Monitor" in finding.message
         for finding in report.findings
     )
 
 
-def test_governance_audit_flags_monitor_without_inline_comment_deleted_event(tmp_path) -> None:
+def test_governance_audit_flags_monitor_without_inline_comment_deleted_event(
+    tmp_path,
+) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / ".github/workflows/codex-review-monitor.yml").write_text(
         "on:\n  pull_request:\n    types: [opened, synchronize, reopened]\n"
@@ -537,12 +742,15 @@ def test_governance_audit_flags_monitor_without_inline_comment_deleted_event(tmp
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "codex_review_monitor" and "deleted inline review comments" in finding.message
+        finding.rule_id == "codex_review_monitor"
+        and "deleted inline review comments" in finding.message
         for finding in report.findings
     )
 
 
-def test_governance_audit_flags_monitor_without_review_dismissed_event(tmp_path) -> None:
+def test_governance_audit_flags_monitor_without_review_dismissed_event(
+    tmp_path,
+) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / ".github/workflows/codex-review-monitor.yml").write_text(
         "on:\n  pull_request:\n    types: [opened, synchronize, reopened]\n"
@@ -556,7 +764,8 @@ def test_governance_audit_flags_monitor_without_review_dismissed_event(tmp_path)
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "codex_review_monitor" and "dismissed events" in finding.message
+        finding.rule_id == "codex_review_monitor"
+        and "dismissed events" in finding.message
         for finding in report.findings
     )
 
@@ -582,7 +791,10 @@ def test_governance_audit_flags_expired_waiver(tmp_path) -> None:
     )
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
-    assert any(finding.rule_id == "waiver" and "expired" in finding.message for finding in report.findings)
+    assert any(
+        finding.rule_id == "waiver" and "expired" in finding.message
+        for finding in report.findings
+    )
 
 
 def test_governance_audit_flags_adr_number_gap(tmp_path) -> None:
@@ -590,7 +802,10 @@ def test_governance_audit_flags_adr_number_gap(tmp_path) -> None:
     (tmp_path / "docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md").unlink()
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
-    assert any(finding.rule_id == "adr" and "continuous" in finding.message for finding in report.findings)
+    assert any(
+        finding.rule_id == "adr" and "continuous" in finding.message
+        for finding in report.findings
+    )
 
 
 def test_governance_audit_flags_missing_pre_push_branch_protection(tmp_path) -> None:
@@ -598,7 +813,10 @@ def test_governance_audit_flags_missing_pre_push_branch_protection(tmp_path) -> 
     (tmp_path / ".githooks/pre-push").unlink()
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
-    assert any(finding.rule_id == "governance_gate" and "pre-push" in finding.message for finding in report.findings)
+    assert any(
+        finding.rule_id == "governance_gate" and "pre-push" in finding.message
+        for finding in report.findings
+    )
 
 
 def test_governance_audit_flags_missing_posix_hook_python_wrapper(tmp_path) -> None:
@@ -615,18 +833,21 @@ def test_governance_audit_flags_missing_posix_hook_python_wrapper(tmp_path) -> N
 def test_governance_audit_flags_single_platform_hook_python_wrapper(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / ".githooks/run-python.sh").write_text(
-        ".venv/Scripts/python.exe \"$@\"\n",
+        '.venv/Scripts/python.exe "$@"\n',
         encoding="utf-8",
     )
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "governance_gate" and "run-python.sh missing .venv/bin/python" in finding.message
+        finding.rule_id == "governance_gate"
+        and "run-python.sh missing .venv/bin/python" in finding.message
         for finding in report.findings
     )
 
 
-def test_governance_audit_flags_hook_python_wrapper_without_platform_branch(tmp_path) -> None:
+def test_governance_audit_flags_hook_python_wrapper_without_platform_branch(
+    tmp_path,
+) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / ".githooks/run-python.sh").write_text(
         "\n".join(
@@ -643,12 +864,15 @@ def test_governance_audit_flags_hook_python_wrapper_without_platform_branch(tmp_
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "governance_gate" and "run-python.sh must choose venv by platform" in finding.message
+        finding.rule_id == "governance_gate"
+        and "run-python.sh must choose venv by platform" in finding.message
         for finding in report.findings
     )
 
 
-def test_governance_audit_flags_hook_python_wrapper_system_python_fallback(tmp_path) -> None:
+def test_governance_audit_flags_hook_python_wrapper_system_python_fallback(
+    tmp_path,
+) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / ".githooks/run-python.sh").write_text(
         "\n".join(
@@ -668,7 +892,8 @@ def test_governance_audit_flags_hook_python_wrapper_system_python_fallback(tmp_p
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "governance_gate" and "run-python.sh must not fall back to system Python" in finding.message
+        finding.rule_id == "governance_gate"
+        and "run-python.sh must not fall back to system Python" in finding.message
         for finding in report.findings
     )
 
@@ -682,7 +907,8 @@ def test_governance_audit_flags_hooks_that_require_powershell(tmp_path) -> None:
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "governance_gate" and "pre-commit hook must use run-python.sh" in finding.message
+        finding.rule_id == "governance_gate"
+        and "pre-commit hook must use run-python.sh" in finding.message
         for finding in report.findings
     )
 
@@ -697,7 +923,8 @@ def test_governance_audit_flags_pre_push_without_gate(tmp_path) -> None:
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "governance_gate" and "pre-push hook missing governance gate" in finding.message
+        finding.rule_id == "governance_gate"
+        and "pre-push hook missing governance gate" in finding.message
         for finding in report.findings
     )
 
@@ -723,18 +950,24 @@ def test_governance_audit_flags_missing_reference_transaction_hook(tmp_path) -> 
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "governance_gate" and "reference-transaction" in finding.message
+        finding.rule_id == "governance_gate"
+        and "reference-transaction" in finding.message
         for finding in report.findings
     )
 
 
-def test_governance_audit_flags_reference_transaction_without_branch_protection(tmp_path) -> None:
+def test_governance_audit_flags_reference_transaction_without_branch_protection(
+    tmp_path,
+) -> None:
     _write_minimal_repo(tmp_path)
-    (tmp_path / ".githooks/reference-transaction").write_text("exit 0\n", encoding="utf-8")
+    (tmp_path / ".githooks/reference-transaction").write_text(
+        "exit 0\n", encoding="utf-8"
+    )
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "governance_gate" and "local branch protection" in finding.message
+        finding.rule_id == "governance_gate"
+        and "local branch protection" in finding.message
         for finding in report.findings
     )
 
@@ -752,12 +985,15 @@ def test_governance_audit_flags_agents_with_detailed_rule_duplication(tmp_path) 
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "agent_entry_sync" and "should not duplicate detailed rules" in finding.message
+        finding.rule_id == "agent_entry_sync"
+        and "should not duplicate detailed rules" in finding.message
         for finding in report.findings
     )
 
 
-def test_governance_audit_flags_agents_without_sandbox_escalation_rule(tmp_path) -> None:
+def test_governance_audit_flags_agents_without_sandbox_escalation_rule(
+    tmp_path,
+) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / "AGENTS.md").write_text(
         "所有 AI 编码助手统一以 AGENTS.md 为通用入口。\n\n"
@@ -770,7 +1006,8 @@ def test_governance_audit_flags_agents_without_sandbox_escalation_rule(tmp_path)
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "agent_entry_sync" and "遇到沙箱/权限阻断时申请提权" in finding.message
+        finding.rule_id == "agent_entry_sync"
+        and "遇到沙箱/权限阻断时申请提权" in finding.message
         for finding in report.findings
     )
 
@@ -785,7 +1022,8 @@ def test_governance_audit_flags_claude_with_codex_or_review_rules(tmp_path) -> N
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "claude_sync" and "Codex-only or standard review rules" in finding.message
+        finding.rule_id == "claude_sync"
+        and "Codex-only or standard review rules" in finding.message
         for finding in report.findings
     )
 
@@ -809,7 +1047,30 @@ def test_governance_audit_flags_missing_pr_cleanup_workflow_tokens(tmp_path) -> 
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "governance_gate" and "git push origin --delete <branch>" in finding.message
+        finding.rule_id == "governance_gate"
+        and "git push origin --delete <branch>" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_missing_dispatch_first_workflow_tokens(
+    tmp_path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / "docs/rules/pr-workflow.md").write_text(
+        "所有进入主干的改动必须通过 PR\n直写主干 ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON\n"
+        "禁止本地合并主干\nCodex Review Monitor\n"
+        "git fetch origin main\ngit merge --ff-only origin/main\n"
+        "git branch -d <branch>\ngit push origin --delete <branch>\n",
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "主会话只负责流程编排" in finding.message
         for finding in report.findings
     )
 
@@ -892,7 +1153,9 @@ def test_reference_transaction_branch_protection_requires_bypass_reason() -> Non
     assert violations == ["main"]
 
 
-def test_reference_transaction_branch_protection_allows_direct_main_fast_forward() -> None:
+def test_reference_transaction_branch_protection_allows_direct_main_fast_forward() -> (
+    None
+):
     violations = check_reference_transaction_input(
         "1" * 40 + " " + "2" * 40 + " refs/heads/main\n",
         environ={
@@ -915,7 +1178,9 @@ def test_reference_transaction_branch_protection_requires_direct_main_reason() -
     assert violations == ["main"]
 
 
-def test_reference_transaction_branch_protection_blocks_direct_main_non_fast_forward() -> None:
+def test_reference_transaction_branch_protection_blocks_direct_main_non_fast_forward() -> (
+    None
+):
     violations = check_reference_transaction_input(
         "2" * 40 + " " + "1" * 40 + " refs/heads/main\n",
         environ={
@@ -940,7 +1205,9 @@ def test_reference_transaction_branch_protection_allows_audited_bypass() -> None
     assert violations == []
 
 
-def test_reference_transaction_branch_protection_blocks_audited_non_origin_update() -> None:
+def test_reference_transaction_branch_protection_blocks_audited_non_origin_update() -> (
+    None
+):
     violations = check_reference_transaction_input(
         "1" * 40 + " " + "3" * 40 + " refs/heads/main\n",
         environ={
@@ -953,7 +1220,9 @@ def test_reference_transaction_branch_protection_blocks_audited_non_origin_updat
     assert violations == ["main"]
 
 
-def test_reference_transaction_branch_protection_blocks_audited_non_fast_forward_update() -> None:
+def test_reference_transaction_branch_protection_blocks_audited_non_fast_forward_update() -> (
+    None
+):
     violations = check_reference_transaction_input(
         "2" * 40 + " " + "1" * 40 + " refs/heads/main\n",
         environ={
@@ -967,18 +1236,563 @@ def test_reference_transaction_branch_protection_blocks_audited_non_fast_forward
 
 
 def _valid_codex_review_body(review_id: int = 4314779358) -> str:
+    cross_review = (
+        "- 子 agent 交叉评审: "
+        "superpowers:subagent-driven-development/spec-reviewer-prompt.md；"
+        "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；"
+        "至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；"
+        "见 `.local/ai-review/latest.md`"
+    )
     return "\n".join(
         [
+            "## AI Review 风险分级",
+            "",
+            "- 风险等级: high",
+            "- 是否需要官方 Codex Review: 是",
+            "- 本地 AI review: `.local/ai-review/latest.md`",
+            cross_review,
+            "- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent",
+            "- P0/P1 未关闭项: 无",
+            "",
+            "## P2 保留项",
+            "",
+            "- 无",
+            "",
             "## Codex Code Review \u7ed3\u8bba",
             "",
             "- Reviewer: `Codex`",
-            "- \u89e6\u53d1\u65b9\u5f0f: `@codex review \u6309 AGENTS.md \u548c docs/rules/review-guidelines.md \u5ba1\uff1b\u9010\u6761\u68c0\u67e5 docs/rules/*.md`",
+            "- \u89e6\u53d1\u65b9\u5f0f: `@codex review`",
             "- \u7ed3\u8bba: \u901a\u8fc7",
             "- \u963b\u65ad\u95ee\u9898: \u65e0",
             "- \u5173\u952e\u8bc1\u636e:",
             f"  - Codex review \u94fe\u63a5\uff1ahttps://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-{review_id}",
             "  - `scripts.research.governance gate`",
         ]
+    )
+
+
+def test_low_risk_pr_body_does_not_require_codex_review() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert report.ok, report.errors
+
+
+def test_low_risk_pr_body_requires_cross_review_and_dispatch_evidence() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "子 agent 交叉评审 must be filled" in report.errors
+    assert "任务分发说明 must be filled" in report.errors
+
+
+def test_low_risk_pr_body_requires_superpowers_cross_review_skills() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: 已由两个 reviewer 完成
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert any("子 agent 交叉评审 must include" in error for error in report.errors)
+
+
+def test_low_risk_pr_body_requires_two_reviewer_cross_review_evidence() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "子 agent 交叉评审 must include two reviewer names" in report.errors
+
+
+def test_low_risk_pr_body_rejects_duplicate_reviewer_names_with_markup() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: alice, `alice`；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "子 agent 交叉评审 must include two reviewer names" in report.errors
+
+
+def test_low_risk_pr_body_requires_actual_reviewer_names() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "子 agent 交叉评审 must include two reviewer names" in report.errors
+
+
+def test_low_risk_pr_body_accepts_reviewer_names_without_fixed_phrase() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert report.ok, report.errors
+
+
+def test_low_risk_pr_body_rejects_placeholder_reviewer_names() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: <规格评审子agent>, <代码质量评审子agent>；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "子 agent 交叉评审 must include two reviewer names" in report.errors
+
+
+def test_low_risk_pr_body_rejects_controller_or_implementer_reviewers() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: 主会话, 实现者；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "子 agent 交叉评审 must include two reviewer names" in report.errors
+
+
+def test_low_risk_pr_body_rejects_mixed_invalid_reviewer_names() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent, 实现者；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "子 agent 交叉评审 must not include invalid reviewer names" in report.errors
+
+
+def test_low_risk_pr_body_requires_local_ai_review_report_field() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "本地 AI review must be filled" in report.errors
+
+
+def test_low_risk_pr_body_with_high_risk_changed_files_requires_codex_review() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(
+        body,
+        comments=[],
+        changed_files=["scripts/research/governance/pr_review_evidence.py"],
+    )
+
+    assert not report.ok
+    assert "high-risk changed files require official Codex Review" in report.errors
+    assert "PR body missing section: Codex Code Review 结论" in report.errors
+
+
+def test_low_risk_pr_body_with_ai_risk_label_requires_codex_review() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[], labels=["ai-risk-review"])
+
+    assert not report.ok
+    assert "ai-risk-review label requires official Codex Review" in report.errors
+    assert "PR body missing section: Codex Code Review 结论" in report.errors
+
+
+def test_issue_label_names_extracts_github_issue_labels() -> None:
+    assert _issue_label_names(
+        {"labels": [{"name": "ai-risk-review"}, {"name": "docs"}]}
+    ) == ("ai-risk-review", "docs")
+
+
+def test_low_risk_pr_body_requires_p2_section() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "PR body missing section: P2 保留项" in report.errors
+
+
+def test_low_risk_pr_body_accepts_chinese_p2_fields() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- AIR-002：大型数据产物无法逐文件人工核验。
+  - 不修原因: 逐文件核验成本过高。
+  - 风险接受理由: 自动化检查覆盖 catalog、manifest 和 pathref。
+  - 处理方式: 合并后通过治理门禁和后续抽样复核跟踪。
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert report.ok, report.errors
+
+
+def test_low_risk_pr_body_rejects_p2_none_mixed_with_unjustified_item() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+- AIR-002：大型数据产物无法逐文件人工核验。
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "P2 保留项 must include defer_reason or 不修原因" in report.errors
+    assert "P2 保留项 must include risk_acceptance or 风险接受理由" in report.errors
+    assert "P2 保留项 must include handling or 处理方式" in report.errors
+
+
+def test_low_risk_pr_body_rejects_empty_dispatched_detail() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "任务分发说明 must include dispatched task detail" in report.errors
+
+
+def test_low_risk_pr_body_accepts_dispatched_detail_with_no_undispatched_items() -> (
+    None
+):
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent；无未分发项
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert report.ok, report.errors
+
+
+def test_low_risk_pr_body_requires_reason_when_task_not_dispatched() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 未分发
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "任务分发说明 must include reason when 未分发" in report.errors
+
+
+def test_low_risk_pr_body_rejects_empty_not_dispatched_reason() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 未分发，原因：
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "任务分发说明 must include reason when 未分发" in report.errors
+
+
+def test_low_risk_pr_body_rejects_weak_not_dispatched_reason() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 未分发，原因：-
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "任务分发说明 must include reason when 未分发" in report.errors
+
+
+def test_low_risk_pr_body_rejects_none_not_dispatched_reason() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 未分发：无
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "任务分发说明 must include reason when 未分发" in report.errors
+
+
+def test_high_risk_pr_body_requires_codex_review() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: high
+- 是否需要官方 Codex Review: 是
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## Codex Code Review 结论
+
+- Reviewer: `Codex`
+- 触发方式: `@codex review`
+- 结论: 未执行
+- 阻断问题: 未确认
+- 关键证据:
+  - Codex review 链接：https://github.com/example/repo/pull/1#pullrequestreview-1
+  - `scripts.research.governance gate`
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert any(
+        "PR comments must include the required @codex review trigger" in error
+        for error in report.errors
     )
 
 
@@ -990,7 +1804,7 @@ def _codex_completion_comment(
     return {
         "id": comment_id,
         "html_url": f"https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-{comment_id}",
-        "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+        "body": "@codex review",
         "created_at": created_at,
         "reaction_items": [
             {
@@ -1019,24 +1833,10 @@ def _codex_no_major_issues_comment(
 def test_pr_review_evidence_accepts_approved_codex_conclusion() -> None:
     head_sha = "0" * 40
     report = validate_pr_body(
-        "\n".join(
-            [
-                "## Codex Code Review 结论",
-                "",
-                "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
-                "- 结论: 通过",
-                "- 阻断问题: 无",
-                "- 关键证据:",
-                "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-                "  - `scripts.research.governance gate`",
-            ]
-        ),
+        _valid_codex_review_body(),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
         expected_head_sha=head_sha,
-        comments=[
-            "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。"
-        ],
+        comments=["@codex review"],
         reviews=[
             {
                 "id": 4314779358,
@@ -1051,14 +1851,45 @@ def test_pr_review_evidence_accepts_approved_codex_conclusion() -> None:
     assert report.errors == ()
 
 
+def test_low_risk_pr_body_can_still_require_official_codex_review() -> None:
+    head_sha = "0" * 40
+    report = validate_pr_body(
+        _valid_codex_review_body().replace("- 风险等级: high", "- 风险等级: low"),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        comments=["@codex review"],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "body": "### Codex Review\n\nNo blocking findings.",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+
+    assert report.ok
+    assert report.errors == ()
+
+
 def test_pr_review_evidence_rejects_unexecuted_codex_conclusion() -> None:
     report = validate_pr_body(
         "\n".join(
             [
+                "## AI Review 风险分级",
+                "",
+                "- 风险等级: high",
+                "- 是否需要官方 Codex Review: 是",
+                "- 本地 AI review: `.local/ai-review/latest.md`",
+                "- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`",
+                "- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent",
+                "- P0/P1 未关闭项: 无",
+                "",
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 未执行",
                 "- 阻断问题: 未确认",
                 "- 关键证据:",
@@ -1078,7 +1909,7 @@ def test_pr_review_evidence_rejects_placeholder_codex_review_link() -> None:
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1088,7 +1919,10 @@ def test_pr_review_evidence_rejects_placeholder_codex_review_link() -> None:
         )
     )
     assert not report.ok
-    assert "review evidence must include a real Codex review link for this PR" in report.errors
+    assert (
+        "review evidence must include a real Codex review link for this PR"
+        in report.errors
+    )
 
 
 def test_pr_review_evidence_rejects_other_pr_review_link() -> None:
@@ -1098,7 +1932,7 @@ def test_pr_review_evidence_rejects_other_pr_review_link() -> None:
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1109,7 +1943,10 @@ def test_pr_review_evidence_rejects_other_pr_review_link() -> None:
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
     )
     assert not report.ok
-    assert "review evidence must include a real Codex review link for this PR" in report.errors
+    assert (
+        "review evidence must include a real Codex review link for this PR"
+        in report.errors
+    )
 
 
 def test_pr_review_evidence_rejects_discussion_link_as_review() -> None:
@@ -1119,7 +1956,7 @@ def test_pr_review_evidence_rejects_discussion_link_as_review() -> None:
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1130,7 +1967,10 @@ def test_pr_review_evidence_rejects_discussion_link_as_review() -> None:
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
     )
     assert not report.ok
-    assert "review evidence must include a real Codex review link for this PR" in report.errors
+    assert (
+        "review evidence must include a real Codex review link for this PR"
+        in report.errors
+    )
 
 
 def test_pr_review_evidence_rejects_missing_required_trigger_comment() -> None:
@@ -1140,7 +1980,7 @@ def test_pr_review_evidence_rejects_missing_required_trigger_comment() -> None:
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1149,10 +1989,12 @@ def test_pr_review_evidence_rejects_missing_required_trigger_comment() -> None:
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
-        comments=["@codex review"],
+        comments=["looks good"],
     )
     assert not report.ok
-    assert "PR comments must include the required @codex review trigger" in report.errors
+    assert (
+        "PR comments must include the required @codex review trigger" in report.errors
+    )
 
 
 def test_pr_review_evidence_rejects_review_from_old_head() -> None:
@@ -1162,7 +2004,7 @@ def test_pr_review_evidence_rejects_review_from_old_head() -> None:
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1181,7 +2023,10 @@ def test_pr_review_evidence_rejects_review_from_old_head() -> None:
         ],
     )
     assert not report.ok
-    assert "Codex review link must match a Codex review on the current head" in report.errors
+    assert (
+        "Codex review link must match a Codex review on the current head"
+        in report.errors
+    )
 
 
 def test_pr_review_evidence_rejects_dismissed_codex_review_link() -> None:
@@ -1202,7 +2047,10 @@ def test_pr_review_evidence_rejects_dismissed_codex_review_link() -> None:
         review_comments=[],
     )
     assert not report.ok
-    assert "Codex review link must match a Codex review on the current head" in report.errors
+    assert (
+        "Codex review link must match a Codex review on the current head"
+        in report.errors
+    )
 
 
 def test_pr_review_evidence_ignores_dismissed_blocking_codex_review() -> None:
@@ -1303,7 +2151,7 @@ def test_pr_review_evidence_accepts_codex_no_major_issues_comment() -> None:
             {
                 "id": 4484212277,
                 "html_url": "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484212277",
-                "body": "@codex review\n\nPlease review according to AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md item by item.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T01:00:00Z",
             },
             _codex_no_major_issues_comment(),
@@ -1314,7 +2162,45 @@ def test_pr_review_evidence_accepts_codex_no_major_issues_comment() -> None:
     assert report.ok
 
 
-def test_pr_review_evidence_ignores_later_non_trigger_comment_for_no_major_issues() -> None:
+def test_pr_review_evidence_ignores_codex_help_text_when_matching_trigger() -> None:
+    head_sha = "0" * 40
+    body = _valid_codex_review_body().replace(
+        "https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
+        "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484229220",
+    )
+    codex_comment = _codex_no_major_issues_comment()
+    codex_comment["body"] = (
+        "Codex Review: Didn't find any major issues. Hooray!\n\n"
+        "<details><summary>About Codex</summary>\n"
+        'Reviews are triggered when you comment "@codex review".\n'
+        "</details>"
+    )
+
+    report = validate_pr_body(
+        body,
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        expected_head_created_at="2026-05-19T00:59:00Z",
+        comments=[
+            {
+                "id": 4484212277,
+                "html_url": "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484212277",
+                "body": "@codex review",
+                "created_at": "2026-05-19T01:00:00Z",
+                "user": {"login": "liuli195"},
+            },
+            codex_comment,
+        ],
+        reviews=[],
+        review_comments=[],
+    )
+
+    assert report.ok
+
+
+def test_pr_review_evidence_ignores_later_non_trigger_comment_for_no_major_issues() -> (
+    None
+):
     head_sha = "0" * 40
     body = _valid_codex_review_body().replace(
         "https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
@@ -1329,7 +2215,7 @@ def test_pr_review_evidence_ignores_later_non_trigger_comment_for_no_major_issue
             {
                 "id": 4484212277,
                 "html_url": "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484212277",
-                "body": "@codex review\n\nPlease review according to AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md item by item.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T01:00:00Z",
             },
             _codex_no_major_issues_comment(created_at="2026-05-19T01:05:00Z"),
@@ -1345,7 +2231,9 @@ def test_pr_review_evidence_ignores_later_non_trigger_comment_for_no_major_issue
     assert report.ok
 
 
-def test_pr_review_evidence_ignores_later_non_trigger_comment_for_completion_reaction() -> None:
+def test_pr_review_evidence_ignores_later_non_trigger_comment_for_completion_reaction() -> (
+    None
+):
     head_sha = "0" * 40
     body = _valid_codex_review_body().replace(
         "#pullrequestreview-4314779358",
@@ -1384,7 +2272,7 @@ def test_pr_review_evidence_rejects_completion_before_latest_required_trigger() 
         comments=[
             _codex_completion_comment(created_at="2026-05-19T01:00:00Z"),
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T01:05:00Z",
             },
         ],
@@ -1392,7 +2280,10 @@ def test_pr_review_evidence_rejects_completion_before_latest_required_trigger() 
         review_comments=[],
     )
     assert not report.ok
-    assert "Codex completion comment must match the latest required @codex review trigger" in report.errors
+    assert (
+        "Codex completion comment must match the latest required @codex review trigger"
+        in report.errors
+    )
 
 
 def test_pr_review_evidence_reads_monitor_head_state_for_head_cutoff() -> None:
@@ -1417,7 +2308,7 @@ def test_pr_review_evidence_rejects_codex_review_with_blocking_body_finding() ->
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1438,7 +2329,10 @@ def test_pr_review_evidence_rejects_codex_review_with_blocking_body_finding() ->
         review_comments=[],
     )
     assert not report.ok
-    assert "Codex review must not contain P0/P1 findings on the current head" in report.errors
+    assert (
+        "Codex review must not contain P0/P1 findings on the current head"
+        in report.errors
+    )
 
 
 def test_pr_review_evidence_rejects_codex_review_with_blocking_inline_finding() -> None:
@@ -1449,7 +2343,7 @@ def test_pr_review_evidence_rejects_codex_review_with_blocking_inline_finding() 
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1475,7 +2369,10 @@ def test_pr_review_evidence_rejects_codex_review_with_blocking_inline_finding() 
         ],
     )
     assert not report.ok
-    assert "Codex review must not contain P0/P1 findings on the current head" in report.errors
+    assert (
+        "Codex review must not contain P0/P1 findings on the current head"
+        in report.errors
+    )
 
 
 def test_pr_review_evidence_rejects_review_before_required_trigger_comment() -> None:
@@ -1486,7 +2383,7 @@ def test_pr_review_evidence_rejects_review_before_required_trigger_comment() -> 
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1498,7 +2395,7 @@ def test_pr_review_evidence_rejects_review_before_required_trigger_comment() -> 
         expected_head_sha=head_sha,
         comments=[
             {
-                "body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。",
+                "body": "@codex review",
                 "created_at": "2026-05-19T00:10:00Z",
             }
         ],
@@ -1514,7 +2411,10 @@ def test_pr_review_evidence_rejects_review_before_required_trigger_comment() -> 
         review_comments=[],
     )
     assert not report.ok
-    assert "Codex review must be submitted after the required @codex review trigger" in report.errors
+    assert (
+        "Codex review must be submitted after the required @codex review trigger"
+        in report.errors
+    )
 
 
 def test_pr_review_evidence_waits_for_review_after_latest_required_trigger() -> None:
@@ -1526,11 +2426,11 @@ def test_pr_review_evidence_waits_for_review_after_latest_required_trigger() -> 
         expected_head_created_at="2026-05-19T00:00:00Z",
         comments=[
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T00:05:00Z",
             },
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T00:15:00Z",
             },
         ],
@@ -1546,7 +2446,10 @@ def test_pr_review_evidence_waits_for_review_after_latest_required_trigger() -> 
         review_comments=[],
     )
     assert not report.ok
-    assert "Codex review must be submitted after the required @codex review trigger" in report.errors
+    assert (
+        "Codex review must be submitted after the required @codex review trigger"
+        in report.errors
+    )
 
 
 def test_pr_review_evidence_rejects_trigger_before_current_head() -> None:
@@ -1557,7 +2460,7 @@ def test_pr_review_evidence_rejects_trigger_before_current_head() -> None:
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1570,7 +2473,7 @@ def test_pr_review_evidence_rejects_trigger_before_current_head() -> None:
         expected_head_created_at="2026-05-19T00:10:00Z",
         comments=[
             {
-                "body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。",
+                "body": "@codex review",
                 "created_at": "2026-05-19T00:09:00Z",
             }
         ],
@@ -1586,7 +2489,10 @@ def test_pr_review_evidence_rejects_trigger_before_current_head() -> None:
         review_comments=[],
     )
     assert not report.ok
-    assert "required @codex review trigger must be submitted after the current head" in report.errors
+    assert (
+        "required @codex review trigger must be submitted after the current head"
+        in report.errors
+    )
 
 
 def test_pr_review_evidence_uses_comment_updated_at_for_trigger_time() -> None:
@@ -1597,7 +2503,7 @@ def test_pr_review_evidence_uses_comment_updated_at_for_trigger_time() -> None:
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1610,7 +2516,7 @@ def test_pr_review_evidence_uses_comment_updated_at_for_trigger_time() -> None:
         expected_head_created_at="2026-05-19T00:07:00Z",
         comments=[
             {
-                "body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。",
+                "body": "@codex review",
                 "created_at": "2026-05-19T00:08:00Z",
                 "updated_at": "2026-05-19T00:12:00Z",
             }
@@ -1627,7 +2533,10 @@ def test_pr_review_evidence_uses_comment_updated_at_for_trigger_time() -> None:
         review_comments=[],
     )
     assert not report.ok
-    assert "Codex review must be submitted after the required @codex review trigger" in report.errors
+    assert (
+        "Codex review must be submitted after the required @codex review trigger"
+        in report.errors
+    )
 
 
 def test_pr_review_evidence_rejects_any_current_head_blocking_codex_review() -> None:
@@ -1638,7 +2547,7 @@ def test_pr_review_evidence_rejects_any_current_head_blocking_codex_review() -> 
                 "## Codex Code Review 结论",
                 "",
                 "- Reviewer: `Codex`",
-                "- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`",
+                "- 触发方式: `@codex review`",
                 "- 结论: 通过",
                 "- 阻断问题: 无",
                 "- 关键证据:",
@@ -1650,7 +2559,7 @@ def test_pr_review_evidence_rejects_any_current_head_blocking_codex_review() -> 
         expected_head_sha=head_sha,
         comments=[
             {
-                "body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。",
+                "body": "@codex review",
                 "created_at": "2026-05-19T00:09:00Z",
             }
         ],
@@ -1674,7 +2583,52 @@ def test_pr_review_evidence_rejects_any_current_head_blocking_codex_review() -> 
         review_comments=[],
     )
     assert not report.ok
-    assert "Codex review must not contain P0/P1 findings on the current head" in report.errors
+    assert (
+        "Codex review must not contain P0/P1 findings on the current head"
+        in report.errors
+    )
+
+
+def test_pr_review_evidence_rejects_unresolved_blocking_codex_threads() -> None:
+    head_sha = "0" * 40
+    report = validate_pr_body(
+        _valid_codex_review_body(),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        comments=[
+            {
+                "body": "@codex review",
+                "created_at": "2026-05-19T00:09:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T00:10:00Z",
+                "body": "### Codex Review",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+        review_threads=[
+            {
+                "isResolved": False,
+                "isOutdated": False,
+                "comments": [
+                    {
+                        "body": "**![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat) blocking**",
+                        "author": {"login": "chatgpt-codex-connector[bot]"},
+                    }
+                ],
+            }
+        ],
+    )
+    assert not report.ok
+    assert (
+        "Codex review must not have unresolved non-outdated P0/P1 threads"
+        in report.errors
+    )
 
 
 def test_parse_next_link_finds_github_pagination_next_url() -> None:
@@ -1693,15 +2647,39 @@ def test_codex_review_monitor_reports_waiting_for_codex_after_trigger() -> None:
         repo="liuli195/Quant-Trading",
         pr_number="5",
         pr={"head": {"sha": "0" * 40}},
-        issue_comments=[
-            {"body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。"}
-        ],
+        issue_comments=[{"body": "@codex review"}],
         reviews=[],
         review_comments=[],
     )
     assert report.status == "waiting_for_codex"
     assert report.trigger_found
     assert "等待 Codex review" in render_monitor_comment(report)
+
+
+def test_codex_review_monitor_blocks_unresolved_blocking_threads() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        issue_comments=[{"body": "@codex review"}],
+        reviews=[],
+        review_comments=[],
+        review_threads=[
+            {
+                "isResolved": False,
+                "isOutdated": False,
+                "comments": [
+                    {
+                        "body": "**![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat) blocking**",
+                        "author": {"login": "chatgpt-codex-connector[bot]"},
+                    }
+                ],
+            }
+        ],
+    )
+    assert report.status == "blocked"
+    assert report.blocking_findings == 1
 
 
 def test_codex_review_monitor_passes_on_codex_completion_reaction() -> None:
@@ -1716,7 +2694,10 @@ def test_codex_review_monitor_passes_on_codex_completion_reaction() -> None:
         review_comments=[],
     )
     assert report.status == "passed"
-    assert report.latest_review_url == "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484023766"
+    assert (
+        report.latest_review_url
+        == "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484023766"
+    )
 
 
 def test_codex_review_monitor_passes_on_codex_no_major_issues_comment() -> None:
@@ -1728,7 +2709,7 @@ def test_codex_review_monitor_passes_on_codex_no_major_issues_comment() -> None:
         head_created_at="2026-05-19T00:59:00Z",
         issue_comments=[
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T01:00:00Z",
             },
             _codex_no_major_issues_comment(),
@@ -1737,10 +2718,49 @@ def test_codex_review_monitor_passes_on_codex_no_major_issues_comment() -> None:
         review_comments=[],
     )
     assert report.status == "passed"
-    assert report.latest_review_url == "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484229220"
+    assert (
+        report.latest_review_url
+        == "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484229220"
+    )
 
 
-def test_codex_review_monitor_waits_for_completion_after_latest_required_trigger() -> None:
+def test_codex_review_monitor_ignores_codex_help_text_when_matching_trigger() -> None:
+    head_sha = "0" * 40
+    codex_comment = _codex_no_major_issues_comment()
+    codex_comment["body"] = (
+        "Codex Review: Didn't find any major issues. Hooray!\n\n"
+        "<details><summary>About Codex</summary>\n"
+        'Reviews are triggered when you comment "@codex review".\n'
+        "</details>"
+    )
+
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        head_created_at="2026-05-19T00:59:00Z",
+        issue_comments=[
+            {
+                "body": "@codex review",
+                "created_at": "2026-05-19T01:00:00Z",
+                "user": {"login": "liuli195"},
+            },
+            codex_comment,
+        ],
+        reviews=[],
+        review_comments=[],
+    )
+
+    assert report.status == "passed"
+    assert (
+        report.latest_review_url
+        == "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484229220"
+    )
+
+
+def test_codex_review_monitor_waits_for_completion_after_latest_required_trigger() -> (
+    None
+):
     head_sha = "0" * 40
     report = build_monitor_report(
         repo="liuli195/Quant-Trading",
@@ -1750,7 +2770,7 @@ def test_codex_review_monitor_waits_for_completion_after_latest_required_trigger
         issue_comments=[
             _codex_completion_comment(created_at="2026-05-19T01:00:00Z"),
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T01:05:00Z",
             },
         ],
@@ -1771,7 +2791,7 @@ def test_codex_review_monitor_rejects_trigger_before_current_head() -> None:
         head_created_at="2026-05-19T01:00:00Z",
         issue_comments=[
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T00:59:00Z",
             }
         ],
@@ -1799,7 +2819,7 @@ def test_codex_review_monitor_waits_for_review_after_required_trigger() -> None:
         head_created_at="2026-05-19T01:00:00Z",
         issue_comments=[
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T01:02:00Z",
             }
         ],
@@ -1827,11 +2847,11 @@ def test_codex_review_monitor_waits_for_review_after_latest_required_trigger() -
         head_created_at="2026-05-19T01:00:00Z",
         issue_comments=[
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T01:02:00Z",
             },
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T01:05:00Z",
             },
         ],
@@ -1856,9 +2876,7 @@ def test_codex_review_monitor_reports_passed_current_head_review() -> None:
         repo="liuli195/Quant-Trading",
         pr_number="5",
         pr={"head": {"sha": head_sha}},
-        issue_comments=[
-            {"body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。"}
-        ],
+        issue_comments=[{"body": "@codex review"}],
         reviews=[
             {
                 "id": 4314779358,
@@ -1871,7 +2889,10 @@ def test_codex_review_monitor_reports_passed_current_head_review() -> None:
         review_comments=[],
     )
     assert report.status == "passed"
-    assert report.latest_review_url == "https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358"
+    assert (
+        report.latest_review_url
+        == "https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358"
+    )
 
 
 def test_codex_review_monitor_ignores_dismissed_reviews() -> None:
@@ -1882,7 +2903,7 @@ def test_codex_review_monitor_ignores_dismissed_reviews() -> None:
         pr={"head": {"sha": head_sha}},
         issue_comments=[
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T01:00:00Z",
             }
         ],
@@ -1908,9 +2929,7 @@ def test_codex_review_monitor_reports_blocked_on_p1_inline_comment() -> None:
         repo="liuli195/Quant-Trading",
         pr_number="5",
         pr={"head": {"sha": head_sha}},
-        issue_comments=[
-            {"body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。"}
-        ],
+        issue_comments=[{"body": "@codex review"}],
         reviews=[
             {
                 "id": 4314779358,
@@ -1942,7 +2961,7 @@ def test_codex_review_priority_patterns_match_plain_text_titles() -> None:
         pr={"head": {"sha": head_sha}},
         issue_comments=[
             {
-                "body": "@codex review\n\nPlease use AGENTS.md and docs/rules/review-guidelines.md; check docs/rules/*.md.",
+                "body": "@codex review",
                 "created_at": "2026-05-19T01:00:00Z",
             }
         ],
@@ -1971,9 +2990,7 @@ def test_codex_review_monitor_blocks_on_any_current_head_codex_review() -> None:
         repo="liuli195/Quant-Trading",
         pr_number="5",
         pr={"head": {"sha": head_sha}},
-        issue_comments=[
-            {"body": "@codex review\n\n请按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md。"}
-        ],
+        issue_comments=[{"body": "@codex review"}],
         reviews=[
             {
                 "id": 4314779358,
@@ -1994,4 +3011,7 @@ def test_codex_review_monitor_blocks_on_any_current_head_codex_review() -> None:
     )
     assert report.status == "blocked"
     assert report.blocking_findings == 1
-    assert report.latest_review_url == "https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779360"
+    assert (
+        report.latest_review_url
+        == "https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779360"
+    )

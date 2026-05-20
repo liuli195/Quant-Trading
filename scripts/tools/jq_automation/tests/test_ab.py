@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import json
 import subprocess
 import tempfile
@@ -316,6 +317,64 @@ class MetricsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             result = extract_from_summary_metrics(Path(tmp))
             self.assertEqual(result, {})
+
+    def test_extract_metrics_follow_data_center_pointers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_dir = root / "run"
+            run_dir.mkdir()
+            snapshot = root / "research_datasets" / "demo" / "run"
+            (snapshot / "raw").mkdir(parents=True)
+            summary = {
+                "策略收益": "15.30%",
+                "策略年化收益": "12.50%",
+                "夏普比率": "1.350",
+            }
+            api = {"stats": {"data": {"algorithm_volatility": 0.22}}}
+            (snapshot / "raw" / "summary_metrics.json.gz").write_bytes(
+                gzip.compress(json.dumps(summary, ensure_ascii=False).encode("utf-8"))
+            )
+            (snapshot / "raw" / "api_export.json.gz").write_bytes(
+                gzip.compress(json.dumps(api, ensure_ascii=False).encode("utf-8"))
+            )
+            (run_dir / "summary_metrics.json").write_text(
+                json.dumps(
+                    {
+                        "kind": "data_center_pointer",
+                        "dataset_snapshot": snapshot.as_posix(),
+                        "dataset_file": "raw/summary_metrics.json.gz",
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (run_dir / "api_export.json").write_text(
+                json.dumps(
+                    {
+                        "kind": "data_center_pointer",
+                        "dataset_snapshot": snapshot.as_posix(),
+                        "dataset_file": "raw/api_export.json.gz",
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            summary_metrics = extract_from_summary_metrics(run_dir)
+            api_metrics = extract_from_api_stats(run_dir / "api_export.json")
+            merged = collect_all_metrics(
+                run_dir,
+                "run",
+                experiment_metrics=[
+                    {"key": "annual_return", "direction": "maximize"},
+                    {"key": "volatility", "direction": "minimize"},
+                ],
+            ).metrics
+
+            self.assertAlmostEqual(summary_metrics["annual_return"], 0.125)
+            self.assertAlmostEqual(api_metrics["volatility"], 0.22)
+            self.assertAlmostEqual(merged["annual_return"], 0.125)
+            self.assertAlmostEqual(merged["volatility"], 0.22)
 
     def test_extract_from_api_stats(self) -> None:
         bundle = {

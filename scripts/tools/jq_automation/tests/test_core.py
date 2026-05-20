@@ -434,8 +434,48 @@ class CoreTests(unittest.TestCase):
                 strategy="demo",
                 run_id="r1",
                 datasets_root=root / "research_datasets",
+                compact_source=True,
             )
             duplicate = register_backtest_run_dataset(
+                run_dir,
+                strategy="demo",
+                run_id="r1",
+                datasets_root=root / "research_datasets",
+                compact_source=True,
+            )
+
+            self.assertIsNotNone(snapshot)
+            self.assertIsNone(duplicate)
+            self.assertTrue((root / "research_datasets" / "demo_backtest_runs" / "r1" / "dataset.json").is_file())
+            api_pointer = json.loads((run_dir / "api_export.json").read_text(encoding="utf-8"))
+            audit_pointer = json.loads((tabs / "audit_log.jsonl").read_text(encoding="utf-8"))
+            summary_pointer = json.loads((run_dir / "summary_metrics.json").read_text(encoding="utf-8"))
+            returns_pointer = json.loads((tabs / "daily_returns.md").read_text(encoding="utf-8"))
+            self.assertEqual(api_pointer["kind"], "data_center_pointer")
+            self.assertEqual(api_pointer["dataset_file"], "raw/api_export.json.gz")
+            self.assertEqual(audit_pointer["kind"], "data_center_pointer")
+            self.assertEqual(audit_pointer["dataset_file"], "raw/audit_log.jsonl.gz")
+            self.assertEqual(summary_pointer["dataset_file"], "raw/summary_metrics.json.gz")
+            self.assertEqual(returns_pointer["dataset_file"], "raw/daily_returns.md.gz")
+
+    def test_register_backtest_run_dataset_keeps_raw_files_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_dir = root / "backtest_runs" / "demo" / "r1"
+            tabs = run_dir / "tabs_raw"
+            tabs.mkdir(parents=True)
+            (run_dir / "summary_metrics.json").write_text(json.dumps({"sharpe": 1.0}), encoding="utf-8")
+            (run_dir / "api_export.json").write_text(json.dumps({"status": "ok"}), encoding="utf-8")
+            (tabs / "daily_returns.md").write_text(
+                "| date | cumulative_return |\n| --- | ---: |\n| 2026-01-01 | 0.010000 |\n",
+                encoding="utf-8",
+            )
+            (tabs / "audit_log.jsonl").write_text(
+                '{"seq": 1, "event": "run_start", "current_dt": "2026-01-01 09:30:00"}\n',
+                encoding="utf-8",
+            )
+
+            snapshot = register_backtest_run_dataset(
                 run_dir,
                 strategy="demo",
                 run_id="r1",
@@ -443,8 +483,10 @@ class CoreTests(unittest.TestCase):
             )
 
             self.assertIsNotNone(snapshot)
-            self.assertIsNone(duplicate)
-            self.assertTrue((root / "research_datasets" / "demo_backtest_runs" / "r1" / "dataset.json").is_file())
+            self.assertEqual(json.loads((run_dir / "summary_metrics.json").read_text(encoding="utf-8")), {"sharpe": 1.0})
+            self.assertEqual(json.loads((run_dir / "api_export.json").read_text(encoding="utf-8")), {"status": "ok"})
+            self.assertIn("cumulative_return", (tabs / "daily_returns.md").read_text(encoding="utf-8"))
+            self.assertIn("run_start", (tabs / "audit_log.jsonl").read_text(encoding="utf-8"))
 
 
     def test_bundle_options_includes_frequency_and_py_version(self) -> None:

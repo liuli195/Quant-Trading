@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .pointers import read_text_file
+
 
 def _iter_audit_rows(path: str | Path):
-    for line in Path(path).read_text(encoding="utf-8").splitlines():
+    for line in read_text_file(path).splitlines():
         if not line.strip():
             continue
         yield json.loads(line)

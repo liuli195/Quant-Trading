@@ -17,14 +17,28 @@
 - [ ] `.\.venv\Scripts\python.exe -m scripts.tools.path_tools.refactor check`
 - [ ] 相关 pytest / py_compile
 
+## AI Review 风险分级
+
+- 风险等级: low / high / unknown
+- 是否需要官方 Codex Review: 是 / 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: 填写 `superpowers:subagent-driven-development/spec-reviewer-prompt.md` + `superpowers:subagent-driven-development/code-quality-reviewer-prompt.md`；reviewers: <规格评审子agent>, <代码质量评审子agent>；见 `.local/ai-review/latest.md`
+- 任务分发说明: 填写已分发任务；未分发时写原因
+- Codex Review Scope: `.local/ai-review/codex-review-scope.md`
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+
 ## Codex Code Review 结论
 
 - Reviewer: `Codex`
-- 触发方式: `@codex review 按 AGENTS.md 和 docs/rules/review-guidelines.md 审；逐条检查 docs/rules/*.md`
-- 结论: 未执行
-- 阻断问题: 未确认
+- 触发方式: `@codex review`
+- 结论: 未要求 / 未执行 / 通过
+- 阻断问题: 无 / 未确认
 - 关键证据:
-  - Codex review 链接：https://github.com/<owner>/<repo>/pull/<number>#pullrequestreview-<id>
+  - Codex review 链接：
   - `.\.venv\Scripts\python.exe -m scripts.research.governance gate`
 
 ## waiver

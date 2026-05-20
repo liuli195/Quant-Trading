@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "catalog_type": "docs",
-  "generated_at": "2026-05-19T17:25:48+00:00",
-  "count": 40,
+  "generated_at": "2026-05-19T20:29:02+00:00",
+  "count": 41,
   "reports": [
     {
       "path": "docs/README.md",
@@ -136,7 +136,7 @@
         "docs/indexes/reports.md",
         "scripts/research/layers"
       ],
-      "updated_at": "2026-05-19T15:28:55+00:00"
+      "updated_at": "2026-05-19T20:26:07+00:00"
     },
     {
       "path": "docs/cc-switch-cli.md",
@@ -161,9 +161,23 @@
         "repo/CLAUDE.md",
         "docs/adr/0005-ai-entry-progressive-disclosure.md",
         "docs/rules/governance.md",
-        "docs/rules/docs-and-pathref.md"
+        "docs/rules/docs-and-pathref.md",
+        "repo/.claude/skills",
+        "repo/.claude/skills/agent-doc-add/SKILL.md",
+        "repo/.claude/skills/agent-doc-refactor/SKILL.md",
+        "repo/.claude/skills/jq-ab-test/SKILL.md",
+        "repo/.claude/skills/jq-analyze/SKILL.md",
+        "repo/.claude/skills/jq-fix/SKILL.md",
+        "repo/.claude/skills/jq-param-scan/SKILL.md",
+        "repo/.claude/skills/jq-research/SKILL.md",
+        "repo/.claude/skills/jq-run/SKILL.md",
+        "repo/AGENTS.md",
+        "repo/CLAUDE.md",
+        "repo/.claude/skills",
+        "repo/AGENTS.md",
+        "repo/CLAUDE.md"
       ],
-      "updated_at": "2026-05-19T17:16:04+00:00"
+      "updated_at": "2026-05-19T19:16:05+00:00"
     },
     {
       "path": "docs/design/本地研究平台重构.md",
@@ -479,7 +493,7 @@
         "scripts/tools/path_tools/README.md",
         "docs/guides/research-workflow.md"
       ],
-      "updated_at": "2026-05-19T15:28:55+00:00"
+      "updated_at": "2026-05-19T19:45:32+00:00"
     },
     {
       "path": "docs/rules/docs-and-pathref.md",
@@ -502,7 +516,7 @@
         "repo/AGENTS.md",
         "repo/CLAUDE.md"
       ],
-      "updated_at": "2026-05-19T17:24:36+00:00"
+      "updated_at": "2026-05-19T19:16:05+00:00"
     },
     {
       "path": "docs/rules/index.md",
@@ -542,7 +556,7 @@
         "repo/AGENTS.md",
         "repo/CLAUDE.md"
       ],
-      "updated_at": "2026-05-19T17:24:26+00:00"
+      "updated_at": "2026-05-19T19:16:05+00:00"
     },
     {
       "path": "docs/rules/research-workflow.md",
@@ -552,7 +566,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-18T21:37:05+00:00"
+      "updated_at": "2026-05-19T20:25:41+00:00"
     },
     {
       "path": "docs/rules/review-guidelines.md",
@@ -575,6 +589,24 @@
         "docs/rules/docs-and-pathref.md"
       ],
       "updated_at": "2026-05-19T15:28:55+00:00"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-05-20-backtest-data-redundancy-compaction.md",
+      "title": "回测数据冗余压缩实施计划",
+      "category": "docs",
+      "strategy": null,
+      "date": "2026-05-20",
+      "tags": [],
+      "pathrefs": [
+        "scripts/research/platform/datasets.py",
+        "scripts/research/datasets.py",
+        "scripts/research/research_core/metrics.py",
+        "scripts/research/research_core/audit.py",
+        "scripts/research/platform/tests/test_platform.py",
+        "scripts/tools/jq_automation/tests/test_core.py",
+        "repo/.gitignore"
+      ],
+      "updated_at": "2026-05-19T20:26:25+00:00"
     }
   ]
 }

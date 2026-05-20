@@ -130,6 +130,19 @@ docs/joinquant-data/quota_ledger/
 **/curves/*.svg
 **/curves/*.csv
 
+# 数据中心压缩原始回测大文件：本地保留，不进入 Git
+research_datasets/**/raw/api_export.json.gz
+research_datasets/**/raw/detail_api_export.json.gz
+research_datasets/**/raw/audit_log.jsonl.gz
+research_datasets/**/raw/summary_metrics.json.gz
+research_datasets/**/raw/daily_returns.md.gz
+research_datasets/**/raw/positioninfo.md.gz
+research_datasets/**/raw/transactioninfo.md.gz
+research_datasets/**/raw/balances.md.gz
+research_datasets/**/raw/period_risks.md.gz
+research_datasets/**/raw/logs.md.gz
+research_datasets/**/raw/backtest_run*.tar.gz
+
 # ========================
 # 安全网：参数扫描临时文件
 # ========================

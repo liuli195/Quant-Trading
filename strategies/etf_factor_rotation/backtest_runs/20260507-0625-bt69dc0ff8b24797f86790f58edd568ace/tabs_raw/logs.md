@@ -1,57 +1,11 @@
-# 策略日志
-
-- INFO：892  |  WARNING：108  |  ERROR：0
-- 触发调仓：0  |  跳过调仓：0
-
-```text
-2021-01-04 09:30:00 - INFO  - history end_date=2020-12-31 00:00:00, context.previous_date=2020-12-31
-2021-01-04 09:30:00 - INFO  - [趋势门槛] TrendGate: 人工智能ETF易方达(159819.XSHE)=0, 纳指ETF(513100.XSHG)=1, 黄金ETF(518880.XSHG)=0
-2021-01-04 09:30:00 - INFO  - [动量分数] MomentumScore: 人工智能ETF易方达(159819.XSHE)=0.0000, 纳指ETF(513100.XSHG)=1.0000, 黄金ETF(518880.XSHG)=0.0000
-2021-01-04 09:30:00 - INFO  - [TopK入选] Selected: 人工智能ETF易方达(159819.XSHE)=0, 纳指ETF(513100.XSHG)=1, 黄金ETF(518880.XSHG)=0
-2021-01-04 09:30:00 - INFO  - [风险平价权重] RPWeight: 人工智能ETF易方达(159819.XSHE)=0.0000, 纳指ETF(513100.XSHG)=1.0000, 黄金ETF(518880.XSHG)=0.0000
-2021-01-04 09:30:00 - INFO  - [RSRS修正乘数] RSRSMultiplier: 人工智能ETF易方达(159819.XSHE)=1.0000, 纳指ETF(513100.XSHG)=0.7805, 黄金ETF(518880.XSHG)=1.2632
-2021-01-04 09:30:00 - INFO  - [拥挤度惩罚] CrowdPenalty: 人工智能ETF易方达(159819.XSHE)=1.0000, 纳指ETF(513100.XSHG)=1.0000, 黄金ETF(518880.XSHG)=1.0000
-2021-01-04 09:30:00 - INFO  - [组合波动率缩放] PortfolioVolScale=0.4100
-2021-01-04 09:30:00 - INFO  - [最终权重] FinalWeight: 人工智能ETF易方达(159819.XSHE)=0.0000, 纳指ETF(513100.XSHG)=0.3200, 黄金ETF(518880.XSHG)=0.0000
-2021-01-04 09:30:00 - WARNING - Security(code=159819.XSHE) 在 positions 中不存在, 为了保持兼容, 我们返回空的 Position 对象, amount/price/avg_cost/acc_avg_cost 都是 0
-2021-01-04 09:30:00 - WARNING - Security(code=513100.XSHG) 在 positions 中不存在, 为了保持兼容, 我们返回空的 Position 对象, amount/price/avg_cost/acc_avg_cost 都是 0
-2021-01-04 09:30:00 - INFO  - 开仓数量必须是100的整数倍，调整为 36600: Order(security=513100.XSHG mode=OrderTargetValue: _value=31999.851043058225 style=MarketOrderStyle: _limit_price=0.0 side=long margin=False entrust_time=None finish_time=None)
-2021-01-04 09:30:00 - INFO  - 下单检查标的数量：StockOrder(entrust_id=1778106321 security=513100.XSHG mode=OrderTargetValue: _value=31999.851043058225 style=MarketOrderStyle: _limit_price=0.0 side=long action=open margin=False entrust_time=2021-01-04 09:30:00 cancel_time=None finish_time=None comment= error=开仓数量必须是 100 的整数倍，调整为 36600)
-2021-01-04 09:30:00 - INFO  - order StockOrder(entrust_id=1778106321 security=513100.XSHG mode=OrderTargetValue: _value=31999.851043058225 style=MarketOrderStyle: _limit_price=0.0 side=long action=open margin=False entrust_time=2021-01-04 09:30:00 cancel_time=None finish_time=None comment= error=开仓数量必须是 100 的整数倍，调整为 36600) trade price: 0.873, amount:36600, commission: 3.19518
-2021-01-04 09:30:00 - INFO  - 订单已委托：StockOrder(entrust_id=1778106321 security=513100.XSHG mode=OrderTargetValue: _value=31999.851043058225 style=MarketOrderStyle: _limit_price=0.0 side=long action=open margin=False entrust_time=2021-01-04 09:30:00 cancel_time=None finish_time=2021-01-04 09:30:00 comment= error=开仓数量必须是 100 的整数倍，调整为 36600)
-2021-01-04 09:30:00 - INFO  - order sent: 纳指ETF(513100.XSHG) security=513100.XSHG target_weight=0.3200 current_weight=0.0000 target_value=31999.85
-2021-01-04 09:30:00 - WARNING - Security(code=518880.XSHG) 在 positions 中不存在, 为了保持兼容, 我们返回空的 Position 对象, amount/price/avg_cost/acc_avg_cost 都是 0
-2021-01-11 09:30:00 - INFO  - history end_date=2021-01-08 00:00:00, context.previous_date=2021-01-08
-2021-01-11 09:30:00 - INFO  - [趋势门槛] TrendGate: 人工智能ETF易方达(159819.XSHE)=0, 纳指ETF(513100.XSHG)=0, 黄金ETF(518880.XSHG)=0
-2021-01-11 09:30:00 - INFO  - [动量分数] MomentumScore: 人工智能ETF易方达(159819.XSHE)=0.0000, 纳指ETF(513100.XSHG)=0.0000, 黄金ETF(518880.XSHG)=0.0000
-2021-01-11 09:30:00 - INFO  - [TopK入选] Selected: 人工智能ETF易方达(159819.XSHE)=0, 纳指ETF(513100.XSHG)=0, 黄金ETF(518880.XSHG)=0
-2021-01-11 09:30:00 - INFO  - [风险平价权重] RPWeight: 人工智能ETF易方达(159819.XSHE)=0.0000, 纳指ETF(513100.XSHG)=0.0000, 黄金ETF(518880.XSHG)=0.0000
-2021-01-11 09:30:00 - INFO  - [RSRS修正乘数] RSRSMultiplier: 人工智能ETF易方达(159819.XSHE)=1.0000, 纳指ETF(513100.XSHG)=1.0564, 黄金ETF(518880.XSHG)=0.7659
-2021-01-11 09:30:00 - INFO  - [拥挤度惩罚] CrowdPenalty: 人工智能ETF易方达(159819.XSHE)=1.0000, 纳指ETF(513100.XSHG)=1.0000, 黄金ETF(518880.XSHG)=1.0000
-2021-01-11 09:30:00 - INFO  - [组合波动率缩放] PortfolioVolScale=1.0000
-2021-01-11 09:30:00 - INFO  - [最终权重] FinalWeight: 人工智能ETF易方达(159819.XSHE)=0.0000, 纳指ETF(513100.XSHG)=0.0000, 黄金ETF(518880.XSHG)=0.0000
-2021-01-11 09:30:00 - WARNING - Security(code=159819.XSHE) 在 positions 中不存在, 为了保持兼容, 我们返回空的 Position 对象, amount/price/avg_cost/acc_avg_cost 都是 0
-2021-01-11 09:30:00 - INFO  - order StockOrder(entrust_id=1778106322 security=513100.XSHG mode=OrderTargetValue: _value=0.0 style=MarketOrderStyle: _limit_price=0.0 side=long action=close margin=False entrust_time=2021-01-11 09:30:00 cancel_time=None finish_time=None comment= error=) trade price: 0.868, amount:36600, commission: 3.17688
-2021-01-11 09:30:00 - INFO  - 订单已委托：StockOrder(entrust_id=1778106322 security=513100.XSHG mode=OrderTargetValue: _value=0.0 style=MarketOrderStyle: _limit_price=0.0 side=long action=close margin=False entrust_time=2021-01-11 09:30:00 cancel_time=None finish_time=2021-01-11 09:30:00 comment= error=)
-2021-01-11 09:30:00 - INFO  - order sent: 纳指ETF(513100.XSHG) security=513100.XSHG target_weight=0.0000 current_weight=0.3183 target_value=0.00
-
-... （剩余 973 行未展开） ...
-
-2022-05-05 09:30:00 - INFO  - [TopK入选] Selected: 人工智能ETF易方达(159819.XSHE)=0, 纳指ETF(513100.XSHG)=0, 黄金ETF(518880.XSHG)=1
-2022-05-05 09:30:00 - INFO  - [风险平价权重] RPWeight: 人工智能ETF易方达(159819.XSHE)=0.0000, 纳指ETF(513100.XSHG)=0.0000, 黄金ETF(518880.XSHG)=1.0000
-2022-05-05 09:30:00 - INFO  - [RSRS修正乘数] RSRSMultiplier: 人工智能ETF易方达(159819.XSHE)=1.0000, 纳指ETF(513100.XSHG)=0.8652, 黄金ETF(518880.XSHG)=1.1604
-2022-05-05 09:30:00 - INFO  - [拥挤度惩罚] CrowdPenalty: 人工智能ETF易方达(159819.XSHE)=1.0000, 纳指ETF(513100.XSHG)=1.0000, 黄金ETF(518880.XSHG)=1.0000
-2022-05-05 09:30:00 - INFO  - [组合波动率缩放] PortfolioVolScale=0.3633
-2022-05-05 09:30:00 - INFO  - [最终权重] FinalWeight: 人工智能ETF易方达(159819.XSHE)=0.0000, 纳指ETF(513100.XSHG)=0.0000, 黄金ETF(518880.XSHG)=0.4216
-2022-05-05 09:30:00 - WARNING - Security(code=159819.XSHE) 在 positions 中不存在, 为了保持兼容, 我们返回空的 Position 对象, amount/price/avg_cost/acc_avg_cost 都是 0
-2022-05-05 09:30:00 - WARNING - Security(code=513100.XSHG) 在 positions 中不存在, 为了保持兼容, 我们返回空的 Position 对象, amount/price/avg_cost/acc_avg_cost 都是 0
-2022-05-09 09:30:00 - INFO  - history end_date=2022-05-06 00:00:00, context.previous_date=2022-05-06
-2022-05-09 09:30:00 - INFO  - [趋势门槛] TrendGate: 人工智能ETF易方达(159819.XSHE)=0, 纳指ETF(513100.XSHG)=0, 黄金ETF(518880.XSHG)=1
-2022-05-09 09:30:00 - INFO  - [动量分数] MomentumScore: 人工智能ETF易方达(159819.XSHE)=0.0000, 纳指ETF(513100.XSHG)=0.0000, 黄金ETF(518880.XSHG)=1.0000
-2022-05-09 09:30:00 - INFO  - [TopK入选] Selected: 人工智能ETF易方达(159819.XSHE)=0, 纳指ETF(513100.XSHG)=0, 黄金ETF(518880.XSHG)=1
-2022-05-09 09:30:00 - INFO  - [风险平价权重] RPWeight: 人工智能ETF易方达(159819.XSHE)=0.0000, 纳指ETF(513100.XSHG)=0.0000, 黄金ETF(518880.XSHG)=1.0000
-2022-05-09 09:30:00 - INFO  - [RSRS修正乘数] RSRSMultiplier: 人工智能ETF易方达(159819.XSHE)=1.0000, 纳指ETF(513100.XSHG)=0.8256, 黄金ETF(518880.XSHG)=0.9485
-2022-05-09 09:30:00 - INFO  - [拥挤度惩罚] CrowdPenalty: 人工智能ETF易方达(159819.XSHE)=1.0000, 纳指ETF(513100.XSHG)=1.0000, 黄金ETF(518880.XSHG)=1.0000
-```
-
-> 注：日志接口返回 `max=true`，当前文件为免费只读接口可获取部分；未使用扣积分导出。
+{
+  "kind": "data_center_pointer",
+  "dataset_id": "etf_factor_rotation_backtest_runs",
+  "snapshot_id": "20260507-0625-bt69dc0ff8b24797f86790f58edd568ace",
+  "dataset_snapshot": "research_datasets/etf_factor_rotation_backtest_runs/20260507-0625-bt69dc0ff8b24797f86790f58edd568ace",
+  "dataset_file": "raw/logs.md.gz",
+  "original_path": "tabs_raw/logs.md",
+  "original_sha256": "d4f2eaff8023294a66539b9ad4b31df3c60201e6588eb9bbdcfd3d627afe081f",
+  "compressed_sha256": "7efbd487d54d80baaa15518d60b590da477f3c9261a88a60588c2c127b353e1b",
+  "original_bytes": 8427
+}

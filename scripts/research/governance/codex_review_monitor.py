@@ -15,16 +15,19 @@ from pathlib import Path
 
 from scripts.research.governance.pr_review_evidence import (
     BLOCKING_CODEX_FINDING_PATTERN,
+    CODEX_REVIEW_AUTHORS,
+    _fetch_pr_review_threads,
     has_codex_completion_reaction,
     head_updated_at_from_monitor_state,
     is_codex_completion_comment,
     is_effective_codex_review,
     render_monitor_head_state,
+    unresolved_blocking_codex_thread_count,
 )
 
 
 MONITOR_MARKER = "<!-- codex-review-monitor -->"
-REQUIRED_TRIGGER_TOKENS = ("@codex review", "AGENTS.md", "docs/rules/review-guidelines.md", "docs/rules/*.md")
+REQUIRED_TRIGGER_TOKENS = ("@codex review",)
 P2_FINDING_PATTERN = re.compile(
     r"(?:P2 Badge|badge/P2-|(?:^|\n)\s*(?:\*\*)?\[P2\]\s+)",
     re.IGNORECASE,
@@ -53,6 +56,7 @@ def build_monitor_report(
     issue_comments: Sequence[Mapping[str, object]],
     reviews: Sequence[Mapping[str, object]],
     review_comments: Sequence[Mapping[str, object]],
+    review_threads: Sequence[Mapping[str, object]] | None = None,
     head_created_at: str | None = None,
 ) -> MonitorReport:
     """Build a status summary for Codex reviews on the PR head."""
@@ -77,6 +81,11 @@ def build_monitor_report(
         current_head_reviews,
         review_comments=review_comments,
         pattern=BLOCKING_CODEX_FINDING_PATTERN,
+    )
+    blocking_findings += (
+        unresolved_blocking_codex_thread_count(review_threads)
+        if review_threads is not None
+        else 0
     )
     advisory_findings = _count_reviews_findings(
         current_head_reviews,
@@ -215,8 +224,7 @@ def _required_trigger_comments(
 ) -> tuple[Mapping[str, object], ...]:
     matched: list[Mapping[str, object]] = []
     for comment in issue_comments:
-        body = str(comment.get("body", ""))
-        if not all(token in body for token in REQUIRED_TRIGGER_TOKENS):
+        if not _is_required_trigger_comment(comment):
             continue
         effective_time = _comment_effective_time(comment)
         if not effective_time:
@@ -229,6 +237,10 @@ def _required_trigger_comments(
 
 
 def _is_required_trigger_comment(comment: Mapping[str, object]) -> bool:
+    user = comment.get("user")
+    login = user.get("login") if isinstance(user, Mapping) else ""
+    if str(login) in CODEX_REVIEW_AUTHORS:
+        return False
     body = str(comment.get("body", ""))
     return all(token in body for token in REQUIRED_TRIGGER_TOKENS)
 
@@ -414,8 +426,7 @@ def _enrich_required_trigger_reactions(
 ) -> list[Mapping[str, object]]:
     enriched: list[Mapping[str, object]] = []
     for comment in comments:
-        body = str(comment.get("body", ""))
-        if not all(token_text in body for token_text in REQUIRED_TRIGGER_TOKENS):
+        if not _is_required_trigger_comment(comment):
             enriched.append(comment)
             continue
         comment_id = comment.get("id")
@@ -484,6 +495,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--comments-file", type=Path)
     parser.add_argument("--reviews-file", type=Path)
     parser.add_argument("--review-comments-file", type=Path)
+    parser.add_argument("--review-threads-file", type=Path)
     parser.add_argument("--head-updated-at-env")
     parser.add_argument("--head-created-at-env", help=argparse.SUPPRESS)
     return parser
@@ -503,6 +515,7 @@ def main(argv: list[str] | None = None) -> int:
     issue_comments = _as_mapping_list(_read_json_file(args.comments_file))
     reviews = _as_mapping_list(_read_json_file(args.reviews_file))
     review_comments = _as_mapping_list(_read_json_file(args.review_comments_file))
+    review_threads = _as_mapping_list(_read_json_file(args.review_threads_file))
     head_created_at = _read_env(args.head_updated_at_env) or _read_env(args.head_created_at_env)
 
     if token:
@@ -519,6 +532,8 @@ def main(argv: list[str] | None = None) -> int:
             review_comments = _as_mapping_list(
                 _fetch_github_list(repo=repo, path=f"pulls/{pr_number}/comments", token=token)
             )
+        if not review_threads:
+            review_threads = _fetch_pr_review_threads(repo=repo, pr_number=pr_number, token=token)
         if not head_created_at:
             head_created_at = head_updated_at_from_monitor_state(
                 issue_comments,
@@ -538,6 +553,7 @@ def main(argv: list[str] | None = None) -> int:
         issue_comments=issue_comments,
         reviews=reviews,
         review_comments=review_comments,
+        review_threads=review_threads,
         head_created_at=head_created_at,
     )
     body = render_monitor_comment(report)

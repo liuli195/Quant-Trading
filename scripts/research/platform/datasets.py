@@ -1,4 +1,4 @@
-"""Repository-level immutable dataset snapshots."""
+﻿"""Repository-level immutable dataset snapshots."""
 
 from __future__ import annotations
 
@@ -8,11 +8,18 @@ import json
 import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
+from scripts.research.research_core.pointers import (
+    read_data_center_pointer as _read_data_center_pointer,
+    read_json_object as _read_json_object,
+    read_logical_bytes as _read_logical_bytes,
+    read_text_file as _read_text_file,
+)
 from scripts.research.research_core.prices import PriceFrames, load_price_bundle
 
 
@@ -22,6 +29,31 @@ class DatasetError(RuntimeError):
 
 DATASET_SCHEMA_VERSION = 1
 DATASET_LIFECYCLES = {"active", "superseded", "archived"}
+BACKTEST_RUN_RAW_FILES = (
+    Path("api_export.json"),
+    Path("detail_api_export.json"),
+    Path("summary_metrics.json"),
+    Path("tabs_raw/audit_log.jsonl"),
+    Path("tabs_raw/daily_returns.md"),
+    Path("tabs_raw/positioninfo.md"),
+    Path("tabs_raw/transactioninfo.md"),
+    Path("tabs_raw/balances.md"),
+    Path("tabs_raw/period_risks.md"),
+    Path("tabs_raw/logs.md"),
+)
+BACKTEST_RUN_LARGE_FILES = BACKTEST_RUN_RAW_FILES
+BACKTEST_RUN_FILE_KEYS = {
+    Path("api_export.json"): "api_export_source",
+    Path("detail_api_export.json"): "detail_api_export_source",
+    Path("summary_metrics.json"): "summary_metrics",
+    Path("tabs_raw/audit_log.jsonl"): "audit_log_source",
+    Path("tabs_raw/daily_returns.md"): "daily_returns_source",
+    Path("tabs_raw/positioninfo.md"): "positioninfo_source",
+    Path("tabs_raw/transactioninfo.md"): "transactioninfo_source",
+    Path("tabs_raw/balances.md"): "balances_source",
+    Path("tabs_raw/period_risks.md"): "period_risks_source",
+    Path("tabs_raw/logs.md"): "logs_source",
+}
 CATALOG_REQUIRED_FIELDS = {
     "dataset_id",
     "snapshot_id",
@@ -60,6 +92,19 @@ class DatasetSnapshot:
     @property
     def parquet_path(self) -> Path:
         return self.root / self.metadata["files"]["canonical"]
+
+
+@dataclass(frozen=True)
+class BacktestRunMigrationResult:
+    """One backtest run migration outcome."""
+
+    strategy: str
+    run_id: str
+    dataset_id: str
+    snapshot_id: str
+    snapshot_root: Path
+    imported: bool
+    compacted_files: tuple[str, ...]
 
 
 class DatasetRegistry:
@@ -125,10 +170,13 @@ class DatasetRegistry:
             files = metadata.get("files", {})
             if isinstance(files, dict):
                 for label, rel_path in files.items():
-                    if label.endswith("_source"):
+                    if label.endswith("_source") or _is_ignored_raw_payload(str(rel_path)):
                         continue
                     if not (metadata_path.parent / rel_path).exists():
                         errors.append(f"missing declared dataset file {label}: {row['dataset_id']}/{row['snapshot_id']}/{rel_path}")
+            raw_integrity = metadata.get("raw_file_integrity", {})
+            if isinstance(raw_integrity, dict):
+                errors.extend(_validate_raw_file_integrity(metadata_path.parent, raw_integrity))
         return errors
 
 
@@ -181,8 +229,16 @@ class DataViewLoader:
         return self.snapshot.root / files[key]
 
     def summary_metrics(self) -> dict[str, Any]:
+        files = self.snapshot.metadata.get("files", {})
+        if "summary_metrics" not in files:
+            return dict(self.snapshot.metadata.get("summary_metrics", {}))
         path = self.path("summary_metrics")
-        return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+        return _read_json_object(path) if path.is_file() else dict(self.snapshot.metadata.get("summary_metrics", {}))
+
+    def raw_text(self, key: str) -> str:
+        """Read a declared raw source file, including gzip files."""
+
+        return _read_text_file(self.path(key))
 
     def daily_returns(self) -> pd.DataFrame:
         path = self.path("daily_returns")
@@ -193,13 +249,17 @@ class DataViewLoader:
         return _parse_daily_returns_md(path)
 
     def audit_events(self) -> list[dict[str, Any]]:
-        path = self.path("audit_log")
+        files = self.snapshot.metadata.get("files", {})
+        key = "audit_log" if "audit_log" in files else "audit_log_source"
+        path = self.path(key) if key in files else Path()
         if not path.is_file():
+            events_path = self.path("audit_events")
+            if events_path.suffix.lower() == ".parquet" and events_path.is_file():
+                frame = pd.read_parquet(events_path)
+                if "payload_json" in frame:
+                    return [json.loads(value) for value in frame["payload_json"].dropna().tolist()]
             return []
-        if path.suffix.lower() == ".gz":
-            lines = gzip.decompress(path.read_bytes()).decode("utf-8").splitlines()
-            return [json.loads(line) for line in lines if line.strip()]
-        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        return _read_jsonl(path)
 
 
 class BacktestRunImporter:
@@ -310,7 +370,7 @@ def import_joinquant_price_json(
     """Create one immutable price-dataset snapshot from a JoinQuant JSON export."""
 
     source_path = Path(source)
-    raw_bytes = source_path.read_bytes()
+    raw_bytes = _read_logical_bytes(source_path)
     payload = json.loads(raw_bytes.decode("utf-8"))
     frame = normalize_joinquant_price_payload(payload)
     if frame.empty:
@@ -371,13 +431,16 @@ def import_backtest_run(
     dataset_id: str,
     datasets_root: str | Path = "research_datasets",
     snapshot_id: str | None = None,
+    allow_partial: bool = False,
 ) -> DatasetSnapshot:
-    """Create one immutable dataset snapshot from a complete ``backtest_runs/<run_id>`` directory."""
+    """Create one immutable dataset snapshot from a ``backtest_runs/<run_id>`` directory."""
 
     source_path = Path(source)
     if not source_path.is_dir():
         raise DatasetError(f"backtest run directory not found: {source_path}")
-    _validate_backtest_run_source(source_path)
+    missing_required = _missing_backtest_run_source_files(source_path)
+    if missing_required and not allow_partial:
+        raise DatasetError(f"backtest run missing required file(s): {', '.join(missing_required)}")
 
     fingerprint = f"sha256:{_sha256_tree(source_path)}"
     generated_snapshot = snapshot_id or (
@@ -391,38 +454,30 @@ def import_backtest_run(
     for directory in (root / "raw", root / "data", root / "views"):
         directory.mkdir(parents=True, exist_ok=True)
 
-    raw_target = root / "raw" / "backtest_run"
-    shutil.copytree(source_path, raw_target)
-
-    summary_path = raw_target / "summary_metrics.json"
-    metadata_path = raw_target / "metadata.json"
-    audit_path = raw_target / "tabs_raw" / "audit_log.jsonl"
-    daily_returns_path = raw_target / "tabs_raw" / "daily_returns.md"
-    api_export_path = _first_existing(
-        raw_target / "detail_api_export.json",
-        raw_target / "api_export.json",
-    )
-    if api_export_path is None:
-        raise DatasetError("backtest run missing required file(s): detail_api_export.json or api_export.json")
-
+    summary_path = source_path / "summary_metrics.json"
+    metadata_path = source_path / "metadata.json"
+    audit_path = source_path / "tabs_raw" / "audit_log.jsonl"
+    daily_returns_path = source_path / "tabs_raw" / "daily_returns.md"
     (root / "raw" / "source.json.gz").write_bytes(
         gzip.compress(json.dumps(_source_manifest(source_path), ensure_ascii=False, indent=2).encode("utf-8"), compresslevel=9)
     )
-    shutil.copy2(summary_path, root / "raw" / "summary_metrics.json")
-    shutil.copy2(daily_returns_path, root / "raw" / "daily_returns.md")
-    shutil.copy2(api_export_path, root / "raw" / api_export_path.name)
-    (root / "raw" / "audit_log.jsonl.gz").write_bytes(
-        gzip.compress(audit_path.read_bytes(), compresslevel=9)
-    )
+    raw_file_integrity: dict[str, dict[str, Any]] = {}
+    for relative_path in BACKTEST_RUN_RAW_FILES:
+        source_file = source_path / relative_path
+        if source_file.is_file():
+            raw_file_integrity[relative_path.as_posix()] = _write_gzip_file(
+                source_file,
+                root / "raw" / _gzip_name(relative_path),
+            )
 
     daily_returns = _parse_daily_returns_md(daily_returns_path)
-    if daily_returns.empty:
+    if daily_returns.empty and not allow_partial:
         raise DatasetError(f"daily_returns.md did not contain parseable rows: {daily_returns_path}")
-    daily_returns.to_csv(root / "views" / "daily_returns.csv", index=False)
-    daily_returns.to_parquet(root / "data" / "daily_returns.parquet", index=False, compression="zstd")
+    if daily_returns.empty:
+        daily_returns = pd.DataFrame(columns=["date", "cumulative_return"])
     daily_returns.to_parquet(root / "data" / "data.parquet", index=False, compression="zstd")
 
-    audit_events = _read_jsonl(audit_path)
+    audit_events = _read_jsonl(audit_path) if audit_path.is_file() else []
     audit_frame = pd.DataFrame(
         [
             {
@@ -434,29 +489,29 @@ def import_backtest_run(
             for event in audit_events
         ]
     )
+    if audit_frame.empty:
+        audit_frame = pd.DataFrame(columns=["seq", "event", "current_dt", "payload_json"])
     audit_frame.to_parquet(root / "data" / "audit_events.parquet", index=False, compression="zstd")
 
     audit_line_count = int(len(audit_events))
     audit_profile = _audit_profile(audit_events)
 
-    summary_metrics = json.loads(summary_path.read_text(encoding="utf-8")) if summary_path.is_file() else {}
-    source_metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.is_file() else {}
+    summary_metrics = _read_json_object(summary_path) if summary_path.is_file() else {}
+    source_metadata = _read_json_object(metadata_path) if metadata_path.is_file() else {}
     date_range = _date_range_from_daily_returns(daily_returns)
     row_count = int(len(daily_returns)) if not daily_returns.empty else audit_line_count
     files = {
         "raw": "raw/source.json.gz",
-        "preserved_run": "raw/backtest_run",
         "profile_json": "views/profile.json",
-        "summary_metrics": "raw/summary_metrics.json",
-        "audit_log": "raw/audit_log.jsonl.gz",
         "audit_events": "data/audit_events.parquet",
-        "daily_returns": "data/daily_returns.parquet",
-        "daily_returns_source": "raw/daily_returns.md",
-        "daily_returns_sample": "views/daily_returns.csv",
+        "daily_returns": "data/data.parquet",
         "canonical": "data/data.parquet",
         "sample": "views/sample.csv",
     }
-    files["api_export"] = f"raw/{api_export_path.name}"
+    for relative_path, key in BACKTEST_RUN_FILE_KEYS.items():
+        integrity = raw_file_integrity.get(relative_path.as_posix())
+        if integrity:
+            files[key] = str(integrity["dataset_file"])
 
     metadata = {
         "schema_version": 1,
@@ -472,14 +527,17 @@ def import_backtest_run(
         "row_count": row_count,
         "date_range": date_range,
         "run_id": source_path.name,
+        "partial": bool(missing_required),
+        "missing_required_files": missing_required,
         "summary_metrics": summary_metrics,
         "source_metadata": source_metadata,
         "audit_line_count": audit_line_count,
         "audit_date_range": audit_profile["date_range"],
         "audit_event_counts": audit_profile["event_counts"],
         "etf_pool": audit_profile["etf_pool"],
-        "report_files": sorted(path.name for path in (raw_target / "report").glob("*.md")) if (raw_target / "report").is_dir() else [],
+        "report_files": sorted(path.name for path in (source_path / "report").glob("*.md")) if (source_path / "report").is_dir() else [],
         "files": files,
+        "raw_file_integrity": raw_file_integrity,
     }
     profile = {
         "row_count": row_count,
@@ -499,6 +557,147 @@ def import_backtest_run(
     daily_returns.head(20).to_csv(root / "views" / "sample.csv", index=False)
     _update_catalog(_datasets_root(datasets_root))
     return DatasetSnapshot(root=root, metadata=metadata)
+
+
+def migrate_backtest_runs_to_datasets(
+    *,
+    strategies_root: str | Path = "strategies",
+    datasets_root: str | Path = "research_datasets",
+    strategy: str | None = None,
+    compact_source: bool = False,
+    dry_run: bool = False,
+) -> list[BacktestRunMigrationResult]:
+    """Import repository backtest runs into the data center."""
+
+    datasets_base = _datasets_root(datasets_root)
+    results: list[BacktestRunMigrationResult] = []
+    for strategy_name, run_dir in _iter_backtest_run_dirs(strategies_root, strategy=strategy):
+        dataset_id = f"{_safe_component(strategy_name)}_backtest_runs"
+        snapshot_id = _safe_component(run_dir.name)
+        snapshot_root = datasets_base / dataset_id / snapshot_id
+        imported = False
+        compacted_files: tuple[str, ...] = ()
+        if snapshot_root.exists() and not (snapshot_root / "dataset.json").is_file():
+            shutil.rmtree(snapshot_root)
+        if not dry_run and not snapshot_root.exists():
+            snapshot = import_backtest_run(
+                run_dir,
+                dataset_id=dataset_id,
+                snapshot_id=snapshot_id,
+                datasets_root=datasets_base,
+                allow_partial=True,
+            )
+            snapshot_root = snapshot.root
+            imported = True
+        if compact_source and not dry_run and snapshot_root.exists():
+            compacted_files = _compact_backtest_run_source(
+                run_dir,
+                dataset_id=dataset_id,
+                snapshot_id=snapshot_id,
+                snapshot_root=snapshot_root,
+            )
+        results.append(
+            BacktestRunMigrationResult(
+                strategy=strategy_name,
+                run_id=run_dir.name,
+                dataset_id=dataset_id,
+                snapshot_id=snapshot_id,
+                snapshot_root=snapshot_root,
+                imported=imported,
+                compacted_files=compacted_files,
+            )
+        )
+    if not dry_run:
+        _update_catalog(datasets_base)
+    return results
+
+
+def compact_backtest_run_source(
+    run_dir: str | Path,
+    *,
+    dataset_id: str,
+    snapshot_id: str,
+    snapshot_root: str | Path,
+) -> tuple[str, ...]:
+    """Replace large source files in one run with data-center pointers."""
+
+    return _compact_backtest_run_source(
+        Path(run_dir),
+        dataset_id=dataset_id,
+        snapshot_id=snapshot_id,
+        snapshot_root=Path(snapshot_root),
+    )
+
+
+def _iter_backtest_run_dirs(strategies_root: str | Path, *, strategy: str | None = None) -> list[tuple[str, Path]]:
+    root = Path(strategies_root)
+    if not root.is_dir():
+        return []
+    strategy_dirs = [root / strategy] if strategy else sorted(path for path in root.iterdir() if path.is_dir())
+    runs: list[tuple[str, Path]] = []
+    for strategy_dir in strategy_dirs:
+        runs_root = strategy_dir / "backtest_runs"
+        if not runs_root.is_dir():
+            continue
+        for run_dir in sorted(path for path in runs_root.iterdir() if path.is_dir()):
+            runs.append((strategy_dir.name, run_dir))
+    return runs
+
+
+def _compact_backtest_run_source(
+    run_dir: Path,
+    *,
+    dataset_id: str,
+    snapshot_id: str,
+    snapshot_root: Path,
+) -> tuple[str, ...]:
+    compacted: list[str] = []
+    raw_integrity = _load_snapshot_raw_integrity(snapshot_root)
+    files = _load_snapshot_files(snapshot_root)
+    for relative_path in BACKTEST_RUN_RAW_FILES:
+        source_file = run_dir / relative_path
+        if not source_file.is_file():
+            continue
+        dataset_file = f"raw/{_gzip_name(relative_path)}"
+        target = snapshot_root / dataset_file
+        pointer = _read_data_center_pointer(source_file)
+        if pointer is not None:
+            if target.is_file():
+                compressed_sha256 = sha256_bytes(target.read_bytes())
+                if pointer.get("compressed_sha256") != compressed_sha256:
+                    pointer["compressed_sha256"] = compressed_sha256
+                    source_file.write_text(json.dumps(pointer, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                raw_integrity[relative_path.as_posix()] = {
+                    "dataset_file": str(pointer.get("dataset_file", dataset_file)),
+                    "original_sha256": str(pointer.get("original_sha256", "")),
+                    "compressed_sha256": compressed_sha256,
+                    "original_bytes": int(pointer.get("original_bytes", 0)),
+                }
+                key = BACKTEST_RUN_FILE_KEYS.get(relative_path)
+                if key:
+                    files[key] = str(pointer.get("dataset_file", dataset_file))
+            continue
+        integrity = _write_gzip_file(source_file, target)
+        raw_integrity[relative_path.as_posix()] = integrity
+        key = BACKTEST_RUN_FILE_KEYS.get(relative_path)
+        if key:
+            files[key] = dataset_file
+        payload = {
+            "kind": "data_center_pointer",
+            "dataset_id": dataset_id,
+            "snapshot_id": snapshot_id,
+            "dataset_snapshot": snapshot_root.as_posix(),
+            "dataset_file": dataset_file,
+            "original_path": relative_path.as_posix(),
+            "original_sha256": integrity["original_sha256"],
+            "compressed_sha256": integrity["compressed_sha256"],
+            "original_bytes": source_file.stat().st_size,
+        }
+        source_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        compacted.append(relative_path.as_posix())
+    if raw_integrity or files:
+        _compact_snapshot_derived_files(snapshot_root, files=files, raw_integrity=raw_integrity)
+    return tuple(compacted)
 
 
 def _update_catalog(root: Path) -> None:
@@ -589,12 +788,18 @@ def _sha256_tree(root: Path) -> str:
     for path in sorted(item for item in root.rglob("*") if item.is_file()):
         digest.update(path.relative_to(root).as_posix().encode("utf-8"))
         digest.update(b"\0")
-        digest.update(path.read_bytes())
+        digest.update(_read_logical_bytes(path))
         digest.update(b"\0")
     return digest.hexdigest()
 
 
 def _validate_backtest_run_source(source_path: Path) -> None:
+    missing = _missing_backtest_run_source_files(source_path)
+    if missing:
+        raise DatasetError(f"backtest run missing required file(s): {', '.join(missing)}")
+
+
+def _missing_backtest_run_source_files(source_path: Path) -> list[str]:
     required = [
         source_path / "summary_metrics.json",
         source_path / "tabs_raw" / "daily_returns.md",
@@ -604,7 +809,150 @@ def _validate_backtest_run_source(source_path: Path) -> None:
     if _first_existing(source_path / "detail_api_export.json", source_path / "api_export.json") is None:
         missing.append("detail_api_export.json or api_export.json")
     if missing:
-        raise DatasetError(f"backtest run missing required file(s): {', '.join(missing)}")
+        return missing
+    return []
+
+
+def _write_gzip_file(source: Path, target: Path) -> dict[str, Any]:
+    raw_bytes = _read_logical_bytes(source)
+    compressed = gzip.compress(raw_bytes, compresslevel=9)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(compressed)
+    return {
+        "dataset_file": f"raw/{target.name}",
+        "original_sha256": sha256_bytes(raw_bytes),
+        "compressed_sha256": sha256_bytes(compressed),
+        "original_bytes": len(raw_bytes),
+    }
+
+
+def _gzip_name(relative_path: Path) -> str:
+    return f"{relative_path.name}.gz"
+
+
+def _is_data_center_pointer(path: Path) -> bool:
+    return _read_data_center_pointer(path) is not None
+
+
+def _load_snapshot_files(snapshot_root: Path) -> dict[str, str]:
+    metadata_path = snapshot_root / "dataset.json"
+    if not metadata_path.is_file():
+        return {}
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    files = metadata.get("files", {})
+    return dict(files) if isinstance(files, dict) else {}
+
+
+def _load_snapshot_raw_integrity(snapshot_root: Path) -> dict[str, dict[str, Any]]:
+    metadata_path = snapshot_root / "dataset.json"
+    if not metadata_path.is_file():
+        return {}
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    raw_integrity = metadata.get("raw_file_integrity", {})
+    return dict(raw_integrity) if isinstance(raw_integrity, dict) else {}
+
+
+def _compact_snapshot_derived_files(
+    snapshot_root: Path,
+    *,
+    files: dict[str, str],
+    raw_integrity: dict[str, dict[str, Any]],
+) -> None:
+    metadata_path = snapshot_root / "dataset.json"
+    if not metadata_path.is_file():
+        return
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    files = dict(metadata.get("files", {}), **files)
+    files["daily_returns"] = "data/data.parquet"
+    files["canonical"] = "data/data.parquet"
+    files.pop("daily_returns_sample", None)
+    metadata["files"] = files
+    metadata["raw_file_integrity"] = raw_integrity
+    metadata.setdefault("storage", {})["raw"] = "json.gz/jsonl.gz/md.gz"
+    for path in (
+        snapshot_root / "raw" / "summary_metrics.json",
+        snapshot_root / "raw" / "daily_returns.md",
+        snapshot_root / "data" / "daily_returns.parquet",
+        snapshot_root / "views" / "daily_returns.csv",
+    ):
+        if path.is_file():
+            path.unlink()
+    (snapshot_root / "dataset.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+    (snapshot_root / "README.md").write_text(_render_backtest_readme(metadata), encoding="utf-8")
+    schema_path = snapshot_root / "views" / "schema.md"
+    if schema_path.parent.is_dir():
+        schema_path.write_text(_render_backtest_schema(), encoding="utf-8")
+
+
+def _validate_raw_file_integrity(snapshot_root: Path, raw_integrity: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    for original_path, raw_info in raw_integrity.items():
+        if not isinstance(raw_info, dict):
+            errors.append(f"raw_file_integrity entry must be object: {original_path}")
+            continue
+        dataset_file = str(raw_info.get("dataset_file", ""))
+        if not dataset_file:
+            errors.append(f"raw_file_integrity missing dataset_file: {original_path}")
+            continue
+        target = snapshot_root / dataset_file
+        if not target.is_file():
+            if _is_repo_ignored_raw_integrity_payload(snapshot_root, dataset_file):
+                continue
+            errors.append(f"missing raw_file_integrity dataset_file: {original_path}")
+            continue
+        compressed = target.read_bytes()
+        if raw_info.get("compressed_sha256") and raw_info["compressed_sha256"] != sha256_bytes(compressed):
+            errors.append(f"compressed sha256 mismatch: {original_path}")
+        if target.suffix.lower() == ".gz" and raw_info.get("original_sha256"):
+            try:
+                original = gzip.decompress(compressed)
+            except OSError:
+                errors.append(f"compressed raw file is not valid gzip: {original_path}")
+                continue
+            if raw_info["original_sha256"] != sha256_bytes(original):
+                errors.append(f"original sha256 mismatch: {original_path}")
+    return errors
+
+
+def _is_ignored_raw_payload(rel_path: str) -> bool:
+    return rel_path.startswith("raw/") and rel_path.endswith(".gz") and Path(rel_path).name != "source.json.gz"
+
+
+def _is_repo_ignored_raw_integrity_payload(snapshot_root: Path, dataset_file: str) -> bool:
+    if not _is_ignored_raw_payload(dataset_file):
+        return False
+    repo_root = _find_repo_root(snapshot_root)
+    if repo_root is None:
+        return False
+    try:
+        relative_target = (snapshot_root / dataset_file).resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        return False
+    if not relative_target.startswith("research_datasets/"):
+        return False
+    gitignore = repo_root / ".gitignore"
+    if not gitignore.is_file():
+        return False
+    for raw_line in gitignore.read_text(encoding="utf-8").splitlines():
+        pattern = raw_line.strip()
+        if not pattern or pattern.startswith("#") or pattern.startswith("!"):
+            continue
+        if pattern.startswith("research_datasets/**/raw/") and fnmatchcase(relative_target, pattern):
+            return True
+    return False
+
+
+def _find_repo_root(path: Path) -> Path | None:
+    current = path.resolve()
+    for candidate in (current, *current.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return None
+
+
+def _safe_component(value: str) -> str:
+    safe = "".join(ch if ch.isalnum() or ch in "._-" else "-" for ch in str(value)).strip("-")
+    return safe or "unnamed"
 
 
 def _first_existing(*paths: Path) -> Path | None:
@@ -618,19 +966,24 @@ def _source_manifest(source_path: Path) -> dict[str, Any]:
     return {
         "source": source_path.as_posix(),
         "files": [
-            {
-                "path": path.relative_to(source_path).as_posix(),
-                "sha256": sha256_bytes(path.read_bytes()),
-                "bytes": path.stat().st_size,
-            }
+            _source_manifest_file(source_path, path)
             for path in sorted(item for item in source_path.rglob("*") if item.is_file())
         ],
     }
 
 
+def _source_manifest_file(source_path: Path, path: Path) -> dict[str, Any]:
+    raw_bytes = _read_logical_bytes(path)
+    return {
+        "path": path.relative_to(source_path).as_posix(),
+        "sha256": sha256_bytes(raw_bytes),
+        "bytes": len(raw_bytes),
+    }
+
+
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in _read_text_file(path).splitlines():
         if not line.strip():
             continue
         rows.append(json.loads(line))
@@ -662,7 +1015,7 @@ def _parse_daily_returns_md(path: Path) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
     if not path.is_file():
         return pd.DataFrame()
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in _read_text_file(path).splitlines():
         stripped = line.strip()
         if not stripped.startswith("|") or "---" in stripped:
             continue
@@ -693,11 +1046,10 @@ def _render_backtest_readme(metadata: dict[str, Any]) -> str:
             f"- **日期范围**: `{metadata['date_range'][0]} ~ {metadata['date_range'][1]}`",
             f"- **审计日志行数**: `{metadata['audit_line_count']}`",
             "",
-            "原始 run 完整保存在 `raw/backtest_run/`；常用视图见 `views/`。",
+            "原始文件压缩保存在 `raw/*.gz`；常用轻量索引见 `views/`；程序读取优先使用 `data/data.parquet`。",
             "",
         ]
     )
-
 
 def _render_backtest_profile(profile: dict[str, Any]) -> str:
     lines = [
@@ -734,13 +1086,11 @@ def _render_backtest_schema() -> str:
             "",
             "| 视图 | 说明 |",
             "| --- | --- |",
-            "| `raw/backtest_run/` | 原始 run 目录完整复制 |",
             "| `raw/source.json.gz` | 原始 run 文件清单与哈希 |",
-            "| `raw/audit_log.jsonl.gz` | 压缩保存的原始审计日志 |",
-            "| `raw/daily_returns.md` | 原始收益表 |",
-            "| `data/daily_returns.parquet` | 从 `tabs_raw/daily_returns.md` 提取的累计收益序列 |",
+            "| `raw/*.gz` | 压缩保存的原始回测文件 |",
+            "| `data/data.parquet` | 累计收益序列主存储 |",
             "| `data/audit_events.parquet` | 审计事件主存储 |",
-            "| `views/daily_returns.csv` | 收益序列便读视图 |",
+            "| `views/sample.csv` | 收益序列小样本 |",
             "| `views/profile.json` | 行数、日期范围、审计日志和报告文件摘要 |",
             "",
         ]
@@ -757,10 +1107,10 @@ def import_audit_log_jsonl(
     """Create an immutable dataset snapshot from a JoinQuant audit_log.jsonl."""
 
     source_path = Path(source)
-    raw_bytes = source_path.read_bytes()
+    raw_bytes = _read_logical_bytes(source_path)
     fingerprint = f"sha256:{sha256_bytes(raw_bytes)}"
 
-    lines = [l for l in raw_bytes.decode("utf-8").splitlines() if l.strip()]
+    lines = [line for line in raw_bytes.decode("utf-8").splitlines() if line.strip()]
     total_lines = len(lines)
     event_counts: dict[str, int] = {}
     dates: list[str] = []
@@ -859,7 +1209,7 @@ def import_audit_log_jsonl(
             "",
             f"- **snapshot**: `{generated_snapshot}`",
             f"- **fingerprint**: `{fingerprint}`",
-            f"- **来源**: joinquant_audit_log_jsonl",
+            "- **来源**: joinquant_audit_log_jsonl",
             f"- **事件总数**: `{total_lines}`",
             f"- **ETF 池**: {params_snapshot.get('etf_pool', [])}",
         ] + (["", f"- **日期范围**: `{date_range[0]} ~ {date_range[1]}`"] if date_range[0] else []) + [""]),
@@ -919,3 +1269,4 @@ def import_audit_log_jsonl(
 
     _update_catalog(_datasets_root(datasets_root))
     return DatasetSnapshot(root=root, metadata=metadata)
+
