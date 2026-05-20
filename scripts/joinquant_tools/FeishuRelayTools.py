@@ -9,6 +9,7 @@ import hmac
 import json
 import os
 import random
+import re
 import sys
 import threading
 import time
@@ -44,6 +45,16 @@ _print = print
 
 def _log(message):
     _print("[FeishuRelayTools] %s" % message)
+
+
+def _safe_error_text(exc):
+    text = str(exc)
+    if WEBHOOK_URL:
+        text = text.replace(WEBHOOK_URL, "<webhook>")
+    if WEBHOOK_SECRET:
+        text = text.replace(WEBHOOK_SECRET, "<secret>")
+    text = re.sub(r"(open-apis/bot/v2/hook/)\S+", r"\1<webhook>", text)
+    return text
 
 
 def _make_signature(timestamp, secret):
@@ -93,7 +104,7 @@ def _get_strategy_name(strategy_file="/tmp/strategy/user_code.py"):
                 if len(content) <= 50 and "import" not in content and "coding" not in content:
                     return content
         except Exception as exc:
-            _log("读取策略名失败: %s" % exc)
+            _log("读取策略名失败: %s" % _safe_error_text(exc))
     return "未命名策略"
 
 
@@ -194,14 +205,14 @@ class _Outbox:
         try:
             limit = int(limit)
         except Exception as exc:
-            _log("outbox replay limit 无效: %s" % exc)
+            _log("outbox replay limit 无效: %s" % _safe_error_text(exc))
             return []
         if limit <= 0:
             return []
         try:
             text = self.read_file(self.path) or ""
         except Exception as exc:
-            _log("outbox 读取失败: %s" % exc)
+            _log("outbox 读取失败: %s" % _safe_error_text(exc))
             return []
         latest_by_batch = {}
         for line in text.splitlines():
@@ -253,13 +264,13 @@ class _OrderBuffer:
         try:
             self._flush_items(self._drain_items(token=token))
         except Exception as exc:
-            _log("flush 异常: %s" % exc)
+            _log("flush 异常: %s" % _safe_error_text(exc))
 
     def flush(self):
         try:
             self._flush_items(self._drain_items())
         except Exception as exc:
-            _log("flush 异常: %s" % exc)
+            _log("flush 异常: %s" % _safe_error_text(exc))
 
     def _drain_items(self, token=None):
         with self._lock:
@@ -295,7 +306,7 @@ class _OrderBuffer:
         try:
             self.send_func(message)
         except Exception as exc:
-            _log("发送通知异常: %s" % exc)
+            _log("发送通知异常: %s" % _safe_error_text(exc))
 
 
 class _FeishuSender:
@@ -314,7 +325,7 @@ class _FeishuSender:
                 self.outbox.write_pending(batch_id, message, orders)
             except Exception as exc:
                 persisted = False
-                _log("outbox 写入失败，无持久化补偿: %s" % exc)
+                _log("outbox 写入失败，无持久化补偿: %s" % _safe_error_text(exc))
         if not feishu_enabled:
             _log("飞书通知未启用，保留 pending: %s" % batch_id)
             return False
@@ -330,7 +341,7 @@ class _FeishuSender:
                 try:
                     self.outbox.write_acked(batch_id)
                 except Exception as exc:
-                    _log("outbox ack 写入失败: %s" % exc)
+                    _log("outbox ack 写入失败: %s" % _safe_error_text(exc))
             return True
         self._schedule_retry(
             message,
@@ -347,7 +358,7 @@ class _FeishuSender:
             payload = _build_feishu_payload(message, secret=WEBHOOK_SECRET)
             response = requests.post(WEBHOOK_URL, json=payload, timeout=REQUEST_TIMEOUT_SECONDS)
         except Exception as exc:
-            _log("飞书请求异常: %s" % exc)
+            _log("飞书请求异常: %s" % _safe_error_text(exc))
             return False, None
         try:
             body = response.json()
