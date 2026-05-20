@@ -610,6 +610,20 @@ def test_wrap_function_defaults_to_module_report_order(monkeypatch):
     assert captured == [original.return_value]
 
 
+def test_wrap_function_returns_existing_wrapped_function(monkeypatch):
+    module = load_module(monkeypatch)
+    captured = []
+    original = Mock(return_value=FakeOrder())
+    first = module._wrap_order_function(original, lambda order: captured.append(order))
+
+    second = module._wrap_order_function(first, lambda order: captured.append(order))
+
+    assert second is first
+    assert getattr(first, "_feishu_wrapped", False) is True
+    assert second() is original.return_value
+    assert captured == [original.return_value]
+
+
 def test_install_wrappers_scans_user_code_and_kuanke_modules(monkeypatch):
     module = load_module(monkeypatch)
     user_code = types.SimpleNamespace(order=Mock(return_value=FakeOrder()))

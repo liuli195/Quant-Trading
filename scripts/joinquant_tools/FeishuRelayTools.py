@@ -409,6 +409,11 @@ class _FeishuSender:
 
 
 def _wrap_order_function(func, report_func=None):
+    if getattr(func, "_feishu_wrapped", False) is True:
+        return func
+    if getattr(func, "_feishu_relay_wrapped", False) is True:
+        return func
+
     def wrapper(*args, **kwargs):
         result = func(*args, **kwargs)
         if result is None:
@@ -420,6 +425,7 @@ def _wrap_order_function(func, report_func=None):
         else:
             reporter(result)
         return result
+    wrapper._feishu_wrapped = True
     return wrapper
 
 
