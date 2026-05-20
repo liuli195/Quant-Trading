@@ -408,16 +408,17 @@ class _FeishuSender:
         timer.start()
 
 
-def _wrap_order_function(func, report_func):
+def _wrap_order_function(func, report_func=None):
     def wrapper(*args, **kwargs):
         result = func(*args, **kwargs)
         if result is None:
             return result
+        reporter = report_func or _report_order
         if isinstance(result, list):
             for item in result:
-                report_func(item)
+                reporter(item)
         else:
-            report_func(result)
+            reporter(result)
         return result
     return wrapper
 
@@ -433,10 +434,14 @@ def _install_wrappers(report_func):
             if function_name in wrapped_names or not hasattr(module, function_name):
                 continue
             original = getattr(module, function_name)
+            if not callable(original):
+                continue
+            if getattr(original, "_feishu_wrapped", False) is True:
+                continue
             if getattr(original, "_feishu_relay_wrapped", False) is True:
                 continue
             wrapped = _wrap_order_function(original, report_func)
-            wrapped._feishu_relay_wrapped = True
+            wrapped._feishu_wrapped = True
             setattr(module, function_name, wrapped)
             wrapped_names.add(function_name)
             count += 1

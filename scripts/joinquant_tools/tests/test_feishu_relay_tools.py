@@ -598,6 +598,18 @@ def test_wrap_function_handles_order_list(monkeypatch):
     assert captured == orders
 
 
+def test_wrap_function_defaults_to_module_report_order(monkeypatch):
+    module = load_module(monkeypatch)
+    captured = []
+    original = Mock(return_value=FakeOrder())
+    monkeypatch.setattr(module, "_report_order", lambda order: captured.append(order))
+
+    wrapped = module._wrap_order_function(original)
+
+    assert wrapped() is original.return_value
+    assert captured == [original.return_value]
+
+
 def test_install_wrappers_scans_user_code_and_kuanke_modules(monkeypatch):
     module = load_module(monkeypatch)
     user_code = types.SimpleNamespace(order=Mock(return_value=FakeOrder()))
@@ -612,3 +624,40 @@ def test_install_wrappers_scans_user_code_and_kuanke_modules(monkeypatch):
     user_code.order()
     kuanke.order_value()
     assert len(captured) == 2
+
+
+def test_install_wrappers_skips_feishu_wrapped_functions(monkeypatch):
+    module = load_module(monkeypatch)
+    original = Mock(return_value=FakeOrder())
+    original._feishu_wrapped = True
+    user_code = types.SimpleNamespace(order=original)
+    monkeypatch.setitem(sys.modules, "user_code", user_code)
+
+    count = module._install_wrappers(lambda order: None)
+
+    assert count == 0
+    assert user_code.order is original
+
+
+def test_install_wrappers_skips_legacy_feishu_relay_wrapped_functions(monkeypatch):
+    module = load_module(monkeypatch)
+    original = Mock(return_value=FakeOrder())
+    original._feishu_relay_wrapped = True
+    user_code = types.SimpleNamespace(order=original)
+    monkeypatch.setitem(sys.modules, "user_code", user_code)
+
+    count = module._install_wrappers(lambda order: None)
+
+    assert count == 0
+    assert user_code.order is original
+
+
+def test_install_wrappers_skips_non_callable_targets(monkeypatch):
+    module = load_module(monkeypatch)
+    user_code = types.SimpleNamespace(order="not callable")
+    monkeypatch.setitem(sys.modules, "user_code", user_code)
+
+    count = module._install_wrappers(lambda order: None)
+
+    assert count == 0
+    assert user_code.order == "not callable"
