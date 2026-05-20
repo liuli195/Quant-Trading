@@ -4,8 +4,8 @@
 
 ## 文件
 
-- 模板：`scripts/joinquant_tools/FeishuRelayTools.py`
-- 方案：`docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md`
+- 模板：[FeishuRelayTools.py](../../scripts/joinquant_tools/FeishuRelayTools.py) <!-- pathref: scripts/joinquant_tools/FeishuRelayTools.py -->
+- 方案：[2026-05-20-feishu-relay-tools-design.md](../superpowers/specs/2026-05-20-feishu-relay-tools-design.md) <!-- pathref: docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md -->
 
 ## 私有上传版
 
