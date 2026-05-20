@@ -666,6 +666,40 @@ def test_install_wrappers_skips_legacy_feishu_relay_wrapped_functions(monkeypatc
     assert user_code.order is original
 
 
+def test_install_wrappers_wrapped_user_code_claims_same_name(monkeypatch):
+    module = load_module(monkeypatch)
+    user_order = Mock(return_value=FakeOrder())
+    user_order._feishu_wrapped = True
+    kuanke_order = Mock(return_value=FakeOrder())
+    user_code = types.SimpleNamespace(order=user_order)
+    kuanke = types.SimpleNamespace(order=kuanke_order)
+    monkeypatch.setitem(sys.modules, "user_code", user_code)
+    monkeypatch.setitem(sys.modules, "kuanke.user_space_api", kuanke)
+
+    count = module._install_wrappers(lambda order: None)
+
+    assert count == 0
+    assert user_code.order is user_order
+    assert kuanke.order is kuanke_order
+
+
+def test_install_wrappers_legacy_wrapped_user_code_claims_same_name(monkeypatch):
+    module = load_module(monkeypatch)
+    user_order = Mock(return_value=FakeOrder())
+    user_order._feishu_relay_wrapped = True
+    kuanke_order = Mock(return_value=FakeOrder())
+    user_code = types.SimpleNamespace(order=user_order)
+    kuanke = types.SimpleNamespace(order=kuanke_order)
+    monkeypatch.setitem(sys.modules, "user_code", user_code)
+    monkeypatch.setitem(sys.modules, "kuanke.user_space_api", kuanke)
+
+    count = module._install_wrappers(lambda order: None)
+
+    assert count == 0
+    assert user_code.order is user_order
+    assert kuanke.order is kuanke_order
+
+
 def test_install_wrappers_skips_non_callable_targets(monkeypatch):
     module = load_module(monkeypatch)
     user_code = types.SimpleNamespace(order="not callable")

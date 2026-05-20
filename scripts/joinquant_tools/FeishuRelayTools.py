@@ -442,6 +442,7 @@ def _install_wrappers(report_func):
             original = getattr(module, function_name)
             if not callable(original):
                 continue
+            wrapped_names.add(function_name)
             if getattr(original, "_feishu_wrapped", False) is True:
                 continue
             if getattr(original, "_feishu_relay_wrapped", False) is True:
@@ -449,7 +450,6 @@ def _install_wrappers(report_func):
             wrapped = _wrap_order_function(original, report_func)
             wrapped._feishu_wrapped = True
             setattr(module, function_name, wrapped)
-            wrapped_names.add(function_name)
             count += 1
             _log("已包装 %s.%s" % (module_name, function_name))
     return count
