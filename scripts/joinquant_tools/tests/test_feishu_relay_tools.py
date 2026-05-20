@@ -573,3 +573,42 @@ def test_sender_rate_limit_retry_stops_after_retry_delays_exhausted(monkeypatch)
 
     FakeTimer.scheduled[-1].fire()
     assert len(FakeTimer.scheduled) == 2
+
+
+def test_wrap_function_returns_original_order_and_buffers_summary(monkeypatch):
+    module = load_module(monkeypatch)
+    captured = []
+    original = Mock(return_value=FakeOrder())
+    wrapped = module._wrap_order_function(original, lambda order: captured.append(order))
+
+    result = wrapped("arg", key="value")
+
+    assert result is original.return_value
+    original.assert_called_once_with("arg", key="value")
+    assert captured == [original.return_value]
+
+
+def test_wrap_function_handles_order_list(monkeypatch):
+    module = load_module(monkeypatch)
+    captured = []
+    orders = [FakeOrder(), FakeOrder()]
+    wrapped = module._wrap_order_function(Mock(return_value=orders), lambda order: captured.append(order))
+
+    assert wrapped() == orders
+    assert captured == orders
+
+
+def test_install_wrappers_scans_user_code_and_kuanke_modules(monkeypatch):
+    module = load_module(monkeypatch)
+    user_code = types.SimpleNamespace(order=Mock(return_value=FakeOrder()))
+    kuanke = types.SimpleNamespace(order_value=Mock(return_value=FakeOrder()))
+    monkeypatch.setitem(sys.modules, "user_code", user_code)
+    monkeypatch.setitem(sys.modules, "kuanke.user_space_api", kuanke)
+    captured = []
+
+    count = module._install_wrappers(lambda order: captured.append(order))
+
+    assert count == 2
+    user_code.order()
+    kuanke.order_value()
+    assert len(captured) == 2

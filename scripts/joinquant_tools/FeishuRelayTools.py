@@ -408,4 +408,70 @@ class _FeishuSender:
         timer.start()
 
 
+def _wrap_order_function(func, report_func):
+    def wrapper(*args, **kwargs):
+        result = func(*args, **kwargs)
+        if result is None:
+            return result
+        if isinstance(result, list):
+            for item in result:
+                report_func(item)
+        else:
+            report_func(result)
+        return result
+    return wrapper
+
+
+def _install_wrappers(report_func):
+    count = 0
+    wrapped_names = set()
+    for module_name in ("user_code", "kuanke.user_space_api"):
+        module = sys.modules.get(module_name)
+        if module is None:
+            continue
+        for function_name in TARGET_FUNCTIONS:
+            if function_name in wrapped_names or not hasattr(module, function_name):
+                continue
+            original = getattr(module, function_name)
+            if getattr(original, "_feishu_relay_wrapped", False) is True:
+                continue
+            wrapped = _wrap_order_function(original, report_func)
+            wrapped._feishu_relay_wrapped = True
+            setattr(module, function_name, wrapped)
+            wrapped_names.add(function_name)
+            count += 1
+            _log("已包装 %s.%s" % (module_name, function_name))
+    return count
+
+
+def _report_order(order_obj):
+    try:
+        summary = _summarize_order(order_obj, CURRENT_STRATEGY_NAME)
+        _buffer.add(summary)
+    except Exception as exc:
+        _log("订单摘要失败: %s" % _safe_error_text(exc))
+
+
+def _replay_unacked(outbox, sender):
+    try:
+        batches = outbox.load_unacked(OUTBOX_REPLAY_LIMIT)
+    except Exception as exc:
+        _log("启动补发失败: %s" % _safe_error_text(exc))
+        return
+    for row in batches:
+        sender.send(row.get("message", ""), replay=True, batch_id=row.get("batch_id"), orders=row.get("orders") or [])
+
+
 CURRENT_STRATEGY_NAME = _get_strategy_name()
+_outbox = _Outbox(_resolve_outbox_path(CURRENT_STRATEGY_NAME))
+_sender = _FeishuSender(_outbox)
+_buffer = _OrderBuffer(
+    BUFFER_WAIT_TIME,
+    MAX_BUFFER_SIZE,
+    lambda message, replay=False, retry_index=0: _sender.send(message, replay=replay, retry_index=retry_index),
+    SEND_JITTER_SECONDS,
+)
+atexit.register(_buffer.flush)
+_wrapped_count = _install_wrappers(_report_order)
+_log("初始化完成，策略“%s”已包装 %s 个下单函数。" % (CURRENT_STRATEGY_NAME, _wrapped_count))
+_replay_unacked(_outbox, _sender)
