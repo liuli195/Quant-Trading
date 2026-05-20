@@ -13,7 +13,7 @@
 - 低风险 PR 可以不触发官方 Codex Code Review，但必须填写 `AI Review 风险分级`、本地 AI review 报告、CI 通过证据和 P2 保留说明。
 - 官方 Codex Code Review 应按 PR 中的 Review Scope 聚焦 P0/P1 风险，并在结论中说明是否发现规则冲突或漂移。
 - 必须保留本地检查证据，至少包括 `.\.venv\Scripts\python.exe -m scripts.research.governance gate`。
-- `@codex review` 触发后由 Codex Review Monitor 监听结果。该监控在 PR head 更新、触发评论、Codex review 和 inline review comment 事件上汇总当前 head 的所有 Codex review 状态，并写入 `Codex Review Monitor` commit status；`Codex Review Monitor` 必须列为 GitHub `main` 的 required status check，但它不替代 Codex review 结论和 PR body 证据。
+- `@codex review` 触发后由 Codex Review Monitor 监听结果。该监控在 PR head 更新、PR 描述更新、触发评论、Codex review 和 inline review comment 事件上汇总当前 head 的所有 Codex review 状态，并写入 `Codex Review Monitor` commit status；`Codex Review Monitor` 必须列为 GitHub `main` 的 required status check，但它不替代 Codex review 结论和 PR body 证据。
 
 ## 本地 AI Review
 
