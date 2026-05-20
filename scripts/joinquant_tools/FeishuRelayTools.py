@@ -314,15 +314,15 @@ class _FeishuSender:
         self.outbox = outbox
 
     def send(self, message, replay=False, retry_index=0, batch_id=None, orders=None):
+        raw_message = message
         orders = orders or []
-        lines = message.splitlines()[1:]
+        lines = raw_message.splitlines()[1:]
         batch_id = batch_id or _make_batch_id(CURRENT_STRATEGY_NAME, time.strftime("%Y-%m-%d"), lines)
-        if replay:
-            message = "[补发] batch_id=%s\n%s" % (batch_id, message)
+        post_message = "[补发] batch_id=%s\n%s" % (batch_id, raw_message) if replay else raw_message
         persisted = True
         if not replay:
             try:
-                self.outbox.write_pending(batch_id, message, orders)
+                self.outbox.write_pending(batch_id, raw_message, orders)
             except Exception as exc:
                 persisted = False
                 _log("outbox 写入失败，无持久化补偿: %s" % _safe_error_text(exc))
@@ -335,7 +335,7 @@ class _FeishuSender:
         if requests is None:
             _log("requests 不可用，保留 pending: %s" % batch_id)
             return False
-        ok, retry_delay = self._post(message)
+        ok, retry_delay = self._post(post_message)
         if ok:
             if persisted:
                 try:
@@ -344,7 +344,7 @@ class _FeishuSender:
                     _log("outbox ack 写入失败: %s" % _safe_error_text(exc))
             return True
         self._schedule_retry(
-            message,
+            raw_message,
             replay=True,
             retry_index=retry_index,
             batch_id=batch_id,

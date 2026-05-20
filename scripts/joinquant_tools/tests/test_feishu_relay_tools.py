@@ -437,6 +437,61 @@ def test_sender_masks_webhook_and_secret_in_response_failure_log(monkeypatch):
     assert "<secret>" in joined_logs
 
 
+def test_sender_replay_retry_does_not_stack_replay_prefix(monkeypatch):
+    post = Mock(return_value=FakeResponse(status_code=500, payload={"code": 1, "msg": "fail"}))
+    module = load_module(monkeypatch, request=post)
+    module.feishu_enabled = True
+    module.WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/fake"
+    module.RETRY_DELAYS_SECONDS = [5, 8]
+    outbox = module._Outbox("path.jsonl", read_file_func=module.read_file, write_file_func=module.write_file)
+    sender = module._FeishuSender(outbox=outbox)
+
+    sender.send("title\nbody", orders=[{"security": "A"}])
+    FakeTimer.scheduled[-1].fire()
+    FakeTimer.scheduled[-1].fire()
+
+    second_retry_text = post.call_args_list[2].kwargs["json"]["content"]["text"]
+    assert second_retry_text.count("[补发]") == 1
+
+
+def test_sender_uses_retry_delay_sequence_until_exhausted(monkeypatch):
+    post = Mock(return_value=FakeResponse(status_code=500, payload={"code": 1, "msg": "fail"}))
+    module = load_module(monkeypatch, request=post)
+    module.feishu_enabled = True
+    module.WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/fake"
+    module.RETRY_DELAYS_SECONDS = [5, 8]
+    outbox = module._Outbox("path.jsonl", read_file_func=module.read_file, write_file_func=module.write_file)
+    sender = module._FeishuSender(outbox=outbox)
+
+    sender.send("message", orders=[{"security": "A"}])
+    assert FakeTimer.scheduled[-1].delay == 5
+    assert len(FakeTimer.scheduled) == 1
+
+    FakeTimer.scheduled[-1].fire()
+    assert FakeTimer.scheduled[-1].delay == 8
+    assert len(FakeTimer.scheduled) == 2
+
+    FakeTimer.scheduled[-1].fire()
+    assert len(FakeTimer.scheduled) == 2
+
+
+def test_sender_sends_without_ack_when_outbox_pending_write_fails(monkeypatch):
+    post = Mock(return_value=FakeResponse())
+    module = load_module(monkeypatch, request=post)
+    module.feishu_enabled = True
+    module.WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/fake"
+
+    def failing_write_file(path, content, append=False):
+        raise RuntimeError("disk full")
+
+    outbox = module._Outbox("path.jsonl", read_file_func=module.read_file, write_file_func=failing_write_file)
+    sender = module._FeishuSender(outbox=outbox)
+
+    assert sender.send("message", orders=[{"security": "A"}]) is True
+    assert post.call_count == 1
+    assert module._test_writes == []
+
+
 def test_sender_uses_rate_limit_reset_for_retry(monkeypatch):
     post = Mock(return_value=FakeResponse(status_code=429, payload={"code": 999, "msg": "rate"}, headers={"x-ogw-ratelimit-reset": "9"}))
     module = load_module(monkeypatch, request=post)
