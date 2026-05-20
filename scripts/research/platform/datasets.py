@@ -8,6 +8,7 @@ import json
 import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
 
@@ -895,6 +896,8 @@ def _validate_raw_file_integrity(snapshot_root: Path, raw_integrity: dict[str, A
             continue
         target = snapshot_root / dataset_file
         if not target.is_file():
+            if _is_repo_ignored_raw_integrity_payload(snapshot_root, dataset_file):
+                continue
             errors.append(f"missing raw_file_integrity dataset_file: {original_path}")
             continue
         compressed = target.read_bytes()
@@ -913,6 +916,38 @@ def _validate_raw_file_integrity(snapshot_root: Path, raw_integrity: dict[str, A
 
 def _is_ignored_raw_payload(rel_path: str) -> bool:
     return rel_path.startswith("raw/") and rel_path.endswith(".gz") and Path(rel_path).name != "source.json.gz"
+
+
+def _is_repo_ignored_raw_integrity_payload(snapshot_root: Path, dataset_file: str) -> bool:
+    if not _is_ignored_raw_payload(dataset_file):
+        return False
+    repo_root = _find_repo_root(snapshot_root)
+    if repo_root is None:
+        return False
+    try:
+        relative_target = (snapshot_root / dataset_file).resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        return False
+    if not relative_target.startswith("research_datasets/"):
+        return False
+    gitignore = repo_root / ".gitignore"
+    if not gitignore.is_file():
+        return False
+    for raw_line in gitignore.read_text(encoding="utf-8").splitlines():
+        pattern = raw_line.strip()
+        if not pattern or pattern.startswith("#") or pattern.startswith("!"):
+            continue
+        if pattern.startswith("research_datasets/**/raw/") and fnmatchcase(relative_target, pattern):
+            return True
+    return False
+
+
+def _find_repo_root(path: Path) -> Path | None:
+    current = path.resolve()
+    for candidate in (current, *current.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return None
 
 
 def _safe_component(value: str) -> str:

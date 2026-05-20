@@ -281,6 +281,41 @@ def test_dataset_registry_flags_missing_declared_raw_gzip(tmp_path) -> None:
     assert any("missing raw_file_integrity dataset_file: summary_metrics.json" in error for error in errors)
 
 
+def test_dataset_registry_allows_repo_ignored_raw_gzip_but_flags_tracked_snapshot_files(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    _init_git_repo(repo)
+    (repo / ".gitignore").write_text(
+        "\n".join(
+            [
+                "research_datasets/**/raw/summary_metrics.json.gz",
+                "research_datasets/**/raw/daily_returns.md.gz",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    run_dir = repo / "strategies" / "demo" / "backtest_runs" / "run-1"
+    _write_backtest_run(run_dir)
+    snapshot = import_backtest_run(
+        run_dir,
+        dataset_id="demo_run",
+        snapshot_id="snap-1",
+        datasets_root=repo / "research_datasets",
+    )
+    (snapshot.root / "raw" / "summary_metrics.json.gz").unlink()
+    (snapshot.root / "raw" / "daily_returns.md.gz").unlink()
+
+    clean_checkout_errors = DatasetRegistry(repo / "research_datasets").validate()
+
+    assert not any("missing raw_file_integrity dataset_file" in error for error in clean_checkout_errors)
+
+    (snapshot.root / "raw" / "source.json.gz").unlink()
+
+    damaged_snapshot_errors = DatasetRegistry(repo / "research_datasets").validate()
+
+    assert any("missing declared dataset file raw:" in error for error in damaged_snapshot_errors)
+
+
 def test_backtest_run_importer_accepts_utf8_bom_summary_metrics(tmp_path) -> None:
     run_dir = tmp_path / "strategies" / "demo" / "backtest_runs" / "run-1"
     _write_backtest_run(run_dir)
