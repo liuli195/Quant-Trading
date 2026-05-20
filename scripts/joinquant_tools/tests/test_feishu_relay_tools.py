@@ -36,6 +36,7 @@ class FakeTimer:
 
 
 def load_module(monkeypatch, name="feishu_relay_under_test", read_text="", request=None):
+    FakeTimer.scheduled = []
     request = request or Mock()
     fake_requests = types.SimpleNamespace(post=request)
     monkeypatch.setitem(sys.modules, "requests", fake_requests)
@@ -88,3 +89,39 @@ def test_build_payload_omits_signature_when_secret_missing(monkeypatch):
     assert "timestamp" not in payload
     assert "sign" not in payload
     assert payload["content"]["text"] == "hello"
+
+
+class FakeOrder:
+    security = "513100.XSHG"
+    is_buy = True
+    amount = 200
+    price = 1.234
+    add_time = None
+
+
+def test_strategy_name_reads_first_line(monkeypatch, tmp_path):
+    strategy_file = tmp_path / "user_code.py"
+    strategy_file.write_text("# 策略名：ETF轮动模拟盘\n", encoding="utf-8")
+    module = load_module(monkeypatch)
+
+    assert module._get_strategy_name(str(strategy_file)) == "ETF轮动模拟盘"
+
+
+def test_strategy_name_falls_back_when_file_missing(monkeypatch):
+    module = load_module(monkeypatch)
+
+    assert module._get_strategy_name("missing.py") == "未命名策略"
+
+
+def test_order_summary_degrades_when_display_name_missing(monkeypatch):
+    module = load_module(monkeypatch)
+    order = FakeOrder()
+    summary = module._summarize_order(order, strategy_name="ETF轮动模拟盘", get_security_info_func=None)
+
+    assert summary["security"] == "513100.XSHG"
+    assert summary["action"] == "买入"
+    assert summary["amount"] == 200
+    assert summary["price"] == 1.234
+    assert summary["strategy"] == "ETF轮动模拟盘"
+    assert "ETF轮动模拟盘" in module._format_order_summary(summary)
+    assert "513100.XSHG" in module._format_order_summary(summary)

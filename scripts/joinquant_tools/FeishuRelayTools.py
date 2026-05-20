@@ -59,3 +59,86 @@ def _build_feishu_payload(text, secret=None, timestamp=None):
         payload["timestamp"] = str(timestamp)
         payload["sign"] = _make_signature(timestamp, secret)
     return payload
+
+
+def _get_strategy_name(strategy_file="/tmp/strategy/user_code.py"):
+    if STRATEGY_NAME:
+        return STRATEGY_NAME
+    if os.path.exists(strategy_file):
+        try:
+            with open(strategy_file, "r", encoding="utf-8") as handle:
+                first_line = handle.readline().strip()
+            if first_line.startswith("#") and len(first_line) > 1:
+                content = first_line[1:].strip()
+                if "策略名" in content:
+                    name = content.split("策略名", 1)[-1].lstrip("：:").strip()
+                    if name:
+                        return name
+                if len(content) <= 50 and "import" not in content and "coding" not in content:
+                    return content
+        except Exception as exc:
+            _log("读取策略名失败: %s" % exc)
+    return "未命名策略"
+
+
+def _safe_value(obj, attr, default=""):
+    try:
+        value = getattr(obj, attr)
+    except Exception:
+        return default
+    return default if value is None else value
+
+
+def _format_time(value):
+    if isinstance(value, _datetime.datetime):
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+    if isinstance(value, str) and value:
+        return value
+    return time.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _get_security_name(security, get_security_info_func=None):
+    if get_security_info_func is None:
+        get_security_info_func = globals().get("get_security_info")
+    if get_security_info_func is None:
+        return ""
+    try:
+        info = get_security_info_func(security)
+        return getattr(info, "display_name", "") or ""
+    except Exception:
+        return ""
+
+
+def _summarize_order(order_obj, strategy_name=None, get_security_info_func=None):
+    security = str(_safe_value(order_obj, "security", ""))
+    is_buy = bool(_safe_value(order_obj, "is_buy", False))
+    amount = _safe_value(order_obj, "amount", "")
+    price = _safe_value(order_obj, "price", "")
+    order_time = _safe_value(order_obj, "add_time", None)
+    return {
+        "time": _format_time(order_time),
+        "action": "买入" if is_buy else "卖出",
+        "name": _get_security_name(security, get_security_info_func),
+        "security": security,
+        "amount": amount,
+        "price": price,
+        "strategy": strategy_name or CURRENT_STRATEGY_NAME,
+    }
+
+
+def _format_order_summary(summary):
+    if summary.get("name"):
+        name_part = "%s(%s)" % (summary.get("name"), summary.get("security"))
+    else:
+        name_part = summary.get("security")
+    return "[%s] 【%s】%s %s %s股 价格:%s" % (
+        summary.get("time", ""),
+        summary.get("strategy", ""),
+        summary.get("action", ""),
+        name_part,
+        summary.get("amount", ""),
+        summary.get("price", ""),
+    )
+
+
+CURRENT_STRATEGY_NAME = _get_strategy_name()
