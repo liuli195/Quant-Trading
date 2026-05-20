@@ -298,4 +298,85 @@ class _OrderBuffer:
             _log("发送通知异常: %s" % exc)
 
 
+class _FeishuSender:
+    def __init__(self, outbox):
+        self.outbox = outbox
+
+    def send(self, message, replay=False, retry_index=0, batch_id=None, orders=None):
+        orders = orders or []
+        lines = message.splitlines()[1:]
+        batch_id = batch_id or _make_batch_id(CURRENT_STRATEGY_NAME, time.strftime("%Y-%m-%d"), lines)
+        if replay:
+            message = "[补发] batch_id=%s\n%s" % (batch_id, message)
+        persisted = True
+        if not replay:
+            try:
+                self.outbox.write_pending(batch_id, message, orders)
+            except Exception as exc:
+                persisted = False
+                _log("outbox 写入失败，无持久化补偿: %s" % exc)
+        if not feishu_enabled:
+            _log("飞书通知未启用，保留 pending: %s" % batch_id)
+            return False
+        if not WEBHOOK_URL:
+            _log("飞书 webhook 未配置，保留 pending: %s" % batch_id)
+            return False
+        if requests is None:
+            _log("requests 不可用，保留 pending: %s" % batch_id)
+            return False
+        ok, retry_delay = self._post(message)
+        if ok:
+            if persisted:
+                try:
+                    self.outbox.write_acked(batch_id)
+                except Exception as exc:
+                    _log("outbox ack 写入失败: %s" % exc)
+            return True
+        self._schedule_retry(
+            message,
+            replay=True,
+            retry_index=retry_index,
+            batch_id=batch_id,
+            orders=orders,
+            retry_delay=retry_delay,
+        )
+        return False
+
+    def _post(self, message):
+        try:
+            payload = _build_feishu_payload(message, secret=WEBHOOK_SECRET)
+            response = requests.post(WEBHOOK_URL, json=payload, timeout=REQUEST_TIMEOUT_SECONDS)
+        except Exception as exc:
+            _log("飞书请求异常: %s" % exc)
+            return False, None
+        try:
+            body = response.json()
+        except Exception:
+            body = {}
+        if 200 <= int(response.status_code) < 300 and body.get("code") == 0:
+            return True, None
+        reset = response.headers.get("x-ogw-ratelimit-reset")
+        if int(response.status_code) == 429 and reset:
+            try:
+                return False, int(reset)
+            except Exception:
+                return False, None
+        _log("飞书发送失败: http=%s code=%s msg=%s" % (response.status_code, body.get("code"), body.get("msg")))
+        return False, None
+
+    def _schedule_retry(self, message, replay, retry_index, batch_id, orders, retry_delay=None):
+        delays = list(RETRY_DELAYS_SECONDS)
+        if retry_delay is None:
+            if retry_index >= len(delays):
+                return
+            retry_delay = delays[retry_index]
+        timer = threading.Timer(
+            retry_delay,
+            self.send,
+            args=(message,),
+            kwargs={"replay": replay, "retry_index": retry_index + 1, "batch_id": batch_id, "orders": orders},
+        )
+        timer.start()
+
+
 CURRENT_STRATEGY_NAME = _get_strategy_name()

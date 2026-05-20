@@ -347,3 +347,56 @@ def test_jitter_send_exception_is_logged(monkeypatch):
     FakeTimer.scheduled[-1].fire()
 
     assert any("发送通知异常" in item and "later boom" in item for item in logs)
+
+
+class FakeResponse:
+    def __init__(self, status_code=200, payload=None, headers=None):
+        self.status_code = status_code
+        self._payload = payload if payload is not None else {"code": 0, "msg": "ok"}
+        self.headers = headers or {}
+
+    def json(self):
+        return self._payload
+
+
+def test_sender_marks_acked_after_success(monkeypatch):
+    post = Mock(return_value=FakeResponse())
+    module = load_module(monkeypatch, request=post)
+    module.feishu_enabled = True
+    module.WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/fake"
+    outbox = module._Outbox("path.jsonl", read_file_func=module.read_file, write_file_func=module.write_file)
+    sender = module._FeishuSender(outbox=outbox)
+
+    sender.send("message", orders=[{"security": "A"}])
+
+    assert post.call_count == 1
+    statuses = [json.loads(content)["status"] for _, content, _ in module._test_writes]
+    assert statuses == ["pending", "acked"]
+
+
+def test_sender_keeps_pending_when_request_fails(monkeypatch):
+    post = Mock(side_effect=RuntimeError("network down"))
+    module = load_module(monkeypatch, request=post)
+    module.feishu_enabled = True
+    module.WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/fake"
+    module.RETRY_DELAYS_SECONDS = []
+    outbox = module._Outbox("path.jsonl", read_file_func=module.read_file, write_file_func=module.write_file)
+    sender = module._FeishuSender(outbox=outbox)
+
+    sender.send("message", orders=[{"security": "A"}])
+
+    statuses = [json.loads(content)["status"] for _, content, _ in module._test_writes]
+    assert statuses == ["pending"]
+
+
+def test_sender_uses_rate_limit_reset_for_retry(monkeypatch):
+    post = Mock(return_value=FakeResponse(status_code=429, payload={"code": 999, "msg": "rate"}, headers={"x-ogw-ratelimit-reset": "9"}))
+    module = load_module(monkeypatch, request=post)
+    module.feishu_enabled = True
+    module.WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/fake"
+    outbox = module._Outbox("path.jsonl", read_file_func=module.read_file, write_file_func=module.write_file)
+    sender = module._FeishuSender(outbox=outbox)
+
+    sender.send("message", orders=[{"security": "A"}])
+
+    assert FakeTimer.scheduled[-1].delay == 9
