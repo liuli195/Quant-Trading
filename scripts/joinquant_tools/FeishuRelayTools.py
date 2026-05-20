@@ -313,16 +313,17 @@ class _FeishuSender:
     def __init__(self, outbox):
         self.outbox = outbox
 
-    def send(self, message, replay=False, retry_index=0, batch_id=None, orders=None):
+    def send(self, message, replay=False, retry_index=0, batch_id=None, orders=None, pending_persisted=True):
         raw_message = message
         orders = orders or []
         lines = raw_message.splitlines()[1:]
         batch_id = batch_id or _make_batch_id(CURRENT_STRATEGY_NAME, time.strftime("%Y-%m-%d"), lines)
         post_message = "[补发] batch_id=%s\n%s" % (batch_id, raw_message) if replay else raw_message
-        persisted = True
+        persisted = pending_persisted
         if not replay:
             try:
                 self.outbox.write_pending(batch_id, raw_message, orders)
+                persisted = True
             except Exception as exc:
                 persisted = False
                 _log("outbox 写入失败，无持久化补偿: %s" % _safe_error_text(exc))
@@ -350,6 +351,7 @@ class _FeishuSender:
             batch_id=batch_id,
             orders=orders,
             retry_delay=retry_delay,
+            pending_persisted=persisted,
         )
         return False
 
@@ -364,10 +366,16 @@ class _FeishuSender:
             body = response.json()
         except Exception:
             body = {}
-        if 200 <= int(response.status_code) < 300 and body.get("code") == 0:
+        if not isinstance(body, dict):
+            body = {}
+        try:
+            status_code = int(response.status_code)
+        except Exception:
+            status_code = 0
+        if 200 <= status_code < 300 and body.get("code") == 0:
             return True, None
         reset = response.headers.get("x-ogw-ratelimit-reset")
-        if int(response.status_code) == 429 and reset:
+        if status_code == 429 and reset:
             try:
                 return False, int(reset)
             except Exception:
@@ -379,7 +387,7 @@ class _FeishuSender:
         ))
         return False, None
 
-    def _schedule_retry(self, message, replay, retry_index, batch_id, orders, retry_delay=None):
+    def _schedule_retry(self, message, replay, retry_index, batch_id, orders, retry_delay=None, pending_persisted=True):
         delays = list(RETRY_DELAYS_SECONDS)
         if retry_delay is None:
             if retry_index >= len(delays):
@@ -389,7 +397,13 @@ class _FeishuSender:
             retry_delay,
             self.send,
             args=(message,),
-            kwargs={"replay": replay, "retry_index": retry_index + 1, "batch_id": batch_id, "orders": orders},
+            kwargs={
+                "replay": replay,
+                "retry_index": retry_index + 1,
+                "batch_id": batch_id,
+                "orders": orders,
+                "pending_persisted": pending_persisted,
+            },
         )
         timer.start()
 

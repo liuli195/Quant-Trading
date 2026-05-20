@@ -492,6 +492,51 @@ def test_sender_sends_without_ack_when_outbox_pending_write_fails(monkeypatch):
     assert module._test_writes == []
 
 
+def test_sender_retry_success_does_not_ack_when_pending_write_failed(monkeypatch):
+    post = Mock(side_effect=[
+        FakeResponse(status_code=500, payload={"code": 1, "msg": "fail"}),
+        FakeResponse(),
+    ])
+    module = load_module(monkeypatch, request=post)
+    module.feishu_enabled = True
+    module.WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/fake"
+    module.RETRY_DELAYS_SECONDS = [5]
+
+    class FailingPendingOutbox:
+        ack_count = 0
+
+        def write_pending(self, batch_id, message, orders):
+            raise RuntimeError("disk full")
+
+        def write_acked(self, batch_id):
+            self.ack_count += 1
+
+    outbox = FailingPendingOutbox()
+    sender = module._FeishuSender(outbox=outbox)
+
+    sender.send("message", orders=[{"security": "A"}])
+    FakeTimer.scheduled[-1].fire()
+
+    assert post.call_count == 2
+    assert outbox.ack_count == 0
+
+
+def test_sender_handles_non_dict_json_failure_body(monkeypatch):
+    post = Mock(return_value=FakeResponse(status_code=500, payload=["not", "dict"]))
+    module = load_module(monkeypatch, request=post)
+    module.feishu_enabled = True
+    module.WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/fake"
+    module.RETRY_DELAYS_SECONDS = []
+    outbox = module._Outbox("path.jsonl", read_file_func=module.read_file, write_file_func=module.write_file)
+    sender = module._FeishuSender(outbox=outbox)
+
+    sender.send("message", orders=[{"security": "A"}])
+
+    statuses = [json.loads(content)["status"] for _, content, _ in module._test_writes]
+    assert statuses == ["pending"]
+    assert FakeTimer.scheduled == []
+
+
 def test_sender_uses_rate_limit_reset_for_retry(monkeypatch):
     post = Mock(return_value=FakeResponse(status_code=429, payload={"code": 999, "msg": "rate"}, headers={"x-ogw-ratelimit-reset": "9"}))
     module = load_module(monkeypatch, request=post)
