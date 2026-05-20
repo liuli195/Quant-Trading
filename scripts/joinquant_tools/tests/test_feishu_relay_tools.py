@@ -276,6 +276,21 @@ def test_outbox_later_pending_overrides_earlier_acked(monkeypatch):
     assert batches[0]["message"] == "new"
 
 
+def test_outbox_limit_uses_latest_event_order(monkeypatch):
+    read_text = "\n".join([
+        json.dumps({"status": "pending", "batch_id": "batch-1", "message": "old"}, ensure_ascii=False),
+        json.dumps({"status": "pending", "batch_id": "batch-2", "message": "middle"}, ensure_ascii=False),
+        json.dumps({"status": "pending", "batch_id": "batch-1", "message": "new"}, ensure_ascii=False),
+    ])
+    module = load_module(monkeypatch, read_text=read_text)
+    outbox = module._Outbox("path.jsonl", read_file_func=module.read_file, write_file_func=module.write_file)
+
+    batches = outbox.load_unacked(limit=1)
+
+    assert [item["batch_id"] for item in batches] == ["batch-1"]
+    assert batches[0]["message"] == "new"
+
+
 def test_outbox_invalid_limits_return_empty(monkeypatch):
     read_text = json.dumps({"status": "pending", "batch_id": "batch-1", "message": "m1"}, ensure_ascii=False)
     module = load_module(monkeypatch, read_text=read_text)

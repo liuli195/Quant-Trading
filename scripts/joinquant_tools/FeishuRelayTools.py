@@ -217,6 +217,7 @@ class _Outbox:
             if not batch_id:
                 continue
             if row.get("status") in ("pending", "acked"):
+                latest_by_batch.pop(batch_id, None)
                 latest_by_batch[batch_id] = row
         batches = [row for row in latest_by_batch.values() if row.get("status") == "pending"]
         return batches[-limit:]
