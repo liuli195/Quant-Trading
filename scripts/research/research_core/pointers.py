@@ -26,6 +26,7 @@ def read_data_center_pointer(path: str | Path) -> dict[str, Any] | None:
 def resolve_data_center_pointer(path: str | Path) -> Path | None:
     """Resolve a data-center pointer to its stored raw file path."""
 
+    pointer_path = Path(path)
     pointer = read_data_center_pointer(path)
     if pointer is None:
         return None
@@ -37,10 +38,26 @@ def resolve_data_center_pointer(path: str | Path) -> Path | None:
     if target.is_file():
         return target
     if not snapshot.is_absolute():
+        pointer_target = pointer_path.parent / snapshot / dataset_file
+        if pointer_target.is_file():
+            return pointer_target
+        repo_root = _find_repo_root(pointer_path)
+        if repo_root is not None:
+            repo_target = repo_root / snapshot / dataset_file
+            if repo_target.is_file():
+                return repo_target
         cwd_target = Path.cwd() / snapshot / dataset_file
         if cwd_target.is_file():
             return cwd_target
     return target
+
+
+def _find_repo_root(path: Path) -> Path | None:
+    current = path.resolve()
+    for candidate in (current, *current.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return None
 
 
 def read_logical_bytes(path: str | Path) -> bytes:

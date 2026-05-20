@@ -3,6 +3,7 @@ from __future__ import annotations
 import gzip
 import json
 from datetime import date
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -21,6 +22,7 @@ from scripts.research.research_core.metrics import (
     rolling_sharpe,
     yearly_metrics,
 )
+from scripts.research.research_core.pointers import read_text_file
 from scripts.research.research_core.prices import load_price_bundle
 
 
@@ -73,6 +75,65 @@ def test_load_price_bundle_reads_data_center_pointer(tmp_path) -> None:
     frames = load_price_bundle(pointer)
 
     assert frames.close.loc[pd.Timestamp("2026-01-02"), "AAA"] == 1.0
+
+
+def test_load_price_bundle_reads_repo_relative_pointer_from_strategy_cwd(tmp_path, monkeypatch) -> None:
+    payload = {
+        "calendar": ["2026-01-02"],
+        "prices": {
+            "AAA": [
+                {"date": "2026-01-02", "open": 0.95, "close": 1.0, "high": 1.1, "low": 0.9, "money": 10},
+            ]
+        },
+    }
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)
+    strategy_dir = repo / "strategies" / "demo_strategy"
+    run_dir = strategy_dir / "backtest_runs" / "run-1"
+    snapshot = repo / "research_datasets" / "demo_strategy_backtest_runs" / "run-1"
+    (run_dir).mkdir(parents=True)
+    (snapshot / "raw").mkdir(parents=True)
+    (snapshot / "raw" / "prices.json.gz").write_bytes(
+        gzip.compress(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+    )
+    (run_dir / "prices.json").write_text(
+        json.dumps(
+            {
+                "kind": "data_center_pointer",
+                "dataset_snapshot": "research_datasets/demo_strategy_backtest_runs/run-1",
+                "dataset_file": "raw/prices.json.gz",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(strategy_dir)
+
+    frames = load_price_bundle(Path("backtest_runs/run-1/prices.json"))
+
+    assert frames.close.loc[pd.Timestamp("2026-01-02"), "AAA"] == 1.0
+
+
+def test_read_text_file_resolves_relative_pointer_snapshot_next_to_pointer(tmp_path, monkeypatch) -> None:
+    pointer_dir = tmp_path / "run"
+    snapshot = pointer_dir / "snapshot"
+    (snapshot / "raw").mkdir(parents=True)
+    (snapshot / "raw" / "payload.txt").write_text("hello", encoding="utf-8")
+    pointer = pointer_dir / "payload.txt"
+    pointer.write_text(
+        json.dumps(
+            {
+                "kind": "data_center_pointer",
+                "dataset_snapshot": "snapshot",
+                "dataset_file": "raw/payload.txt",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert read_text_file(pointer) == "hello"
 
 
 def test_calendar_helpers_build_forward_returns() -> None:
