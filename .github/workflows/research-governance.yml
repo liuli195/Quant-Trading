@@ -8,6 +8,8 @@ on:
     types: [submitted, edited, dismissed]
   pull_request_review_comment:
     types: [created, edited, deleted]
+  pull_request_review_thread:
+    types: [resolved]
   schedule:
     - cron: "0 2 * * 1"
   workflow_dispatch:
@@ -44,7 +46,8 @@ jobs:
     if: >-
       github.event_name == 'pull_request' ||
       github.event_name == 'pull_request_review' ||
-      github.event_name == 'pull_request_review_comment'
+      github.event_name == 'pull_request_review_comment' ||
+      github.event_name == 'pull_request_review_thread'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

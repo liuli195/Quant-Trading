@@ -14,7 +14,7 @@
 - 高风险或 unknown PR 必须加 `ai-risk-review`，并触发官方 Codex Code Review。
 - 大型 PR 的官方 Codex Code Review 必须使用 `Codex Review Scope`，只审高风险目录和高风险规则命中改动的 P0/P1 逻辑风险。
 - 无法生成明确 `Codex Review Scope` 的大型 PR，应拆分 PR；未拆分时按全量高风险 PR 处理。
-- 高风险或 unknown PR 合并前必须有 Codex Code Review 的通过结论，并通过 CI 的 `pr-review-evidence` job 与 `Codex Review Monitor` status。
+- 高风险或 unknown PR 合并前必须有 Codex Code Review 的通过结论，并通过 CI 的 `pr-review-evidence` job 与 `Codex Review Monitor` status；二者必须拦截未解决且未过期的 Codex P0/P1 review thread。
 - 本地推送主干由 `.githooks/pre-push` 的代码化门禁阻断；如用户显式授权直写主干，必须在对应命令上设置 `ALLOW_DIRECT_MAIN_WRITE=1` 和 `DIRECT_MAIN_WRITE_REASON=<reason>`。
 - 本地主干 ref 更新由 `.githooks/reference-transaction` 阻断；如用户显式授权直写主干，可设置 `ALLOW_DIRECT_MAIN_WRITE=1` 和 `DIRECT_MAIN_WRITE_REASON=<reason>`，但只允许 fast-forward 更新，禁止 reset、删除或 force rewrite。
 - PR 在 GitHub 云端合并后，本地 `main` 必须先 `git fetch origin main`，再显式设置 `ALLOW_MAIN_REF_UPDATE=1` 和 `MAIN_REF_UPDATE_REASON`，并只用 `git merge --ff-only origin/main` 或等价 fast-forward 命令同步到 `origin/main`。

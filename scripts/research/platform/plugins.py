@@ -27,6 +27,7 @@ from scripts.research.research_core.metrics import (
     yearly_metrics,
 )
 from scripts.research.research_core.audit import load_rebalance_events
+from scripts.research.research_core.pointers import read_logical_bytes
 from scripts.research.research_core.prices import load_price_bundle
 from scripts.research.momentum_tilt_research.analysis import calibrate_replay
 from scripts.research.momentum_tilt_research.replay import (
@@ -934,7 +935,7 @@ def get_plugin(name: str):
 def _sha256_file(path: Path) -> str:
     import hashlib
 
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return hashlib.sha256(read_logical_bytes(path)).hexdigest()
 
 
 def _stable_json_hash(payload: object) -> str:

@@ -187,7 +187,8 @@ def _write_minimal_repo(root: Path) -> None:
     (root / ".github/workflows/research-governance.yml").write_text(
         "on:\n  schedule:\n    - cron: '0 2 * * 1'\n"
         "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
-        "  pull_request_review_comment:\n    types: [created, edited, deleted]\nsteps:\n"
+        "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
+        "  pull_request_review_thread:\n    types: [resolved]\nsteps:\n"
         "  - run: python -m ruff check scripts strategies\n"
         "  - run: python -m bandit -q -r scripts strategies\n"
         "  - run: python -m mypy scripts strategies\n"
@@ -203,6 +204,8 @@ def _write_minimal_repo(root: Path) -> None:
         "    types: [submitted, edited, dismissed]\n"
         "  pull_request_review_comment:\n"
         "    types: [created, edited, deleted]\n"
+        "  pull_request_review_thread:\n"
+        "    types: [resolved]\n"
         "permissions:\n  statuses: write\nsteps:\n"
         "  - run: python -m scripts.research.governance.codex_review_monitor --sync-comment --sync-status\n",
         encoding="utf-8",
@@ -606,6 +609,27 @@ def test_governance_audit_flags_review_evidence_without_review_dismissed_event(
     )
 
 
+def test_governance_audit_flags_review_evidence_without_review_thread_events(
+    tmp_path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".github/workflows/research-governance.yml").write_text(
+        "on:\n  schedule:\n    - cron: '0 2 * * 1'\n"
+        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
+        "  pull_request_review_comment:\n    types: [created, edited, deleted]\nsteps:\n"
+        "  - run: python -m scripts.research.governance gate\n"
+        "  - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "review thread resolved events" in finding.message
+        for finding in report.findings
+    )
+
+
 def test_governance_workflow_contains_pr_review_evidence_gate(tmp_path: Path) -> None:
     _write_minimal_repo(tmp_path)
     workflow = tmp_path / ".github/workflows/research-governance.yml"
@@ -615,6 +639,7 @@ def test_governance_workflow_contains_pr_review_evidence_gate(tmp_path: Path) ->
         "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review]\n"
         "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
         "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
+        "  pull_request_review_thread:\n    types: [resolved]\n"
         "  schedule:\n    - cron: '0 2 * * 1'\n"
         "jobs:\n"
         "  governance:\n"
@@ -645,6 +670,7 @@ def test_governance_audit_flags_workflow_without_pr_review_evidence_gate(
         "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review]\n"
         "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
         "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
+        "  pull_request_review_thread:\n    types: [resolved]\n"
         "  schedule:\n    - cron: '0 2 * * 1'\n"
         "jobs:\n"
         "  governance:\n"
@@ -727,6 +753,28 @@ def test_governance_audit_flags_monitor_without_review_dismissed_event(
     assert any(
         finding.rule_id == "codex_review_monitor"
         and "dismissed events" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_monitor_without_review_thread_events(
+    tmp_path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".github/workflows/codex-review-monitor.yml").write_text(
+        "on:\n  pull_request:\n    types: [opened, synchronize, reopened]\n"
+        "  issue_comment:\n    types: [created, edited, deleted]\n"
+        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
+        "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
+        "permissions:\n  statuses: write\nsteps:\n"
+        "  - run: python -m scripts.research.governance.codex_review_monitor --sync-comment --sync-status\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "codex_review_monitor"
+        and "review thread resolved events" in finding.message
         for finding in report.findings
     )
 
@@ -1978,6 +2026,48 @@ def test_pr_review_evidence_rejects_any_current_head_blocking_codex_review() -> 
     )
 
 
+def test_pr_review_evidence_rejects_unresolved_blocking_codex_threads() -> None:
+    head_sha = "0" * 40
+    report = validate_pr_body(
+        _valid_codex_review_body(),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        comments=[
+            {
+                "body": "@codex review",
+                "created_at": "2026-05-19T00:09:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T00:10:00Z",
+                "body": "### Codex Review",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+        review_threads=[
+            {
+                "isResolved": False,
+                "isOutdated": False,
+                "comments": [
+                    {
+                        "body": "**![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat) blocking**",
+                        "author": {"login": "chatgpt-codex-connector[bot]"},
+                    }
+                ],
+            }
+        ],
+    )
+    assert not report.ok
+    assert (
+        "Codex review must not have unresolved non-outdated P0/P1 threads"
+        in report.errors
+    )
+
+
 def test_parse_next_link_finds_github_pagination_next_url() -> None:
     header = (
         '<https://api.github.com/repos/liuli195/Quant-Trading/issues/5/comments?page=2>; rel="next", '
@@ -2001,6 +2091,32 @@ def test_codex_review_monitor_reports_waiting_for_codex_after_trigger() -> None:
     assert report.status == "waiting_for_codex"
     assert report.trigger_found
     assert "等待 Codex review" in render_monitor_comment(report)
+
+
+def test_codex_review_monitor_blocks_unresolved_blocking_threads() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        issue_comments=[{"body": "@codex review"}],
+        reviews=[],
+        review_comments=[],
+        review_threads=[
+            {
+                "isResolved": False,
+                "isOutdated": False,
+                "comments": [
+                    {
+                        "body": "**![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat) blocking**",
+                        "author": {"login": "chatgpt-codex-connector[bot]"},
+                    }
+                ],
+            }
+        ],
+    )
+    assert report.status == "blocked"
+    assert report.blocking_findings == 1
 
 
 def test_codex_review_monitor_passes_on_codex_completion_reaction() -> None:

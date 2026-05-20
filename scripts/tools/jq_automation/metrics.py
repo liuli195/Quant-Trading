@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from scripts.research.research_core.pointers import read_json_object
 
 from .quota import load_ledger
 
@@ -128,7 +129,7 @@ def extract_from_summary_metrics(run_dir: Path) -> dict[str, float | None]:
     path = run_dir / "summary_metrics.json"
     if not path.is_file():
         return {}
-    raw = json.loads(path.read_text(encoding="utf-8"))
+    raw = read_json_object(path)
     result: dict[str, float | None] = {}
     for cn_key, eng_key in METRIC_KEY_MAP.items():
         if cn_key in raw:
@@ -142,7 +143,7 @@ def extract_from_api_stats(bundle_or_path: dict[str, Any] | Path) -> dict[str, f
         path = bundle_or_path
         if not path.is_file():
             return {}
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw = read_json_object(path)
     else:
         raw = bundle_or_path
 
@@ -166,7 +167,7 @@ def extract_from_metadata(run_dir: Path) -> dict[str, Any]:
     path = run_dir / "metadata.json"
     if not path.is_file():
         return {}
-    raw = json.loads(path.read_text(encoding="utf-8"))
+    raw = read_json_object(path)
     return {
         "backtest_id": raw.get("backtest_id", raw.get("backtestId")),
         "backtest_url": raw.get("backtest_url", raw.get("backtestUrl")),

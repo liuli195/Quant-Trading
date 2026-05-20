@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import json
 from datetime import date
 
@@ -40,6 +41,38 @@ def test_load_price_bundle_normalizes_frames(tmp_path) -> None:
     assert list(frames.close.columns) == ["AAA", "BBB"]
     assert frames.close.loc[pd.Timestamp("2026-01-05"), "AAA"] == 1.1
     assert pd.isna(frames.close.loc[pd.Timestamp("2026-01-05"), "BBB"])
+
+
+def test_load_price_bundle_reads_data_center_pointer(tmp_path) -> None:
+    payload = {
+        "calendar": ["2026-01-02"],
+        "prices": {
+            "AAA": [
+                {"date": "2026-01-02", "open": 0.95, "close": 1.0, "high": 1.1, "low": 0.9, "money": 10},
+            ]
+        },
+    }
+    snapshot = tmp_path / "research_datasets" / "prices" / "snap"
+    (snapshot / "raw").mkdir(parents=True)
+    (snapshot / "raw" / "prices.json.gz").write_bytes(
+        gzip.compress(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+    )
+    pointer = tmp_path / "prices.json"
+    pointer.write_text(
+        json.dumps(
+            {
+                "kind": "data_center_pointer",
+                "dataset_snapshot": snapshot.as_posix(),
+                "dataset_file": "raw/prices.json.gz",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    frames = load_price_bundle(pointer)
+
+    assert frames.close.loc[pd.Timestamp("2026-01-02"), "AAA"] == 1.0
 
 
 def test_calendar_helpers_build_forward_returns() -> None:

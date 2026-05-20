@@ -542,6 +542,16 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "PR review evidence workflow must listen to Codex review submitted, edited, and dismissed events",
                 )
             )
+        if not _workflow_event_types_include(
+            text, "pull_request_review_thread", ("resolved",)
+        ):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "PR review evidence workflow must listen to review thread resolved events",
+                )
+            )
 
     monitor_workflow = root / ".github" / "workflows" / "codex-review-monitor.yml"
     if not monitor_workflow.is_file():
@@ -560,6 +570,7 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             "issue_comment",
             "pull_request_review",
             "pull_request_review_comment",
+            "pull_request_review_thread",
             "statuses: write",
             "scripts.research.governance.codex_review_monitor",
             "--sync-comment",
@@ -591,6 +602,16 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "codex_review_monitor",
                     "error",
                     "monitor workflow must listen to Codex review submitted, edited, and dismissed events",
+                )
+            )
+        if not _workflow_event_types_include(
+            text, "pull_request_review_thread", ("resolved",)
+        ):
+            findings.append(
+                AuditFinding(
+                    "codex_review_monitor",
+                    "error",
+                    "monitor workflow must listen to review thread resolved events",
                 )
             )
 

@@ -13,6 +13,12 @@ from typing import Any
 
 import pandas as pd
 
+from scripts.research.research_core.pointers import (
+    read_data_center_pointer as _read_data_center_pointer,
+    read_json_object as _read_json_object,
+    read_logical_bytes as _read_logical_bytes,
+    read_text_file as _read_text_file,
+)
 from scripts.research.research_core.prices import PriceFrames, load_price_bundle
 
 
@@ -363,7 +369,7 @@ def import_joinquant_price_json(
     """Create one immutable price-dataset snapshot from a JoinQuant JSON export."""
 
     source_path = Path(source)
-    raw_bytes = source_path.read_bytes()
+    raw_bytes = _read_logical_bytes(source_path)
     payload = json.loads(raw_bytes.decode("utf-8"))
     frame = normalize_joinquant_price_payload(payload)
     if frame.empty:
@@ -781,7 +787,7 @@ def _sha256_tree(root: Path) -> str:
     for path in sorted(item for item in root.rglob("*") if item.is_file()):
         digest.update(path.relative_to(root).as_posix().encode("utf-8"))
         digest.update(b"\0")
-        digest.update(path.read_bytes())
+        digest.update(_read_logical_bytes(path))
         digest.update(b"\0")
     return digest.hexdigest()
 
@@ -825,50 +831,6 @@ def _gzip_name(relative_path: Path) -> str:
 
 def _is_data_center_pointer(path: Path) -> bool:
     return _read_data_center_pointer(path) is not None
-
-
-def _read_data_center_pointer(path: Path) -> dict[str, Any] | None:
-    if not path.is_file() or path.stat().st_size > 8192:
-        return None
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        return None
-    if isinstance(payload, dict) and payload.get("kind") == "data_center_pointer":
-        return payload
-    return None
-
-
-def _resolve_data_center_pointer(path: Path) -> Path | None:
-    pointer = _read_data_center_pointer(path)
-    if pointer is None:
-        return None
-    snapshot = Path(str(pointer.get("dataset_snapshot", "")))
-    dataset_file = str(pointer.get("dataset_file", ""))
-    if not dataset_file:
-        return None
-    target = snapshot / dataset_file
-    if target.is_file():
-        return target
-    if not snapshot.is_absolute():
-        cwd_target = Path.cwd() / snapshot / dataset_file
-        if cwd_target.is_file():
-            return cwd_target
-    return target
-
-
-def _read_logical_bytes(path: Path) -> bytes:
-    target = _resolve_data_center_pointer(path)
-    if target is not None:
-        return _read_logical_bytes(target)
-    raw = path.read_bytes()
-    if path.suffix.lower() == ".gz":
-        return gzip.decompress(raw)
-    return raw
-
-
-def _read_text_file(path: Path) -> str:
-    return _read_logical_bytes(path).decode("utf-8-sig")
 
 
 def _load_snapshot_files(snapshot_root: Path) -> dict[str, str]:
@@ -968,13 +930,18 @@ def _source_manifest(source_path: Path) -> dict[str, Any]:
     return {
         "source": source_path.as_posix(),
         "files": [
-            {
-                "path": path.relative_to(source_path).as_posix(),
-                "sha256": sha256_bytes(path.read_bytes()),
-                "bytes": path.stat().st_size,
-            }
+            _source_manifest_file(source_path, path)
             for path in sorted(item for item in source_path.rglob("*") if item.is_file())
         ],
+    }
+
+
+def _source_manifest_file(source_path: Path, path: Path) -> dict[str, Any]:
+    raw_bytes = _read_logical_bytes(path)
+    return {
+        "path": path.relative_to(source_path).as_posix(),
+        "sha256": sha256_bytes(raw_bytes),
+        "bytes": len(raw_bytes),
     }
 
 
@@ -985,10 +952,6 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
             continue
         rows.append(json.loads(line))
     return rows
-
-
-def _read_json_object(path: Path) -> dict[str, Any]:
-    return json.loads(_read_text_file(path))
 
 
 def _audit_profile(events: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1108,10 +1071,10 @@ def import_audit_log_jsonl(
     """Create an immutable dataset snapshot from a JoinQuant audit_log.jsonl."""
 
     source_path = Path(source)
-    raw_bytes = source_path.read_bytes()
+    raw_bytes = _read_logical_bytes(source_path)
     fingerprint = f"sha256:{sha256_bytes(raw_bytes)}"
 
-    lines = [l for l in raw_bytes.decode("utf-8").splitlines() if l.strip()]
+    lines = [line for line in raw_bytes.decode("utf-8").splitlines() if line.strip()]
     total_lines = len(lines)
     event_counts: dict[str, int] = {}
     dates: list[str] = []
@@ -1210,7 +1173,7 @@ def import_audit_log_jsonl(
             "",
             f"- **snapshot**: `{generated_snapshot}`",
             f"- **fingerprint**: `{fingerprint}`",
-            f"- **来源**: joinquant_audit_log_jsonl",
+            "- **来源**: joinquant_audit_log_jsonl",
             f"- **事件总数**: `{total_lines}`",
             f"- **ETF 池**: {params_snapshot.get('etf_pool', [])}",
         ] + (["", f"- **日期范围**: `{date_range[0]} ~ {date_range[1]}`"] if date_range[0] else []) + [""]),

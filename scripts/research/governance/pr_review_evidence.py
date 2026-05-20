@@ -53,10 +53,18 @@ def validate_pr_body(
     comments: Sequence[object] | None = None,
     reviews: Sequence[Mapping[str, object]] | None = None,
     review_comments: Sequence[Mapping[str, object]] | None = None,
+    review_threads: Sequence[Mapping[str, object]] | None = None,
 ) -> EvidenceReport:
     """Return whether a PR body contains merge-blocking review evidence."""
 
     official_codex_required, errors = _official_codex_required(body)
+    if (
+        review_threads is not None
+        and unresolved_blocking_codex_thread_count(review_threads) > 0
+    ):
+        errors.append(
+            "Codex review must not have unresolved non-outdated P0/P1 threads"
+        )
     if not official_codex_required:
         return EvidenceReport(not errors, tuple(errors))
 
@@ -323,6 +331,69 @@ def _codex_completion_comment_errors(
     return tuple(errors)
 
 
+def unresolved_blocking_codex_thread_count(
+    review_threads: Sequence[Mapping[str, object]],
+) -> int:
+    """Count unresolved, non-outdated Codex review threads with P0/P1 findings."""
+
+    count = 0
+    for thread in review_threads:
+        if _thread_is_resolved(thread) or _thread_is_outdated(thread):
+            continue
+        if _thread_has_blocking_codex_comment(thread):
+            count += 1
+    return count
+
+
+def _thread_is_resolved(thread: Mapping[str, object]) -> bool:
+    return bool(_first_thread_value(thread, "isResolved", "is_resolved"))
+
+
+def _thread_is_outdated(thread: Mapping[str, object]) -> bool:
+    return bool(_first_thread_value(thread, "isOutdated", "is_outdated"))
+
+
+def _first_thread_value(thread: Mapping[str, object], *keys: str) -> object:
+    for key in keys:
+        if key in thread:
+            return thread[key]
+    return False
+
+
+def _thread_has_blocking_codex_comment(thread: Mapping[str, object]) -> bool:
+    for comment in _thread_comments(thread):
+        author = comment.get("author")
+        if not isinstance(author, Mapping):
+            author = comment.get("user")
+        login = author.get("login") if isinstance(author, Mapping) else ""
+        if str(login) not in CODEX_REVIEW_AUTHORS:
+            continue
+        if BLOCKING_CODEX_FINDING_PATTERN.search(str(comment.get("body", ""))):
+            return True
+    return False
+
+
+def _thread_comments(thread: Mapping[str, object]) -> tuple[Mapping[str, object], ...]:
+    comments = thread.get("comments")
+    if isinstance(comments, list):
+        return tuple(item for item in comments if isinstance(item, Mapping))
+    if isinstance(comments, Mapping):
+        nodes = comments.get("nodes")
+        if isinstance(nodes, list):
+            return tuple(item for item in nodes if isinstance(item, Mapping))
+        edges = comments.get("edges")
+        if isinstance(edges, list):
+            extracted: list[Mapping[str, object]] = []
+            for edge in edges:
+                if not isinstance(edge, Mapping):
+                    continue
+                node = edge.get("node")
+                if isinstance(node, Mapping):
+                    extracted.append(node)
+            return tuple(extracted)
+    return ()
+
+
 def _review_has_blocking_findings(
     review: Mapping[str, object],
     *,
@@ -570,6 +641,24 @@ def _fetch_github_json(*, repo: str, path: str, token: str) -> object:
     return payload
 
 
+def _fetch_github_graphql(
+    *, query: str, variables: Mapping[str, object], token: str
+) -> Mapping[str, object]:
+    request = urllib.request.Request(
+        "https://api.github.com/graphql",
+        data=json.dumps({"query": query, "variables": dict(variables)}).encode("utf-8"),
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    return payload if isinstance(payload, Mapping) else {}
+
+
 def _fetch_github_list(*, repo: str, path: str, token: str) -> list[object]:
     items: list[object] = []
     url: str | None = _github_api_url(repo=repo, path=path)
@@ -664,6 +753,78 @@ def _fetch_pr_review_comments(
     return [item for item in payload if isinstance(item, Mapping)]
 
 
+def _fetch_pr_review_threads(
+    *, repo: str, pr_number: str, token: str
+) -> list[Mapping[str, object]]:
+    owner, name = repo.split("/", 1)
+    query = """
+    query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+      repository(owner: $owner, name: $name) {
+        pullRequest(number: $number) {
+          reviewThreads(first: 100, after: $cursor) {
+            nodes {
+              isResolved
+              isOutdated
+              comments(first: 50) {
+                nodes {
+                  body
+                  author {
+                    login
+                  }
+                }
+              }
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+          }
+        }
+      }
+    }
+    """
+    threads: list[Mapping[str, object]] = []
+    cursor: str | None = None
+    while True:
+        payload = _fetch_github_graphql(
+            query=query,
+            variables={
+                "owner": owner,
+                "name": name,
+                "number": int(pr_number),
+                "cursor": cursor,
+            },
+            token=token,
+        )
+        connection = _graphql_review_threads_connection(payload)
+        nodes = connection.get("nodes")
+        if isinstance(nodes, list):
+            threads.extend(item for item in nodes if isinstance(item, Mapping))
+        page_info = connection.get("pageInfo")
+        if not isinstance(page_info, Mapping) or not bool(page_info.get("hasNextPage")):
+            break
+        cursor = str(page_info.get("endCursor", "") or "")
+        if not cursor:
+            break
+    return threads
+
+
+def _graphql_review_threads_connection(
+    payload: Mapping[str, object],
+) -> Mapping[str, object]:
+    data = payload.get("data")
+    if not isinstance(data, Mapping):
+        return {}
+    repository = data.get("repository")
+    if not isinstance(repository, Mapping):
+        return {}
+    pull_request = repository.get("pullRequest")
+    if not isinstance(pull_request, Mapping):
+        return {}
+    review_threads = pull_request.get("reviewThreads")
+    return review_threads if isinstance(review_threads, Mapping) else {}
+
+
 def _read_env(name: str | None) -> str | None:
     if not name:
         return None
@@ -699,6 +860,12 @@ def _coerce_reviews(payload: object | None) -> Sequence[Mapping[str, object]] | 
     return [item for item in payload if isinstance(item, Mapping)]
 
 
+def _coerce_review_threads(
+    payload: object | None,
+) -> Sequence[Mapping[str, object]] | None:
+    return _coerce_reviews(payload)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     source = parser.add_mutually_exclusive_group(required=True)
@@ -714,6 +881,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--comments-file", type=Path)
     parser.add_argument("--reviews-file", type=Path)
     parser.add_argument("--review-comments-file", type=Path)
+    parser.add_argument("--review-threads-file", type=Path)
     return parser
 
 
@@ -728,6 +896,9 @@ def main(argv: list[str] | None = None) -> int:
     comments = _coerce_comments(_read_optional_file(args.comments_file))
     reviews = _coerce_reviews(_read_optional_file(args.reviews_file))
     review_comments = _coerce_reviews(_read_optional_file(args.review_comments_file))
+    review_threads = _coerce_review_threads(
+        _read_optional_file(args.review_threads_file)
+    )
     expected_pr_url = _read_env(args.pr_url_env)
     expected_head_sha = _read_env(args.head_sha_env)
     expected_head_created_at = _read_env(args.head_updated_at_env) or _read_env(
@@ -769,6 +940,10 @@ def main(argv: list[str] | None = None) -> int:
             review_comments = _fetch_pr_review_comments(
                 repo=repo, pr_number=pr_number, token=token
             )
+        if review_threads is None:
+            review_threads = _fetch_pr_review_threads(
+                repo=repo, pr_number=pr_number, token=token
+            )
 
     if not expected_head_created_at:
         expected_head_created_at = head_updated_at_from_monitor_state(
@@ -784,6 +959,7 @@ def main(argv: list[str] | None = None) -> int:
         comments=comments,
         reviews=reviews,
         review_comments=review_comments,
+        review_threads=review_threads,
     )
     if report.ok:
         print("PR review evidence ok")

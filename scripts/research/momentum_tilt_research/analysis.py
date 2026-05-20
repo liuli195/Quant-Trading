@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from dataclasses import asdict
 from pathlib import Path
 from typing import Iterable
 
@@ -20,6 +18,7 @@ from scripts.research.research_core.metrics import (
     rolling_sharpe,
     yearly_metrics,
 )
+from scripts.research.research_core.pointers import read_json_object
 from scripts.research.research_core.prices import PriceFrames, load_price_bundle
 from scripts.research.research_core.reporting import markdown_table, write_json
 
@@ -317,7 +316,7 @@ def write_phase0_outputs(
         "",
         f"- **baseline run**: `{BASELINE_RUN_ID}`",
         f"- **审计日志**: [audit_log.jsonl](../../../../../backtest_runs/{BASELINE_RUN_ID}/tabs_raw/audit_log.jsonl) <!-- pathref: backtest_tabs_dir(strategy=etf_factor_rotation, run_id={BASELINE_RUN_ID})/audit_log.jsonl -->",
-        f"- **原始行情**: [etf_window_research_prices.json](../../../../window_heterogeneity/inputs/raw/etf_window_research_prices.json) <!-- pathref: strategy_research_project_raw_inputs(strategy=etf_factor_rotation, project=window_heterogeneity)/etf_window_research_prices.json -->",
+        "- **原始行情**: [etf_window_research_prices.json](../../../../window_heterogeneity/inputs/raw/etf_window_research_prices.json) <!-- pathref: strategy_research_project_raw_inputs(strategy=etf_factor_rotation, project=window_heterogeneity)/etf_window_research_prices.json -->",
         f"- **日收益**: [daily_returns.md](../../../../../backtest_runs/{BASELINE_RUN_ID}/tabs_raw/daily_returns.md) <!-- pathref: backtest_tabs_dir(strategy=etf_factor_rotation, run_id={BASELINE_RUN_ID})/daily_returns.md -->",
         f"- **信号周数**: `{len(events)}`",
         "",
@@ -427,7 +426,7 @@ def write_phase1_outputs(
 
 
 def _parse_cloud_summary(run_id: str) -> dict[str, float]:
-    raw = json.loads((backtest_run_dir(run_id) / "summary_metrics.json").read_text(encoding="utf-8"))
+    raw = read_json_object(backtest_run_dir(run_id) / "summary_metrics.json")
     return {
         "annual_return": float(str(raw["策略年化收益"]).rstrip("%")) / 100,
         "sharpe": float(raw["夏普比率"]),

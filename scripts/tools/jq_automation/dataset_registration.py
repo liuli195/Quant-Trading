@@ -16,7 +16,7 @@ def register_backtest_run_dataset(
     datasets_root: str | Path = "research_datasets",
     enabled: bool = True,
     allow_partial: bool = False,
-    compact_source: bool = True,
+    compact_source: bool = False,
 ) -> Path | None:
     """Register a saved ``backtest_runs/<run_id>`` directory in the data center.
 

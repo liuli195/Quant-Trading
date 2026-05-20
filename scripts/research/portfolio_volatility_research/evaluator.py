@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -16,6 +15,7 @@ from scripts.research.momentum_tilt_research.replay import (
 )
 from scripts.research.research_core.audit import load_rebalance_events
 from scripts.research.research_core.metrics import performance_metrics
+from scripts.research.research_core.pointers import read_json_object
 from scripts.research.research_core.prices import load_price_bundle
 
 CODES = ("159819.XSHE", "513100.XSHG", "518880.XSHG")
@@ -55,7 +55,7 @@ def _portfolio_vol(
 
 
 def _parse_cloud_summary(path: Path) -> dict[str, float]:
-    raw = json.loads(path.read_text(encoding="utf-8"))
+    raw = read_json_object(path)
     return {
         "annual_return": float(str(raw["策略年化收益"]).rstrip("%")) / 100,
         "volatility": float(raw["策略波动率"]),
