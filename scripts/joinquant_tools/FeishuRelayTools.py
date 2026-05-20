@@ -141,4 +141,61 @@ def _format_order_summary(summary):
     )
 
 
+def _build_message(strategy_name, lines, security_keyword=""):
+    title = "【%s】飞书交易通知" % strategy_name
+    if security_keyword and security_keyword not in title:
+        title = "%s %s" % (security_keyword, title)
+    return title + "\n" + ("\n" + "-" * 28 + "\n").join(lines)
+
+
+class _OrderBuffer:
+    def __init__(self, wait_seconds, max_size, send_func, jitter_seconds=0):
+        self.wait_seconds = wait_seconds
+        self.max_size = max_size
+        self.send_func = send_func
+        self.jitter_seconds = jitter_seconds
+        self._items = []
+        self._timer = None
+        self._lock = threading.Lock()
+
+    @property
+    def pending_count(self):
+        with self._lock:
+            return len(self._items)
+
+    def add(self, order_summary):
+        with self._lock:
+            self._items.append(order_summary)
+            if self._timer:
+                self._timer.cancel()
+            self._timer = threading.Timer(self.wait_seconds, self.flush)
+            self._timer.start()
+
+    def flush(self):
+        try:
+            with self._lock:
+                if self._timer:
+                    self._timer.cancel()
+                    self._timer = None
+                if not self._items:
+                    return
+                items = self._items
+                self._items = []
+            lines = [_format_order_summary(item) for item in items[-self.max_size:]]
+            if len(items) > self.max_size:
+                lines.insert(0, "...(前略 %s 条)" % (len(items) - self.max_size))
+            message = _build_message(CURRENT_STRATEGY_NAME, lines, SECURITY_KEYWORD)
+            self._send_with_jitter(message)
+        except Exception as exc:
+            _log("flush 异常: %s" % exc)
+
+    def _send_with_jitter(self, message):
+        if self.jitter_seconds and self.jitter_seconds > 0:
+            delay = random.randint(0, int(self.jitter_seconds))
+            timer = threading.Timer(delay, self.send_func, args=(message,))
+            timer.start()
+            return
+        self.send_func(message)
+
+
 CURRENT_STRATEGY_NAME = _get_strategy_name()

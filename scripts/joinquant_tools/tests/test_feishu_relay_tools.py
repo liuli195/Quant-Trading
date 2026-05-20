@@ -125,3 +125,57 @@ def test_order_summary_degrades_when_display_name_missing(monkeypatch):
     assert summary["strategy"] == "ETF轮动模拟盘"
     assert "ETF轮动模拟盘" in module._format_order_summary(summary)
     assert "513100.XSHG" in module._format_order_summary(summary)
+
+
+def test_buffer_merges_orders_and_clears_after_flush(monkeypatch):
+    module = load_module(monkeypatch)
+    sent = []
+    sender = lambda message, replay=False, retry_index=0: sent.append((message, replay, retry_index))
+    buffer = module._OrderBuffer(wait_seconds=60, max_size=30, send_func=sender, jitter_seconds=0)
+
+    buffer.add({"time": "2026-05-20 09:31:00", "action": "买入", "name": "", "security": "513100.XSHG", "amount": 100, "price": 1.0, "strategy": "S"})
+    buffer.add({"time": "2026-05-20 09:31:01", "action": "卖出", "name": "", "security": "518880.XSHG", "amount": 50, "price": 5.0, "strategy": "S"})
+    buffer.flush()
+
+    assert len(sent) == 1
+    assert "513100.XSHG" in sent[0][0]
+    assert "518880.XSHG" in sent[0][0]
+    assert buffer.pending_count == 0
+
+
+def test_buffer_limits_message_size_with_prefix(monkeypatch):
+    module = load_module(monkeypatch)
+    sent = []
+    buffer = module._OrderBuffer(wait_seconds=60, max_size=1, send_func=lambda message, replay=False, retry_index=0: sent.append(message), jitter_seconds=0)
+
+    buffer.add({"time": "t1", "action": "买入", "name": "", "security": "A", "amount": 1, "price": 1, "strategy": "S"})
+    buffer.add({"time": "t2", "action": "买入", "name": "", "security": "B", "amount": 1, "price": 1, "strategy": "S"})
+    buffer.flush()
+
+    assert "前略 1 条" in sent[0]
+    assert "A" not in sent[0]
+    assert "B" in sent[0]
+
+
+def test_security_keyword_is_in_every_message(monkeypatch):
+    module = load_module(monkeypatch)
+
+    text = module._build_message("S", ["line1"], security_keyword="交易通知")
+
+    assert "交易通知" in text
+    assert "S" in text
+
+
+def test_jitter_schedules_deferred_send(monkeypatch):
+    module = load_module(monkeypatch)
+    monkeypatch.setattr(module.random, "randint", lambda start, end: 7)
+    sent = []
+    buffer = module._OrderBuffer(wait_seconds=60, max_size=30, send_func=lambda message, replay=False, retry_index=0: sent.append(message), jitter_seconds=30)
+
+    buffer.add({"time": "t1", "action": "买入", "name": "", "security": "A", "amount": 1, "price": 1, "strategy": "S"})
+    buffer.flush()
+
+    assert FakeTimer.scheduled[-1].delay == 7
+    assert sent == []
+    FakeTimer.scheduled[-1].fire()
+    assert len(sent) == 1
