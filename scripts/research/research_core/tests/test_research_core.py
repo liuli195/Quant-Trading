@@ -136,6 +136,23 @@ def test_read_text_file_resolves_relative_pointer_snapshot_next_to_pointer(tmp_p
     assert read_text_file(pointer) == "hello"
 
 
+def test_read_text_file_keeps_missing_pointer_payload_readable(tmp_path, monkeypatch) -> None:
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)
+    run_dir = repo / "strategies" / "demo" / "backtest_runs" / "run-1"
+    run_dir.mkdir(parents=True)
+    pointer_payload = {
+        "kind": "data_center_pointer",
+        "dataset_snapshot": "research_datasets/demo_run/snap-1",
+        "dataset_file": "raw/summary_metrics.json.gz",
+    }
+    pointer = run_dir / "summary_metrics.json"
+    pointer.write_text(json.dumps(pointer_payload, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.chdir(repo / "strategies" / "demo")
+
+    assert json.loads(read_text_file(pointer)) == pointer_payload
+
+
 def test_calendar_helpers_build_forward_returns() -> None:
     calendar = pd.bdate_range("2026-01-01", "2026-01-20")
     anchors = build_weekly_anchor_frame(calendar, date(2026, 1, 1), date(2026, 1, 20), (5,))

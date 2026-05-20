@@ -49,7 +49,7 @@ def resolve_data_center_pointer(path: str | Path) -> Path | None:
         cwd_target = Path.cwd() / snapshot / dataset_file
         if cwd_target.is_file():
             return cwd_target
-    return target
+    return None
 
 
 def _find_repo_root(path: Path) -> Path | None:
