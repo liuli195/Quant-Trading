@@ -389,9 +389,9 @@ class _FeishuSender:
 
     def _schedule_retry(self, message, replay, retry_index, batch_id, orders, retry_delay=None, pending_persisted=True):
         delays = list(RETRY_DELAYS_SECONDS)
+        if retry_index >= len(delays):
+            return
         if retry_delay is None:
-            if retry_index >= len(delays):
-                return
             retry_delay = delays[retry_index]
         timer = threading.Timer(
             retry_delay,

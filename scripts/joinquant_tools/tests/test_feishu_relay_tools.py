@@ -548,3 +548,28 @@ def test_sender_uses_rate_limit_reset_for_retry(monkeypatch):
     sender.send("message", orders=[{"security": "A"}])
 
     assert FakeTimer.scheduled[-1].delay == 9
+
+
+def test_sender_rate_limit_retry_stops_after_retry_delays_exhausted(monkeypatch):
+    post = Mock(return_value=FakeResponse(
+        status_code=429,
+        payload={"code": 999, "msg": "rate"},
+        headers={"x-ogw-ratelimit-reset": "9"},
+    ))
+    module = load_module(monkeypatch, request=post)
+    module.feishu_enabled = True
+    module.WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/fake"
+    module.RETRY_DELAYS_SECONDS = [5, 8]
+    outbox = module._Outbox("path.jsonl", read_file_func=module.read_file, write_file_func=module.write_file)
+    sender = module._FeishuSender(outbox=outbox)
+
+    sender.send("message", orders=[{"security": "A"}])
+    assert FakeTimer.scheduled[-1].delay == 9
+    assert len(FakeTimer.scheduled) == 1
+
+    FakeTimer.scheduled[-1].fire()
+    assert FakeTimer.scheduled[-1].delay == 9
+    assert len(FakeTimer.scheduled) == 2
+
+    FakeTimer.scheduled[-1].fire()
+    assert len(FakeTimer.scheduled) == 2
