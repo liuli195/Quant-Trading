@@ -63,7 +63,7 @@ def test_sign_feishu_payload_uses_timestamp_newline_secret(monkeypatch):
     module = load_module(monkeypatch)
     secret = "unit-test-secret"
     expected = base64.b64encode(
-        hmac.new(secret.encode("utf-8"), b"1700000000\nunit-test-secret", hashlib.sha256).digest()
+        hmac.new(b"1700000000\nunit-test-secret", digestmod=hashlib.sha256).digest()
     ).decode("utf-8")
 
     assert module._make_signature(1700000000, secret) == expected
@@ -75,7 +75,7 @@ def test_build_payload_includes_signature_when_secret_exists(monkeypatch):
     payload = module._build_feishu_payload("hello", secret="unit-test-secret", timestamp=1700000000)
 
     assert payload["timestamp"] == "1700000000"
-    assert payload["sign"]
+    assert payload["sign"] == module._make_signature(1700000000, "unit-test-secret")
     assert payload["msg_type"] == "text"
     assert payload["content"]["text"] == "hello"
 

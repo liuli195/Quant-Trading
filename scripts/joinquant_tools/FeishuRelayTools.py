@@ -48,7 +48,7 @@ def _log(message):
 
 def _make_signature(timestamp, secret):
     string_to_sign = "%s\n%s" % (timestamp, secret)
-    digest = hmac.new(secret.encode("utf-8"), string_to_sign.encode("utf-8"), hashlib.sha256).digest()
+    digest = hmac.new(string_to_sign.encode("utf-8"), digestmod=hashlib.sha256).digest()
     return base64.b64encode(digest).decode("utf-8")
 
 
