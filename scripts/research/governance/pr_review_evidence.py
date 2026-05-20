@@ -660,6 +660,11 @@ def _required_trigger_comments(comments: Sequence[object]) -> tuple[object, ...]
 
 
 def _is_required_trigger_comment(comment: object) -> bool:
+    if isinstance(comment, Mapping):
+        user = comment.get("user")
+        login = user.get("login") if isinstance(user, Mapping) else ""
+        if str(login) in CODEX_REVIEW_AUTHORS:
+            return False
     body = _comment_body(comment)
     return all(token in body for token in REQUIRED_TRIGGER_TOKENS)
 

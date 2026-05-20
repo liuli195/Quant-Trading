@@ -15,6 +15,7 @@ from pathlib import Path
 
 from scripts.research.governance.pr_review_evidence import (
     BLOCKING_CODEX_FINDING_PATTERN,
+    CODEX_REVIEW_AUTHORS,
     _fetch_pr_review_threads,
     has_codex_completion_reaction,
     head_updated_at_from_monitor_state,
@@ -223,8 +224,7 @@ def _required_trigger_comments(
 ) -> tuple[Mapping[str, object], ...]:
     matched: list[Mapping[str, object]] = []
     for comment in issue_comments:
-        body = str(comment.get("body", ""))
-        if not all(token in body for token in REQUIRED_TRIGGER_TOKENS):
+        if not _is_required_trigger_comment(comment):
             continue
         effective_time = _comment_effective_time(comment)
         if not effective_time:
@@ -237,6 +237,10 @@ def _required_trigger_comments(
 
 
 def _is_required_trigger_comment(comment: Mapping[str, object]) -> bool:
+    user = comment.get("user")
+    login = user.get("login") if isinstance(user, Mapping) else ""
+    if str(login) in CODEX_REVIEW_AUTHORS:
+        return False
     body = str(comment.get("body", ""))
     return all(token in body for token in REQUIRED_TRIGGER_TOKENS)
 
@@ -422,8 +426,7 @@ def _enrich_required_trigger_reactions(
 ) -> list[Mapping[str, object]]:
     enriched: list[Mapping[str, object]] = []
     for comment in comments:
-        body = str(comment.get("body", ""))
-        if not all(token_text in body for token_text in REQUIRED_TRIGGER_TOKENS):
+        if not _is_required_trigger_comment(comment):
             enriched.append(comment)
             continue
         comment_id = comment.get("id")
