@@ -156,6 +156,7 @@ class _OrderBuffer:
         self.jitter_seconds = jitter_seconds
         self._items = []
         self._timer = None
+        self._timer_token = 0
         self._lock = threading.Lock()
 
     @property
@@ -166,10 +167,18 @@ class _OrderBuffer:
     def add(self, order_summary):
         with self._lock:
             self._items.append(order_summary)
+            self._timer_token += 1
+            token = self._timer_token
             if self._timer:
                 self._timer.cancel()
-            self._timer = threading.Timer(self.wait_seconds, self.flush)
+            self._timer = threading.Timer(self.wait_seconds, self._flush_if_current, args=(token,))
             self._timer.start()
+
+    def _flush_if_current(self, token):
+        with self._lock:
+            if token != self._timer_token:
+                return
+        self.flush()
 
     def flush(self):
         try:
@@ -192,10 +201,16 @@ class _OrderBuffer:
     def _send_with_jitter(self, message):
         if self.jitter_seconds and self.jitter_seconds > 0:
             delay = random.randint(0, int(self.jitter_seconds))
-            timer = threading.Timer(delay, self.send_func, args=(message,))
+            timer = threading.Timer(delay, self._safe_send, args=(message,))
             timer.start()
             return
-        self.send_func(message)
+        self._safe_send(message)
+
+    def _safe_send(self, message):
+        try:
+            self.send_func(message)
+        except Exception as exc:
+            _log("发送通知异常: %s" % exc)
 
 
 CURRENT_STRATEGY_NAME = _get_strategy_name()

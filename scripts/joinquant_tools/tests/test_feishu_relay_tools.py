@@ -160,10 +160,31 @@ def test_buffer_limits_message_size_with_prefix(monkeypatch):
 def test_security_keyword_is_in_every_message(monkeypatch):
     module = load_module(monkeypatch)
 
-    text = module._build_message("S", ["line1"], security_keyword="交易通知")
+    text = module._build_message("S", ["line1"], security_keyword="安全校验")
 
-    assert "交易通知" in text
+    assert "安全校验" in text
     assert "S" in text
+
+
+def test_stale_timer_token_is_ignored(monkeypatch):
+    module = load_module(monkeypatch)
+    sent = []
+    buffer = module._OrderBuffer(wait_seconds=60, max_size=30, send_func=lambda message, replay=False, retry_index=0: sent.append(message), jitter_seconds=0)
+
+    buffer.add({"time": "t1", "action": "买入", "name": "", "security": "A", "amount": 1, "price": 1, "strategy": "S"})
+    first_timer = FakeTimer.scheduled[-1]
+    buffer.add({"time": "t2", "action": "买入", "name": "", "security": "B", "amount": 1, "price": 1, "strategy": "S"})
+    second_timer = FakeTimer.scheduled[-1]
+
+    first_timer.callback(*first_timer.args, **first_timer.kwargs)
+    assert sent == []
+    assert buffer.pending_count == 2
+
+    second_timer.fire()
+    assert len(sent) == 1
+    assert "A" in sent[0]
+    assert "B" in sent[0]
+    assert buffer.pending_count == 0
 
 
 def test_jitter_schedules_deferred_send(monkeypatch):
@@ -179,3 +200,35 @@ def test_jitter_schedules_deferred_send(monkeypatch):
     assert sent == []
     FakeTimer.scheduled[-1].fire()
     assert len(sent) == 1
+
+
+def test_send_exception_is_logged(monkeypatch):
+    module = load_module(monkeypatch)
+    logs = []
+    monkeypatch.setattr(module, "_print", lambda message: logs.append(message))
+
+    def failing_send(message):
+        raise RuntimeError("boom")
+
+    buffer = module._OrderBuffer(wait_seconds=60, max_size=30, send_func=failing_send, jitter_seconds=0)
+    buffer.add({"time": "t1", "action": "买入", "name": "", "security": "A", "amount": 1, "price": 1, "strategy": "S"})
+    buffer.flush()
+
+    assert any("发送通知异常" in item and "boom" in item for item in logs)
+
+
+def test_jitter_send_exception_is_logged(monkeypatch):
+    module = load_module(monkeypatch)
+    logs = []
+    monkeypatch.setattr(module, "_print", lambda message: logs.append(message))
+    monkeypatch.setattr(module.random, "randint", lambda start, end: 1)
+
+    def failing_send(message):
+        raise RuntimeError("later boom")
+
+    buffer = module._OrderBuffer(wait_seconds=60, max_size=30, send_func=failing_send, jitter_seconds=30)
+    buffer.add({"time": "t1", "action": "买入", "name": "", "security": "A", "amount": 1, "price": 1, "strategy": "S"})
+    buffer.flush()
+    FakeTimer.scheduled[-1].fire()
+
+    assert any("发送通知异常" in item and "later boom" in item for item in logs)
