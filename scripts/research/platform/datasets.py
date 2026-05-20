@@ -895,6 +895,7 @@ def _validate_raw_file_integrity(snapshot_root: Path, raw_integrity: dict[str, A
             continue
         target = snapshot_root / dataset_file
         if not target.is_file():
+            errors.append(f"missing raw_file_integrity dataset_file: {original_path}")
             continue
         compressed = target.read_bytes()
         if raw_info.get("compressed_sha256") and raw_info["compressed_sha256"] != sha256_bytes(compressed):

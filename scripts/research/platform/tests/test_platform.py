@@ -264,6 +264,23 @@ def test_backtest_run_importer_compacts_three_redundancy_classes(tmp_path) -> No
     assert DatasetRegistry(tmp_path / "research_datasets").validate() == []
 
 
+def test_dataset_registry_flags_missing_declared_raw_gzip(tmp_path) -> None:
+    run_dir = tmp_path / "strategies" / "demo" / "backtest_runs" / "run-1"
+    _write_backtest_run(run_dir)
+    snapshot = import_backtest_run(
+        run_dir,
+        dataset_id="demo_run",
+        snapshot_id="snap-1",
+        datasets_root=tmp_path / "research_datasets",
+    )
+    missing = snapshot.root / "raw" / "summary_metrics.json.gz"
+    missing.unlink()
+
+    errors = DatasetRegistry(tmp_path / "research_datasets").validate()
+
+    assert any("missing raw_file_integrity dataset_file: summary_metrics.json" in error for error in errors)
+
+
 def test_backtest_run_importer_accepts_utf8_bom_summary_metrics(tmp_path) -> None:
     run_dir = tmp_path / "strategies" / "demo" / "backtest_runs" / "run-1"
     _write_backtest_run(run_dir)
