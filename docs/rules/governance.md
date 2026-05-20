@@ -9,7 +9,7 @@
 - `scripts.research.governance.ai_review_gate` 是本地 AI review 报告、风险等级和 Codex Review Scope 的统一校验入口；本地报告保存在 `.local/ai-review/`，不进入仓库。
 - CI 必须校验 PR body 中的 `AI Review 风险分级` 和 review 证据；本地报告缺失、无法解析或无法证明低风险时，PR body 必须按 high/unknown 处理。
 - 低风险 PR 可以不包含官方 Codex Code Review 链接；高风险或 unknown PR 必须包含官方 Codex Code Review 的通过结论。
-- CI 必须用 `pr-review-evidence` job 校验 PR review 证据，并在需要官方 Codex Review 时用 `Codex Review Monitor` status 监听当前 head 的 Codex 评审状态；两者都必须读取 review thread resolved/outdated 状态，拦截未解决且未过期的 Codex P0/P1 thread，并在 review thread resolved 事件后重新校验。
+- CI 必须用 `pr-review-evidence` job 校验 PR review 证据，并在需要官方 Codex Review 时用 `Codex Review Monitor` status 监听当前 head 的 Codex 评审状态；两者都必须实时读取 review thread resolved/outdated 状态，拦截未解决且未过期的 Codex P0/P1 thread。
 - 本地仓库必须设置 `git config core.hooksPath .githooks`，不能只提交 hook 文件。
 - `.githooks/pre-commit`、`.githooks/pre-push` 和 `.githooks/reference-transaction` 必须通过 `.githooks/run-python.sh` 调用项目虚拟环境，不能硬编码 `powershell.exe` 或单一平台解释器路径。
 - `.githooks/pre-push` 必须调用 `scripts.research.governance.branch_protection pre-push` 和 `scripts.research.governance gate`，并保留 Git LFS pre-push 转交。

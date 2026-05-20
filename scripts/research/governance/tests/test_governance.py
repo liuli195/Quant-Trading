@@ -188,7 +188,7 @@ def _write_minimal_repo(root: Path) -> None:
         "on:\n  schedule:\n    - cron: '0 2 * * 1'\n"
         "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
         "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
-        "  pull_request_review_thread:\n    types: [resolved]\nsteps:\n"
+        "steps:\n"
         "  - run: python -m ruff check scripts strategies\n"
         "  - run: python -m bandit -q -r scripts strategies\n"
         "  - run: python -m mypy scripts strategies\n"
@@ -204,8 +204,6 @@ def _write_minimal_repo(root: Path) -> None:
         "    types: [submitted, edited, dismissed]\n"
         "  pull_request_review_comment:\n"
         "    types: [created, edited, deleted]\n"
-        "  pull_request_review_thread:\n"
-        "    types: [resolved]\n"
         "permissions:\n  statuses: write\nsteps:\n"
         "  - run: python -m scripts.research.governance.codex_review_monitor --sync-comment --sync-status\n",
         encoding="utf-8",
@@ -609,27 +607,6 @@ def test_governance_audit_flags_review_evidence_without_review_dismissed_event(
     )
 
 
-def test_governance_audit_flags_review_evidence_without_review_thread_events(
-    tmp_path,
-) -> None:
-    _write_minimal_repo(tmp_path)
-    (tmp_path / ".github/workflows/research-governance.yml").write_text(
-        "on:\n  schedule:\n    - cron: '0 2 * * 1'\n"
-        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
-        "  pull_request_review_comment:\n    types: [created, edited, deleted]\nsteps:\n"
-        "  - run: python -m scripts.research.governance gate\n"
-        "  - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
-        encoding="utf-8",
-    )
-    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
-    assert not report.ok
-    assert any(
-        finding.rule_id == "governance_gate"
-        and "review thread resolved events" in finding.message
-        for finding in report.findings
-    )
-
-
 def test_governance_workflow_contains_pr_review_evidence_gate(tmp_path: Path) -> None:
     _write_minimal_repo(tmp_path)
     workflow = tmp_path / ".github/workflows/research-governance.yml"
@@ -639,7 +616,6 @@ def test_governance_workflow_contains_pr_review_evidence_gate(tmp_path: Path) ->
         "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review]\n"
         "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
         "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
-        "  pull_request_review_thread:\n    types: [resolved]\n"
         "  schedule:\n    - cron: '0 2 * * 1'\n"
         "jobs:\n"
         "  governance:\n"
@@ -670,7 +646,6 @@ def test_governance_audit_flags_workflow_without_pr_review_evidence_gate(
         "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review]\n"
         "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
         "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
-        "  pull_request_review_thread:\n    types: [resolved]\n"
         "  schedule:\n    - cron: '0 2 * * 1'\n"
         "jobs:\n"
         "  governance:\n"
@@ -753,28 +728,6 @@ def test_governance_audit_flags_monitor_without_review_dismissed_event(
     assert any(
         finding.rule_id == "codex_review_monitor"
         and "dismissed events" in finding.message
-        for finding in report.findings
-    )
-
-
-def test_governance_audit_flags_monitor_without_review_thread_events(
-    tmp_path,
-) -> None:
-    _write_minimal_repo(tmp_path)
-    (tmp_path / ".github/workflows/codex-review-monitor.yml").write_text(
-        "on:\n  pull_request:\n    types: [opened, synchronize, reopened]\n"
-        "  issue_comment:\n    types: [created, edited, deleted]\n"
-        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
-        "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
-        "permissions:\n  statuses: write\nsteps:\n"
-        "  - run: python -m scripts.research.governance.codex_review_monitor --sync-comment --sync-status\n",
-        encoding="utf-8",
-    )
-    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
-    assert not report.ok
-    assert any(
-        finding.rule_id == "codex_review_monitor"
-        and "review thread resolved events" in finding.message
         for finding in report.findings
     )
 
