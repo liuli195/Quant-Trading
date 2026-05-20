@@ -261,6 +261,52 @@ def test_outbox_loads_unacked_batches(monkeypatch):
     assert batches[0]["message"] == "m1"
 
 
+def test_outbox_later_pending_overrides_earlier_acked(monkeypatch):
+    read_text = "\n".join([
+        json.dumps({"status": "pending", "batch_id": "batch-1", "message": "old"}, ensure_ascii=False),
+        json.dumps({"status": "acked", "batch_id": "batch-1"}, ensure_ascii=False),
+        json.dumps({"status": "pending", "batch_id": "batch-1", "message": "new"}, ensure_ascii=False),
+    ])
+    module = load_module(monkeypatch, read_text=read_text)
+    outbox = module._Outbox("path.jsonl", read_file_func=module.read_file, write_file_func=module.write_file)
+
+    batches = outbox.load_unacked(limit=20)
+
+    assert [item["batch_id"] for item in batches] == ["batch-1"]
+    assert batches[0]["message"] == "new"
+
+
+def test_outbox_invalid_limits_return_empty(monkeypatch):
+    read_text = json.dumps({"status": "pending", "batch_id": "batch-1", "message": "m1"}, ensure_ascii=False)
+    module = load_module(monkeypatch, read_text=read_text)
+    outbox = module._Outbox("path.jsonl", read_file_func=module.read_file, write_file_func=module.write_file)
+
+    assert outbox.load_unacked(limit=0) == []
+    assert outbox.load_unacked(limit=-1) == []
+    assert outbox.load_unacked(limit="bad") == []
+
+
+def test_outbox_skips_non_object_and_bad_json_lines(monkeypatch):
+    read_text = "\n".join([
+        "not-json",
+        json.dumps([], ensure_ascii=False),
+        json.dumps("x", ensure_ascii=False),
+        json.dumps({"status": "pending", "batch_id": "batch-1", "message": "m1"}, ensure_ascii=False),
+    ])
+    module = load_module(monkeypatch, read_text=read_text)
+    outbox = module._Outbox("path.jsonl", read_file_func=module.read_file, write_file_func=module.write_file)
+
+    batches = outbox.load_unacked(limit=20)
+
+    assert [item["batch_id"] for item in batches] == ["batch-1"]
+
+
+def test_resolve_outbox_path_sanitizes_strategy_name(monkeypatch):
+    module = load_module(monkeypatch)
+
+    assert module._resolve_outbox_path("A/B\\C") == "feishu_relay_outbox/A_B_C.jsonl"
+
+
 def test_batch_id_is_stable_for_same_message(monkeypatch):
     module = load_module(monkeypatch)
 

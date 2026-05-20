@@ -192,12 +192,18 @@ class _Outbox:
         if self.read_file is None:
             return []
         try:
+            limit = int(limit)
+        except Exception as exc:
+            _log("outbox replay limit 无效: %s" % exc)
+            return []
+        if limit <= 0:
+            return []
+        try:
             text = self.read_file(self.path) or ""
         except Exception as exc:
             _log("outbox 读取失败: %s" % exc)
             return []
-        pending = {}
-        acked = set()
+        latest_by_batch = {}
         for line in text.splitlines():
             if not line.strip():
                 continue
@@ -205,15 +211,15 @@ class _Outbox:
                 row = json.loads(line)
             except Exception:
                 continue
+            if not isinstance(row, dict):
+                continue
             batch_id = row.get("batch_id")
             if not batch_id:
                 continue
-            if row.get("status") == "pending":
-                pending[batch_id] = row
-            elif row.get("status") == "acked":
-                acked.add(batch_id)
-        batches = [row for batch_id, row in pending.items() if batch_id not in acked]
-        return batches[-int(limit):]
+            if row.get("status") in ("pending", "acked"):
+                latest_by_batch[batch_id] = row
+        batches = [row for row in latest_by_batch.values() if row.get("status") == "pending"]
+        return batches[-limit:]
 
 
 class _OrderBuffer:
