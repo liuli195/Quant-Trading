@@ -14,6 +14,7 @@ from scripts.research.governance.codex_review_monitor import (
 from scripts.research.governance.pr_review_evidence import (
     BLOCKING_CODEX_FINDING_PATTERN,
     head_updated_at_from_monitor_state,
+    _issue_label_names,
     _parse_next_link,
     render_monitor_head_state,
     validate_pr_body,
@@ -112,6 +113,7 @@ def _write_minimal_repo(root: Path) -> None:
         "使用项目虚拟环境运行 Python，具体命令见 docs/rules/commands.md。"
         "所有进入主干的改动必须通过 PR；如用户显式授权，可以按直写主干链路直接提交和推送主干；"
         "禁止本地合并主干，细则见 docs/rules/pr-workflow.md。"
+        "效率：所有任务默认优先分发给子agent，主会话只负责流程编排。"
         "Markdown 内部文件引用使用 pathref。"
         "遇到沙箱/权限阻断时申请提权。"
         "每次任务后清理临时产物。\n\n"
@@ -186,6 +188,7 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / ".github/workflows/research-governance.yml").write_text(
         "on:\n  schedule:\n    - cron: '0 2 * * 1'\n"
+        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
         "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
         "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
         "steps:\n"
@@ -217,6 +220,10 @@ def _write_minimal_repo(root: Path) -> None:
     (root / "docs/rules/pr-workflow.md").write_text(
         "所有进入主干的改动必须通过 PR\n直写主干 ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON\n"
         "禁止本地合并主干\nCodex Review Monitor\n"
+        "主会话只负责流程编排\n任务优先分发给子agent执行\n子 agent 交叉评审\n"
+        "superpowers:subagent-driven-development/spec-reviewer-prompt.md\n"
+        "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md\n"
+        "reviewers:\n"
         "git fetch origin main\ngit merge --ff-only origin/main\n"
         "git branch -d <branch>\ngit push origin --delete <branch>\n",
         encoding="utf-8",
@@ -248,7 +255,11 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     (root / ".github/pull_request_template.md").write_text(
-        "改动目标\n影响范围\n规则同步\n已运行检查\nCodex Code Review 结论\n"
+        "改动目标\n影响范围\n规则同步\n已运行检查\n子 agent 交叉评审\n"
+        "superpowers:subagent-driven-development/spec-reviewer-prompt.md\n"
+        "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md\n"
+        "reviewers:\n"
+        "任务分发说明\nCodex Code Review 结论\n"
         "Codex\nscripts.research.governance gate\nwaiver\n证据\n",
         encoding="utf-8",
     )
@@ -263,6 +274,11 @@ def _write_minimal_repo(root: Path) -> None:
                 "P0/P1",
                 "scripts.research.governance gate",
                 "Codex Review Monitor",
+                "至少两个独立 reviewer",
+                "子 agent 交叉评审",
+                "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
+                "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
+                "reviewers:",
                 "Codex Code Review 结论",
                 "结论: 通过",
                 "阻断问题: 无",
@@ -607,13 +623,35 @@ def test_governance_audit_flags_review_evidence_without_review_dismissed_event(
     )
 
 
+def test_governance_audit_flags_review_evidence_without_label_events(
+    tmp_path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".github/workflows/research-governance.yml").write_text(
+        "on:\n  schedule:\n    - cron: '0 2 * * 1'\n"
+        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review]\n"
+        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
+        "  pull_request_review_comment:\n    types: [created, edited, deleted]\nsteps:\n"
+        "  - run: python -m scripts.research.governance gate\n"
+        "  - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "labeled and unlabeled events" in finding.message
+        for finding in report.findings
+    )
+
+
 def test_governance_workflow_contains_pr_review_evidence_gate(tmp_path: Path) -> None:
     _write_minimal_repo(tmp_path)
     workflow = tmp_path / ".github/workflows/research-governance.yml"
     workflow.write_text(
         "name: Research Governance\n"
         "on:\n"
-        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review]\n"
+        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
         "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
         "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
         "  schedule:\n    - cron: '0 2 * * 1'\n"
@@ -643,7 +681,7 @@ def test_governance_audit_flags_workflow_without_pr_review_evidence_gate(
     workflow.write_text(
         "name: Research Governance\n"
         "on:\n"
-        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review]\n"
+        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
         "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
         "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
         "  schedule:\n    - cron: '0 2 * * 1'\n"
@@ -1015,6 +1053,28 @@ def test_governance_audit_flags_missing_pr_cleanup_workflow_tokens(tmp_path) -> 
     )
 
 
+def test_governance_audit_flags_missing_dispatch_first_workflow_tokens(
+    tmp_path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / "docs/rules/pr-workflow.md").write_text(
+        "所有进入主干的改动必须通过 PR\n直写主干 ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON\n"
+        "禁止本地合并主干\nCodex Review Monitor\n"
+        "git fetch origin main\ngit merge --ff-only origin/main\n"
+        "git branch -d <branch>\ngit push origin --delete <branch>\n",
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "主会话只负责流程编排" in finding.message
+        for finding in report.findings
+    )
+
+
 def test_pre_push_branch_protection_blocks_main() -> None:
     violations = check_pre_push_input(
         "refs/heads/topic abc123 refs/heads/main def456\n",
@@ -1176,6 +1236,13 @@ def test_reference_transaction_branch_protection_blocks_audited_non_fast_forward
 
 
 def _valid_codex_review_body(review_id: int = 4314779358) -> str:
+    cross_review = (
+        "- 子 agent 交叉评审: "
+        "superpowers:subagent-driven-development/spec-reviewer-prompt.md；"
+        "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；"
+        "至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；"
+        "见 `.local/ai-review/latest.md`"
+    )
     return "\n".join(
         [
             "## AI Review 风险分级",
@@ -1183,7 +1250,13 @@ def _valid_codex_review_body(review_id: int = 4314779358) -> str:
             "- 风险等级: high",
             "- 是否需要官方 Codex Review: 是",
             "- 本地 AI review: `.local/ai-review/latest.md`",
+            cross_review,
+            "- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent",
             "- P0/P1 未关闭项: 无",
+            "",
+            "## P2 保留项",
+            "",
+            "- 无",
             "",
             "## Codex Code Review \u7ed3\u8bba",
             "",
@@ -1205,6 +1278,8 @@ def test_low_risk_pr_body_does_not_require_codex_review() -> None:
 - 风险等级: low
 - 是否需要官方 Codex Review: 否
 - 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
 
 ## P2 保留项
@@ -1217,6 +1292,479 @@ def test_low_risk_pr_body_does_not_require_codex_review() -> None:
     assert report.ok, report.errors
 
 
+def test_low_risk_pr_body_requires_cross_review_and_dispatch_evidence() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "子 agent 交叉评审 must be filled" in report.errors
+    assert "任务分发说明 must be filled" in report.errors
+
+
+def test_low_risk_pr_body_requires_superpowers_cross_review_skills() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: 已由两个 reviewer 完成
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert any("子 agent 交叉评审 must include" in error for error in report.errors)
+
+
+def test_low_risk_pr_body_requires_two_reviewer_cross_review_evidence() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "子 agent 交叉评审 must include two reviewer names" in report.errors
+
+
+def test_low_risk_pr_body_rejects_duplicate_reviewer_names_with_markup() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: alice, `alice`；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "子 agent 交叉评审 must include two reviewer names" in report.errors
+
+
+def test_low_risk_pr_body_requires_actual_reviewer_names() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "子 agent 交叉评审 must include two reviewer names" in report.errors
+
+
+def test_low_risk_pr_body_accepts_reviewer_names_without_fixed_phrase() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert report.ok, report.errors
+
+
+def test_low_risk_pr_body_rejects_placeholder_reviewer_names() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: <规格评审子agent>, <代码质量评审子agent>；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "子 agent 交叉评审 must include two reviewer names" in report.errors
+
+
+def test_low_risk_pr_body_rejects_controller_or_implementer_reviewers() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: 主会话, 实现者；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "子 agent 交叉评审 must include two reviewer names" in report.errors
+
+
+def test_low_risk_pr_body_rejects_mixed_invalid_reviewer_names() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent, 实现者；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "子 agent 交叉评审 must not include invalid reviewer names" in report.errors
+
+
+def test_low_risk_pr_body_requires_local_ai_review_report_field() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "本地 AI review must be filled" in report.errors
+
+
+def test_low_risk_pr_body_with_high_risk_changed_files_requires_codex_review() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(
+        body,
+        comments=[],
+        changed_files=["scripts/research/governance/pr_review_evidence.py"],
+    )
+
+    assert not report.ok
+    assert "high-risk changed files require official Codex Review" in report.errors
+    assert "PR body missing section: Codex Code Review 结论" in report.errors
+
+
+def test_low_risk_pr_body_with_ai_risk_label_requires_codex_review() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[], labels=["ai-risk-review"])
+
+    assert not report.ok
+    assert "ai-risk-review label requires official Codex Review" in report.errors
+    assert "PR body missing section: Codex Code Review 结论" in report.errors
+
+
+def test_issue_label_names_extracts_github_issue_labels() -> None:
+    assert _issue_label_names(
+        {"labels": [{"name": "ai-risk-review"}, {"name": "docs"}]}
+    ) == ("ai-risk-review", "docs")
+
+
+def test_low_risk_pr_body_requires_p2_section() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "PR body missing section: P2 保留项" in report.errors
+
+
+def test_low_risk_pr_body_accepts_chinese_p2_fields() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- AIR-002：大型数据产物无法逐文件人工核验。
+  - 不修原因: 逐文件核验成本过高。
+  - 风险接受理由: 自动化检查覆盖 catalog、manifest 和 pathref。
+  - 处理方式: 合并后通过治理门禁和后续抽样复核跟踪。
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert report.ok, report.errors
+
+
+def test_low_risk_pr_body_rejects_p2_none_mixed_with_unjustified_item() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+- AIR-002：大型数据产物无法逐文件人工核验。
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "P2 保留项 must include defer_reason or 不修原因" in report.errors
+    assert "P2 保留项 must include risk_acceptance or 风险接受理由" in report.errors
+    assert "P2 保留项 must include handling or 处理方式" in report.errors
+
+
+def test_low_risk_pr_body_rejects_empty_dispatched_detail() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "任务分发说明 must include dispatched task detail" in report.errors
+
+
+def test_low_risk_pr_body_accepts_dispatched_detail_with_no_undispatched_items() -> (
+    None
+):
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent；无未分发项
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert report.ok, report.errors
+
+
+def test_low_risk_pr_body_requires_reason_when_task_not_dispatched() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 未分发
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "任务分发说明 must include reason when 未分发" in report.errors
+
+
+def test_low_risk_pr_body_rejects_empty_not_dispatched_reason() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 未分发，原因：
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "任务分发说明 must include reason when 未分发" in report.errors
+
+
+def test_low_risk_pr_body_rejects_weak_not_dispatched_reason() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 未分发，原因：-
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "任务分发说明 must include reason when 未分发" in report.errors
+
+
+def test_low_risk_pr_body_rejects_none_not_dispatched_reason() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 未分发：无
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "任务分发说明 must include reason when 未分发" in report.errors
+
+
 def test_high_risk_pr_body_requires_codex_review() -> None:
     body = """
 ## AI Review 风险分级
@@ -1224,6 +1772,8 @@ def test_high_risk_pr_body_requires_codex_review() -> None:
 - 风险等级: high
 - 是否需要官方 Codex Review: 是
 - 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
 
 ## Codex Code Review 结论
@@ -1301,6 +1851,28 @@ def test_pr_review_evidence_accepts_approved_codex_conclusion() -> None:
     assert report.errors == ()
 
 
+def test_low_risk_pr_body_can_still_require_official_codex_review() -> None:
+    head_sha = "0" * 40
+    report = validate_pr_body(
+        _valid_codex_review_body().replace("- 风险等级: high", "- 风险等级: low"),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        comments=["@codex review"],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "body": "### Codex Review\n\nNo blocking findings.",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+
+    assert report.ok
+    assert report.errors == ()
+
+
 def test_pr_review_evidence_rejects_unexecuted_codex_conclusion() -> None:
     report = validate_pr_body(
         "\n".join(
@@ -1310,6 +1882,8 @@ def test_pr_review_evidence_rejects_unexecuted_codex_conclusion() -> None:
                 "- 风险等级: high",
                 "- 是否需要官方 Codex Review: 是",
                 "- 本地 AI review: `.local/ai-review/latest.md`",
+                "- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`",
+                "- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent",
                 "- P0/P1 未关闭项: 无",
                 "",
                 "## Codex Code Review 结论",

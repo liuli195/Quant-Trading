@@ -16,6 +16,23 @@ from pathlib import Path
 REQUIRED_REVIEWER = "Codex"
 SECTION_HEADER = "Codex Code Review 结论"
 AI_REVIEW_SECTION_HEADER = "AI Review 风险分级"
+P2_SECTION_HEADER = "P2 保留项"
+REQUIRED_CROSS_REVIEW_TOKENS = (
+    "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
+    "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
+)
+HIGH_RISK_PREFIXES = (
+    "strategies/",
+    "scripts/research/platform/",
+    "scripts/research/governance/",
+    ".github/",
+    ".githooks/",
+    "docs/rules/",
+    "docs/adr/",
+)
+REVIEWER_NAMES_PATTERN = re.compile(
+    r"reviewers?\s*[:：]\s*(?P<names>[^；;\n]+)", re.IGNORECASE
+)
 CODEX_REVIEW_URL_PATTERN = re.compile(
     r"https://github\.com/(?P<repo>[^/\s]+/[^/\s]+)/pull/(?P<number>\d+)#pullrequestreview-(?P<review_id>\d+)"
 )
@@ -54,10 +71,14 @@ def validate_pr_body(
     reviews: Sequence[Mapping[str, object]] | None = None,
     review_comments: Sequence[Mapping[str, object]] | None = None,
     review_threads: Sequence[Mapping[str, object]] | None = None,
+    changed_files: Sequence[str] | None = None,
+    labels: Sequence[str] | None = None,
 ) -> EvidenceReport:
     """Return whether a PR body contains merge-blocking review evidence."""
 
-    official_codex_required, errors = _official_codex_required(body)
+    official_codex_required, errors = _official_codex_required(
+        body, changed_files=changed_files, labels=labels
+    )
     if (
         review_threads is not None
         and unresolved_blocking_codex_thread_count(review_threads) > 0
@@ -143,25 +164,213 @@ def _extract_named_section(body: str, header: str) -> str | None:
     return "\n".join(lines[start:end])
 
 
-def _official_codex_required(body: str) -> tuple[bool, list[str]]:
+def _official_codex_required(
+    body: str,
+    *,
+    changed_files: Sequence[str] | None,
+    labels: Sequence[str] | None,
+) -> tuple[bool, list[str]]:
     errors: list[str] = []
     section = _extract_named_section(body, AI_REVIEW_SECTION_HEADER)
     if section is None:
         return True, [f"PR body missing section: {AI_REVIEW_SECTION_HEADER}"]
     risk = _normalize_value(_read_field(section, "风险等级"))
     requires = _normalize_value(_read_field(section, "是否需要官方 Codex Review"))
+    local_review = _normalize_value(_read_field(section, "本地 AI review"))
+    cross_review = _normalize_value(_read_field(section, "子 agent 交叉评审"))
+    task_dispatch = _normalize_value(_read_field(section, "任务分发说明"))
     blockers = _normalize_value(_read_field(section, "P0/P1 未关闭项"))
     if risk not in {"low", "high", "unknown"}:
         errors.append("风险等级 must be low, high, or unknown")
         return True, errors
+    if _is_unfilled_ai_review_field(local_review):
+        errors.append("本地 AI review must be filled")
+    elif ".local/ai-review/latest.md" not in local_review:
+        errors.append("本地 AI review must reference .local/ai-review/latest.md")
+    errors.extend(_cross_review_field_errors(cross_review))
+    errors.extend(_task_dispatch_errors(task_dispatch))
+    errors.extend(_p2_section_errors(body))
     if blockers != "无":
         errors.append("P0/P1 未关闭项 must be 无")
+    high_risk_files = _high_risk_changed_files(changed_files)
+    if high_risk_files:
+        if risk == "low" or requires in {"否", "不需要", "false", "False"}:
+            errors.append("high-risk changed files require official Codex Review")
+        return True, errors
+    if _has_ai_risk_review_label(labels):
+        if risk == "low" or requires in {"否", "不需要", "false", "False"}:
+            errors.append("ai-risk-review label requires official Codex Review")
+        return True, errors
     if risk in {"high", "unknown"}:
         return True, errors
-    if requires not in {"否", "不需要", "false", "False"}:
-        errors.append("低风险 PR must mark 是否需要官方 Codex Review as 否")
+    if requires in {"是", "需要", "true", "True"}:
         return True, errors
-    return False, errors
+    if requires in {"否", "不需要", "false", "False"}:
+        return False, errors
+    errors.append("低风险 PR must mark 是否需要官方 Codex Review as 是 or 否")
+    return True, errors
+
+
+def _is_unfilled_ai_review_field(value: str) -> bool:
+    if not value:
+        return True
+    placeholders = ("填写", "已分发 / 未分发")
+    return any(token in value for token in placeholders)
+
+
+def _cross_review_field_errors(value: str) -> list[str]:
+    if _is_unfilled_ai_review_field(value):
+        return ["子 agent 交叉评审 must be filled"]
+    errors: list[str] = []
+    missing = [token for token in REQUIRED_CROSS_REVIEW_TOKENS if token not in value]
+    if missing:
+        errors.append(
+            "子 agent 交叉评审 must include "
+            + " and ".join(REQUIRED_CROSS_REVIEW_TOKENS)
+        )
+    reviewer_names = _cross_review_reviewer_names(value)
+    if any(_is_placeholder_reviewer_name(name) for name in reviewer_names):
+        errors.append("子 agent 交叉评审 must not include invalid reviewer names")
+    if _cross_review_reviewer_count(reviewer_names) < 2:
+        errors.append("子 agent 交叉评审 must include two reviewer names")
+    return errors
+
+
+def _task_dispatch_errors(value: str) -> list[str]:
+    if _is_unfilled_ai_review_field(value):
+        return ["任务分发说明 must be filled"]
+    if "已分发" in value:
+        if not _has_meaningful_dispatched_detail(value):
+            return ["任务分发说明 must include dispatched task detail"]
+        return []
+    if "未分发" in value:
+        if not _task_dispatch_has_reason(value):
+            return ["任务分发说明 must include reason when 未分发"]
+        return []
+    return ["任务分发说明 must state 已分发 or 未分发"]
+
+
+def _has_meaningful_dispatched_detail(value: str) -> bool:
+    normalized = value.replace("无未分发项", "")
+    normalized = normalized.replace("已分发", "")
+    normalized = normalized.replace("给", "")
+    normalized = normalized.strip().strip("`\"'。.!！；;:：,，- ")
+    return len(normalized) >= 3
+
+
+def _task_dispatch_has_reason(value: str) -> bool:
+    if "未分发" not in value:
+        return True
+    match = re.search(r"(?:原因|理由)\s*[:：]\s*(?P<reason>.*)$", value)
+    if not match:
+        match = re.search(r"未分发\s*[,，;；:：-]+\s*(?P<reason>.*)$", value)
+    if not match:
+        return False
+    return _has_meaningful_dispatch_reason(match.group("reason"))
+
+
+def _has_meaningful_dispatch_reason(value: str) -> bool:
+    normalized = value.strip().strip("`\"'。.!！；;:：,，- ")
+    if not normalized:
+        return False
+    return normalized.casefold() not in {"无", "none", "n/a", "na", "null"}
+
+
+def _p2_section_errors(body: str) -> list[str]:
+    section = _extract_named_section(body, P2_SECTION_HEADER)
+    if section is None:
+        return [f"PR body missing section: {P2_SECTION_HEADER}"]
+    normalized = section.strip()
+    if not normalized:
+        return ["P2 保留项 must be filled"]
+    if _p2_section_declares_none_only(section):
+        return []
+    errors: list[str] = []
+    if not _section_contains_any(section, ("defer_reason", "不修原因")):
+        errors.append("P2 保留项 must include defer_reason or 不修原因")
+    if not _section_contains_any(section, ("risk_acceptance", "风险接受理由")):
+        errors.append("P2 保留项 must include risk_acceptance or 风险接受理由")
+    if not _section_contains_any(section, ("handling", "处理方式")):
+        errors.append("P2 保留项 must include handling or 处理方式")
+    return errors
+
+
+def _section_contains_any(section: str, tokens: Sequence[str]) -> bool:
+    return any(token in section for token in tokens)
+
+
+def _p2_section_declares_none_only(section: str) -> bool:
+    lines = [line.strip() for line in section.splitlines() if line.strip()]
+    return lines == ["- 无"] or lines == ["* 无"]
+
+
+def _high_risk_changed_files(changed_files: Sequence[str] | None) -> tuple[str, ...]:
+    if changed_files is None:
+        return ()
+    return tuple(path for path in changed_files if _is_high_risk_path(path))
+
+
+def _is_high_risk_path(path: str) -> bool:
+    normalized = path.replace("\\", "/")
+    if normalized.startswith("./"):
+        normalized = normalized[2:]
+    normalized = normalized.lstrip("/")
+    if _is_generated_strategy_artifact(normalized):
+        return False
+    return any(normalized.startswith(prefix) for prefix in HIGH_RISK_PREFIXES)
+
+
+def _is_generated_strategy_artifact(path: str) -> bool:
+    parts = path.split("/")
+    return len(parts) >= 3 and parts[0] == "strategies" and parts[2] == "backtest_runs"
+
+
+def _has_ai_risk_review_label(labels: Sequence[str] | None) -> bool:
+    if labels is None:
+        return False
+    return any(str(label).casefold() == "ai-risk-review" for label in labels)
+
+
+def _cross_review_reviewer_names(value: str) -> tuple[str, ...]:
+    match = REVIEWER_NAMES_PATTERN.search(value)
+    if not match:
+        return ()
+    return tuple(
+        name.strip()
+        for name in re.split(r"[,，、+/]+", match.group("names"))
+        if name.strip()
+    )
+
+
+def _cross_review_reviewer_count(names: Sequence[str]) -> int:
+    names = [name for name in names if not _is_placeholder_reviewer_name(name)]
+    return len({_normalize_reviewer_identity(name) for name in names})
+
+
+def _is_placeholder_reviewer_name(value: str) -> bool:
+    normalized = value.strip().strip("`\"'")
+    if normalized.startswith("<") and normalized.endswith(">"):
+        return True
+    compact = _normalize_reviewer_identity(normalized.strip("<>"))
+    return compact in {
+        "a",
+        "b",
+        "reviewera",
+        "reviewerb",
+        "controller",
+        "coordinator",
+        "implementer",
+        "mainagent",
+        "mainsession",
+        "主会话",
+        "实现者",
+        "规格评审子agent",
+        "代码质量评审子agent",
+    }
+
+
+def _normalize_reviewer_identity(value: str) -> str:
+    return "".join(value.strip().strip("`\"'").split()).casefold()
 
 
 def _read_field(section: str, field: str) -> str:
@@ -753,6 +962,41 @@ def _fetch_pr_review_comments(
     return [item for item in payload if isinstance(item, Mapping)]
 
 
+def _fetch_pr_changed_files(
+    *, repo: str, pr_number: str, token: str
+) -> tuple[str, ...]:
+    payload = _fetch_github_list(
+        repo=repo, path=f"pulls/{pr_number}/files", token=token
+    )
+    return tuple(
+        str(item.get("filename", ""))
+        for item in payload
+        if isinstance(item, Mapping) and str(item.get("filename", "")).strip()
+    )
+
+
+def _fetch_issue_metadata(
+    *, repo: str, pr_number: str, token: str
+) -> Mapping[str, object]:
+    payload = _fetch_github_json(repo=repo, path=f"issues/{pr_number}", token=token)
+    return payload if isinstance(payload, Mapping) else {}
+
+
+def _issue_label_names(issue: Mapping[str, object]) -> tuple[str, ...]:
+    labels = issue.get("labels")
+    if not isinstance(labels, list):
+        return ()
+    names: list[str] = []
+    for label in labels:
+        if isinstance(label, Mapping):
+            name = str(label.get("name", "")).strip()
+        else:
+            name = str(label).strip()
+        if name:
+            names.append(name)
+    return tuple(names)
+
+
 def _fetch_pr_review_threads(
     *, repo: str, pr_number: str, token: str
 ) -> list[Mapping[str, object]]:
@@ -899,6 +1143,8 @@ def main(argv: list[str] | None = None) -> int:
     review_threads = _coerce_review_threads(
         _read_optional_file(args.review_threads_file)
     )
+    changed_files: Sequence[str] | None = None
+    labels: Sequence[str] | None = None
     expected_pr_url = _read_env(args.pr_url_env)
     expected_head_sha = _read_env(args.head_sha_env)
     expected_head_created_at = _read_env(args.head_updated_at_env) or _read_env(
@@ -944,6 +1190,12 @@ def main(argv: list[str] | None = None) -> int:
             review_threads = _fetch_pr_review_threads(
                 repo=repo, pr_number=pr_number, token=token
             )
+        changed_files = _fetch_pr_changed_files(
+            repo=repo, pr_number=pr_number, token=token
+        )
+        labels = _issue_label_names(
+            _fetch_issue_metadata(repo=repo, pr_number=pr_number, token=token)
+        )
 
     if not expected_head_created_at:
         expected_head_created_at = head_updated_at_from_monitor_state(
@@ -960,6 +1212,8 @@ def main(argv: list[str] | None = None) -> int:
         reviews=reviews,
         review_comments=review_comments,
         review_threads=review_threads,
+        changed_files=changed_files,
+        labels=labels,
     )
     if report.ok:
         print("PR review evidence ok")

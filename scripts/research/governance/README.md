@@ -31,6 +31,8 @@ make risk-check
 
 `make ai-review` 校验 `.local/ai-review/latest.json`，并生成 `.local/ai-review/latest.md` 和 `.local/ai-review/codex-review-scope.md`。`.local/` 不入库；CI 通过 PR body 的 `AI Review 风险分级` 和 `pr-review-evidence` job 复验风险证据。
 
+`.local/ai-review/latest.json` 的 `reviewers` 字段必须记录至少两个独立 reviewer，作为子 agent 交叉评审证据；单 reviewer 或重复 reviewer 会被 `make ai-review` 拒绝。`cross_review.review_skills` 必须记录 Superpowers 评审模板，对应值为 `superpowers:subagent-driven-development/spec-reviewer-prompt.md` 和 `superpowers:subagent-driven-development/code-quality-reviewer-prompt.md`。生成的 `.local/ai-review/latest.md` 会列出交叉评审证据。PR body 的 `子 agent 交叉评审` 字段必须使用 `reviewers: A, B` 写明两个独立 reviewer，还必须说明任务分发情况，未分发时写明具体原因。
+
 `.githooks/pre-push` calls all required push gates before handing off to Git LFS:
 
 ```powershell

@@ -6,7 +6,9 @@
 
 - 多个 AI agent 并行写入时，每个 agent 使用独立 Git 分支。
 - 不允许多个 agent 在同一写入分支上并行修改 repo-tracked 文件。
+- 所有任务默认按优先分发原则执行：主会话只负责流程编排、范围确认、结果汇总和最终验证，任务优先分发给子agent执行；简单只读查询、强串行依赖或工具权限只在主会话可用时，必须说明不分发理由。
 - PR 合并前必须完成本地静态扫描、本地 AI review 和问题评级；P0/P1 问题未关闭时禁止进入下一阶段。
+- PR code review 必须委派至少两个独立子 agent 做子 agent 交叉评审；评审子 agent 必须使用 Superpowers 模板 `superpowers:subagent-driven-development/spec-reviewer-prompt.md` 和 `superpowers:subagent-driven-development/code-quality-reviewer-prompt.md`，并在 PR body 中用 `reviewers: A, B` 记录两个独立 reviewer；实现者或主会话不得作为唯一 reviewer。
 - 所有进入主干的改动必须通过 PR，除非用户在当前对话中显式授权使用“直写主干”链路。
 - “合并到主干”默认含义是创建、更新或准备 PR，不是本地合并 `main`。
 - 禁止本地合并主干；AI 助手不得用 `git switch main` 后接 `git merge` / `git reset` 把功能分支提交写入本地 `main`。

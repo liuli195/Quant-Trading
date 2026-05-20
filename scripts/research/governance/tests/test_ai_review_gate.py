@@ -14,6 +14,248 @@ def _write_report(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
 
+def _cross_review() -> dict:
+    return {
+        "delegated_to_subagents": True,
+        "review_skills": [
+            "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
+            "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
+        ],
+        "evidence": "spec reviewer and code quality reviewer subagents completed",
+    }
+
+
+def test_report_requires_two_distinct_reviewers_for_cross_review(
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 1,
+            "tool": "codex",
+            "reviewers": ["superpowers"],
+            "risk_level": "low",
+            "requires_official_codex_review": False,
+            "cross_review": _cross_review(),
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert (
+        "reviewers must include at least two distinct reviewers for cross-review"
+        in result.errors
+    )
+
+
+def test_report_rejects_duplicate_reviewers_for_cross_review(
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 1,
+            "tool": "codex",
+            "reviewers": ["superpowers", "superpowers"],
+            "risk_level": "low",
+            "requires_official_codex_review": False,
+            "cross_review": _cross_review(),
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert (
+        "reviewers must include at least two distinct reviewers for cross-review"
+        in result.errors
+    )
+
+
+def test_report_rejects_duplicate_reviewers_with_markup(tmp_path: Path) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 1,
+            "tool": "codex",
+            "reviewers": ["alice", "`alice`"],
+            "risk_level": "low",
+            "requires_official_codex_review": False,
+            "cross_review": _cross_review(),
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert (
+        "reviewers must include at least two distinct reviewers for cross-review"
+        in result.errors
+    )
+
+
+def test_report_requires_delegated_cross_review_evidence(
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 1,
+            "tool": "codex",
+            "reviewers": ["spec-review-subagent", "quality-review-subagent"],
+            "risk_level": "low",
+            "requires_official_codex_review": False,
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert "cross_review.delegated_to_subagents must be true" in result.errors
+
+
+def test_report_requires_superpowers_review_skills(tmp_path: Path) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 1,
+            "tool": "codex",
+            "reviewers": ["spec-review-subagent", "quality-review-subagent"],
+            "risk_level": "low",
+            "requires_official_codex_review": False,
+            "cross_review": {
+                "delegated_to_subagents": True,
+                "review_skills": ["codex-security"],
+                "evidence": "subagents completed",
+            },
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert (
+        "cross_review.review_skills must include superpowers:subagent-driven-development/spec-reviewer-prompt.md and superpowers:subagent-driven-development/code-quality-reviewer-prompt.md"
+        in result.errors
+    )
+
+
+def test_report_trims_reviewers_before_distinct_check(tmp_path: Path) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 1,
+            "tool": "codex",
+            "reviewers": ["spec-review-subagent", " spec-review-subagent "],
+            "risk_level": "low",
+            "requires_official_codex_review": False,
+            "cross_review": _cross_review(),
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert (
+        "reviewers must include at least two distinct reviewers for cross-review"
+        in result.errors
+    )
+
+
+def test_report_rejects_non_string_reviewers(tmp_path: Path) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 1,
+            "tool": "codex",
+            "reviewers": [None, "quality-review-subagent"],
+            "risk_level": "low",
+            "requires_official_codex_review": False,
+            "cross_review": _cross_review(),
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert "reviewers must contain only strings" in result.errors
+
+
+def test_report_rejects_placeholder_reviewers(tmp_path: Path) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 1,
+            "tool": "codex",
+            "reviewers": ["<规格评审子agent>", "<代码质量评审子agent>"],
+            "risk_level": "low",
+            "requires_official_codex_review": False,
+            "cross_review": _cross_review(),
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert "reviewers must not contain placeholder reviewer names" in result.errors
+
+
+def test_report_rejects_implementer_or_controller_reviewers(tmp_path: Path) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 1,
+            "tool": "codex",
+            "reviewers": ["主会话", "实现者"],
+            "risk_level": "low",
+            "requires_official_codex_review": False,
+            "cross_review": _cross_review(),
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert "reviewers must not contain placeholder reviewer names" in result.errors
+
+
 def test_open_p1_blocks_progress(tmp_path: Path) -> None:
     report = tmp_path / "latest.json"
     _write_report(
@@ -24,6 +266,7 @@ def test_open_p1_blocks_progress(tmp_path: Path) -> None:
             "reviewers": ["superpowers", "codex-security"],
             "risk_level": "high",
             "requires_official_codex_review": True,
+            "cross_review": _cross_review(),
             "changed_files": ["strategies/etf_factor_rotation/etf_factor_rotation.py"],
             "findings": [
                 {
@@ -56,6 +299,7 @@ def test_p2_requires_defer_reason(tmp_path: Path) -> None:
             "reviewers": ["pr-review-toolkit", "security-guidance"],
             "risk_level": "low",
             "requires_official_codex_review": False,
+            "cross_review": _cross_review(),
             "changed_files": ["docs/guides/example.md"],
             "findings": [
                 {
@@ -88,6 +332,7 @@ def test_high_risk_scope_mentions_changed_file(tmp_path: Path) -> None:
             "reviewers": ["superpowers", "codex-security"],
             "risk_level": "high",
             "requires_official_codex_review": True,
+            "cross_review": _cross_review(),
             "changed_files": ["scripts/research/governance/rules.py"],
             "findings": [],
             "checks": {"pytest": "pass", "governance_gate": "pass"},
@@ -114,6 +359,7 @@ def test_high_risk_scope_excludes_generated_strategy_artifacts(
             "reviewers": ["superpowers", "codex-security"],
             "risk_level": "high",
             "requires_official_codex_review": True,
+            "cross_review": _cross_review(),
             "changed_files": [
                 "strategies/etf_factor_rotation/backtest_runs/run/api_export.json",
                 "strategies/etf_factor_rotation/etf_factor_rotation.py",
@@ -137,12 +383,15 @@ def test_high_risk_scope_excludes_generated_strategy_artifacts(
 
 
 def test_markdown_summary_lists_risk_and_findings() -> None:
+    cross_review = _cross_review()
+    cross_review["evidence"] = "line one\n## injected heading"
     payload = {
         "schema_version": 1,
         "tool": "codex",
         "reviewers": ["superpowers", "codex-security"],
         "risk_level": "low",
         "requires_official_codex_review": False,
+        "cross_review": cross_review,
         "changed_files": ["docs/guides/example.md"],
         "findings": [
             {
@@ -166,6 +415,13 @@ def test_markdown_summary_lists_risk_and_findings() -> None:
     assert "- 风险等级: low" in text
     assert "AIR-003" in text
     assert "docs/guides/example.md" in text
+    assert "## 子 agent 交叉评审" in text
+    assert "superpowers:subagent-driven-development/spec-reviewer-prompt.md" in text
+    assert (
+        "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md"
+        in text
+    )
+    assert "line one ## injected heading" in text
 
 
 def test_report_file_accepts_utf8_bom(tmp_path: Path) -> None:
@@ -173,9 +429,10 @@ def test_report_file_accepts_utf8_bom(tmp_path: Path) -> None:
     payload = {
         "schema_version": 1,
         "tool": "codex",
-        "reviewers": ["superpowers"],
+        "reviewers": ["superpowers", "codex-security"],
         "risk_level": "low",
         "requires_official_codex_review": False,
+        "cross_review": _cross_review(),
         "changed_files": ["docs/guides/example.md"],
         "findings": [],
         "checks": {"pytest": "pass"},

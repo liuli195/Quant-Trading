@@ -60,6 +60,11 @@ PR_TEMPLATE_TOKENS = (
     "影响范围",
     "规则同步",
     "已运行检查",
+    "子 agent 交叉评审",
+    "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
+    "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
+    "reviewers:",
+    "任务分发说明",
     "Codex Code Review 结论",
     "Codex",
     "scripts.research.governance gate",
@@ -74,6 +79,11 @@ REQUIRED_REVIEW_GUIDELINES_TOKENS = (
     "P0/P1",
     "scripts.research.governance gate",
     "Codex Review Monitor",
+    "至少两个独立 reviewer",
+    "子 agent 交叉评审",
+    "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
+    "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
+    "reviewers:",
     "Codex Code Review 结论",
     "结论: 通过",
     "阻断问题: 无",
@@ -100,6 +110,8 @@ REQUIRED_AGENT_ENTRY_TOKENS = (
     "直写主干",
     "禁止本地合并主干",
     "docs/rules/pr-workflow.md",
+    "默认优先分发给子agent",
+    "主会话只负责流程编排",
     "Markdown 内部文件引用使用",
     "pathref",
     "遇到沙箱/权限阻断时申请提权",
@@ -542,6 +554,26 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "PR review evidence workflow must listen to Codex review submitted, edited, and dismissed events",
                 )
             )
+        if not _workflow_event_types_include(
+            text,
+            "pull_request",
+            (
+                "opened",
+                "synchronize",
+                "reopened",
+                "edited",
+                "ready_for_review",
+                "labeled",
+                "unlabeled",
+            ),
+        ):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "PR review evidence workflow must listen to pull_request labeled and unlabeled events",
+                )
+            )
 
     monitor_workflow = root / ".github" / "workflows" / "codex-review-monitor.yml"
     if not monitor_workflow.is_file():
@@ -607,6 +639,12 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             "git merge --ff-only origin/main",
             "git branch -d <branch>",
             "git push origin --delete <branch>",
+            "主会话只负责流程编排",
+            "任务优先分发给子agent执行",
+            "子 agent 交叉评审",
+            "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
+            "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
+            "reviewers:",
         ):
             if token not in text:
                 findings.append(

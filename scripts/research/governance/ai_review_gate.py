@@ -13,6 +13,10 @@ from typing import Any
 BLOCKING_SEVERITIES = {"P0", "P1"}
 VALID_SEVERITIES = {"P0", "P1", "P2", "P3"}
 VALID_STATUSES = {"open", "fixed", "false_positive", "accepted"}
+REQUIRED_CROSS_REVIEW_SKILLS = (
+    "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
+    "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
+)
 HIGH_RISK_PREFIXES = (
     "strategies/",
     "scripts/research/platform/",
@@ -56,9 +60,24 @@ def validate_report(payload: dict[str, Any]) -> AiReviewValidation:
         errors.append("schema_version must be 1")
     if str(payload.get("tool") or "") not in {"codex", "claude"}:
         errors.append("tool must be codex or claude")
-    reviewers = _string_list(payload.get("reviewers"))
+    raw_reviewers = payload.get("reviewers")
+    reviewers = _string_list(raw_reviewers)
+    distinct_reviewers = {
+        _normalize_reviewer_identity(reviewer) for reviewer in reviewers
+    }
+    if isinstance(raw_reviewers, list) and any(
+        not isinstance(item, str) for item in raw_reviewers
+    ):
+        errors.append("reviewers must contain only strings")
     if not reviewers:
         errors.append("reviewers must not be empty")
+    elif len(distinct_reviewers) < 2:
+        errors.append(
+            "reviewers must include at least two distinct reviewers for cross-review"
+        )
+    if any(_is_placeholder_reviewer_name(reviewer) for reviewer in reviewers):
+        errors.append("reviewers must not contain placeholder reviewer names")
+    errors.extend(_cross_review_errors(payload.get("cross_review")))
     if risk_level not in {"low", "high", "unknown"}:
         errors.append("risk_level must be low, high, or unknown")
         risk_level = "unknown"
@@ -165,10 +184,9 @@ def render_markdown_report(payload: dict[str, Any]) -> str:
         f"- 风险等级: {result.risk_level}",
         f"- 是否需要官方 Codex Review: {'是' if result.requires_official_codex_review else '否'}",
         f"- 校验结果: {'通过' if result.ok else '失败'}",
-        "",
-        "## 变更文件",
-        "",
     ]
+    lines.extend(_render_cross_review(payload.get("cross_review")))
+    lines.extend(["", "## 变更文件", ""])
     lines.extend(f"- `{path}`" for path in changed_files)
     if not changed_files:
         lines.append("- 无")
@@ -218,7 +236,72 @@ def _is_generated_strategy_artifact(path: str) -> bool:
 def _string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
-    return [str(item) for item in value if str(item).strip()]
+    return [text for item in value if isinstance(item, str) and (text := item.strip())]
+
+
+def _is_placeholder_reviewer_name(value: str) -> bool:
+    normalized = value.strip().strip("`\"'")
+    if normalized.startswith("<") and normalized.endswith(">"):
+        return True
+    compact = _normalize_reviewer_identity(normalized.strip("<>"))
+    return compact in {
+        "a",
+        "b",
+        "reviewera",
+        "reviewerb",
+        "controller",
+        "coordinator",
+        "implementer",
+        "mainagent",
+        "mainsession",
+        "主会话",
+        "实现者",
+        "规格评审子agent",
+        "代码质量评审子agent",
+    }
+
+
+def _normalize_reviewer_identity(value: str) -> str:
+    return "".join(value.strip().strip("`\"'").split()).casefold()
+
+
+def _cross_review_errors(value: Any) -> list[str]:
+    if not isinstance(value, dict):
+        return ["cross_review.delegated_to_subagents must be true"]
+    errors: list[str] = []
+    if value.get("delegated_to_subagents") is not True:
+        errors.append("cross_review.delegated_to_subagents must be true")
+    skills = {skill.casefold() for skill in _string_list(value.get("review_skills"))}
+    required_skills = {skill.casefold() for skill in REQUIRED_CROSS_REVIEW_SKILLS}
+    if not required_skills.issubset(skills):
+        errors.append(
+            "cross_review.review_skills must include superpowers:subagent-driven-development/spec-reviewer-prompt.md and superpowers:subagent-driven-development/code-quality-reviewer-prompt.md"
+        )
+    if not str(value.get("evidence") or "").strip():
+        errors.append("cross_review.evidence must be filled")
+    return errors
+
+
+def _render_cross_review(value: Any) -> list[str]:
+    lines = ["", "## 子 agent 交叉评审", ""]
+    if not isinstance(value, dict):
+        lines.append("- 未记录")
+        return lines
+    delegated = "是" if value.get("delegated_to_subagents") is True else "否"
+    lines.append(f"- 已委派子 agent: {delegated}")
+    skills = _string_list(value.get("review_skills"))
+    if skills:
+        lines.append("- Superpowers 评审技能:")
+        lines.extend(f"  - `{skill}`" for skill in skills)
+    else:
+        lines.append("- Superpowers 评审技能: 未记录")
+    evidence = _single_line_text(value.get("evidence"))
+    lines.append(f"- 证据: {evidence or '未记录'}")
+    return lines
+
+
+def _single_line_text(value: Any) -> str:
+    return " ".join(str(value or "").split())
 
 
 def build_parser() -> argparse.ArgumentParser:

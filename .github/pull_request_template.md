@@ -22,6 +22,8 @@
 - 风险等级: low / high / unknown
 - 是否需要官方 Codex Review: 是 / 否
 - 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: 填写 `superpowers:subagent-driven-development/spec-reviewer-prompt.md` + `superpowers:subagent-driven-development/code-quality-reviewer-prompt.md`；reviewers: <规格评审子agent>, <代码质量评审子agent>；见 `.local/ai-review/latest.md`
+- 任务分发说明: 填写已分发任务；未分发时写原因
 - Codex Review Scope: `.local/ai-review/codex-review-scope.md`
 - P0/P1 未关闭项: 无
 
