@@ -709,3 +709,52 @@ def test_install_wrappers_skips_non_callable_targets(monkeypatch):
 
     assert count == 0
     assert user_code.order == "not callable"
+
+
+def test_replay_unacked_skips_malformed_message_and_continues(monkeypatch):
+    module = load_module(monkeypatch)
+    logs = []
+    sent = []
+    monkeypatch.setattr(module, "_print", lambda message: logs.append(message))
+
+    outbox = types.SimpleNamespace(load_unacked=lambda limit: [
+        {"batch_id": "bad", "message": {"not": "text"}, "orders": [{"security": "A"}]},
+        {"batch_id": "good", "message": "normal message", "orders": [{"security": "B"}]},
+    ])
+    sender = types.SimpleNamespace(
+        send=lambda message, replay=False, batch_id=None, orders=None: sent.append((message, replay, batch_id, orders))
+    )
+
+    module._replay_unacked(outbox, sender)
+
+    assert sent == [("normal message", True, "good", [{"security": "B"}])]
+    assert any("补发记录异常" in item for item in logs)
+
+
+def test_replay_unacked_sender_exception_does_not_stop_following_rows(monkeypatch):
+    module = load_module(monkeypatch)
+    logs = []
+    sent = []
+    webhook_url = "https://open.feishu.cn/open-apis/bot/v2/hook/sensitive-token"
+    module.WEBHOOK_URL = webhook_url
+    monkeypatch.setattr(module, "_print", lambda message: logs.append(message))
+
+    outbox = types.SimpleNamespace(load_unacked=lambda limit: [
+        {"batch_id": "bad", "message": "bad message", "orders": []},
+        {"batch_id": "good", "message": "good message", "orders": []},
+    ])
+
+    class Sender:
+        def send(self, message, replay=False, batch_id=None, orders=None):
+            if batch_id == "bad":
+                raise RuntimeError("failed %s" % webhook_url)
+            sent.append((message, replay, batch_id, orders))
+
+    module._replay_unacked(outbox, Sender())
+
+    assert sent == [("good message", True, "good", [])]
+    joined_logs = "\n".join(logs)
+    assert "补发记录异常" in joined_logs
+    assert webhook_url not in joined_logs
+    assert "sensitive-token" not in joined_logs
+    assert "<webhook>" in joined_logs

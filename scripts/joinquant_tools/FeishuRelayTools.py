@@ -470,7 +470,14 @@ def _replay_unacked(outbox, sender):
         _log("启动补发失败: %s" % _safe_error_text(exc))
         return
     for row in batches:
-        sender.send(row.get("message", ""), replay=True, batch_id=row.get("batch_id"), orders=row.get("orders") or [])
+        try:
+            message = row.get("message", "")
+            if not isinstance(message, str):
+                _log("补发记录异常: message 不是字符串 batch_id=%s" % _safe_error_text(row.get("batch_id")))
+                continue
+            sender.send(message, replay=True, batch_id=row.get("batch_id"), orders=row.get("orders") or [])
+        except Exception as exc:
+            _log("补发记录异常: %s" % _safe_error_text(exc))
 
 
 CURRENT_STRATEGY_NAME = _get_strategy_name()
