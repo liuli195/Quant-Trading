@@ -187,6 +187,18 @@ def test_stale_timer_token_is_ignored(monkeypatch):
     assert buffer.pending_count == 0
 
 
+def test_expired_token_does_not_drain_items(monkeypatch):
+    module = load_module(monkeypatch)
+    buffer = module._OrderBuffer(wait_seconds=60, max_size=30, send_func=lambda message, replay=False, retry_index=0: None, jitter_seconds=0)
+
+    buffer.add({"time": "t1", "action": "买入", "name": "", "security": "A", "amount": 1, "price": 1, "strategy": "S"})
+    old_token = buffer._timer_token
+    buffer.add({"time": "t2", "action": "买入", "name": "", "security": "B", "amount": 1, "price": 1, "strategy": "S"})
+
+    assert buffer._drain_items(token=old_token) is None
+    assert buffer.pending_count == 2
+
+
 def test_jitter_schedules_deferred_send(monkeypatch):
     module = load_module(monkeypatch)
     monkeypatch.setattr(module.random, "randint", lambda start, end: 7)

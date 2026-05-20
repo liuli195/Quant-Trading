@@ -175,28 +175,38 @@ class _OrderBuffer:
             self._timer.start()
 
     def _flush_if_current(self, token):
-        with self._lock:
-            if token != self._timer_token:
-                return
-        self.flush()
+        try:
+            self._flush_items(self._drain_items(token=token))
+        except Exception as exc:
+            _log("flush 异常: %s" % exc)
 
     def flush(self):
         try:
-            with self._lock:
-                if self._timer:
-                    self._timer.cancel()
-                    self._timer = None
-                if not self._items:
-                    return
-                items = self._items
-                self._items = []
-            lines = [_format_order_summary(item) for item in items[-self.max_size:]]
-            if len(items) > self.max_size:
-                lines.insert(0, "...(前略 %s 条)" % (len(items) - self.max_size))
-            message = _build_message(CURRENT_STRATEGY_NAME, lines, SECURITY_KEYWORD)
-            self._send_with_jitter(message)
+            self._flush_items(self._drain_items())
         except Exception as exc:
             _log("flush 异常: %s" % exc)
+
+    def _drain_items(self, token=None):
+        with self._lock:
+            if token is not None and token != self._timer_token:
+                return None
+            if self._timer:
+                self._timer.cancel()
+                self._timer = None
+            if not self._items:
+                return None
+            items = self._items
+            self._items = []
+            return items
+
+    def _flush_items(self, items):
+        if not items:
+            return
+        lines = [_format_order_summary(item) for item in items[-self.max_size:]]
+        if len(items) > self.max_size:
+            lines.insert(0, "...(前略 %s 条)" % (len(items) - self.max_size))
+        message = _build_message(CURRENT_STRATEGY_NAME, lines, SECURITY_KEYWORD)
+        self._send_with_jitter(message)
 
     def _send_with_jitter(self, message):
         if self.jitter_seconds and self.jitter_seconds > 0:
