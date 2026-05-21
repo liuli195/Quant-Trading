@@ -35,7 +35,14 @@ class FakeTimer:
             self.callback(*self.args, **self.kwargs)
 
 
-def load_module(monkeypatch, name="feishu_relay_under_test", read_text="", request=None):
+def load_module(
+    monkeypatch,
+    name="feishu_relay_under_test",
+    read_text="",
+    request=None,
+    preinject_file_api=True,
+    kuanke_file_api=None,
+):
     FakeTimer.scheduled = []
     request = request or Mock()
     fake_requests = types.SimpleNamespace(post=request)
@@ -51,10 +58,18 @@ def load_module(monkeypatch, name="feishu_relay_under_test", read_text="", reque
     def fake_write_file(path, content, append=False):
         writes.append((path, content, append))
 
+    if kuanke_file_api is not None:
+        monkeypatch.setitem(sys.modules, "kuanke", types.SimpleNamespace())
+        monkeypatch.setitem(sys.modules, "kuanke.user_space_api", kuanke_file_api)
+
     spec = importlib.util.spec_from_file_location(name, MODULE_PATH)
     module = importlib.util.module_from_spec(spec)
-    module.read_file = fake_read_file
-    module.write_file = fake_write_file
+    if preinject_file_api is True:
+        module.read_file = fake_read_file
+        module.write_file = fake_write_file
+    elif preinject_file_api == "non_callable":
+        module.read_file = "not callable"
+        module.write_file = "not callable"
     spec.loader.exec_module(module)
     module._test_writes = writes
     return module
@@ -242,6 +257,43 @@ def test_outbox_writes_pending_then_acked(monkeypatch):
     assert rows[1]["status"] == "acked"
     assert rows[1]["batch_id"] == "batch-1"
     assert all(call[2] is True for call in module._test_writes)
+
+
+def test_outbox_resolves_file_api_from_kuanke_when_module_globals_missing(monkeypatch):
+    writes = []
+
+    def kuanke_read_file(path):
+        return ""
+
+    def kuanke_write_file(path, content, append=False):
+        writes.append((path, content, append))
+
+    kuanke_api = types.SimpleNamespace(read_file=kuanke_read_file, write_file=kuanke_write_file)
+    module = load_module(monkeypatch, preinject_file_api=False, kuanke_file_api=kuanke_api)
+
+    module._outbox.write_pending("batch-1", "message", [{"security": "A"}])
+
+    assert len(writes) == 1
+    path, content, append = writes[0]
+    assert path == "feishu_relay_outbox/%s.jsonl" % module.CURRENT_STRATEGY_NAME
+    assert append is True
+    row = json.loads(content)
+    assert row["status"] == "pending"
+    assert row["batch_id"] == "batch-1"
+
+
+def test_outbox_ignores_non_callable_module_file_api_and_uses_kuanke(monkeypatch):
+    writes = []
+    kuanke_api = types.SimpleNamespace(
+        read_file=lambda path: "",
+        write_file=lambda path, content, append=False: writes.append((path, content, append)),
+    )
+    module = load_module(monkeypatch, preinject_file_api="non_callable", kuanke_file_api=kuanke_api)
+
+    module._outbox.write_pending("batch-1", "message", [])
+
+    assert len(writes) == 1
+    assert json.loads(writes[0][1])["status"] == "pending"
 
 
 def test_outbox_loads_unacked_batches(monkeypatch):

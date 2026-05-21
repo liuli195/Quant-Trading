@@ -6,6 +6,7 @@ import base64
 import datetime as _datetime
 import hashlib
 import hmac
+import importlib
 import json
 import os
 import random
@@ -86,6 +87,22 @@ def _make_batch_id(strategy_name, trade_date, lines):
 def _resolve_outbox_path(strategy_name):
     safe_strategy = str(strategy_name).replace("/", "_").replace("\\", "_")
     return OUTBOX_PATH.format(strategy=safe_strategy)
+
+
+def _resolve_file_api(name):
+    candidate = globals().get(name)
+    if callable(candidate):
+        return candidate
+    module = sys.modules.get("kuanke.user_space_api")
+    if module is None:
+        try:
+            module = importlib.import_module("kuanke.user_space_api")
+        except Exception:
+            return None
+    candidate = getattr(module, name, None)
+    if callable(candidate):
+        return candidate
+    return None
 
 
 def _get_strategy_name(strategy_file="/tmp/strategy/user_code.py"):
@@ -178,8 +195,8 @@ def _build_message(strategy_name, lines, security_keyword=""):
 class _Outbox:
     def __init__(self, path, read_file_func=None, write_file_func=None):
         self.path = path
-        self.read_file = read_file_func or globals().get("read_file")
-        self.write_file = write_file_func or globals().get("write_file")
+        self.read_file = read_file_func if read_file_func is not None else _resolve_file_api("read_file")
+        self.write_file = write_file_func if write_file_func is not None else _resolve_file_api("write_file")
 
     def write_pending(self, batch_id, message, orders):
         row = {
