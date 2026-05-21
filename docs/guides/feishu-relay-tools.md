@@ -9,11 +9,11 @@
 
 ## 私有上传版
 
-1. 复制 `scripts/joinquant_tools/FeishuRelayTools.py` 为 `FeishuRelayTools.private.py`。
-2. 在私有版里填入 `WEBHOOK_URL` 和 `WEBHOOK_SECRET`。
+1. 复制上方模板为本地未跟踪私有副本：`FeishuRelayTools.private.py` 或 `FeishuRelayTools.local.py`。
+2. 只在本地私有副本里填入 `WEBHOOK_URL` 和 `WEBHOOK_SECRET`，禁止把填了密钥的内容提交回仓库里的跟踪模板。
 3. 按需设置 `SECURITY_KEYWORD`、`BUFFER_WAIT_TIME`、`SEND_JITTER_SECONDS`。
-4. 上传私有版到聚宽研究环境或策略文件目录。
-5. 在策略开头导入私有版，确保导入发生在策略下单函数被调用前。
+4. 上传到聚宽研究环境或策略文件目录时，建议保存为 `FeishuRelayTools.py`。
+5. 在策略开头写 `import FeishuRelayTools`，确保导入发生在策略下单函数被调用前。
 
 ## 聚宽人工冒烟
 
@@ -29,4 +29,4 @@
 - 不提交真实 webhook。
 - 不提交真实 secret。
 - 不在日志打印完整 webhook 或 secret。
-- 私有上传版文件名必须使用 `.gitignore` 已覆盖的 `FeishuRelayTools.private.py` 或 `FeishuRelayTools.local.py`。
+- 本地私有副本文件名必须使用 `.gitignore` 已覆盖的 `FeishuRelayTools.private.py` 或 `FeishuRelayTools.local.py`。
