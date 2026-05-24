@@ -108,13 +108,13 @@ def _write_minimal_repo(root: Path) -> None:
     (root / "AGENTS.md").write_text(
         "所有 AI 编码助手统一以 AGENTS.md 为通用入口。\n\n"
         "本仓库是基于 Python 的 A 股/场内基金量化策略仓库。\n\n"
-        "规则索引见 indexes.md。所有回答和输出使用简体中文。"
+        "规则索引见 indexes.md。所有回答和输出使用简体中文，简洁直白。"
         "策略代码仅在聚宽云端运行。"
-        "须使用提权走项目 .venv。命令参考 docs/rules/commands.md。"
-        "所有进入主干的改动必须通过 PR；如用户显式授权，可以按直写主干链路直接提交和推送主干；"
+        "须使用提权走项目 `.venv`。命令参考 docs/rules/commands.md。"
+        "进入主干须通过 PR；如用户显式授权，可以按直写主干链路直接提交和推送主干；"
         "禁止本地合并主干，细则见 docs/rules/pr-workflow.md。"
-        "效率：所有任务默认优先分发给子agent，主会话只负责流程编排。"
-        "Markdown 内部文件引用使用 pathref。"
+        "效率：所有任务默认优先派发子 agent，主会话负责编排。"
+        "Markdown 内部文件引用使用可点击链接和 pathref。"
         "每次任务后清理临时产物。\n\n"
         "## Review guidelines\n\n"
         "Before reviewing, read and apply docs/rules/review-guidelines.md. "
@@ -1006,7 +1006,7 @@ def test_governance_audit_flags_agents_without_sandbox_escalation_rule(
     assert not report.ok
     assert any(
         finding.rule_id == "agent_entry_sync"
-        and "须使用提权走项目 .venv" in finding.message
+        and "须使用提权走项目 `.venv`" in finding.message
         for finding in report.findings
     )
 
