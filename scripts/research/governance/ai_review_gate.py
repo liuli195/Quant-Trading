@@ -421,7 +421,7 @@ def _authorization_errors(value: Any, label: str) -> list[str]:
 
 def _is_placeholder_authorization_value(value: str) -> bool:
     normalized = value.strip().strip("`\"'")
-    return bool(re.fullmatch(r"<[^>]+>", normalized))
+    return bool(re.search(r"<[^>]+>", normalized))
 
 
 def _render_cross_review(value: Any) -> list[str]:

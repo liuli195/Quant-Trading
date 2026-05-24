@@ -303,6 +303,40 @@ def test_partial_review_mode_rejects_placeholder_authorization_values(
     assert "partial review mode authorization invalid evidence" in result.errors
 
 
+def test_partial_review_mode_rejects_embedded_placeholder_authorization_values(
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 2,
+            "tool": "codex",
+            "review_mode": "partial",
+            "review_mode_authorization": {
+                "authorized_by": "user <template>",
+                "reason": "approved because <template>",
+                "evidence": "ticket <template>",
+            },
+            "reviewers": ["spec-review-subagent", "quality-review-subagent"],
+            "risk_level": "low",
+            "requires_official_codex_review": False,
+            "security_review": _security_review(),
+            "cross_review": _cross_review(),
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert "partial review mode authorization invalid authorized_by" in result.errors
+    assert "partial review mode authorization invalid reason" in result.errors
+    assert "partial review mode authorization invalid evidence" in result.errors
+
+
 def test_high_risk_report_requires_official_review_by_default(tmp_path: Path) -> None:
     report = tmp_path / "latest.json"
     _write_report(
@@ -399,6 +433,44 @@ def test_skip_official_review_rejects_placeholder_authorization_values(
                 "authorized_by": "<授权人>",
                 "reason": "<原因>",
                 "evidence": "<授权证据>",
+            },
+            "security_review": _security_review(),
+            "cross_review": _cross_review(),
+            "complete_review": _complete_review(),
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert (
+        "official Codex review skip authorization invalid authorized_by"
+        in result.errors
+    )
+    assert "official Codex review skip authorization invalid reason" in result.errors
+    assert "official Codex review skip authorization invalid evidence" in result.errors
+
+
+def test_skip_official_review_rejects_embedded_placeholder_authorization_values(
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 2,
+            "tool": "codex",
+            "reviewers": ["spec-review-subagent", "quality-review-subagent"],
+            "risk_level": "high",
+            "requires_official_codex_review": False,
+            "skip_official_codex_review": True,
+            "official_codex_review_skip_authorization": {
+                "authorized_by": "user <template>",
+                "reason": "approved because <template>",
+                "evidence": "ticket <template>",
             },
             "security_review": _security_review(),
             "cross_review": _cross_review(),
