@@ -21,6 +21,7 @@ from scripts.research.governance.pr_review_evidence import (
     head_updated_at_from_monitor_state,
     is_codex_completion_comment,
     is_effective_codex_review,
+    official_codex_review_skip_authorized,
     render_monitor_head_state,
     unresolved_blocking_codex_thread_count,
 )
@@ -62,20 +63,35 @@ def build_monitor_report(
     """Build a status summary for Codex reviews on the PR head."""
 
     head_sha = _head_sha(pr)
-    trigger_time = _required_trigger_time(issue_comments, head_created_at=head_created_at)
+    skip_authorized = official_codex_review_skip_authorized(str(pr.get("body", "")))
+    trigger_time = _required_trigger_time(
+        issue_comments, head_created_at=head_created_at
+    )
     trigger_found = trigger_time is not None
     current_head_reviews = _current_head_codex_reviews(reviews, head_sha=head_sha)
-    post_trigger_reviews = _reviews_after_trigger(current_head_reviews, trigger_time=trigger_time)
-    latest_review = _latest_codex_review(post_trigger_reviews) or _latest_codex_review(current_head_reviews)
+    post_trigger_reviews = _reviews_after_trigger(
+        current_head_reviews, trigger_time=trigger_time
+    )
+    latest_review = _latest_codex_review(post_trigger_reviews) or _latest_codex_review(
+        current_head_reviews
+    )
     completion_comment = _latest_codex_completion_comment(
         issue_comments,
         head_created_at=head_created_at,
         trigger_time=trigger_time,
     )
-    latest_review_url = _review_url(repo=repo, pr_number=pr_number, review=latest_review) if latest_review else None
-    latest_review_sha = str(latest_review.get("commit_id", "")) if latest_review else None
+    latest_review_url = (
+        _review_url(repo=repo, pr_number=pr_number, review=latest_review)
+        if latest_review
+        else None
+    )
+    latest_review_sha = (
+        str(latest_review.get("commit_id", "")) if latest_review else None
+    )
     if latest_review_url is None and completion_comment is not None:
-        latest_review_url = _issue_comment_url(repo=repo, pr_number=pr_number, comment=completion_comment)
+        latest_review_url = _issue_comment_url(
+            repo=repo, pr_number=pr_number, comment=completion_comment
+        )
         latest_review_sha = head_sha
     blocking_findings = _count_reviews_findings(
         current_head_reviews,
@@ -93,12 +109,15 @@ def build_monitor_report(
         pattern=P2_FINDING_PATTERN,
     )
 
-    if not trigger_found:
-        status = "waiting_for_trigger"
-        message = "未发现符合规则的 `@codex review` 触发评论。"
-    elif blocking_findings:
+    if blocking_findings:
         status = "blocked"
         message = "Codex review 含 P0/P1 阻断发现，不能填写通过结论。"
+    elif skip_authorized:
+        status = "skipped"
+        message = "官方 Codex review 已由用户授权跳过。"
+    elif not trigger_found:
+        status = "waiting_for_trigger"
+        message = "未发现符合规则的 `@codex review` 触发评论。"
     elif not post_trigger_reviews and completion_comment is None:
         status = "waiting_for_codex"
         message = "已发现触发评论，正在等待 Codex 针对当前 head 输出 review。"
@@ -126,13 +145,18 @@ def render_monitor_comment(report: MonitorReport) -> str:
         "waiting_for_codex": "等待 Codex review",
         "blocked": "阻断",
         "passed": "可更新通过证据",
+        "skipped": "授权跳过",
     }.get(report.status, report.status)
     latest_review = report.latest_review_url or "未发现"
-    latest_sha = _short_sha(report.latest_review_sha) if report.latest_review_sha else "未发现"
+    latest_sha = (
+        _short_sha(report.latest_review_sha) if report.latest_review_sha else "未发现"
+    )
     return "\n".join(
         [
             MONITOR_MARKER,
-            render_monitor_head_state(head_sha=report.head_sha, head_updated_at=report.head_updated_at),
+            render_monitor_head_state(
+                head_sha=report.head_sha, head_updated_at=report.head_updated_at
+            ),
             "## Codex Review Monitor",
             "",
             f"- PR: `#{report.pr_number}`",
@@ -149,9 +173,13 @@ def render_monitor_comment(report: MonitorReport) -> str:
     )
 
 
-def sync_monitor_comment(*, repo: str, pr_number: str, token: str, report: MonitorReport) -> None:
+def sync_monitor_comment(
+    *, repo: str, pr_number: str, token: str, report: MonitorReport
+) -> None:
     body = render_monitor_comment(report)
-    comments = _fetch_github_list(repo=repo, path=f"issues/{pr_number}/comments", token=token)
+    comments = _fetch_github_list(
+        repo=repo, path=f"issues/{pr_number}/comments", token=token
+    )
     existing_id = _find_monitor_comment_id(comments)
     if existing_id:
         _request_json(
@@ -169,20 +197,27 @@ def sync_monitor_comment(*, repo: str, pr_number: str, token: str, report: Monit
         )
 
 
-def sync_commit_status(*, repo: str, pr: Mapping[str, object], token: str, report: MonitorReport) -> None:
+def sync_commit_status(
+    *, repo: str, pr: Mapping[str, object], token: str, report: MonitorReport
+) -> None:
     state = {
         "waiting_for_trigger": "failure",
         "waiting_for_codex": "pending",
         "blocked": "failure",
         "passed": "success",
+        "skipped": "success",
     }.get(report.status, "error")
-    pr_url = str(pr.get("html_url", "")) or f"https://github.com/{repo}/pull/{report.pr_number}"
+    pr_url = (
+        str(pr.get("html_url", ""))
+        or f"https://github.com/{repo}/pull/{report.pr_number}"
+    )
     target_url = report.latest_review_url or pr_url
     description = {
         "waiting_for_trigger": "Waiting for required @codex review trigger",
         "waiting_for_codex": "Waiting for Codex review on current head",
         "blocked": "Codex review has P0/P1 findings",
         "passed": "Codex review has no P0/P1 findings",
+        "skipped": "Official Codex review skipped by user authorization",
     }.get(report.status, "Codex review monitor status unavailable")
     _request_json(
         method="POST",
@@ -202,7 +237,10 @@ def _has_required_trigger_comment(
     *,
     head_created_at: str | None = None,
 ) -> bool:
-    return _required_trigger_time(issue_comments, head_created_at=head_created_at) is not None
+    return (
+        _required_trigger_time(issue_comments, head_created_at=head_created_at)
+        is not None
+    )
 
 
 def _required_trigger_time(
@@ -212,7 +250,9 @@ def _required_trigger_time(
 ) -> str | None:
     matched_times = [
         _comment_effective_time(comment)
-        for comment in _required_trigger_comments(issue_comments, head_created_at=head_created_at)
+        for comment in _required_trigger_comments(
+            issue_comments, head_created_at=head_created_at
+        )
     ]
     return max(matched_times) if matched_times else None
 
@@ -258,7 +298,9 @@ def _latest_codex_completion_comment(
             continue
         if trigger_time and comment_time and comment_time < trigger_time:
             continue
-        if _is_required_trigger_comment(comment) and has_codex_completion_reaction(comment):
+        if _is_required_trigger_comment(comment) and has_codex_completion_reaction(
+            comment
+        ):
             matched.append(comment)
             continue
         if is_codex_completion_comment(comment):
@@ -284,7 +326,8 @@ def _current_head_codex_reviews(
     return [
         review
         for review in reviews
-        if str(review.get("commit_id", "")) == head_sha and is_effective_codex_review(review)
+        if str(review.get("commit_id", "")) == head_sha
+        and is_effective_codex_review(review)
     ]
 
 
@@ -295,7 +338,9 @@ def _reviews_after_trigger(
 ) -> list[Mapping[str, object]]:
     if trigger_time is None:
         return []
-    return [review for review in reviews if _review_submitted_at(review) >= trigger_time]
+    return [
+        review for review in reviews if _review_submitted_at(review) >= trigger_time
+    ]
 
 
 def _review_submitted_at(review: Mapping[str, object]) -> str:
@@ -306,7 +351,9 @@ def _review_submitted_at(review: Mapping[str, object]) -> str:
     return ""
 
 
-def _latest_codex_review(reviews: Sequence[Mapping[str, object]]) -> Mapping[str, object] | None:
+def _latest_codex_review(
+    reviews: Sequence[Mapping[str, object]],
+) -> Mapping[str, object] | None:
     if not reviews:
         return None
     return sorted(reviews, key=_review_sort_key)[-1]
@@ -324,8 +371,13 @@ def _review_url(*, repo: str, pr_number: str, review: Mapping[str, object]) -> s
     return f"https://github.com/{repo}/pull/{pr_number}#pullrequestreview-{review.get('id')}"
 
 
-def _issue_comment_url(*, repo: str, pr_number: str, comment: Mapping[str, object]) -> str:
-    return str(comment.get("html_url", "")) or f"https://github.com/{repo}/pull/{pr_number}#issuecomment-{comment.get('id')}"
+def _issue_comment_url(
+    *, repo: str, pr_number: str, comment: Mapping[str, object]
+) -> str:
+    return (
+        str(comment.get("html_url", ""))
+        or f"https://github.com/{repo}/pull/{pr_number}#issuecomment-{comment.get('id')}"
+    )
 
 
 def _count_review_findings(
@@ -382,7 +434,9 @@ def _api_url(*, repo: str, path: str) -> str:
     return f"https://api.github.com/repos/{repo}/{path}{separator}per_page=100"
 
 
-def _request_json(*, method: str, url: str, token: str, payload: object | None = None) -> tuple[object, str | None]:
+def _request_json(
+    *, method: str, url: str, token: str, payload: object | None = None
+) -> tuple[object, str | None]:
     data = None if payload is None else json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
         url,
@@ -403,7 +457,9 @@ def _request_json(*, method: str, url: str, token: str, payload: object | None =
 
 
 def _fetch_github_json(*, repo: str, path: str, token: str) -> object:
-    payload, _ = _request_json(method="GET", url=_api_url(repo=repo, path=path), token=token)
+    payload, _ = _request_json(
+        method="GET", url=_api_url(repo=repo, path=path), token=token
+    )
     return payload
 
 
@@ -435,7 +491,9 @@ def _enrich_required_trigger_reactions(
             continue
         item = dict(comment)
         item["reaction_items"] = _as_mapping_list(
-            _fetch_github_list(repo=repo, path=f"issues/comments/{comment_id}/reactions", token=token)
+            _fetch_github_list(
+                repo=repo, path=f"issues/comments/{comment_id}/reactions", token=token
+            )
         )
         enriched.append(item)
     return enriched
@@ -516,24 +574,40 @@ def main(argv: list[str] | None = None) -> int:
     reviews = _as_mapping_list(_read_json_file(args.reviews_file))
     review_comments = _as_mapping_list(_read_json_file(args.review_comments_file))
     review_threads = _as_mapping_list(_read_json_file(args.review_threads_file))
-    head_created_at = _read_env(args.head_updated_at_env) or _read_env(args.head_created_at_env)
+    head_created_at = _read_env(args.head_updated_at_env) or _read_env(
+        args.head_created_at_env
+    )
 
     if token:
         if not pr:
-            pr = _as_mapping(_fetch_github_json(repo=repo, path=f"pulls/{pr_number}", token=token))
+            pr = _as_mapping(
+                _fetch_github_json(repo=repo, path=f"pulls/{pr_number}", token=token)
+            )
         if not issue_comments:
             issue_comments = _as_mapping_list(
-                _fetch_github_list(repo=repo, path=f"issues/{pr_number}/comments", token=token)
+                _fetch_github_list(
+                    repo=repo, path=f"issues/{pr_number}/comments", token=token
+                )
             )
-        issue_comments = _enrich_required_trigger_reactions(issue_comments, repo=repo, token=token)
+        issue_comments = _enrich_required_trigger_reactions(
+            issue_comments, repo=repo, token=token
+        )
         if not reviews:
-            reviews = _as_mapping_list(_fetch_github_list(repo=repo, path=f"pulls/{pr_number}/reviews", token=token))
+            reviews = _as_mapping_list(
+                _fetch_github_list(
+                    repo=repo, path=f"pulls/{pr_number}/reviews", token=token
+                )
+            )
         if not review_comments:
             review_comments = _as_mapping_list(
-                _fetch_github_list(repo=repo, path=f"pulls/{pr_number}/comments", token=token)
+                _fetch_github_list(
+                    repo=repo, path=f"pulls/{pr_number}/comments", token=token
+                )
             )
         if not review_threads:
-            review_threads = _fetch_pr_review_threads(repo=repo, pr_number=pr_number, token=token)
+            review_threads = _fetch_pr_review_threads(
+                repo=repo, pr_number=pr_number, token=token
+            )
         if not head_created_at:
             head_created_at = head_updated_at_from_monitor_state(
                 issue_comments,
@@ -565,19 +639,29 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.sync_status:
         if not token:
-            print("error: GITHUB_TOKEN is required when --sync-status is used", file=sys.stderr)
+            print(
+                "error: GITHUB_TOKEN is required when --sync-status is used",
+                file=sys.stderr,
+            )
             return 2
         sync_commit_status(repo=repo, pr=pr, token=token, report=report)
     if args.sync_comment:
         if not token:
-            print("error: GITHUB_TOKEN is required when --sync-comment is used", file=sys.stderr)
+            print(
+                "error: GITHUB_TOKEN is required when --sync-comment is used",
+                file=sys.stderr,
+            )
             return 2
         try:
-            sync_monitor_comment(repo=repo, pr_number=pr_number, token=token, report=report)
+            sync_monitor_comment(
+                repo=repo, pr_number=pr_number, token=token, report=report
+            )
         except urllib.error.HTTPError as error:
             if error.code != 403:
                 raise
-            print("warning: unable to sync monitor PR comment: HTTP 403", file=sys.stderr)
+            print(
+                "warning: unable to sync monitor PR comment: HTTP 403", file=sys.stderr
+            )
     return 0
 
 

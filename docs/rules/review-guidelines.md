@@ -6,8 +6,11 @@
 
 - 所有 PR 必须完成本地 AI review、问题评级和风险分级。
 - 本地 AI review 必须由至少两个独立 reviewer 完成子 agent 交叉评审，并在统一报告 schema 的 `reviewers` 字段中记录；评审子 agent 必须使用 Superpowers 模板 `superpowers:subagent-driven-development/spec-reviewer-prompt.md` 和 `superpowers:subagent-driven-development/code-quality-reviewer-prompt.md`。
+- 本地 AI review 默认使用 `complete` 完全 review 模式；两个 reviewer 必须持续查找更多发现，直到各自最后一轮明确记录无新发现。
+- 只有用户显式授权时，本地 AI review 才能使用 `partial` 不完全模式；必须记录 `authorized_by`、`reason` 和 `evidence`。
 - P0/P1 问题未以 `fixed` 或 `false_positive` 关闭前，不得进入下一阶段。
-- 高风险或 unknown PR 的 Codex Code Review 必须由 PR 评论明确触发。评论内容必须包含 `@codex review`。
+- 高风险或 unknown PR 默认必须执行官方 Codex Code Review，并由 PR 评论明确触发。评论内容必须包含 `@codex review`。
+- 用户显式授权时，可以跳过官方 Codex Code Review；必须记录 `官方 Codex Review 跳过授权` 的 `authorized_by`、`reason` 和 `evidence`。该授权不允许绕过未解决且未过期的 Codex P0/P1 thread。
 - Automatic reviews 可以作为补充，但不能替代上面的明确触发评论。
 - PR 中如存在 Codex 标出的 P0/P1 问题，不得填写通过结论。
 - 高风险或 unknown PR 描述必须填写 `Codex Code Review 结论`，且 `结论` 为 `通过`、`阻断问题` 为 `无` 后，才能进入合并。
@@ -19,10 +22,13 @@
 
 ## 本地 AI Review
 
-- Codex 本地 AI review 使用 Superpowers 和 Codex Security。
-- Claude 本地 AI review 使用 pr-review-toolkit 和 security-guidance。
+- Codex 本地 AI review 必须使用 Superpowers 和 Codex Security，并在本地报告 `security_review.tool` 记录 `codex-security`。
+- Claude 本地 AI review 必须使用 pr-review-toolkit 和 security-guidance，并在本地报告 `security_review.tool` 记录 `security-guidance`。
 - 所有 AI review provider 必须输出统一报告 schema。
 - 统一报告 schema 的 `reviewers` 必须列出至少两个独立 reviewer；重复 reviewer 不算交叉评审；`cross_review.review_skills` 必须包含 `superpowers:subagent-driven-development/spec-reviewer-prompt.md` 和 `superpowers:subagent-driven-development/code-quality-reviewer-prompt.md`。
+- 统一报告 schema 的 `security_review.evidence` 必须记录本地安全 review 证据；PR body 的 `本地安全 review` 字段必须记录 `provider`、`tool` 和 `evidence`。
+- 统一报告 schema v2 默认 `review_mode=complete`；`complete_review.iterations` 必须证明每个 reviewer 最后一轮为 `no_new_findings=true` 且 `new_findings=[]`。
+- `review_mode=partial` 必须填写 `review_mode_authorization.authorized_by`、`reason` 和 `evidence`。
 - PR body 的 `子 agent 交叉评审` 字段必须使用 `reviewers: A, B` 记录两个独立 reviewer 名称。
 - 本地 AI review 必须输出具体问题、评级、文件位置、建议修复、处理状态和验证证据。
 - 本地 AI review 不是 PR 模板生成器；它必须推动 P0/P1 修复闭环。
@@ -43,6 +49,7 @@
 - PR 存在 `ai-risk-review` label。
 - 本地 AI review 报告缺失、无法解析或无法证明低风险。
 - 高风险路径或高风险规则命中。
+- 用户显式授权跳过官方 Codex Review 时，上述触发条件可以不触发官方 review，但 PR body 必须填写 `官方 Codex Review 跳过授权`。已有未解决且未过期的 Codex P0/P1 thread 仍然阻断。
 
 ## 评审重点
 
@@ -71,8 +78,12 @@ Codex review 发现治理相关风险时，应优先对照以下规则文件定�
 ## AI Review 风险分级
 
 - 风险等级: low / high / unknown
-- 是否需要官方 Codex Review: 是 / 否
+- 是否需要官方 Codex Review: 是 / 否（低风险无需 / 用户授权跳过）
+- 官方 Codex Review 跳过授权: 无 / authorized_by=<授权人>；reason=<原因>；evidence=<授权证据>
 - 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex / claude；tool=codex-security / security-guidance；evidence=<安全 review 证据>
+- 本地 AI review 模式: complete / partial
+- 不完全 Review 模式授权: 无 / authorized_by=<授权人>；reason=<原因>；evidence=<授权证据>
 - 子 agent 交叉评审: 填写 `superpowers:subagent-driven-development/spec-reviewer-prompt.md` + `superpowers:subagent-driven-development/code-quality-reviewer-prompt.md`；reviewers: <规格评审子agent>, <代码质量评审子agent>；见 `.local/ai-review/latest.md`
 - 任务分发说明: 填写已分发任务；未分发时写原因
 - Codex Review Scope: `.local/ai-review/codex-review-scope.md`

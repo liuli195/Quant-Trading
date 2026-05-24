@@ -20,8 +20,12 @@
 ## AI Review 风险分级
 
 - 风险等级: low / high / unknown
-- 是否需要官方 Codex Review: 是 / 否
+- 是否需要官方 Codex Review: 是 / 否（低风险无需 / 用户授权跳过）
+- 官方 Codex Review 跳过授权: 无 / authorized_by=<授权人>；reason=<原因>；evidence=<授权证据>
 - 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex / claude；tool=codex-security / security-guidance；evidence=<安全 review 证据>
+- 本地 AI review 模式: complete / partial
+- 不完全 Review 模式授权: 无 / authorized_by=<授权人>；reason=<原因>；evidence=<授权证据>
 - 子 agent 交叉评审: 填写 `superpowers:subagent-driven-development/spec-reviewer-prompt.md` + `superpowers:subagent-driven-development/code-quality-reviewer-prompt.md`；reviewers: <规格评审子agent>, <代码质量评审子agent>；见 `.local/ai-review/latest.md`
 - 任务分发说明: 填写已分发任务；未分发时写原因
 - Codex Review Scope: `.local/ai-review/codex-review-scope.md`

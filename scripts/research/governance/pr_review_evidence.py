@@ -17,9 +17,21 @@ REQUIRED_REVIEWER = "Codex"
 SECTION_HEADER = "Codex Code Review 结论"
 AI_REVIEW_SECTION_HEADER = "AI Review 风险分级"
 P2_SECTION_HEADER = "P2 保留项"
+AI_REVIEW_MODE_FIELD = "本地 AI review 模式"
+PARTIAL_REVIEW_AUTH_FIELD = "不完全 Review 模式授权"
+OFFICIAL_SKIP_FIELD = "官方 Codex Review 跳过授权"
+SECURITY_REVIEW_FIELD = "本地安全 review"
 REQUIRED_CROSS_REVIEW_TOKENS = (
     "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
     "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
+)
+REQUIRED_SECURITY_REVIEW_TOOLS = {
+    "codex": "codex-security",
+    "claude": "security-guidance",
+}
+SECURITY_REVIEW_PROVIDER_PATTERN = re.compile(
+    r"(?:provider|工具|提供方)\s*[=:：]\s*(?P<provider>codex|claude)",
+    re.IGNORECASE,
 )
 HIGH_RISK_PREFIXES = (
     "strategies/",
@@ -176,7 +188,11 @@ def _official_codex_required(
         return True, [f"PR body missing section: {AI_REVIEW_SECTION_HEADER}"]
     risk = _normalize_value(_read_field(section, "风险等级"))
     requires = _normalize_value(_read_field(section, "是否需要官方 Codex Review"))
+    review_mode = _read_field(section, AI_REVIEW_MODE_FIELD)
+    partial_review_authorization = _read_field(section, PARTIAL_REVIEW_AUTH_FIELD)
+    skip_authorization = _read_field(section, OFFICIAL_SKIP_FIELD)
     local_review = _normalize_value(_read_field(section, "本地 AI review"))
+    security_review = _read_field(section, SECURITY_REVIEW_FIELD)
     cross_review = _normalize_value(_read_field(section, "子 agent 交叉评审"))
     task_dispatch = _normalize_value(_read_field(section, "任务分发说明"))
     blockers = _normalize_value(_read_field(section, "P0/P1 未关闭项"))
@@ -187,28 +203,119 @@ def _official_codex_required(
         errors.append("本地 AI review must be filled")
     elif ".local/ai-review/latest.md" not in local_review:
         errors.append("本地 AI review must reference .local/ai-review/latest.md")
+    errors.extend(_security_review_field_errors(security_review))
     errors.extend(_cross_review_field_errors(cross_review))
     errors.extend(_task_dispatch_errors(task_dispatch))
+    errors.extend(
+        _ai_review_mode_errors(
+            review_mode,
+            partial_review_authorization=partial_review_authorization,
+        )
+    )
     errors.extend(_p2_section_errors(body))
     if blockers != "无":
         errors.append("P0/P1 未关闭项 must be 无")
     high_risk_files = _high_risk_changed_files(changed_files)
     if high_risk_files:
-        if risk == "low" or requires in {"否", "不需要", "false", "False"}:
+        if risk == "low":
             errors.append("high-risk changed files require official Codex Review")
+        if requires in {"否", "不需要", "false", "False"}:
+            skip_errors = _official_codex_skip_authorization_errors(skip_authorization)
+            if skip_errors:
+                errors.extend(skip_errors)
+            elif risk != "low":
+                return False, errors
         return True, errors
     if _has_ai_risk_review_label(labels):
-        if risk == "low" or requires in {"否", "不需要", "false", "False"}:
+        if risk == "low":
             errors.append("ai-risk-review label requires official Codex Review")
+        if requires in {"否", "不需要", "false", "False"}:
+            skip_errors = _official_codex_skip_authorization_errors(skip_authorization)
+            if skip_errors:
+                errors.extend(skip_errors)
+            elif risk != "low":
+                return False, errors
         return True, errors
     if risk in {"high", "unknown"}:
+        if requires in {"否", "不需要", "false", "False"}:
+            skip_errors = _official_codex_skip_authorization_errors(skip_authorization)
+            if skip_errors:
+                errors.extend(skip_errors)
+                return True, errors
+            return False, errors
         return True, errors
     if requires in {"是", "需要", "true", "True"}:
         return True, errors
     if requires in {"否", "不需要", "false", "False"}:
+        if _official_skip_authorization_present(skip_authorization):
+            errors.extend(_official_codex_skip_authorization_errors(skip_authorization))
         return False, errors
     errors.append("低风险 PR must mark 是否需要官方 Codex Review as 是 or 否")
     return True, errors
+
+
+def official_codex_review_skip_authorized(body: str) -> bool:
+    section = _extract_named_section(body, AI_REVIEW_SECTION_HEADER)
+    if section is None:
+        return False
+    value = _read_field(section, OFFICIAL_SKIP_FIELD)
+    return _official_skip_authorization_present(
+        value
+    ) and not _official_codex_skip_authorization_errors(value)
+
+
+def _official_skip_authorization_present(value: str) -> bool:
+    normalized = _normalize_value(value)
+    if not normalized:
+        return False
+    return normalized.casefold() not in {
+        "无",
+        "否",
+        "不跳过",
+        "未授权",
+        "none",
+        "n/a",
+        "na",
+    }
+
+
+def _official_codex_skip_authorization_errors(value: str) -> list[str]:
+    if not _official_skip_authorization_present(value):
+        return [f"{OFFICIAL_SKIP_FIELD} must be filled"]
+    return _authorization_field_errors(value, OFFICIAL_SKIP_FIELD)
+
+
+def _ai_review_mode_errors(
+    value: str, *, partial_review_authorization: str
+) -> list[str]:
+    mode = _normalize_value(value) or "complete"
+    if mode not in {"complete", "partial"}:
+        return [f"{AI_REVIEW_MODE_FIELD} must be complete or partial"]
+    if mode == "partial":
+        return _authorization_field_errors(
+            partial_review_authorization,
+            PARTIAL_REVIEW_AUTH_FIELD,
+        )
+    return []
+
+
+def _authorization_field_errors(value: str, field: str) -> list[str]:
+    normalized = _normalize_value(value)
+    if not normalized or normalized.casefold() in {"无", "否", "none", "n/a", "na"}:
+        return [f"{field} must be filled"]
+    placeholder_error = _placeholder_field_error(value, field)
+    if placeholder_error:
+        return [placeholder_error]
+    errors: list[str] = []
+    required_groups = (
+        ("authorized_by=", "授权人", "批准人"),
+        ("reason=", "原因", "理由"),
+        ("evidence=", "证据"),
+    )
+    for group in required_groups:
+        if not any(token in value for token in group):
+            errors.append(f"{field} must include " + "/".join(group))
+    return errors
 
 
 def _is_unfilled_ai_review_field(value: str) -> bool:
@@ -216,6 +323,12 @@ def _is_unfilled_ai_review_field(value: str) -> bool:
         return True
     placeholders = ("填写", "已分发 / 未分发")
     return any(token in value for token in placeholders)
+
+
+def _placeholder_field_error(value: str, field: str) -> str | None:
+    if re.search(r"<[^>]+>", value) or " / " in value:
+        return f"{field} must not contain placeholder text"
+    return None
 
 
 def _cross_review_field_errors(value: str) -> list[str]:
@@ -233,6 +346,31 @@ def _cross_review_field_errors(value: str) -> list[str]:
         errors.append("子 agent 交叉评审 must not include invalid reviewer names")
     if _cross_review_reviewer_count(reviewer_names) < 2:
         errors.append("子 agent 交叉评审 must include two reviewer names")
+    return errors
+
+
+def _security_review_field_errors(value: str) -> list[str]:
+    if _is_unfilled_ai_review_field(_normalize_value(value)):
+        return [f"{SECURITY_REVIEW_FIELD} must be filled"]
+    placeholder_error = _placeholder_field_error(value, SECURITY_REVIEW_FIELD)
+    if placeholder_error:
+        return [placeholder_error]
+    errors: list[str] = []
+    normalized = value.casefold()
+    match = SECURITY_REVIEW_PROVIDER_PATTERN.search(value)
+    provider = match.group("provider").casefold() if match else ""
+    if provider not in REQUIRED_SECURITY_REVIEW_TOOLS:
+        errors.append(
+            f"{SECURITY_REVIEW_FIELD} must include provider=codex or provider=claude"
+        )
+        return errors
+    required_tool = REQUIRED_SECURITY_REVIEW_TOOLS[provider]
+    if required_tool not in normalized:
+        errors.append(
+            f"{SECURITY_REVIEW_FIELD} must include tool={required_tool} for provider={provider}"
+        )
+    if "evidence=" not in normalized and "证据" not in value:
+        errors.append(f"{SECURITY_REVIEW_FIELD} must include evidence")
     return errors
 
 

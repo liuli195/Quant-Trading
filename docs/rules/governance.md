@@ -7,8 +7,10 @@
 - 关键路径必须由 CODEOWNERS 覆盖并经过 owner review。
 - `scripts.research.governance gate` 是本地 hook 和 CI 的强门禁入口。
 - `scripts.research.governance.ai_review_gate` 是本地 AI review 报告、风险等级和 Codex Review Scope 的统一校验入口；本地报告保存在 `.local/ai-review/`，不进入仓库。
+- 本地 AI review 报告 schema v2 默认 `review_mode=complete`；`partial` 不完全模式必须有用户授权记录。
+- 本地 AI review 报告 schema v2 必须包含 `security_review`：`tool=codex` 时要求 `codex-security`，`tool=claude` 时要求 `security-guidance`；PR body 必须同步填写 `本地安全 review` 证据。
 - CI 必须校验 PR body 中的 `AI Review 风险分级` 和 review 证据；本地报告缺失、无法解析或无法证明低风险时，PR body 必须按 high/unknown 处理。
-- 低风险 PR 可以不包含官方 Codex Code Review 链接；高风险或 unknown PR 必须包含官方 Codex Code Review 的通过结论。
+- 低风险 PR 可以不包含官方 Codex Code Review 链接；高风险或 unknown PR 默认必须包含官方 Codex Code Review 的通过结论。用户显式授权跳过时，必须在 PR body 中记录 `官方 Codex Review 跳过授权`。
 - CI 必须用 `pr-review-evidence` job 校验 PR review 证据，并在需要官方 Codex Review 时用 `Codex Review Monitor` status 监听当前 head 的 Codex 评审状态；两者都必须实时读取 review thread resolved/outdated 状态，拦截未解决且未过期的 Codex P0/P1 thread。
 - 本地仓库必须设置 `git config core.hooksPath .githooks`，不能只提交 hook 文件。
 - `.githooks/pre-commit`、`.githooks/pre-push` 和 `.githooks/reference-transaction` 必须通过 `.githooks/run-python.sh` 调用项目虚拟环境，不能硬编码 `powershell.exe` 或单一平台解释器路径。
