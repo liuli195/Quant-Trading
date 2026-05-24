@@ -1129,3 +1129,26 @@ Record in final report:
 - Intentional non-scope: no Redis, no local service, no polling process, no `after_trading_end`, no strategy trading logic change, no generator script.
 - TDD order: every behavior task starts with failing tests, then minimal implementation, then test pass.
 - Known residual risk: local tests cannot prove JoinQuant module load order, network access, `threading.Timer`, or `atexit` behavior. These remain manual cloud acceptance items.
+
+## 聚宽冒烟验收记录（2026-05-24）
+
+- Run tag: `20260524-204724`
+- 聚宽临时策略：自动创建空白策略，`algorithmId=1408ed244439c861b18797baafaa6e46`。
+- 工具加载方式：用户已将 `.local/jq-feishu-smoke/FeishuRelayTools.success.py` 上传到聚宽研究环境根目录；冒烟策略通过 `read_file("FeishuRelayTools.success.py")` 动态加载为 `FeishuRelayTools` 模块。
+- 本地前置检查：`.venv` 提权运行 `pytest scripts\joinquant_tools\tests -q` 通过，结果 `47 passed`；`.venv` 提权运行 `py_compile` 检查公共模板和私有上传版通过。
+- Success run: `feishu-smoke-success-20260524-204724`，backtest_id `62447fc5326f8522a21e0c797864d27b`，URL `https://www.joinquant.com/algorithm/backtest/detail?backtestId=62447fc5326f8522a21e0c797864d27b`。日志证据：包装下单函数 `4` 个，`FEISHU_SMOKE_ORDER_RESULT OK security=510300.XSHG`，`events_pending=2 events_acked=2 unacked=0`，平台日志 `ERROR=0`；成交 1 笔，510300.XSHG 买入 2400 股。
+- Failure run: `feishu-smoke-failure-20260524-204724`，backtest_id `01939835093ee6cadcb495fcc70cb065`，URL `https://www.joinquant.com/algorithm/backtest/detail?backtestId=01939835093ee6cadcb495fcc70cb065`。日志证据：策略完成且 `ERROR=0`，订单仍正常成交；无效 hook 返回 `http=200 code=19001`；回测结束后按 outbox 最新状态统计为 `events_pending=5 events_acked=4 unacked=1`。
+- Replay run: `feishu-smoke-replay-20260524-204724`，backtest_id `df6c9c9da9d8736e05879a83ed0cc523`，URL `https://www.joinquant.com/algorithm/backtest/detail?backtestId=df6c9c9da9d8736e05879a83ed0cc523`。日志证据：`transactioninfo` 无成交，日志仅输出 `FEISHU_SMOKE_REPLAY_NO_ORDER`；outbox 回到 `events_pending=5 events_acked=5 unacked=0`。
+- 飞书接收时间：自动化侧无法读取飞书群 UI；已通过 Feishu HTTP ack 与 outbox ack 证明聚宽云端发送链路跑通，群内接收时间待人工补录。
+- 提取说明：本次使用 `result_source=detail`，产物完整保留平台日志和成交明细；`integrity.json` 标记 `incomplete` 是因为未生成 research bundle 和策略侧 `audit_log.jsonl`，不影响本次飞书通知冒烟结论。
+- 安全记录：验收记录未保存 webhook、secret、完整签名或完整机器人 URL。
+
+## 聚宽双策略冒烟验收记录（2026-05-24）
+
+- Run tag: `20260524-dual-3`
+- 前置：已在聚宽研究环境根目录将用户上传的 `FeishuRelayTools.success.py` 复制为 `FeishuRelayTools.py`；双策略测试源码使用普通 `import FeishuRelayTools`，不再通过 `read_file` 或路径 loader 加载工具文件。
+- Alpha run: `feishu-smoke-dual-alpha-20260524-dual-3`，策略名 `FeishuDualA-20260524-dual-3`，backtest_id `29141130a775c2e5eb972098b20f7a45`，URL `https://www.joinquant.com/algorithm/backtest/detail?backtestId=29141130a775c2e5eb972098b20f7a45`。日志证据：包装下单函数 `4` 个，`FEISHU_DUAL_ORDER_RESULT OK mode=alpha security=510300.XSHG target=10000`，回测内 outbox 快照 `events_pending=2 events_acked=2 unacked=0`，最终远端 outbox 文件 `FeishuDualA-20260524-dual-3.jsonl` 为 `pending=3 acked=3 unacked=0`。
+- Beta run: `feishu-smoke-dual-beta-20260524-dual-3`，策略名 `FeishuDualB-20260524-dual-3`，backtest_id `d0ba4e699588513eff2f324de672e993`，URL `https://www.joinquant.com/algorithm/backtest/detail?backtestId=d0ba4e699588513eff2f324de672e993`。日志证据：包装下单函数 `4` 个，`FEISHU_DUAL_ORDER_RESULT OK mode=beta security=510300.XSHG target=16000`，回测内 outbox 快照 `events_pending=2 events_acked=2 unacked=0`，最终远端 outbox 文件 `FeishuDualB-20260524-dual-3.jsonl` 为 `pending=3 acked=3 unacked=0`。
+- 隔离结论：两个策略使用不同 `STRATEGY_NAME` 和不同 outbox 文件，最终均 ack 且 `unacked=0`，未观察到 outbox 串写或策略名串用。
+- 并发提交说明：尝试过两个自动化并发路径：两个复制 Chrome profile 同时运行 `jq_automation run`、同一个已登录上下文双页面顺序编译后同时启动；两者均在聚宽编译等待阶段返回空白 `CompileFailed`，未形成可用回测结果。因此本条记录证明“双策略名独立发送与持久化隔离”通过，但“严格同时提交两个聚宽正式回测”尚未由自动化证明。
+- 安全记录：验收记录未保存 webhook、secret、完整签名或完整机器人 URL。

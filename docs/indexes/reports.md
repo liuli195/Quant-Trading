@@ -2,18 +2,20 @@
 
 | category | strategy | title | path | pathrefs |
 | --- | --- | --- | --- | ---: |
-| docs |  | 文档入口 | `docs/README.md` | 18 |
+| docs |  | 文档入口 | `docs/README.md` | 19 |
 | docs |  | ADR 0001: 规则来源和治理模型 | `docs/adr/0001-rule-source-and-governance-model.md` | 6 |
 | docs |  | ADR 0002: 多 AI Agent 并行工作使用 Git 分支 | `docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md` | 0 |
 | docs |  | ADR 0003: Governance Gate 和主干保护 | `docs/adr/0003-governance-gate-and-main-branch-protection.md` | 0 |
 | docs |  | ADR 0004: 使用官方 Codex Code Review 作为 PR 评审门禁 | `docs/adr/0004-codex-code-review-governance.md` | 7 |
 | docs |  | ADR 0005: AI 入口采用渐进式披露 | `docs/adr/0005-ai-entry-progressive-disclosure.md` | 9 |
+| docs |  | ADR 0006: PR 风险分级评审流程 | `docs/adr/0006-risk-tiered-pr-review.md` | 0 |
 | docs |  | 本地研究平台架构 | `docs/architecture/research-platform-architecture.md` | 19 |
 | docs |  | CC-Switch CLI | `docs/cc-switch-cli.md` | 0 |
 | docs |  | 跨 AI 工具 Skill 管理实施计划 | `docs/design/cross-ai-skill-management.md` | 20 |
 | docs |  | 本地研究平台重构 | `docs/design/本地研究平台重构.md` | 0 |
 | docs |  | 本地研究平台重构技术实施方案 | `docs/design/本地研究平台重构技术实施方案.md` | 6 |
 | docs |  | 长期项目防止开发规则漂移方案 | `docs/design/长期项目防止开发规则漂移方案.md` | 8 |
+| docs |  | 飞书交易通知工具使用说明 | `docs/guides/feishu-relay-tools.md` | 2 |
 | docs |  | 本地 Python 环境说明 | `docs/guides/local-python-env.md` | 1 |
 | docs |  | 旧研究项目迁移指南 | `docs/guides/research-workflow-migration.md` | 0 |
 | docs |  | 本地优先研究流程 | `docs/guides/research-workflow.md` | 8 |
@@ -41,8 +43,11 @@
 | docs |  | 仓库规则总索引 | `docs/rules/index.md` | 16 |
 | docs |  | PR 工作流规则 | `docs/rules/pr-workflow.md` | 2 |
 | docs |  | 研究流程规则 | `docs/rules/research-workflow.md` | 0 |
-| docs |  | Codex Code Review 指南 | `docs/rules/review-guidelines.md` | 11 |
+| docs |  | PR Review 指南 | `docs/rules/review-guidelines.md` | 10 |
 | docs |  | 回测数据冗余压缩实施计划 | `docs/superpowers/plans/2026-05-20-backtest-data-redundancy-compaction.md` | 7 |
+| docs |  | Feishu Relay Tools Implementation Plan | `docs/superpowers/plans/2026-05-20-feishu-relay-tools-implementation.md` | 5 |
+| docs |  | PR 风险分级评审流程 Implementation Plan | `docs/superpowers/plans/2026-05-20-pr-risk-tiered-review-workflow.md` | 1 |
+| docs |  | 飞书交易通知工具设计 | `docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md` | 2 |
 | backtest_run | etf_dynamic_rebalance | 回测归因分析 — ETF 动态调仓策略 | `strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/attribution-analysis.md` | 0 |
 | backtest_run | etf_dynamic_rebalance | 回测报告 — ETF 动态调仓策略 | `strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/backtest_report.md` | 3 |
 | backtest_run | etf_dynamic_rebalance | 性能分析报告 — ETF 动态调仓策略 | `strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/performance-analysis.md` | 0 |
@@ -358,6 +363,18 @@
 | test_batch | etf_factor_rotation | ab-momentum-extreme-ab-comparison | `strategies/etf_factor_rotation/test_batches/20260517-momentum-extreme-ab/report/ab-momentum-extreme-ab-comparison.md` | 2 |
 | test_batch | etf_factor_rotation | 动量分桶检查 | `strategies/etf_factor_rotation/test_batches/20260517-momentum-extreme-ab/report/momentum-bucket-check.md` | 2 |
 | test_batch | etf_factor_rotation | AB 对比报告: momentum-strength-confirmation | `strategies/etf_factor_rotation/test_batches/20260517-momentum-strength-confirmation/report/ab-momentum-strength-confirmation-comparison.md` | 0 |
+| backtest_run | feishu_relay_smoke | 回测数据汇总 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-alpha-20260524-dual-2/report/backtest_report.md` | 0 |
+| backtest_run | feishu_relay_smoke | 数据完整性报告 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-alpha-20260524-dual-2/report/data-integrity.md` | 0 |
+| backtest_run | feishu_relay_smoke | 回测数据汇总 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-alpha-20260524-dual-3/report/backtest_report.md` | 0 |
+| backtest_run | feishu_relay_smoke | 数据完整性报告 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-alpha-20260524-dual-3/report/data-integrity.md` | 0 |
+| backtest_run | feishu_relay_smoke | 回测数据汇总 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-beta-20260524-dual-3/report/backtest_report.md` | 0 |
+| backtest_run | feishu_relay_smoke | 数据完整性报告 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-beta-20260524-dual-3/report/data-integrity.md` | 0 |
+| backtest_run | feishu_relay_smoke | 回测数据汇总 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-failure-20260524-204724/report/backtest_report.md` | 0 |
+| backtest_run | feishu_relay_smoke | 数据完整性报告 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-failure-20260524-204724/report/data-integrity.md` | 0 |
+| backtest_run | feishu_relay_smoke | 回测数据汇总 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-replay-20260524-204724/report/backtest_report.md` | 0 |
+| backtest_run | feishu_relay_smoke | 数据完整性报告 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-replay-20260524-204724/report/data-integrity.md` | 0 |
+| backtest_run | feishu_relay_smoke | 回测数据汇总 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-success-20260524-204724/report/backtest_report.md` | 0 |
+| backtest_run | feishu_relay_smoke | 数据完整性报告 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-success-20260524-204724/report/data-integrity.md` | 0 |
 | backtest_run | ma_crossover | 回测数据汇总 | `strategies/ma_crossover/backtest_runs/20260505-1939-bt48ef4a644906d1ada69ba04637aa4bb6/report/backtest_report.md` | 0 |
 | backtest_run | ma_crossover | 性能分析报告 — ma_crossover (s01-baseline) | `strategies/ma_crossover/backtest_runs/20260505-1939-bt48ef4a644906d1ada69ba04637aa4bb6/report/performance-analysis.md` | 0 |
 | backtest_run | ma_crossover | 策略分析报告 — ma_crossover (s01-baseline) | `strategies/ma_crossover/backtest_runs/20260505-1939-bt48ef4a644906d1ada69ba04637aa4bb6/report/strategy-analysis.md` | 0 |

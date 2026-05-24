@@ -1,0 +1,574 @@
+{
+  "metadata": {
+    "schema_version": 2,
+    "strategy": "feishu_relay_smoke",
+    "strategy_name": "飞书通知冒烟",
+    "backtest_id": "df6c9c9da9d8736e05879a83ed0cc523",
+    "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=df6c9c9da9d8736e05879a83ed0cc523",
+    "generated_at": "2026-05-24T13:11:31.682Z",
+    "start_date_effective": "2025-01-02",
+    "end_date_effective": "2025-01-03",
+    "capital": 100000,
+    "frequency": "1d",
+    "py_version": "Python3",
+    "extraction_method": "joinquant_detail_readonly_api",
+    "export_used": false,
+    "internal_backtest_id": "14f4bbabc46a86c265bde92c567a888f",
+    "id_mismatch": true
+  },
+  "stats": {
+    "data": {
+      "trading_days": 2,
+      "benchmark_volatility": 0.19938443625787,
+      "algorithm_volatility": 0,
+      "treasury_return": 0.00010958904109589,
+      "algorithm_return": 0,
+      "benchmark_return": -0.037883467160799,
+      "annual_algo_return": 0,
+      "annual_bm_return": -0.99199318684736,
+      "sharpe": 0,
+      "excess_return_sharpe": "597.648",
+      "sortino": 0,
+      "information": 4.9752789408516,
+      "beta": 0,
+      "alpha": -0.04,
+      "excess_return": 0.039375133747058,
+      "avg_excess_return": "1.95%",
+      "max_drawdown": 0,
+      "max_drawdown_period": [
+        "2025-01-02",
+        "2025-01-02"
+      ],
+      "excess_return_max_drawdown": "0.00%",
+      "excess_return_max_drawdown_period": [
+        "2025-01-02",
+        "2025-01-02"
+      ],
+      "max_leverage": 0,
+      "period_label": "2025-01",
+      "__version": 101,
+      "win_ratio": 0,
+      "profit_loss_ratio": 0,
+      "win_count": 0,
+      "lose_count": 0,
+      "day_win_ratio": 1,
+      "avg_trade_return": 0,
+      "avg_position_days": 0,
+      "turnover_rate": 0,
+      "report_done_seconds": 0.097630500793457,
+      "report_done_cpu_seconds": 3.24
+    },
+    "status": "0",
+    "code": "00000",
+    "msg": ""
+  },
+  "result_pages": [
+    {
+      "benchmark": {
+        "time": [
+          1735804800000,
+          1735891200000
+        ],
+        "value": [
+          -2.8,
+          -3.79
+        ]
+      },
+      "overallReturn": {
+        "time": [
+          1735804800000,
+          1735891200000
+        ],
+        "value": [
+          0,
+          0
+        ]
+      },
+      "gains": {
+        "earn": {
+          "time": [
+            1735804800000,
+            1735891200000
+          ],
+          "value": [
+            0,
+            0
+          ]
+        },
+        "lose": {
+          "time": [
+            1735804800000,
+            1735891200000
+          ],
+          "value": [
+            0,
+            0
+          ]
+        }
+      },
+      "orders": {
+        "buy": {
+          "time": [
+            1735804800000,
+            1735891200000
+          ],
+          "value": [
+            0,
+            0
+          ]
+        },
+        "sell": {
+          "time": [
+            1735804800000,
+            1735891200000
+          ],
+          "value": [
+            0,
+            0
+          ]
+        }
+      },
+      "count": 2,
+      "offset": "0"
+    }
+  ],
+  "result_page_meta": [
+    {
+      "page": 0,
+      "offset": 0,
+      "count": 2
+    }
+  ],
+  "day_result": {
+    "data": {
+      "state": "2",
+      "result": {
+        "benchmark": {
+          "time": [],
+          "value": []
+        },
+        "overallReturn": {
+          "time": [],
+          "value": []
+        },
+        "count": 0,
+        "offset": 0
+      }
+    },
+    "status": "0",
+    "code": "00000",
+    "msg": ""
+  },
+  "risk": {
+    "data": {
+      "risk": {
+        "algorithmPeriodReturn": [
+          {
+            "date": "2025-01",
+            "1month": 0,
+            "3month": "N/A",
+            "6month": "N/A",
+            "12month": "N/A"
+          }
+        ],
+        "benchmarkPeriodReturn": [
+          {
+            "date": "2025-01",
+            "1month": -0.037883467160799,
+            "3month": "N/A",
+            "6month": "N/A",
+            "12month": "N/A"
+          }
+        ],
+        "alpha": [
+          {
+            "date": "2025-01",
+            "1month": -0.04,
+            "3month": "N/A",
+            "6month": "N/A",
+            "12month": "N/A"
+          }
+        ],
+        "beta": [
+          {
+            "date": "2025-01",
+            "1month": 0,
+            "3month": "N/A",
+            "6month": "N/A",
+            "12month": "N/A"
+          }
+        ],
+        "sharp": [
+          {
+            "date": "2025-01",
+            "1month": 0,
+            "3month": "N/A",
+            "6month": "N/A",
+            "12month": "N/A"
+          }
+        ],
+        "sortino": [
+          {
+            "date": "2025-01",
+            "1month": 0,
+            "3month": "N/A",
+            "6month": "N/A",
+            "12month": "N/A"
+          }
+        ],
+        "information": [
+          {
+            "date": "2025-01",
+            "1month": 4.9752789408516,
+            "3month": "N/A",
+            "6month": "N/A",
+            "12month": "N/A"
+          }
+        ],
+        "algovolatility": [
+          {
+            "date": "2025-01",
+            "1month": 0,
+            "3month": "N/A",
+            "6month": "N/A",
+            "12month": "N/A"
+          }
+        ],
+        "benchmarkvolatility": [
+          {
+            "date": "2025-01",
+            "1month": 0.19938443625787,
+            "3month": "N/A",
+            "6month": "N/A",
+            "12month": "N/A"
+          }
+        ],
+        "maxdrawdown": [
+          {
+            "date": "2025-01",
+            "1month": 0,
+            "3month": "N/A",
+            "6month": "N/A",
+            "12month": "N/A"
+          }
+        ]
+      }
+    },
+    "status": "0",
+    "code": "00000",
+    "msg": ""
+  },
+  "runtime": {
+    "data": {
+      "startTime": "2025-01-02 00:00:00",
+      "endTime": "2025-01-03 23:59:59",
+      "addTime": "2026-05-24 21:11:17",
+      "cancelTime": "0000-00-00 00:00:00",
+      "currentTime": "2026-05-24 21:11:25",
+      "runStartTime": "2026-05-24 21:11:21",
+      "needSeconds": 3.24,
+      "untilNowSec": "00分03秒",
+      "creditsLog": [],
+      "status": "2"
+    },
+    "status": "0",
+    "code": "00000",
+    "msg": ""
+  },
+  "source": {
+    "data": {
+      "source": "JQ_AUTO_AUDIT_TOKEN = 'feishu_relay_smoke-feishu-smoke-replay-20260524211106-3d6df00a'\nimport json\nimport sys\nimport types\ndef _load_feishu_tools():\n    try:\n        import FeishuRelayTools as module\n        return module\n    except Exception:\n        module = types.ModuleType(\"FeishuRelayTools\")\n        sys.modules[\"FeishuRelayTools\"] = module\n        source = read_file(\"FeishuRelayTools.success.py\")\n        if isinstance(source, bytes):\n            source = source.decode(\"utf-8\")\n        exec(source, module.__dict__)\n        return module\nFeishuRelayTools = _load_feishu_tools()\nSMOKE_MODE = 'replay'\nSMOKE_STRATEGY_NAME = '飞书通知冒烟-20260524-204724'\nSMOKE_OUTBOX_PATH = FeishuRelayTools._resolve_outbox_path(FeishuRelayTools.CURRENT_STRATEGY_NAME)\ndef initialize(context):\n    set_benchmark(\"510300.XSHG\")\n    set_option(\"use_real_price\", True)\n    g.feishu_smoke_ordered = False\n    log.info(\n        \"FEISHU_SMOKE_INIT mode=%s strategy=%s outbox=%s wrapped=%s\"\n        % (\n            SMOKE_MODE,\n            FeishuRelayTools.CURRENT_STRATEGY_NAME,\n            SMOKE_OUTBOX_PATH,\n            getattr(FeishuRelayTools, \"_wrapped_count\", \"NA\"),\n        )\n    )\n    run_daily(smoke_order, time=\"09:35\", reference_security=\"510300.XSHG\")\n    run_daily(smoke_snapshot, time=\"14:55\", reference_security=\"510300.XSHG\")\ndef smoke_order(context):\n    log.info(\"FEISHU_SMOKE_REPLAY_NO_ORDER\")\ndef _outbox_stats():\n    text = read_file(SMOKE_OUTBOX_PATH) or \"\"\n    pending_batches = set()\n    acked_batches = set()\n    pending_events = 0\n    acked_events = 0\n    for line in text.splitlines():\n        line = line.strip()\n        if not line:\n            continue\n        try:\n            row = json.loads(line)\n        except Exception:\n            continue\n        batch_id = row.get(\"batch_id\")\n        status = row.get(\"status\")\n        if not batch_id:\n            continue\n        if status == \"pending\":\n            pending_events += 1\n            pending_batches.add(batch_id)\n        elif status == \"acked\":\n            acked_events += 1\n            acked_batches.add(batch_id)\n    unacked = sorted(pending_batches - acked_batches)\n    return pending_events, acked_events, len(unacked), \",\".join(unacked[-3:])\ndef smoke_snapshot(context):\n    try:\n        pending_events, acked_events, unacked_count, sample = _outbox_stats()\n        log.info(\n            \"FEISHU_SMOKE_OUTBOX mode=%s events_pending=%s events_acked=%s unacked=%s sample=%s\"\n            % (SMOKE_MODE, pending_events, acked_events, unacked_count, sample)\n        )\n        log.info(\"FEISHU_SMOKE_WRAPPED_COUNT %s\" % getattr(FeishuRelayTools, \"_wrapped_count\", \"NA\"))\n    except Exception as exc:\n        log.error(\"FEISHU_SMOKE_OUTBOX_READ_ERROR %s\" % exc)"
+    },
+    "status": "0",
+    "code": "00000",
+    "msg": ""
+  },
+  "profile_text": "{\"data\":{\"state\":\"2\",\"profile\":\"\"},\"status\":\"0\",\"code\":\"00000\",\"msg\":\"\"}",
+  "transactions": {
+    "rows": [],
+    "pages": [
+      {
+        "page": 0,
+        "query": "/algorithm/backtest/transactionInfo?backtestId=14f4bbabc46a86c265bde92c567a888f&ajax=1",
+        "count": 0,
+        "offset": 0,
+        "dateOffset": null,
+        "max": false,
+        "firstDate": null,
+        "lastDate": null
+      }
+    ],
+    "partial": false
+  },
+  "positions": {
+    "rows": [
+      {
+        "date": "2025-01-02",
+        "time": "15:15:00",
+        "security": "",
+        "stock": "<span class=\"label label-cash\">Cash</span>",
+        "side": "",
+        "amount": "",
+        "closeableAmount": "",
+        "price": "",
+        "value": 100000,
+        "gain": "",
+        "avgCost": "",
+        "holdCost": "",
+        "margin": "",
+        "dailyGains": "",
+        "todayAmount": "",
+        "gainPercentStr": "",
+        "totalValue": 0
+      },
+      {
+        "date": "2025-01-03",
+        "time": "15:15:00",
+        "security": "",
+        "stock": "<span class=\"label label-cash\">Cash</span>",
+        "side": "",
+        "amount": "",
+        "closeableAmount": "",
+        "price": "",
+        "value": 100000,
+        "gain": "",
+        "avgCost": "",
+        "holdCost": "",
+        "margin": "",
+        "dailyGains": "",
+        "todayAmount": "",
+        "gainPercentStr": "",
+        "totalValue": 0
+      }
+    ],
+    "pages": [
+      {
+        "page": 0,
+        "query": "/algorithm/backtest/positionInfo?backtestId=14f4bbabc46a86c265bde92c567a888f&ajax=1",
+        "count": 2,
+        "added": 2,
+        "max": false,
+        "firstDate": "2025-01-02",
+        "lastDate": "2025-01-03"
+      }
+    ],
+    "partial": false,
+    "method": "dateOffset segmented without export"
+  },
+  "logs": {
+    "rows": [
+      "2025-01-02 00:00:00 - INFO  - [FeishuRelayTools] 已包装 user_code.order",
+      "2025-01-02 00:00:00 - INFO  - [FeishuRelayTools] 已包装 user_code.order_value",
+      "2025-01-02 00:00:00 - INFO  - [FeishuRelayTools] 已包装 user_code.order_target",
+      "2025-01-02 00:00:00 - INFO  - [FeishuRelayTools] 已包装 user_code.order_target_value",
+      "2025-01-02 00:00:00 - INFO  - [FeishuRelayTools] 初始化完成，策略“飞书通知冒烟-20260524-204724”已包装 4 个下单函数。",
+      "2025-01-02 00:00:00 - INFO  - FEISHU_SMOKE_INIT mode=replay strategy=飞书通知冒烟-20260524-204724 outbox=feishu_relay_outbox/飞书通知冒烟-20260524-204724.jsonl wrapped=4",
+      "2025-01-02 09:35:00 - INFO  - FEISHU_SMOKE_REPLAY_NO_ORDER",
+      "2025-01-02 14:55:00 - INFO  - FEISHU_SMOKE_OUTBOX mode=replay events_pending=5 events_acked=5 unacked=0 sample=",
+      "2025-01-02 14:55:00 - INFO  - FEISHU_SMOKE_WRAPPED_COUNT 4",
+      "2025-01-03 09:35:00 - INFO  - FEISHU_SMOKE_REPLAY_NO_ORDER",
+      "2025-01-03 14:55:00 - INFO  - FEISHU_SMOKE_OUTBOX mode=replay events_pending=5 events_acked=5 unacked=0 sample=",
+      "2025-01-03 14:55:00 - INFO  - FEISHU_SMOKE_WRAPPED_COUNT 4"
+    ],
+    "pages": [
+      {
+        "page": 0,
+        "query": "/algorithm/backtest/log?backtestId=14f4bbabc46a86c265bde92c567a888f&offset=0&ajax=1",
+        "count": 12,
+        "offset": 0,
+        "responseOffset": 0,
+        "max": false
+      },
+      {
+        "page": 1,
+        "query": "/algorithm/backtest/log?backtestId=14f4bbabc46a86c265bde92c567a888f&offset=12&ajax=1",
+        "count": 0,
+        "offset": 12,
+        "responseOffset": 12,
+        "max": false
+      }
+    ],
+    "partial": false
+  },
+  "error_logs": {
+    "rows": [],
+    "pages": [
+      {
+        "page": 0,
+        "query": "/algorithm/backtest/error?backtestId=14f4bbabc46a86c265bde92c567a888f&offset=0&ajax=1",
+        "count": 0,
+        "offset": 0,
+        "responseOffset": null,
+        "max": false
+      }
+    ],
+    "partial": false
+  },
+  "result_rows": [
+    {
+      "date": "2025-01-02",
+      "algorithm_return_value": 0,
+      "benchmark_return_value": -2.8,
+      "gains_earn": 0,
+      "gains_lose": 0,
+      "orders_buy": 0,
+      "orders_sell": 0
+    },
+    {
+      "date": "2025-01-03",
+      "algorithm_return_value": 0,
+      "benchmark_return_value": -3.79,
+      "gains_earn": 0,
+      "gains_lose": 0,
+      "orders_buy": 0,
+      "orders_sell": 0
+    }
+  ],
+  "risk_tabs": {
+    "algorithm_period_return": {
+      "label": "策略收益",
+      "source_key": "algorithmPeriodReturn",
+      "rows": [
+        {
+          "date": "2025-01",
+          "1month": 0,
+          "3month": "N/A",
+          "6month": "N/A",
+          "12month": "N/A"
+        }
+      ]
+    },
+    "benchmark_period_return": {
+      "label": "基准收益",
+      "source_key": "benchmarkPeriodReturn",
+      "rows": [
+        {
+          "date": "2025-01",
+          "1month": -0.037883467160799,
+          "3month": "N/A",
+          "6month": "N/A",
+          "12month": "N/A"
+        }
+      ]
+    },
+    "alpha": {
+      "label": "阿尔法",
+      "source_key": "alpha",
+      "rows": [
+        {
+          "date": "2025-01",
+          "1month": -0.04,
+          "3month": "N/A",
+          "6month": "N/A",
+          "12month": "N/A"
+        }
+      ]
+    },
+    "beta": {
+      "label": "贝塔",
+      "source_key": "beta",
+      "rows": [
+        {
+          "date": "2025-01",
+          "1month": 0,
+          "3month": "N/A",
+          "6month": "N/A",
+          "12month": "N/A"
+        }
+      ]
+    },
+    "sharpe": {
+      "label": "夏普比率",
+      "source_key": "sharp",
+      "rows": [
+        {
+          "date": "2025-01",
+          "1month": 0,
+          "3month": "N/A",
+          "6month": "N/A",
+          "12month": "N/A"
+        }
+      ]
+    },
+    "sortino": {
+      "label": "索提诺比率",
+      "source_key": "sortino",
+      "rows": [
+        {
+          "date": "2025-01",
+          "1month": 0,
+          "3month": "N/A",
+          "6month": "N/A",
+          "12month": "N/A"
+        }
+      ]
+    },
+    "information": {
+      "label": "信息比率",
+      "source_key": "information",
+      "rows": [
+        {
+          "date": "2025-01",
+          "1month": 4.9752789408516,
+          "3month": "N/A",
+          "6month": "N/A",
+          "12month": "N/A"
+        }
+      ]
+    },
+    "algo_volatility": {
+      "label": "波动率",
+      "source_key": "algovolatility",
+      "rows": [
+        {
+          "date": "2025-01",
+          "1month": 0,
+          "3month": "N/A",
+          "6month": "N/A",
+          "12month": "N/A"
+        }
+      ]
+    },
+    "benchmark_volatility": {
+      "label": "基准波动率",
+      "source_key": "benchmarkvolatility",
+      "rows": [
+        {
+          "date": "2025-01",
+          "1month": 0.19938443625787,
+          "3month": "N/A",
+          "6month": "N/A",
+          "12month": "N/A"
+        }
+      ]
+    },
+    "max_drawdown": {
+      "label": "最大回撤",
+      "source_key": "maxdrawdown",
+      "rows": [
+        {
+          "date": "2025-01",
+          "1month": 0,
+          "3month": "N/A",
+          "6month": "N/A",
+          "12month": "N/A"
+        }
+      ]
+    }
+  },
+  "counts": {
+    "transactions": 0,
+    "positions": 2,
+    "logs": 12,
+    "error_logs": 0,
+    "result_rows": 2,
+    "result_pages": 1,
+    "risk_rows": 10
+  },
+  "partial": {
+    "transactions": false,
+    "positions": false,
+    "logs": false,
+    "results": false
+  }
+}

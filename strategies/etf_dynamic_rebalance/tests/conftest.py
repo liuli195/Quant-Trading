@@ -35,6 +35,7 @@ _mock_jqlib.technical_analysis = _mock_jqlib_ta
 
 sys.modules['jqlib'] = _mock_jqlib
 sys.modules['jqlib.technical_analysis'] = _mock_jqlib_ta
+sys.modules['FeishuRelayTools'] = MagicMock()
 
 # 策略文件第 1 行调用 enable_profile()，必须提前注入
 builtins.enable_profile = Mock()

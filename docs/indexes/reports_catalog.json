@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "catalog_type": "reports",
-  "generated_at": "2026-05-19T20:29:02+00:00",
-  "count": 327,
+  "generated_at": "2026-05-24T15:41:42+00:00",
+  "count": 339,
   "reports": [
     {
       "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/attribution-analysis.md",
@@ -3522,6 +3522,126 @@
       "tags": [],
       "pathrefs": [],
       "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-alpha-20260524-dual-2/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "feishu_relay_smoke",
+      "date": "2025-01-02",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-24T13:26:58+00:00"
+    },
+    {
+      "path": "strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-alpha-20260524-dual-2/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "feishu_relay_smoke",
+      "date": "2026-05-24",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-24T13:26:58+00:00"
+    },
+    {
+      "path": "strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-alpha-20260524-dual-3/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "feishu_relay_smoke",
+      "date": "2025-01-02",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-24T13:29:05+00:00"
+    },
+    {
+      "path": "strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-alpha-20260524-dual-3/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "feishu_relay_smoke",
+      "date": "2026-05-24",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-24T13:29:05+00:00"
+    },
+    {
+      "path": "strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-beta-20260524-dual-3/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "feishu_relay_smoke",
+      "date": "2025-01-02",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-24T13:30:14+00:00"
+    },
+    {
+      "path": "strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-beta-20260524-dual-3/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "feishu_relay_smoke",
+      "date": "2026-05-24",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-24T13:30:14+00:00"
+    },
+    {
+      "path": "strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-failure-20260524-204724/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "feishu_relay_smoke",
+      "date": "2025-01-02",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-24T13:04:32+00:00"
+    },
+    {
+      "path": "strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-failure-20260524-204724/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "feishu_relay_smoke",
+      "date": "2026-05-24",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-24T13:04:32+00:00"
+    },
+    {
+      "path": "strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-replay-20260524-204724/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "feishu_relay_smoke",
+      "date": "2025-01-02",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-24T13:11:31+00:00"
+    },
+    {
+      "path": "strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-replay-20260524-204724/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "feishu_relay_smoke",
+      "date": "2026-05-24",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-24T13:11:31+00:00"
+    },
+    {
+      "path": "strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-success-20260524-204724/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "feishu_relay_smoke",
+      "date": "2025-01-02",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-24T13:03:33+00:00"
+    },
+    {
+      "path": "strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-success-20260524-204724/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "feishu_relay_smoke",
+      "date": "2026-05-24",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-24T13:03:33+00:00"
     },
     {
       "path": "strategies/ma_crossover/backtest_runs/20260505-1939-bt48ef4a644906d1ada69ba04637aa4bb6/report/backtest_report.md",

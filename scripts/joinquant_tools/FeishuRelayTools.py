@@ -108,6 +108,14 @@ def _resolve_file_api(name):
 def _get_strategy_name(strategy_file="/tmp/strategy/user_code.py"):
     if STRATEGY_NAME:
         return STRATEGY_NAME
+    user_code = sys.modules.get("user_code")
+    if user_code is not None:
+        try:
+            strategy_name = getattr(user_code, "STRATEGY_NAME", "")
+        except Exception:
+            strategy_name = ""
+        if strategy_name:
+            return str(strategy_name)
     if os.path.exists(strategy_file):
         try:
             with open(strategy_file, "r", encoding="utf-8") as handle:
@@ -143,22 +151,89 @@ def _format_time(value):
 
 def _get_security_name(security, get_security_info_func=None):
     if get_security_info_func is None:
-        get_security_info_func = globals().get("get_security_info")
+        get_security_info_func = _resolve_get_security_info_func()
     if get_security_info_func is None:
         return ""
     try:
         info = get_security_info_func(security)
+        if isinstance(info, dict):
+            return info.get("display_name") or info.get("name") or ""
         return getattr(info, "display_name", "") or ""
     except Exception:
         return ""
 
 
-def _summarize_order(order_obj, strategy_name=None, get_security_info_func=None):
+def _resolve_get_security_info_func():
+    direct_func = globals().get("get_security_info")
+    if callable(direct_func):
+        return direct_func
+    for module_name in ("kuanke.user_space_api", "user_code", "__main__"):
+        module = sys.modules.get(module_name)
+        if module is None:
+            continue
+        try:
+            func = getattr(module, "get_security_info", None)
+        except Exception:
+            continue
+        if callable(func):
+            return func
+    return None
+
+
+def _to_float(value):
+    if value == "" or value is None:
+        return None
+    try:
+        return float(value)
+    except Exception:
+        return None
+
+
+def _format_decimal(value, digits=2):
+    numeric = _to_float(value)
+    if numeric is None:
+        return str(value) if value is not None else "--"
+    text = ("%%.%sf" % int(digits)) % numeric
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text
+
+
+def _signed_number(value, is_buy):
+    numeric = _to_float(value)
+    if numeric is None:
+        return value
+    sign = 1 if is_buy else -1
+    return abs(numeric) * sign
+
+
+def _format_percent(value):
+    numeric = _to_float(value)
+    if numeric is None:
+        return "--"
+    return "%s%%" % _format_decimal(numeric * 100, 2)
+
+
+def _calculate_trade_value(order_obj, amount, price, call_context):
+    value = _safe_value(order_obj, "value", None)
+    if value in ("", None) and call_context:
+        value = call_context.get("trade_value")
+    if value not in ("", None):
+        return value
+    amount_float = _to_float(amount)
+    price_float = _to_float(price)
+    if amount_float is None or price_float is None:
+        return None
+    return amount_float * price_float
+
+
+def _summarize_order(order_obj, strategy_name=None, get_security_info_func=None, call_context=None):
     security = str(_safe_value(order_obj, "security", ""))
     is_buy = bool(_safe_value(order_obj, "is_buy", False))
     amount = _safe_value(order_obj, "amount", "")
     price = _safe_value(order_obj, "price", "")
     order_time = _safe_value(order_obj, "add_time", None)
+    call_context = call_context or {}
     return {
         "time": _format_time(order_time),
         "action": "买入" if is_buy else "卖出",
@@ -166,22 +241,27 @@ def _summarize_order(order_obj, strategy_name=None, get_security_info_func=None)
         "security": security,
         "amount": amount,
         "price": price,
+        "signed_amount": _signed_number(amount, is_buy),
+        "trade_value": _signed_number(_calculate_trade_value(order_obj, amount, price, call_context), is_buy),
+        "target_weight": call_context.get("target_weight"),
         "strategy": strategy_name or CURRENT_STRATEGY_NAME,
     }
 
 
 def _format_order_summary(summary):
     if summary.get("name"):
-        name_part = "%s(%s)" % (summary.get("name"), summary.get("security"))
+        name_part = "%s-%s" % (summary.get("name"), summary.get("security"))
     else:
         name_part = summary.get("security")
-    return "[%s] 【%s】%s %s %s股 价格:%s" % (
+    return "[%s] 【%s】【%s】 “%s” 数量：%s股，价格：%s，总金额：%s，目标仓位：%s" % (
         summary.get("time", ""),
         summary.get("strategy", ""),
         summary.get("action", ""),
         name_part,
-        summary.get("amount", ""),
-        summary.get("price", ""),
+        _format_decimal(summary.get("signed_amount", summary.get("amount", "")), 0),
+        _format_decimal(summary.get("price", ""), 4),
+        _format_decimal(summary.get("trade_value"), 2),
+        _format_percent(summary.get("target_weight")),
     )
 
 
@@ -425,22 +505,86 @@ class _FeishuSender:
         timer.start()
 
 
-def _wrap_order_function(func, report_func=None):
+def _get_arg(args, kwargs, index, names):
+    if len(args) > index:
+        return args[index]
+    for name in names:
+        if name in kwargs:
+            return kwargs[name]
+    return None
+
+
+def _frame_portfolio_total_value(frame):
+    if frame is None:
+        return None
+    locals_dict = getattr(frame, "f_locals", {})
+    for name in ("account_value", "total_value"):
+        total = _to_float(locals_dict.get(name))
+        if total is not None:
+            return total
+    for name in ("context", "ctx"):
+        context = locals_dict.get(name)
+        portfolio = getattr(context, "portfolio", None)
+        total = _to_float(getattr(portfolio, "total_value", None))
+        if total is not None:
+            return total
+    portfolio = locals_dict.get("portfolio")
+    total = _to_float(getattr(portfolio, "total_value", None))
+    if total is not None:
+        return total
+    return None
+
+
+def _build_call_context(function_name, args, kwargs, caller_frame=None):
+    context = {"function": function_name}
+    if function_name == "order_value":
+        context["trade_value"] = _get_arg(args, kwargs, 1, ("value", "cash_amount"))
+    elif function_name == "order_target_value":
+        target_value = _get_arg(args, kwargs, 1, ("value", "target_value"))
+        context["target_value"] = target_value
+        total_value = _frame_portfolio_total_value(caller_frame)
+        target_value_float = _to_float(target_value)
+        if target_value_float is not None and total_value and total_value != 0:
+            context["target_weight"] = target_value_float / total_value
+    elif function_name == "order_target_percent":
+        context["target_weight"] = _get_arg(args, kwargs, 1, ("percent", "target_percent"))
+    return context
+
+
+def _report_with_context(reporter, order_obj, call_context):
+    try:
+        reporter(order_obj, call_context=call_context)
+    except TypeError as exc:
+        text = str(exc)
+        if "call_context" not in text and "unexpected keyword" not in text:
+            raise
+        reporter(order_obj)
+
+
+def _wrap_order_function(func, function_name=None, report_func=None):
+    if report_func is None and callable(function_name):
+        report_func = function_name
+        function_name = None
     if getattr(func, "_feishu_wrapped", False) is True:
         return func
     if getattr(func, "_feishu_relay_wrapped", False) is True:
         return func
 
     def wrapper(*args, **kwargs):
+        try:
+            caller_frame = sys._getframe(1)
+        except Exception:
+            caller_frame = None
+        call_context = _build_call_context(function_name, args, kwargs, caller_frame)
         result = func(*args, **kwargs)
         if result is None:
             return result
         reporter = report_func or _report_order
         if isinstance(result, list):
             for item in result:
-                reporter(item)
+                _report_with_context(reporter, item, call_context)
         else:
-            reporter(result)
+            _report_with_context(reporter, result, call_context)
         return result
     wrapper._feishu_wrapped = True
     return wrapper
@@ -464,7 +608,7 @@ def _install_wrappers(report_func):
                 continue
             if getattr(original, "_feishu_relay_wrapped", False) is True:
                 continue
-            wrapped = _wrap_order_function(original, report_func)
+            wrapped = _wrap_order_function(original, function_name=function_name, report_func=report_func)
             wrapped._feishu_wrapped = True
             setattr(module, function_name, wrapped)
             count += 1
@@ -472,9 +616,9 @@ def _install_wrappers(report_func):
     return count
 
 
-def _report_order(order_obj):
+def _report_order(order_obj, call_context=None):
     try:
-        summary = _summarize_order(order_obj, CURRENT_STRATEGY_NAME)
+        summary = _summarize_order(order_obj, CURRENT_STRATEGY_NAME, call_context=call_context)
         _buffer.add(summary)
     except Exception as exc:
         _log("订单摘要失败: %s" % _safe_error_text(exc))

@@ -1,0 +1,120 @@
+{
+  "status": "incomplete",
+  "generated_at": "2026-05-24T13:04:32.188134+00:00",
+  "issues": [
+    "research_bundle: research get_backtest bundle is required",
+    "audit_log: audit log is missing"
+  ],
+  "checks": [
+    {
+      "name": "research_bundle",
+      "required": true,
+      "status": "fail",
+      "source": "api_export.json",
+      "count": null,
+      "partial": null,
+      "message": "research get_backtest bundle is required"
+    },
+    {
+      "name": "detail_api_bundle",
+      "required": true,
+      "status": "pass",
+      "source": "api_export.json",
+      "count": null,
+      "partial": null,
+      "message": "detail API bundle is required"
+    },
+    {
+      "name": "metadata",
+      "required": true,
+      "status": "pass",
+      "source": "metadata.json",
+      "count": null,
+      "partial": null,
+      "message": ""
+    },
+    {
+      "name": "summary_metrics",
+      "required": true,
+      "status": "pass",
+      "source": "summary_metrics.json",
+      "count": null,
+      "partial": null,
+      "message": ""
+    },
+    {
+      "name": "detail_results",
+      "required": true,
+      "status": "pass",
+      "source": "api_export.json",
+      "count": 2,
+      "partial": false,
+      "message": ""
+    },
+    {
+      "name": "detail_transactions",
+      "required": true,
+      "status": "pass",
+      "source": "api_export.json",
+      "count": 1,
+      "partial": false,
+      "message": ""
+    },
+    {
+      "name": "detail_positions",
+      "required": true,
+      "status": "pass",
+      "source": "api_export.json",
+      "count": 4,
+      "partial": false,
+      "message": ""
+    },
+    {
+      "name": "detail_risk_tabs",
+      "required": true,
+      "status": "pass",
+      "source": "api_export.json",
+      "count": 10,
+      "partial": null,
+      "message": ""
+    },
+    {
+      "name": "platform_logs",
+      "required": false,
+      "status": "pass",
+      "source": "api_export.json",
+      "count": 16,
+      "partial": false,
+      "message": "platform logs may be partial; audit_log is canonical"
+    },
+    {
+      "name": "audit_log",
+      "required": true,
+      "status": "fail",
+      "source": "tabs_raw/audit_log.jsonl",
+      "count": 0,
+      "partial": true,
+      "message": "audit log is missing"
+    }
+  ],
+  "sources": {
+    "research": {
+      "path": "api_export.json",
+      "present": false,
+      "method": "joinquant_detail_readonly_api"
+    },
+    "detail_api": {
+      "path": "api_export.json",
+      "present": true
+    },
+    "audit_log": {
+      "path": "tabs_raw/audit_log.jsonl",
+      "present": false,
+      "count": 0
+    },
+    "platform_logs": {
+      "path": "tabs_raw/logs.md",
+      "partial": false
+    }
+  }
+}

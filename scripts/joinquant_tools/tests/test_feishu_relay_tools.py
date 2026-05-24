@@ -114,12 +114,30 @@ class FakeOrder:
     add_time = None
 
 
+class FakeSellOrder:
+    security = "518880.XSHG"
+    is_buy = False
+    amount = 1600
+    price = 9.21
+    value = 232424.23
+    add_time = "2026-03-24 09:30:00"
+
+
 def test_strategy_name_reads_first_line(monkeypatch, tmp_path):
     strategy_file = tmp_path / "user_code.py"
     strategy_file.write_text("# 策略名：ETF轮动模拟盘\n", encoding="utf-8")
     module = load_module(monkeypatch)
 
     assert module._get_strategy_name(str(strategy_file)) == "ETF轮动模拟盘"
+
+
+def test_strategy_name_reads_user_code_global_before_file(monkeypatch, tmp_path):
+    strategy_file = tmp_path / "user_code.py"
+    strategy_file.write_text("# 策略名：COMMENT_NAME\n", encoding="utf-8")
+    monkeypatch.setitem(sys.modules, "user_code", types.SimpleNamespace(STRATEGY_NAME="CODE_NAME"))
+    module = load_module(monkeypatch)
+
+    assert module._get_strategy_name(str(strategy_file)) == "CODE_NAME"
 
 
 def test_strategy_name_falls_back_when_file_missing(monkeypatch):
@@ -140,6 +158,58 @@ def test_order_summary_degrades_when_display_name_missing(monkeypatch):
     assert summary["strategy"] == "ETF轮动模拟盘"
     assert "ETF轮动模拟盘" in module._format_order_summary(summary)
     assert "513100.XSHG" in module._format_order_summary(summary)
+
+
+def test_order_summary_reads_security_name_from_kuanke_api_module(monkeypatch):
+    module = load_module(monkeypatch)
+    monkeypatch.setitem(
+        sys.modules,
+        "kuanke.user_space_api",
+        types.SimpleNamespace(
+            get_security_info=lambda security: types.SimpleNamespace(display_name="黄金易方达ETF")
+        ),
+    )
+
+    summary = module._summarize_order(FakeSellOrder(), strategy_name="ETF动态调仓")
+
+    assert summary["name"] == "黄金易方达ETF"
+    assert "黄金易方达ETF-518880.XSHG" in module._format_order_summary(summary)
+
+
+def test_order_summary_formats_trade_value_target_weight_and_sell_sign(monkeypatch):
+    module = load_module(monkeypatch)
+    order = FakeSellOrder()
+    summary = module._summarize_order(
+        order,
+        strategy_name="ETF多因子轮动",
+        get_security_info_func=lambda security: types.SimpleNamespace(display_name="黄金易方达ETF"),
+        call_context={"target_weight": 0.2476},
+    )
+
+    assert module._format_order_summary(summary) == (
+        "[2026-03-24 09:30:00] 【ETF多因子轮动】【卖出】 "
+        "“黄金易方达ETF-518880.XSHG” 数量：-1600股，价格：9.21，总金额：-232424.23，目标仓位：24.76%"
+    )
+
+
+def test_wrapped_order_target_value_infers_target_weight_from_caller_context(monkeypatch):
+    module = load_module(monkeypatch)
+    reported = []
+    user_code = types.SimpleNamespace(order_target_value=Mock(return_value=FakeSellOrder()))
+    monkeypatch.setitem(sys.modules, "user_code", user_code)
+
+    def report(order, call_context=None):
+        reported.append(module._summarize_order(order, strategy_name="S", call_context=call_context))
+
+    module._install_wrappers(report)
+
+    def place_order(context):
+        return user_code.order_target_value("518880.XSHG", 247600)
+
+    context = types.SimpleNamespace(portfolio=types.SimpleNamespace(total_value=1000000))
+    place_order(context)
+
+    assert reported[0]["target_weight"] == 0.2476
 
 
 def test_buffer_merges_orders_and_clears_after_flush(monkeypatch):

@@ -1,4 +1,7 @@
+# 策略名：ETF多因子轮动
 enable_profile()
+STRATEGY_NAME = "ETF多因子轮动"
+import FeishuRelayTools
 
 """
 ============================================================
