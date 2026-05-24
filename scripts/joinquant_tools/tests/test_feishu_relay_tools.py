@@ -212,6 +212,25 @@ def test_wrapped_order_target_value_infers_target_weight_from_caller_context(mon
     assert reported[0]["target_weight"] == 0.2476
 
 
+def test_wrapped_order_captures_run_type_from_caller_context(monkeypatch):
+    module = load_module(monkeypatch)
+    reported = []
+    original = Mock(return_value=FakeOrder())
+
+    def report(order, call_context=None):
+        reported.append(call_context)
+
+    wrapped = module._wrap_order_function(original, function_name="order", report_func=report)
+
+    def place_order(context):
+        return wrapped("513100.XSHG", 100)
+
+    context = types.SimpleNamespace(run_params=types.SimpleNamespace(type="sim_trade"))
+    place_order(context)
+
+    assert reported[0]["run_type"] == "sim_trade"
+
+
 def test_buffer_merges_orders_and_clears_after_flush(monkeypatch):
     module = load_module(monkeypatch)
     sent = []
@@ -249,6 +268,38 @@ def test_security_keyword_is_in_every_message(monkeypatch):
 
     assert "安全校验" in text
     assert "S" in text
+
+
+def test_buffer_prefixes_known_run_environment(monkeypatch):
+    module = load_module(monkeypatch)
+    cases = [
+        ("full_backtest", "[回测]"),
+        ("sim_trade", "[模拟交易]"),
+        ("simple_backtest", "[编译运行]"),
+    ]
+
+    for run_type, expected_prefix in cases:
+        sent = []
+        buffer = module._OrderBuffer(
+            wait_seconds=60,
+            max_size=30,
+            send_func=lambda message, replay=False, retry_index=0: sent.append(message),
+            jitter_seconds=0,
+        )
+
+        buffer.add({
+            "time": "t1",
+            "action": "买入",
+            "name": "",
+            "security": "A",
+            "amount": 1,
+            "price": 1,
+            "strategy": "S",
+            "run_type": run_type,
+        })
+        buffer.flush()
+
+        assert sent[0].startswith(expected_prefix)
 
 
 def test_stale_timer_token_is_ignored(monkeypatch):

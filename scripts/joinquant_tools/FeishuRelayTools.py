@@ -40,6 +40,11 @@ TARGET_FUNCTIONS = (
     "order_target_value",
     "order_target_percent",
 )
+RUN_TYPE_LABELS = {
+    "full_backtest": "回测",
+    "sim_trade": "模拟交易",
+    "simple_backtest": "编译运行",
+}
 
 _print = print
 
@@ -139,6 +144,53 @@ def _safe_value(obj, attr, default=""):
     except Exception:
         return default
     return default if value is None else value
+
+
+def _context_run_type(context):
+    if context is None:
+        return ""
+    if isinstance(context, dict):
+        run_params = context.get("run_params")
+    else:
+        run_params = getattr(context, "run_params", None)
+    if isinstance(run_params, dict):
+        run_type = run_params.get("type")
+    else:
+        run_type = getattr(run_params, "type", "")
+    return str(run_type) if run_type else ""
+
+
+def _frame_run_type(frame):
+    if frame is None:
+        return ""
+    locals_dict = getattr(frame, "f_locals", {})
+    for name in ("context", "ctx"):
+        run_type = _context_run_type(locals_dict.get(name))
+        if run_type:
+            return run_type
+    return ""
+
+
+def _run_type_label(run_type):
+    return RUN_TYPE_LABELS.get(str(run_type), "") if run_type else ""
+
+
+def _prefix_message_with_run_type(message, run_type):
+    label = _run_type_label(run_type)
+    if not label:
+        return message
+    prefix = "[%s]" % label
+    if message.startswith(prefix):
+        return message
+    return "%s %s" % (prefix, message)
+
+
+def _resolve_items_run_type(items):
+    for item in items or []:
+        run_type = item.get("run_type") if isinstance(item, dict) else ""
+        if _run_type_label(run_type):
+            return run_type
+    return ""
 
 
 def _format_time(value):
@@ -244,6 +296,7 @@ def _summarize_order(order_obj, strategy_name=None, get_security_info_func=None,
         "signed_amount": _signed_number(amount, is_buy),
         "trade_value": _signed_number(_calculate_trade_value(order_obj, amount, price, call_context), is_buy),
         "target_weight": call_context.get("target_weight"),
+        "run_type": call_context.get("run_type"),
         "strategy": strategy_name or CURRENT_STRATEGY_NAME,
     }
 
@@ -265,11 +318,12 @@ def _format_order_summary(summary):
     )
 
 
-def _build_message(strategy_name, lines, security_keyword=""):
+def _build_message(strategy_name, lines, security_keyword="", run_type=None):
     title = "【%s】飞书交易通知" % strategy_name
     if security_keyword and security_keyword not in title:
         title = "%s %s" % (security_keyword, title)
-    return title + "\n" + ("\n" + "-" * 28 + "\n").join(lines)
+    message = title + "\n" + ("\n" + "-" * 28 + "\n").join(lines)
+    return _prefix_message_with_run_type(message, run_type)
 
 
 class _Outbox:
@@ -388,7 +442,8 @@ class _OrderBuffer:
         lines = [_format_order_summary(item) for item in items[-self.max_size:]]
         if len(items) > self.max_size:
             lines.insert(0, "...(前略 %s 条)" % (len(items) - self.max_size))
-        message = _build_message(CURRENT_STRATEGY_NAME, lines, SECURITY_KEYWORD)
+        run_type = _resolve_items_run_type(items)
+        message = _build_message(CURRENT_STRATEGY_NAME, lines, SECURITY_KEYWORD, run_type=run_type)
         self._send_with_jitter(message)
 
     def _send_with_jitter(self, message):
@@ -537,6 +592,9 @@ def _frame_portfolio_total_value(frame):
 
 def _build_call_context(function_name, args, kwargs, caller_frame=None):
     context = {"function": function_name}
+    run_type = _frame_run_type(caller_frame)
+    if run_type:
+        context["run_type"] = run_type
     if function_name == "order_value":
         context["trade_value"] = _get_arg(args, kwargs, 1, ("value", "cash_amount"))
     elif function_name == "order_target_value":
