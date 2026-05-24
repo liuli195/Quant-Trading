@@ -394,10 +394,20 @@ def _security_review_field_errors(value: str) -> list[str]:
         errors.append(
             f"{SECURITY_REVIEW_FIELD} must include tool={required_tool} for provider={provider}"
         )
-    evidence_value = _assignment_value(value, "evidence")
-    if evidence_value is not None and not _has_real_field_value(evidence_value):
+    evidence_values = (
+        _assignment_value(value, "evidence"),
+        _assignment_value(value, "证据"),
+    )
+    has_evidence_assignment = any(item is not None for item in evidence_values)
+    if any(
+        item is not None and not _has_real_field_value(item) for item in evidence_values
+    ):
         errors.append(f"{SECURITY_REVIEW_FIELD} evidence must be filled")
-    if "evidence=" not in normalized and "证据" not in value:
+    if (
+        not has_evidence_assignment
+        and "evidence" not in normalized
+        and "证据" not in value
+    ):
         errors.append(f"{SECURITY_REVIEW_FIELD} must include evidence")
     return errors
 
