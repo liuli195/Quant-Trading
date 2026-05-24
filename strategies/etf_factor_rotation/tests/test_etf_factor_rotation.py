@@ -17,6 +17,24 @@ import numpy as np
 import pandas as pd
 import pytest
 
+
+def test_strategy_loads_without_feishu_relay_tools(monkeypatch):
+    import builtins
+    import importlib.util
+    import pathlib
+    import sys
+
+    monkeypatch.delitem(sys.modules, "FeishuRelayTools", raising=False)
+    monkeypatch.setattr(builtins, "enable_profile", Mock())
+    strategy_file = pathlib.Path(__file__).resolve().parent.parent / "etf_factor_rotation.py"
+    spec = importlib.util.spec_from_file_location("etf_factor_rotation_no_feishu", str(strategy_file))
+    module = importlib.util.module_from_spec(spec)
+
+    spec.loader.exec_module(module)
+
+    assert module.FeishuRelayTools is None
+
+
 # ============================================================
 # 可复用的价格序列生成工具
 # ============================================================

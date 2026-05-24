@@ -15,6 +15,12 @@
 | [joinquant-data](joinquant-data) <!-- pathref: docs/joinquant-data --> | 聚宽数据专题资料 | [JQ_场内基金数据.md](joinquant-data/JQ_场内基金数据.md) <!-- pathref: docs/joinquant-data/JQ_场内基金数据.md --> |
 | [indexes](indexes) <!-- pathref: docs/indexes --> | 机器生成的文档、报告、数据和变体索引 | [docs_catalog.json](indexes/docs_catalog.json) <!-- pathref: docs/indexes/docs_catalog.json --> |
 
+## 常用指南
+
+| 文档 | 内容 | 备注 |
+| --- | --- | --- |
+| [feishu-relay-tools.md](guides/feishu-relay-tools.md) <!-- pathref: docs/guides/feishu-relay-tools.md --> | 聚宽模拟交易飞书通知工具使用说明 | — |
+
 ## 维护约定
 
 - 新增说明型文档优先放入 `guides/`、`architecture/`、`design/` 或 `reference/`。

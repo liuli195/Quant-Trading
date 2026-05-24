@@ -1,0 +1,665 @@
+{
+  "metadata": {
+    "schema_version": 2,
+    "strategy": "feishu_relay_smoke",
+    "strategy_name": "FeishuDualA-20260524-dual-3",
+    "backtest_id": "29141130a775c2e5eb972098b20f7a45",
+    "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=29141130a775c2e5eb972098b20f7a45",
+    "generated_at": "2026-05-24T13:29:05.199Z",
+    "start_date_effective": "2025-01-02",
+    "end_date_effective": "2025-01-03",
+    "capital": 100000,
+    "frequency": "1d",
+    "py_version": "Python3",
+    "extraction_method": "joinquant_detail_readonly_api",
+    "export_used": false,
+    "internal_backtest_id": "94a7da38c9ca8ac3c22a78bc8bd5741b",
+    "id_mismatch": true
+  },
+  "stats": {
+    "data": {
+      "trading_days": 2,
+      "benchmark_volatility": 0.19938443625787,
+      "algorithm_volatility": 0.018240761237296,
+      "treasury_return": 0.00010958904109589,
+      "algorithm_return": -0.0035539999999999,
+      "benchmark_return": -0.037883467160799,
+      "annual_algo_return": -0.3592021943838,
+      "annual_bm_return": -0.99199318684736,
+      "sharpe": -21.885171851686,
+      "excess_return_sharpe": "419.566",
+      "sortino": 0,
+      "information": 3.4933098955383,
+      "beta": 0.091485381605735,
+      "alpha": -0.30478990387055,
+      "excess_return": 0.035681194521721,
+      "avg_excess_return": "1.77%",
+      "max_drawdown": 0.0035539999999999,
+      "max_drawdown_period": [
+        "2025-01-02",
+        "2025-01-03"
+      ],
+      "excess_return_max_drawdown": "0.00%",
+      "excess_return_max_drawdown_period": [
+        "2025-01-02",
+        "2025-01-02"
+      ],
+      "max_leverage": 0,
+      "period_label": "2025-01",
+      "__version": 101,
+      "win_ratio": 0,
+      "profit_loss_ratio": 0,
+      "win_count": 0,
+      "lose_count": 0,
+      "day_win_ratio": 1,
+      "avg_trade_return": 0,
+      "avg_position_days": 2,
+      "turnover_rate": 0.024164280999793,
+      "report_done_seconds": 0.23297882080078,
+      "report_done_cpu_seconds": 3.38
+    },
+    "status": "0",
+    "code": "00000",
+    "msg": ""
+  },
+  "result_pages": [
+    {
+      "benchmark": {
+        "time": [
+          1735804800000,
+          1735891200000
+        ],
+        "value": [
+          -2.8,
+          -3.79
+        ]
+      },
+      "overallReturn": {
+        "time": [
+          1735804800000,
+          1735891200000
+        ],
+        "value": [
+          -0.26,
+          -0.36
+        ]
+      },
+      "gains": {
+        "earn": {
+          "time": [
+            1735804800000,
+            1735891200000
+          ],
+          "value": [
+            0,
+            0
+          ]
+        },
+        "lose": {
+          "time": [
+            1735804800000,
+            1735891200000
+          ],
+          "value": [
+            -259.4,
+            -96
+          ]
+        }
+      },
+      "orders": {
+        "buy": {
+          "time": [
+            1735804800000,
+            1735891200000
+          ],
+          "value": [
+            9636,
+            0
+          ]
+        },
+        "sell": {
+          "time": [
+            1735804800000,
+            1735891200000
+          ],
+          "value": [
+            0,
+            0
+          ]
+        }
+      },
+      "count": 2,
+      "offset": "0"
+    }
+  ],
+  "result_page_meta": [
+    {
+      "page": 0,
+      "offset": 0,
+      "count": 2
+    }
+  ],
+  "day_result": {
+    "data": {
+      "state": "2",
+      "result": {
+        "benchmark": {
+          "time": [],
+          "value": []
+        },
+        "overallReturn": {
+          "time": [],
+          "value": []
+        },
+        "count": 0,
+        "offset": 0
+      }
+    },
+    "status": "0",
+    "code": "00000",
+    "msg": ""
+  },
+  "risk": {
+    "data": {
+      "risk": {
+        "algorithmPeriodReturn": [
+          {
+            "date": "2025-01",
+            "1month": -0.0035539999999999,
+            "3month": "N/A",
+            "6month": "N/A",
+            "12month": "N/A"
+          }
+        ],
+        "benchmarkPeriodReturn": [
+          {
+            "date": "2025-01",
+            "1month": -0.037883467160799,
+            "3month": "N/A",
+            "6month": "N/A",
+            "12month": "N/A"
+          }
+        ],
+        "alpha": [
+          {
+            "date": "2025-01",
+            "1month": -0.30478990387055,
+            "3month": "N/A",
+            "6month": "N/A",
+            "12month": "N/A"
+          }
+        ],
+        "beta": [
+          {
+            "date": "2025-01",
+            "1month": 0.091485381605735,
+            "3month": "N/A",
+            "6month": "N/A",
+            "12month": "N/A"
+          }
+        ],
+        "sharp": [
+          {
+            "date": "2025-01",
+            "1month": -21.885171851686,
+            "3month": "N/A",
+            "6month": "N/A",
+            "12month": "N/A"
+          }
+        ],
+        "sortino": [
+          {
+            "date": "2025-01",
+            "1month": 0,
+            "3month": "N/A",
+            "6month": "N/A",
+            "12month": "N/A"
+          }
+        ],
+        "information": [
+          {
+            "date": "2025-01",
+            "1month": 3.4933098955383,
+            "3month": "N/A",
+            "6month": "N/A",
+            "12month": "N/A"
+          }
+        ],
+        "algovolatility": [
+          {
+            "date": "2025-01",
+            "1month": 0.018240761237296,
+            "3month": "N/A",
+            "6month": "N/A",
+            "12month": "N/A"
+          }
+        ],
+        "benchmarkvolatility": [
+          {
+            "date": "2025-01",
+            "1month": 0.19938443625787,
+            "3month": "N/A",
+            "6month": "N/A",
+            "12month": "N/A"
+          }
+        ],
+        "maxdrawdown": [
+          {
+            "date": "2025-01",
+            "1month": 0.0035539999999999,
+            "3month": "N/A",
+            "6month": "N/A",
+            "12month": "N/A"
+          }
+        ]
+      }
+    },
+    "status": "0",
+    "code": "00000",
+    "msg": ""
+  },
+  "runtime": {
+    "data": {
+      "startTime": "2025-01-02 00:00:00",
+      "endTime": "2025-01-03 23:59:59",
+      "addTime": "2026-05-24 21:28:50",
+      "cancelTime": "0000-00-00 00:00:00",
+      "currentTime": "2026-05-24 21:28:59",
+      "runStartTime": "2026-05-24 21:28:54",
+      "needSeconds": 3.38,
+      "untilNowSec": "00分03秒",
+      "creditsLog": [],
+      "status": "2"
+    },
+    "status": "0",
+    "code": "00000",
+    "msg": ""
+  },
+  "source": {
+    "data": {
+      "source": "JQ_AUTO_AUDIT_TOKEN = 'feishu_relay_smoke-feishu-smoke-dual-alpha-20260524212839-f1fbbd7b'\nimport atexit\nimport json\nimport FeishuRelayTools\nSMOKE_MODE = 'alpha'\nSMOKE_STRATEGY_NAME = 'FeishuDualA-20260524-dual-3'\nSMOKE_TARGET_VALUE = 10000\nFeishuRelayTools.STRATEGY_NAME = SMOKE_STRATEGY_NAME\nFeishuRelayTools.CURRENT_STRATEGY_NAME = SMOKE_STRATEGY_NAME\nFeishuRelayTools.BUFFER_WAIT_TIME = 1\nFeishuRelayTools.SEND_JITTER_SECONDS = 0\nFeishuRelayTools.RETRY_DELAYS_SECONDS = []\nFeishuRelayTools._outbox = FeishuRelayTools._Outbox(FeishuRelayTools._resolve_outbox_path(FeishuRelayTools.CURRENT_STRATEGY_NAME))\nFeishuRelayTools._sender = FeishuRelayTools._FeishuSender(FeishuRelayTools._outbox)\nFeishuRelayTools._buffer = FeishuRelayTools._OrderBuffer(\n    FeishuRelayTools.BUFFER_WAIT_TIME,\n    FeishuRelayTools.MAX_BUFFER_SIZE,\n    lambda message, replay=False, retry_index=0: FeishuRelayTools._sender.send(message, replay=replay, retry_index=retry_index),\n    FeishuRelayTools.SEND_JITTER_SECONDS,\n)\natexit.register(FeishuRelayTools._buffer.flush)\nSMOKE_OUTBOX_PATH = FeishuRelayTools._resolve_outbox_path(FeishuRelayTools.CURRENT_STRATEGY_NAME)\ndef initialize(context):\n    set_benchmark(\"510300.XSHG\")\n    set_option(\"use_real_price\", True)\n    g.feishu_smoke_ordered = False\n    log.info(\n        \"FEISHU_DUAL_INIT mode=%s strategy=%s outbox=%s wrapped=%s target=%s\"\n        % (\n            SMOKE_MODE,\n            FeishuRelayTools.CURRENT_STRATEGY_NAME,\n            SMOKE_OUTBOX_PATH,\n            getattr(FeishuRelayTools, \"_wrapped_count\", \"NA\"),\n            SMOKE_TARGET_VALUE,\n        )\n    )\n    run_daily(smoke_order, time=\"09:35\", reference_security=\"510300.XSHG\")\n    run_daily(smoke_snapshot, time=\"14:55\", reference_security=\"510300.XSHG\")\ndef smoke_order(context):\n    if g.feishu_smoke_ordered:\n        return\n    g.feishu_smoke_ordered = True\n    order_obj = order_target_value(\"510300.XSHG\", SMOKE_TARGET_VALUE)\n    status = \"OK\" if order_obj is not None else \"NONE\"\n    log.info(\"FEISHU_DUAL_ORDER_RESULT %s mode=%s security=510300.XSHG target=%s\" % (status, SMOKE_MODE, SMOKE_TARGET_VALUE))\ndef _outbox_stats():\n    text = read_file(SMOKE_OUTBOX_PATH) or \"\"\n    pending_events = 0\n    acked_events = 0\n    latest_by_batch = {}\n    for line in text.splitlines():\n        line = line.strip()\n        if not line:\n            continue\n        try:\n            row = json.loads(line)\n        except Exception:\n            continue\n        batch_id = row.get(\"batch_id\")\n        status = row.get(\"status\")\n        if not batch_id or status not in (\"pending\", \"acked\"):\n            continue\n        if status == \"pending\":\n            pending_events += 1\n        elif status == \"acked\":\n            acked_events += 1\n        latest_by_batch.pop(batch_id, None)\n        latest_by_batch[batch_id] = status\n    unacked = sorted(batch_id for batch_id, status in latest_by_batch.items() if status == \"pending\")\n    return pending_events, acked_events, len(unacked), \",\".join(unacked[-3:])\ndef smoke_snapshot(context):\n    try:\n        pending_events, acked_events, unacked_count, sample = _outbox_stats()\n        log.info(\n            \"FEISHU_DUAL_OUTBOX mode=%s events_pending=%s events_acked=%s unacked=%s sample=%s\"\n            % (SMOKE_MODE, pending_events, acked_events, unacked_count, sample)\n        )\n        log.info(\"FEISHU_DUAL_WRAPPED_COUNT %s\" % getattr(FeishuRelayTools, \"_wrapped_count\", \"NA\"))\n    except Exception as exc:\n        log.error(\"FEISHU_DUAL_OUTBOX_READ_ERROR %s\" % exc)"
+    },
+    "status": "0",
+    "code": "00000",
+    "msg": ""
+  },
+  "profile_text": "{\"data\":{\"state\":\"2\",\"profile\":\"\"},\"status\":\"0\",\"code\":\"00000\",\"msg\":\"\"}",
+  "transactions": {
+    "rows": [
+      {
+        "date": "2025-01-02",
+        "time": "09:35:00",
+        "security": "基金",
+        "stock": "300ETF(510300.XSHG)",
+        "transaction": "买",
+        "type": "市价单",
+        "amount": "2400股",
+        "price": "4.015",
+        "total": 9636,
+        "gains": 0,
+        "commission": 5,
+        "status": "全部成交",
+        "orderAmount": "2400股",
+        "limitPrice": "-",
+        "matchTime": "2025-01-02 09:35:00",
+        "transactionPersent": "-",
+        "trueOrderAmount": "2400股",
+        "trueAmount": "2400股",
+        "trueLimitPrice": 0,
+        "truePrice": 4.015,
+        "tradeDate": "2025-01-02"
+      }
+    ],
+    "pages": [
+      {
+        "page": 0,
+        "query": "/algorithm/backtest/transactionInfo?backtestId=94a7da38c9ca8ac3c22a78bc8bd5741b&ajax=1",
+        "count": 1,
+        "offset": 0,
+        "dateOffset": null,
+        "max": false,
+        "firstDate": "2025-01-02",
+        "lastDate": "2025-01-02"
+      },
+      {
+        "page": 1,
+        "query": "/algorithm/backtest/transactionInfo?backtestId=94a7da38c9ca8ac3c22a78bc8bd5741b&ajax=1&offset=1&dateOffset=2025-01-02",
+        "count": 0,
+        "offset": 1,
+        "dateOffset": "2025-01-02",
+        "max": false,
+        "firstDate": null,
+        "lastDate": null
+      }
+    ],
+    "partial": false
+  },
+  "positions": {
+    "rows": [
+      {
+        "date": "2025-01-02",
+        "time": "2025-01-02 16:00:00",
+        "security": "基金",
+        "stock": "300ETF(510300.XSHG)",
+        "side": "多",
+        "amount": "2400股",
+        "closeableAmount": "0股",
+        "price": "3.909",
+        "value": 9381.6,
+        "gain": -254.4,
+        "avgCost": "4.015",
+        "holdCost": "-",
+        "margin": 0,
+        "dailyGains": -254.4,
+        "todayAmount": "2400股",
+        "gainPercent": -0.0264,
+        "gainPercentStr": "-2.64%",
+        "totalValue": 99740.6,
+        "dailyGainsPercent": -0.02640099626401,
+        "todayGainsPercent": -0.0264,
+        "truePrice": "3.909",
+        "trueAvgCost": "4.015",
+        "trueAmount": "2400股",
+        "trueGainPercent": -0.0264,
+        "positionPersent": "9.41%"
+      },
+      {
+        "date": "2025-01-02",
+        "time": "15:15:00",
+        "security": "",
+        "stock": "<span class=\"label label-cash\">Cash</span>",
+        "side": "",
+        "amount": "",
+        "closeableAmount": "",
+        "price": "",
+        "value": 90359,
+        "gain": "",
+        "avgCost": "",
+        "holdCost": "",
+        "margin": "",
+        "dailyGains": "",
+        "todayAmount": "",
+        "gainPercentStr": "",
+        "totalValue": 0
+      },
+      {
+        "date": "2025-01-03",
+        "time": "2025-01-03 16:00:00",
+        "security": "基金",
+        "stock": "300ETF(510300.XSHG)",
+        "side": "多",
+        "amount": "2400股",
+        "closeableAmount": "2400股",
+        "price": "3.869",
+        "value": 9285.6,
+        "gain": -350.4,
+        "avgCost": "4.015",
+        "holdCost": "-",
+        "margin": 0,
+        "dailyGains": -96,
+        "todayAmount": "0股",
+        "gainPercent": -0.0364,
+        "gainPercentStr": "-3.64%",
+        "totalValue": 99644.6,
+        "dailyGainsPercent": -0.036363636363636,
+        "todayGainsPercent": -0.0102,
+        "truePrice": "3.869",
+        "trueAvgCost": "4.015",
+        "trueAmount": "2400股",
+        "trueGainPercent": -0.0364,
+        "positionPersent": "9.32%"
+      },
+      {
+        "date": "2025-01-03",
+        "time": "15:15:00",
+        "security": "",
+        "stock": "<span class=\"label label-cash\">Cash</span>",
+        "side": "",
+        "amount": "",
+        "closeableAmount": "",
+        "price": "",
+        "value": 90359,
+        "gain": "",
+        "avgCost": "",
+        "holdCost": "",
+        "margin": "",
+        "dailyGains": "",
+        "todayAmount": "",
+        "gainPercentStr": "",
+        "totalValue": 0
+      }
+    ],
+    "pages": [
+      {
+        "page": 0,
+        "query": "/algorithm/backtest/positionInfo?backtestId=94a7da38c9ca8ac3c22a78bc8bd5741b&ajax=1",
+        "count": 4,
+        "added": 4,
+        "max": false,
+        "firstDate": "2025-01-02",
+        "lastDate": "2025-01-03"
+      }
+    ],
+    "partial": false,
+    "method": "dateOffset segmented without export"
+  },
+  "logs": {
+    "rows": [
+      "2025-01-02 00:00:00 - INFO  - [FeishuRelayTools] 已包装 user_code.order",
+      "2025-01-02 00:00:00 - INFO  - [FeishuRelayTools] 已包装 user_code.order_value",
+      "2025-01-02 00:00:00 - INFO  - [FeishuRelayTools] 已包装 user_code.order_target",
+      "2025-01-02 00:00:00 - INFO  - [FeishuRelayTools] 已包装 user_code.order_target_value",
+      "2025-01-02 00:00:00 - INFO  - [FeishuRelayTools] 初始化完成，策略“飞书通知冒烟-20260524-204724”已包装 4 个下单函数。",
+      "2025-01-02 00:00:00 - INFO  - FEISHU_DUAL_INIT mode=alpha strategy=FeishuDualA-20260524-dual-3 outbox=feishu_relay_outbox/FeishuDualA-20260524-dual-3.jsonl wrapped=4 target=10000",
+      "2025-01-02 09:35:00 - INFO  - 开仓数量必须是100的整数倍，调整为 2400: Order(security=510300.XSHG mode=OrderTargetValue: _value=10000.0 style=MarketOrderStyle: _limit_price=0.0 side=long margin=False entrust_time=None finish_time=None)",
+      "2025-01-02 09:35:00 - INFO  - 下单检查标的数量：StockOrder(entrust_id=1779629332 security=510300.XSHG mode=OrderTargetValue: _value=10000.0 style=MarketOrderStyle: _limit_price=0.0 side=long action=open margin=False entrust_time=2025-01-02 09:35:00 cancel_time=None finish_time=None comment= error=开仓数量必须是 100 的整数倍，调整为 2400)",
+      "2025-01-02 09:35:00 - INFO  - order StockOrder(entrust_id=1779629332 security=510300.XSHG mode=OrderTargetValue: _value=10000.0 style=MarketOrderStyle: _limit_price=0.0 side=long action=open margin=False entrust_time=2025-01-02 09:35:00 cancel_time=None finish_time=None comment= error=开仓数量必须是 100 的整数倍，调整为 2400) trade price: 4.015, amount:2400, commission: 5.0",
+      "2025-01-02 09:35:00 - INFO  - 订单已委托：StockOrder(entrust_id=1779629332 security=510300.XSHG mode=OrderTargetValue: _value=10000.0 style=MarketOrderStyle: _limit_price=0.0 side=long action=open margin=False entrust_time=2025-01-02 09:35:00 cancel_time=None finish_time=2025-01-02 09:35:00 comment= error=开仓数量必须是 100 的整数倍，调整为 2400)",
+      "2025-01-02 09:35:00 - INFO  - FEISHU_DUAL_ORDER_RESULT OK mode=alpha security=510300.XSHG target=10000",
+      "2025-01-02 14:55:00 - INFO  - FEISHU_DUAL_OUTBOX mode=alpha events_pending=2 events_acked=2 unacked=0 sample=",
+      "2025-01-02 14:55:00 - INFO  - FEISHU_DUAL_WRAPPED_COUNT 4",
+      "2025-01-03 14:55:00 - INFO  - FEISHU_DUAL_OUTBOX mode=alpha events_pending=2 events_acked=2 unacked=0 sample=",
+      "2025-01-03 14:55:00 - INFO  - FEISHU_DUAL_WRAPPED_COUNT 4"
+    ],
+    "pages": [
+      {
+        "page": 0,
+        "query": "/algorithm/backtest/log?backtestId=94a7da38c9ca8ac3c22a78bc8bd5741b&offset=0&ajax=1",
+        "count": 15,
+        "offset": 0,
+        "responseOffset": 0,
+        "max": false
+      },
+      {
+        "page": 1,
+        "query": "/algorithm/backtest/log?backtestId=94a7da38c9ca8ac3c22a78bc8bd5741b&offset=15&ajax=1",
+        "count": 0,
+        "offset": 15,
+        "responseOffset": 15,
+        "max": false
+      }
+    ],
+    "partial": false
+  },
+  "error_logs": {
+    "rows": [],
+    "pages": [
+      {
+        "page": 0,
+        "query": "/algorithm/backtest/error?backtestId=94a7da38c9ca8ac3c22a78bc8bd5741b&offset=0&ajax=1",
+        "count": 0,
+        "offset": 0,
+        "responseOffset": null,
+        "max": false
+      }
+    ],
+    "partial": false
+  },
+  "result_rows": [
+    {
+      "date": "2025-01-02",
+      "algorithm_return_value": -0.26,
+      "benchmark_return_value": -2.8,
+      "gains_earn": 0,
+      "gains_lose": -259.4,
+      "orders_buy": 9636,
+      "orders_sell": 0
+    },
+    {
+      "date": "2025-01-03",
+      "algorithm_return_value": -0.36,
+      "benchmark_return_value": -3.79,
+      "gains_earn": 0,
+      "gains_lose": -96,
+      "orders_buy": 0,
+      "orders_sell": 0
+    }
+  ],
+  "risk_tabs": {
+    "algorithm_period_return": {
+      "label": "策略收益",
+      "source_key": "algorithmPeriodReturn",
+      "rows": [
+        {
+          "date": "2025-01",
+          "1month": -0.0035539999999999,
+          "3month": "N/A",
+          "6month": "N/A",
+          "12month": "N/A"
+        }
+      ]
+    },
+    "benchmark_period_return": {
+      "label": "基准收益",
+      "source_key": "benchmarkPeriodReturn",
+      "rows": [
+        {
+          "date": "2025-01",
+          "1month": -0.037883467160799,
+          "3month": "N/A",
+          "6month": "N/A",
+          "12month": "N/A"
+        }
+      ]
+    },
+    "alpha": {
+      "label": "阿尔法",
+      "source_key": "alpha",
+      "rows": [
+        {
+          "date": "2025-01",
+          "1month": -0.30478990387055,
+          "3month": "N/A",
+          "6month": "N/A",
+          "12month": "N/A"
+        }
+      ]
+    },
+    "beta": {
+      "label": "贝塔",
+      "source_key": "beta",
+      "rows": [
+        {
+          "date": "2025-01",
+          "1month": 0.091485381605735,
+          "3month": "N/A",
+          "6month": "N/A",
+          "12month": "N/A"
+        }
+      ]
+    },
+    "sharpe": {
+      "label": "夏普比率",
+      "source_key": "sharp",
+      "rows": [
+        {
+          "date": "2025-01",
+          "1month": -21.885171851686,
+          "3month": "N/A",
+          "6month": "N/A",
+          "12month": "N/A"
+        }
+      ]
+    },
+    "sortino": {
+      "label": "索提诺比率",
+      "source_key": "sortino",
+      "rows": [
+        {
+          "date": "2025-01",
+          "1month": 0,
+          "3month": "N/A",
+          "6month": "N/A",
+          "12month": "N/A"
+        }
+      ]
+    },
+    "information": {
+      "label": "信息比率",
+      "source_key": "information",
+      "rows": [
+        {
+          "date": "2025-01",
+          "1month": 3.4933098955383,
+          "3month": "N/A",
+          "6month": "N/A",
+          "12month": "N/A"
+        }
+      ]
+    },
+    "algo_volatility": {
+      "label": "波动率",
+      "source_key": "algovolatility",
+      "rows": [
+        {
+          "date": "2025-01",
+          "1month": 0.018240761237296,
+          "3month": "N/A",
+          "6month": "N/A",
+          "12month": "N/A"
+        }
+      ]
+    },
+    "benchmark_volatility": {
+      "label": "基准波动率",
+      "source_key": "benchmarkvolatility",
+      "rows": [
+        {
+          "date": "2025-01",
+          "1month": 0.19938443625787,
+          "3month": "N/A",
+          "6month": "N/A",
+          "12month": "N/A"
+        }
+      ]
+    },
+    "max_drawdown": {
+      "label": "最大回撤",
+      "source_key": "maxdrawdown",
+      "rows": [
+        {
+          "date": "2025-01",
+          "1month": 0.0035539999999999,
+          "3month": "N/A",
+          "6month": "N/A",
+          "12month": "N/A"
+        }
+      ]
+    }
+  },
+  "counts": {
+    "transactions": 1,
+    "positions": 4,
+    "logs": 15,
+    "error_logs": 0,
+    "result_rows": 2,
+    "result_pages": 1,
+    "risk_rows": 10
+  },
+  "partial": {
+    "transactions": false,
+    "positions": false,
+    "logs": false,
+    "results": false
+  }
+}

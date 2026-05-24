@@ -317,6 +317,18 @@
 | test_batch | etf_factor_rotation | ab-momentum-extreme-ab-comparison | `strategies/etf_factor_rotation/test_batches/20260517-momentum-extreme-ab/report/ab-momentum-extreme-ab-comparison.md` | 2 |
 | test_batch | etf_factor_rotation | 动量分桶检查 | `strategies/etf_factor_rotation/test_batches/20260517-momentum-extreme-ab/report/momentum-bucket-check.md` | 2 |
 | test_batch | etf_factor_rotation | AB 对比报告: momentum-strength-confirmation | `strategies/etf_factor_rotation/test_batches/20260517-momentum-strength-confirmation/report/ab-momentum-strength-confirmation-comparison.md` | 0 |
+| backtest_run | feishu_relay_smoke | 回测数据汇总 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-alpha-20260524-dual-2/report/backtest_report.md` | 0 |
+| backtest_run | feishu_relay_smoke | 数据完整性报告 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-alpha-20260524-dual-2/report/data-integrity.md` | 0 |
+| backtest_run | feishu_relay_smoke | 回测数据汇总 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-alpha-20260524-dual-3/report/backtest_report.md` | 0 |
+| backtest_run | feishu_relay_smoke | 数据完整性报告 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-alpha-20260524-dual-3/report/data-integrity.md` | 0 |
+| backtest_run | feishu_relay_smoke | 回测数据汇总 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-beta-20260524-dual-3/report/backtest_report.md` | 0 |
+| backtest_run | feishu_relay_smoke | 数据完整性报告 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-beta-20260524-dual-3/report/data-integrity.md` | 0 |
+| backtest_run | feishu_relay_smoke | 回测数据汇总 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-failure-20260524-204724/report/backtest_report.md` | 0 |
+| backtest_run | feishu_relay_smoke | 数据完整性报告 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-failure-20260524-204724/report/data-integrity.md` | 0 |
+| backtest_run | feishu_relay_smoke | 回测数据汇总 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-replay-20260524-204724/report/backtest_report.md` | 0 |
+| backtest_run | feishu_relay_smoke | 数据完整性报告 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-replay-20260524-204724/report/data-integrity.md` | 0 |
+| backtest_run | feishu_relay_smoke | 回测数据汇总 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-success-20260524-204724/report/backtest_report.md` | 0 |
+| backtest_run | feishu_relay_smoke | 数据完整性报告 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-success-20260524-204724/report/data-integrity.md` | 0 |
 | backtest_run | ma_crossover | 回测数据汇总 | `strategies/ma_crossover/backtest_runs/20260505-1939-bt48ef4a644906d1ada69ba04637aa4bb6/report/backtest_report.md` | 0 |
 | backtest_run | ma_crossover | 性能分析报告 — ma_crossover (s01-baseline) | `strategies/ma_crossover/backtest_runs/20260505-1939-bt48ef4a644906d1ada69ba04637aa4bb6/report/performance-analysis.md` | 0 |
 | backtest_run | ma_crossover | 策略分析报告 — ma_crossover (s01-baseline) | `strategies/ma_crossover/backtest_runs/20260505-1939-bt48ef4a644906d1ada69ba04637aa4bb6/report/strategy-analysis.md` | 0 |

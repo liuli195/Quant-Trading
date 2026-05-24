@@ -158,6 +158,15 @@ research_datasets/**/raw/backtest_run*.tar.gz
 secrets/
 
 # ========================
+# 飞书通知私有上传版与本地 outbox
+# ========================
+FeishuRelayTools.private.py
+FeishuRelayTools.local.py
+scripts/joinquant_tools/FeishuRelayTools.private.py
+scripts/joinquant_tools/FeishuRelayTools.local.py
+feishu_relay_outbox/
+
+# ========================
 # Jupyter
 # ========================
 .ipynb_checkpoints/

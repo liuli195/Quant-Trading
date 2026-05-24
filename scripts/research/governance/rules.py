@@ -104,7 +104,7 @@ REQUIRED_AGENT_ENTRY_TOKENS = (
     "docs/rules/review-guidelines.md",
     "简体中文，简洁直白",
     "聚宽云端",
-    "须走项目 `.venv`",
+    "须使用提权走项目 `.venv`",
     "docs/rules/commands.md",
     "进入主干须通过 PR",
     "直写主干",
@@ -114,7 +114,6 @@ REQUIRED_AGENT_ENTRY_TOKENS = (
     "主会话负责编排",
     "可点击链接",
     "pathref",
-    "申请提权",
     "任务后清理临时产物",
 )
 FORBIDDEN_AGENT_DETAIL_TOKENS = (
