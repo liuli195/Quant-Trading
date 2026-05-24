@@ -1378,6 +1378,32 @@ def test_low_risk_pr_body_rejects_template_security_review_placeholder() -> None
     assert "本地安全 review must not contain placeholder text" in report.errors
 
 
+def test_low_risk_pr_body_rejects_mismatched_security_review_tool_assignment() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=security-guidance；evidence=codex-security local review completed
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert (
+        "本地安全 review must include tool=codex-security for provider=codex"
+        in report.errors
+    )
+
+
 def test_low_risk_pr_body_rejects_empty_security_review_evidence() -> None:
     body = """
 ## AI Review 风险分级

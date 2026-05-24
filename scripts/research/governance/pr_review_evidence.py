@@ -392,7 +392,8 @@ def _security_review_field_errors(value: str) -> list[str]:
         )
         return errors
     required_tool = REQUIRED_SECURITY_REVIEW_TOOLS[provider]
-    if required_tool not in normalized:
+    tool_value = _assignment_value(value, "tool")
+    if tool_value is None or tool_value.casefold() != required_tool:
         errors.append(
             f"{SECURITY_REVIEW_FIELD} must include tool={required_tool} for provider={provider}"
         )
