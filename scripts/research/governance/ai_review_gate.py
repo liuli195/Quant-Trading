@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -410,9 +411,17 @@ def _authorization_errors(value: Any, label: str) -> list[str]:
         return [f"{label} requires user authorization"]
     errors: list[str] = []
     for field in ("authorized_by", "reason", "evidence"):
-        if not str(value.get(field) or "").strip():
+        field_value = _single_line_text(value.get(field))
+        if not field_value:
             errors.append(f"{label} authorization missing {field}")
+        elif _is_placeholder_authorization_value(field_value):
+            errors.append(f"{label} authorization invalid {field}")
     return errors
+
+
+def _is_placeholder_authorization_value(value: str) -> bool:
+    normalized = value.strip().strip("`\"'")
+    return bool(re.fullmatch(r"<[^>]+>", normalized))
 
 
 def _render_cross_review(value: Any) -> list[str]:
