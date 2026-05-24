@@ -15,8 +15,11 @@ def initialize(context):
 def smoke_order(context):
     if getattr(g, "feishu_smoke_ordered", False):
         return
+    order = order_target_value("510300.XSHG", 10000)
+    if order is None:
+        log.warning("FEISHU_SMOKE_ORDER_FAILED security=510300.XSHG")
+        return
     g.feishu_smoke_ordered = True
-    order_target_value("510300.XSHG", 10000)
     log.info("FEISHU_SMOKE_ORDER_SUBMITTED security=510300.XSHG")
 
 
