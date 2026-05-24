@@ -321,6 +321,8 @@ def _authorization_field_errors(value: str, field: str) -> list[str]:
         if assignment_values:
             if not any(_has_real_field_value(text) for text in assignment_values):
                 errors.append(f"{field} {label} must be filled")
+        elif any(alias in value for alias in aliases):
+            errors.append(f"{field} {label} must be filled")
         elif not any(alias in value for alias in aliases):
             errors.append(f"{field} must include " + "/".join(aliases))
     return errors
@@ -403,12 +405,11 @@ def _security_review_field_errors(value: str) -> list[str]:
         item is not None and not _has_real_field_value(item) for item in evidence_values
     ):
         errors.append(f"{SECURITY_REVIEW_FIELD} evidence must be filled")
-    if (
-        not has_evidence_assignment
-        and "evidence" not in normalized
-        and "证据" not in value
-    ):
-        errors.append(f"{SECURITY_REVIEW_FIELD} must include evidence")
+    if not has_evidence_assignment:
+        if "evidence" in normalized or "证据" in value:
+            errors.append(f"{SECURITY_REVIEW_FIELD} evidence must be filled")
+        else:
+            errors.append(f"{SECURITY_REVIEW_FIELD} must include evidence")
     return errors
 
 
