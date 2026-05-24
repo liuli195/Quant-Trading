@@ -1,4 +1,4 @@
-# tools.py (用于聚宽研究环境，来自：猪头战法 时间:2025-04-26 https://www.joinquant.com/view/community/detail/70825)
+can# tools.py (用于聚宽研究环境，来自：猪头战法 时间:2025-04-26 https://www.joinquant.com/view/community/detail/70825)
 # 功能作用：用python装饰器在不改变聚宽内置下单函数的基础上，新增将订单信号推送至企业微信和 Redis (QMT)的功能
 # 用法：在策略开头添加 import tools 即可，无需修改策略其他代码！策略名，可通过在第一行添加注释  "# 策略名：XXX" 填写即可完成中转。
 
