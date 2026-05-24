@@ -1,7 +1,10 @@
 # 策略名：ETF动态调仓
 enable_profile()
 STRATEGY_NAME = "ETF动态调仓"
-import FeishuRelayTools
+try:
+    import FeishuRelayTools
+except ImportError:
+    FeishuRelayTools = None
 
 """
 ============================================================

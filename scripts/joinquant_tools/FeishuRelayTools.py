@@ -444,19 +444,19 @@ class _OrderBuffer:
             lines.insert(0, "...(前略 %s 条)" % (len(items) - self.max_size))
         run_type = _resolve_items_run_type(items)
         message = _build_message(CURRENT_STRATEGY_NAME, lines, SECURITY_KEYWORD, run_type=run_type)
-        self._send_with_jitter(message)
+        self._send_with_jitter(message, items)
 
-    def _send_with_jitter(self, message):
+    def _send_with_jitter(self, message, orders):
         if self.jitter_seconds and self.jitter_seconds > 0:
             delay = random.randint(0, int(self.jitter_seconds))
-            timer = threading.Timer(delay, self._safe_send, args=(message,))
+            timer = threading.Timer(delay, self._safe_send, args=(message, orders))
             timer.start()
             return
-        self._safe_send(message)
+        self._safe_send(message, orders)
 
-    def _safe_send(self, message):
+    def _safe_send(self, message, orders):
         try:
-            self.send_func(message)
+            self.send_func(message, orders=orders)
         except Exception as exc:
             _log("发送通知异常: %s" % _safe_error_text(exc))
 
@@ -484,6 +484,9 @@ class _FeishuSender:
             return False
         if not WEBHOOK_URL:
             _log("飞书 webhook 未配置，保留 pending: %s" % batch_id)
+            return False
+        if not WEBHOOK_SECRET:
+            _log("飞书 webhook secret 未配置，保留 pending: %s" % batch_id)
             return False
         if requests is None:
             _log("requests 不可用，保留 pending: %s" % batch_id)
@@ -705,7 +708,12 @@ _sender = _FeishuSender(_outbox)
 _buffer = _OrderBuffer(
     BUFFER_WAIT_TIME,
     MAX_BUFFER_SIZE,
-    lambda message, replay=False, retry_index=0: _sender.send(message, replay=replay, retry_index=retry_index),
+    lambda message, replay=False, retry_index=0, orders=None: _sender.send(
+        message,
+        replay=replay,
+        retry_index=retry_index,
+        orders=orders,
+    ),
     SEND_JITTER_SECONDS,
 )
 atexit.register(_buffer.flush)

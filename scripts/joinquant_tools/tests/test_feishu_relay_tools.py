@@ -71,6 +71,7 @@ def load_module(
         module.read_file = "not callable"
         module.write_file = "not callable"
     spec.loader.exec_module(module)
+    module.WEBHOOK_SECRET = "unit-test-secret"
     module._test_writes = writes
     return module
 
@@ -234,7 +235,7 @@ def test_wrapped_order_captures_run_type_from_caller_context(monkeypatch):
 def test_buffer_merges_orders_and_clears_after_flush(monkeypatch):
     module = load_module(monkeypatch)
     sent = []
-    sender = lambda message, replay=False, retry_index=0: sent.append((message, replay, retry_index))
+    sender = lambda message, replay=False, retry_index=0, orders=None: sent.append((message, replay, retry_index, orders))
     buffer = module._OrderBuffer(wait_seconds=60, max_size=30, send_func=sender, jitter_seconds=0)
 
     buffer.add({"time": "2026-05-20 09:31:00", "action": "买入", "name": "", "security": "513100.XSHG", "amount": 100, "price": 1.0, "strategy": "S"})
@@ -244,13 +245,33 @@ def test_buffer_merges_orders_and_clears_after_flush(monkeypatch):
     assert len(sent) == 1
     assert "513100.XSHG" in sent[0][0]
     assert "518880.XSHG" in sent[0][0]
+    assert sent[0][3] == [
+        {
+            "time": "2026-05-20 09:31:00",
+            "action": "买入",
+            "name": "",
+            "security": "513100.XSHG",
+            "amount": 100,
+            "price": 1.0,
+            "strategy": "S",
+        },
+        {
+            "time": "2026-05-20 09:31:01",
+            "action": "卖出",
+            "name": "",
+            "security": "518880.XSHG",
+            "amount": 50,
+            "price": 5.0,
+            "strategy": "S",
+        },
+    ]
     assert buffer.pending_count == 0
 
 
 def test_buffer_limits_message_size_with_prefix(monkeypatch):
     module = load_module(monkeypatch)
     sent = []
-    buffer = module._OrderBuffer(wait_seconds=60, max_size=1, send_func=lambda message, replay=False, retry_index=0: sent.append(message), jitter_seconds=0)
+    buffer = module._OrderBuffer(wait_seconds=60, max_size=1, send_func=lambda message, replay=False, retry_index=0, orders=None: sent.append(message), jitter_seconds=0)
 
     buffer.add({"time": "t1", "action": "买入", "name": "", "security": "A", "amount": 1, "price": 1, "strategy": "S"})
     buffer.add({"time": "t2", "action": "买入", "name": "", "security": "B", "amount": 1, "price": 1, "strategy": "S"})
@@ -283,7 +304,7 @@ def test_buffer_prefixes_known_run_environment(monkeypatch):
         buffer = module._OrderBuffer(
             wait_seconds=60,
             max_size=30,
-            send_func=lambda message, replay=False, retry_index=0: sent.append(message),
+            send_func=lambda message, replay=False, retry_index=0, orders=None: sent.append(message),
             jitter_seconds=0,
         )
 
@@ -305,7 +326,7 @@ def test_buffer_prefixes_known_run_environment(monkeypatch):
 def test_stale_timer_token_is_ignored(monkeypatch):
     module = load_module(monkeypatch)
     sent = []
-    buffer = module._OrderBuffer(wait_seconds=60, max_size=30, send_func=lambda message, replay=False, retry_index=0: sent.append(message), jitter_seconds=0)
+    buffer = module._OrderBuffer(wait_seconds=60, max_size=30, send_func=lambda message, replay=False, retry_index=0, orders=None: sent.append(message), jitter_seconds=0)
 
     buffer.add({"time": "t1", "action": "买入", "name": "", "security": "A", "amount": 1, "price": 1, "strategy": "S"})
     first_timer = FakeTimer.scheduled[-1]
@@ -325,7 +346,7 @@ def test_stale_timer_token_is_ignored(monkeypatch):
 
 def test_expired_token_does_not_drain_items(monkeypatch):
     module = load_module(monkeypatch)
-    buffer = module._OrderBuffer(wait_seconds=60, max_size=30, send_func=lambda message, replay=False, retry_index=0: None, jitter_seconds=0)
+    buffer = module._OrderBuffer(wait_seconds=60, max_size=30, send_func=lambda message, replay=False, retry_index=0, orders=None: None, jitter_seconds=0)
 
     buffer.add({"time": "t1", "action": "买入", "name": "", "security": "A", "amount": 1, "price": 1, "strategy": "S"})
     old_token = buffer._timer_token
@@ -339,7 +360,7 @@ def test_jitter_schedules_deferred_send(monkeypatch):
     module = load_module(monkeypatch)
     monkeypatch.setattr(module.random, "randint", lambda start, end: 7)
     sent = []
-    buffer = module._OrderBuffer(wait_seconds=60, max_size=30, send_func=lambda message, replay=False, retry_index=0: sent.append(message), jitter_seconds=30)
+    buffer = module._OrderBuffer(wait_seconds=60, max_size=30, send_func=lambda message, replay=False, retry_index=0, orders=None: sent.append(message), jitter_seconds=30)
 
     buffer.add({"time": "t1", "action": "买入", "name": "", "security": "A", "amount": 1, "price": 1, "strategy": "S"})
     buffer.flush()
@@ -355,7 +376,7 @@ def test_send_exception_is_logged(monkeypatch):
     logs = []
     monkeypatch.setattr(module, "_print", lambda message: logs.append(message))
 
-    def failing_send(message):
+    def failing_send(message, orders=None):
         raise RuntimeError("boom")
 
     buffer = module._OrderBuffer(wait_seconds=60, max_size=30, send_func=failing_send, jitter_seconds=0)
@@ -511,7 +532,7 @@ def test_jitter_send_exception_is_logged(monkeypatch):
     monkeypatch.setattr(module, "_print", lambda message: logs.append(message))
     monkeypatch.setattr(module.random, "randint", lambda start, end: 1)
 
-    def failing_send(message):
+    def failing_send(message, orders=None):
         raise RuntimeError("later boom")
 
     buffer = module._OrderBuffer(wait_seconds=60, max_size=30, send_func=failing_send, jitter_seconds=30)
@@ -560,6 +581,24 @@ def test_sender_keeps_pending_when_request_fails(monkeypatch):
 
     statuses = [json.loads(content)["status"] for _, content, _ in module._test_writes]
     assert statuses == ["pending"]
+
+
+def test_sender_keeps_pending_when_secret_missing(monkeypatch):
+    post = Mock(return_value=FakeResponse())
+    module = load_module(monkeypatch, request=post)
+    module.feishu_enabled = True
+    module.WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/fake"
+    module.WEBHOOK_SECRET = ""
+    module.RETRY_DELAYS_SECONDS = []
+    outbox = module._Outbox("path.jsonl", read_file_func=module.read_file, write_file_func=module.write_file)
+    sender = module._FeishuSender(outbox=outbox)
+
+    sender.send("message", orders=[{"security": "A"}])
+
+    assert post.call_count == 0
+    statuses = [json.loads(content)["status"] for _, content, _ in module._test_writes]
+    assert statuses == ["pending"]
+    assert FakeTimer.scheduled == []
 
 
 def test_sender_masks_webhook_url_in_request_exception_log(monkeypatch):

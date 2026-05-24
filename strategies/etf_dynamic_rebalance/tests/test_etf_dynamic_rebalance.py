@@ -122,6 +122,22 @@ def make_mock_get_price_return(prices_dict, dates=None):
 class TestStaticCheck:
     """TC-STATIC 系列：静态编译与代码质量检查。"""
 
+    def test_loads_without_feishu_relay_tools(self, monkeypatch):
+        """TC-STATIC-000: 缺少飞书通知模块时策略仍可加载。"""
+        import builtins
+        import importlib.util
+        import pathlib
+
+        monkeypatch.delitem(sys.modules, "FeishuRelayTools", raising=False)
+        monkeypatch.setattr(builtins, "enable_profile", Mock())
+        strategy_file = pathlib.Path(__file__).resolve().parent.parent / "etf_dynamic_rebalance.py"
+        spec = importlib.util.spec_from_file_location("etf_dynamic_rebalance_no_feishu", str(strategy_file))
+        module = importlib.util.module_from_spec(spec)
+
+        spec.loader.exec_module(module)
+
+        assert module.FeishuRelayTools is None
+
     def test_py_compile(self):
         """TC-STATIC-001: Python 语法编译通过。"""
         import py_compile
