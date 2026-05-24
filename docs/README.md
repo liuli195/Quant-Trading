@@ -19,7 +19,7 @@
 
 | 文档 | 内容 | 备注 |
 | --- | --- | --- |
-| [feishu-relay-tools.md](guides/feishu-relay-tools.md) <!-- pathref: docs/guides/feishu-relay-tools.md --> | 聚宽模拟交易飞书通知工具使用说明 |  |
+| [feishu-relay-tools.md](guides/feishu-relay-tools.md) <!-- pathref: docs/guides/feishu-relay-tools.md --> | 聚宽模拟交易飞书通知工具使用说明 | — |
 
 ## 维护约定
 
