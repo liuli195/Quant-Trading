@@ -1378,6 +1378,29 @@ def test_low_risk_pr_body_rejects_template_security_review_placeholder() -> None
     assert "本地安全 review must not contain placeholder text" in report.errors
 
 
+def test_low_risk_pr_body_rejects_empty_security_review_evidence() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence=
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "本地安全 review evidence must be filled" in report.errors
+
+
 def test_low_risk_pr_body_requires_superpowers_cross_review_skills() -> None:
     body = """
 ## AI Review 风险分级
@@ -1509,6 +1532,34 @@ def test_pr_body_partial_ai_review_mode_requires_user_authorization() -> None:
 
     assert not report.ok
     assert "不完全 Review 模式授权 must be filled" in report.errors
+
+
+def test_pr_body_partial_ai_review_mode_rejects_empty_authorization_values() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 官方 Codex Review 跳过授权: 无
+- 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence=Codex Security local review completed
+- 本地 AI review 模式: partial
+- 不完全 Review 模式授权: authorized_by=；reason=；evidence=
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "不完全 Review 模式授权 authorized_by must be filled" in report.errors
+    assert "不完全 Review 模式授权 reason must be filled" in report.errors
+    assert "不完全 Review 模式授权 evidence must be filled" in report.errors
 
 
 def test_pr_body_partial_ai_review_mode_accepts_user_authorization() -> None:
@@ -1968,6 +2019,18 @@ def test_high_risk_pr_body_rejects_template_skip_authorization_placeholder() -> 
     assert (
         "官方 Codex Review 跳过授权 must not contain placeholder text" in report.errors
     )
+
+
+def test_high_risk_pr_body_rejects_empty_skip_authorization_values() -> None:
+    report = validate_pr_body(
+        _official_codex_skip_body(authorization="authorized_by=；reason=；evidence="),
+        comments=[],
+    )
+
+    assert not report.ok
+    assert "官方 Codex Review 跳过授权 authorized_by must be filled" in report.errors
+    assert "官方 Codex Review 跳过授权 reason must be filled" in report.errors
+    assert "官方 Codex Review 跳过授权 evidence must be filled" in report.errors
 
 
 def test_codex_skip_authorization_does_not_bypass_unresolved_blocking_threads() -> None:

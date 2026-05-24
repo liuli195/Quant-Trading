@@ -308,13 +308,21 @@ def _authorization_field_errors(value: str, field: str) -> list[str]:
         return [placeholder_error]
     errors: list[str] = []
     required_groups = (
-        ("authorized_by=", "授权人", "批准人"),
-        ("reason=", "原因", "理由"),
-        ("evidence=", "证据"),
+        ("authorized_by", ("authorized_by", "授权人", "批准人")),
+        ("reason", ("reason", "原因", "理由")),
+        ("evidence", ("evidence", "证据")),
     )
-    for group in required_groups:
-        if not any(token in value for token in group):
-            errors.append(f"{field} must include " + "/".join(group))
+    for label, aliases in required_groups:
+        assignment_values = [
+            text
+            for alias in aliases
+            if (text := _assignment_value(value, alias)) is not None
+        ]
+        if assignment_values:
+            if not any(_has_real_field_value(text) for text in assignment_values):
+                errors.append(f"{field} {label} must be filled")
+        elif not any(alias in value for alias in aliases):
+            errors.append(f"{field} must include " + "/".join(aliases))
     return errors
 
 
@@ -329,6 +337,23 @@ def _placeholder_field_error(value: str, field: str) -> str | None:
     if re.search(r"<[^>]+>", value) or " / " in value:
         return f"{field} must not contain placeholder text"
     return None
+
+
+def _assignment_value(value: str, key: str) -> str | None:
+    pattern = re.compile(rf"{re.escape(key)}\s*[=:：]\s*([^；;\n]*)")
+    match = pattern.search(value)
+    return match.group(1).strip() if match else None
+
+
+def _has_real_field_value(value: str) -> bool:
+    normalized = _normalize_value(value)
+    return bool(normalized) and normalized.casefold() not in {
+        "无",
+        "否",
+        "none",
+        "n/a",
+        "na",
+    }
 
 
 def _cross_review_field_errors(value: str) -> list[str]:
@@ -369,6 +394,9 @@ def _security_review_field_errors(value: str) -> list[str]:
         errors.append(
             f"{SECURITY_REVIEW_FIELD} must include tool={required_tool} for provider={provider}"
         )
+    evidence_value = _assignment_value(value, "evidence")
+    if evidence_value is not None and not _has_real_field_value(evidence_value):
+        errors.append(f"{SECURITY_REVIEW_FIELD} evidence must be filled")
     if "evidence=" not in normalized and "证据" not in value:
         errors.append(f"{SECURITY_REVIEW_FIELD} must include evidence")
     return errors
