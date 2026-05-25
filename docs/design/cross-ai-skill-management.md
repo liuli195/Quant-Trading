@@ -6,7 +6,7 @@
 
 ## 已知事实
 
-- `cc-switch` 已支持跨应用管理 Skills、MCP 和 prompts，说明见 [cc-switch-cli.md](../cc-switch-cli.md) <!-- pathref: docs/cc-switch-cli.md -->。
+- `cc-switch` 已支持跨应用管理 Skills、MCP 和 prompts，说明见 [cc-switch-cli.md](cc-switch-cli.md) <!-- pathref: docs/design/cc-switch-cli.md -->。
 - 本仓库的 AI 通用入口是 [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->；Claude Code 专属入口是 [CLAUDE.md](../../CLAUDE.md) <!-- pathref: repo/CLAUDE.md -->。
 - 入口分层已经由 [ADR 0005](../adr/0005-ai-entry-progressive-disclosure.md) <!-- pathref: docs/adr/0005-ai-entry-progressive-disclosure.md --> 确认：通用规则进 `AGENTS.md`，工具专属内容进对应工具入口，细则进 `docs/rules/*.md`。
 - 本仓库治理要求规则入口、Skill、README、workflow、registry、catalog 和 pathref 不漂移，见 [governance.md](../rules/governance.md) <!-- pathref: docs/rules/governance.md -->。

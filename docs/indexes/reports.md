@@ -10,7 +10,7 @@
 | docs |  | ADR 0005: AI 入口采用渐进式披露 | `docs/adr/0005-ai-entry-progressive-disclosure.md` | 9 |
 | docs |  | ADR 0006: PR 风险分级评审流程 | `docs/adr/0006-risk-tiered-pr-review.md` | 0 |
 | docs |  | 本地研究平台架构 | `docs/architecture/research-platform-architecture.md` | 19 |
-| docs |  | CC-Switch CLI | `docs/cc-switch-cli.md` | 0 |
+| docs |  | CC-Switch CLI | `docs/design/cc-switch-cli.md` | 0 |
 | docs |  | 跨 AI 工具 Skill 管理实施计划 | `docs/design/cross-ai-skill-management.md` | 20 |
 | docs |  | 本地研究平台重构 | `docs/design/本地研究平台重构.md` | 0 |
 | docs |  | 本地研究平台重构技术实施方案 | `docs/design/本地研究平台重构技术实施方案.md` | 6 |

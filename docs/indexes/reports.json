@@ -150,7 +150,7 @@
       "updated_at": "2026-05-20T11:48:29+00:00"
     },
     {
-      "path": "docs/cc-switch-cli.md",
+      "path": "docs/design/cc-switch-cli.md",
       "title": "CC-Switch CLI",
       "category": "docs",
       "strategy": null,
@@ -167,7 +167,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [
-        "docs/cc-switch-cli.md",
+        "docs/design/cc-switch-cli.md",
         "repo/AGENTS.md",
         "repo/CLAUDE.md",
         "docs/adr/0005-ai-entry-progressive-disclosure.md",
