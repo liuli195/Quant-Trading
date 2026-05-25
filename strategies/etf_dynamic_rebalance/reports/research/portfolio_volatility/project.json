@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "strategy": "etf_dynamic_rebalance",
+  "project": "etf_dynamic_rebalance_vol_control_calmar",
+  "owner": "research-platform",
+  "created_by": "research-platform",
+  "updated_by": "research-platform",
+  "created_at": "2026-05-25T17:58:31+00:00",
+  "updated_at": "2026-05-25T17:58:31+00:00",
+  "lifecycle": "active",
+  "template": "portfolio_volatility",
+  "plugin": "portfolio_volatility",
+  "datasets": [],
+  "inputs": {
+    "raw_data": "strategies\\etf_dynamic_rebalance\\reports\\research\\portfolio_volatility\\raw_price_bundle.json",
+    "baseline_run_dir": "strategies\\etf_dynamic_rebalance\\backtest_runs\\20260526-0130-btcf16d21b6c9aa1e55636a42a50d28d14",
+    "smoke_points_per_window": 16
+  },
+  "runtime": {
+    "fast_top_k": 20,
+    "cloud_top_k": 3,
+    "fast_mode_slo_seconds": 3.0,
+    "full_mode_slo_seconds": 180.0
+  }
+}

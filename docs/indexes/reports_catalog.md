@@ -9,6 +9,21 @@
 | backtest_run | etf_dynamic_rebalance | 回测数据汇总 | `strategies/etf_dynamic_rebalance/backtest_runs/20260507-1622-bt9185c8dff5682cc51043774c05817179/report/backtest_report.md` | 0 |
 | backtest_run | etf_dynamic_rebalance | 性能分析 | `strategies/etf_dynamic_rebalance/backtest_runs/20260507-1622-bt9185c8dff5682cc51043774c05817179/report/performance-analysis.md` | 0 |
 | backtest_run | etf_dynamic_rebalance | 策略分析 | `strategies/etf_dynamic_rebalance/backtest_runs/20260507-1622-bt9185c8dff5682cc51043774c05817179/report/strategy-analysis.md` | 0 |
+| backtest_run | etf_dynamic_rebalance | 回测数据汇总 | `strategies/etf_dynamic_rebalance/backtest_runs/20260526-0041-bt4ff080af1035efa8930129872f3f644d/report/backtest_report.md` | 0 |
+| backtest_run | etf_dynamic_rebalance | 数据完整性报告 | `strategies/etf_dynamic_rebalance/backtest_runs/20260526-0041-bt4ff080af1035efa8930129872f3f644d/report/data-integrity.md` | 0 |
+| backtest_run | etf_dynamic_rebalance | ETF 动态调仓组合波动率控制回测对比与归因 | `strategies/etf_dynamic_rebalance/backtest_runs/20260526-0041-bt4ff080af1035efa8930129872f3f644d/report/vol-control-comparison-attribution.md` | 3 |
+| backtest_run | etf_dynamic_rebalance | 回测数据汇总 | `strategies/etf_dynamic_rebalance/backtest_runs/20260526-0130-btcf16d21b6c9aa1e55636a42a50d28d14/report/backtest_report.md` | 0 |
+| backtest_run | etf_dynamic_rebalance | 数据完整性报告 | `strategies/etf_dynamic_rebalance/backtest_runs/20260526-0130-btcf16d21b6c9aa1e55636a42a50d28d14/report/data-integrity.md` | 0 |
+| backtest_run | etf_dynamic_rebalance | 回测数据汇总 | `strategies/etf_dynamic_rebalance/backtest_runs/20260526-0214-bt24c9d8b410c21d7da6229fe0d3c94901/report/backtest_report.md` | 0 |
+| backtest_run | etf_dynamic_rebalance | 数据完整性报告 | `strategies/etf_dynamic_rebalance/backtest_runs/20260526-0214-bt24c9d8b410c21d7da6229fe0d3c94901/report/data-integrity.md` | 0 |
+| backtest_run | etf_dynamic_rebalance | 回测数据汇总 | `strategies/etf_dynamic_rebalance/backtest_runs/20260526-0217-bt649414737cca9f694bc92e09c5cdd140/report/backtest_report.md` | 0 |
+| backtest_run | etf_dynamic_rebalance | 数据完整性报告 | `strategies/etf_dynamic_rebalance/backtest_runs/20260526-0217-bt649414737cca9f694bc92e09c5cdd140/report/data-integrity.md` | 0 |
+| backtest_run | etf_dynamic_rebalance | 回测数据汇总 | `strategies/etf_dynamic_rebalance/backtest_runs/20260526-0221-bt3259066658e5135eb443ce3f05689b72/report/backtest_report.md` | 0 |
+| backtest_run | etf_dynamic_rebalance | 数据完整性报告 | `strategies/etf_dynamic_rebalance/backtest_runs/20260526-0221-bt3259066658e5135eb443ce3f05689b72/report/data-integrity.md` | 0 |
+| backtest_run | etf_dynamic_rebalance | 回测数据汇总 | `strategies/etf_dynamic_rebalance/backtest_runs/20260526-0225-bt8a0c34a15f9adffd8446ae39d2e7ee7e/report/backtest_report.md` | 0 |
+| backtest_run | etf_dynamic_rebalance | 数据完整性报告 | `strategies/etf_dynamic_rebalance/backtest_runs/20260526-0225-bt8a0c34a15f9adffd8446ae39d2e7ee7e/report/data-integrity.md` | 0 |
+| backtest_run | etf_dynamic_rebalance | 回测数据汇总 | `strategies/etf_dynamic_rebalance/backtest_runs/20260526-0229-btee809d4cea8f278df764d8dd0c195e5f/report/backtest_report.md` | 0 |
+| backtest_run | etf_dynamic_rebalance | 数据完整性报告 | `strategies/etf_dynamic_rebalance/backtest_runs/20260526-0229-btee809d4cea8f278df764d8dd0c195e5f/report/data-integrity.md` | 0 |
 | backtest_run | etf_dynamic_rebalance | ETF动态调仓策略 — 回测详情报告 | `strategies/etf_dynamic_rebalance/backtest_runs/etf_threshold_005_20260503_214900_8c080de9/report/backtest_report.md` | 0 |
 | backtest_run | etf_dynamic_rebalance | ETF 动态调仓策略 — 性能分析报告（偏离度阈值 5%） | `strategies/etf_dynamic_rebalance/backtest_runs/etf_threshold_005_20260503_214900_8c080de9/report/performance-analysis.md` | 0 |
 | backtest_run | etf_dynamic_rebalance | ETF 动态调仓策略 — 策略分析报告（偏离度阈值 5%） | `strategies/etf_dynamic_rebalance/backtest_runs/etf_threshold_005_20260503_214900_8c080de9/report/strategy-analysis.md` | 0 |
@@ -24,10 +39,16 @@
 | backtest_run | etf_dynamic_rebalance | 策略分析 | `strategies/etf_dynamic_rebalance/backtest_runs/jq_existing_20260504_084253/report/strategy-analysis.md` | 0 |
 | report | etf_dynamic_rebalance | ETF 动态调仓策略 — 偏离度阈值对比分析 | `strategies/etf_dynamic_rebalance/reports/01-threshold-comparison.md` | 0 |
 | report | etf_dynamic_rebalance | ETF 动态调仓策略 — 最大回撤归因分析 | `strategies/etf_dynamic_rebalance/reports/02-drawdown-attribution.md` | 0 |
+| report | etf_dynamic_rebalance | ETF 动态再平衡波控后 vs ETF 多因子轮动对比与归因 | `strategies/etf_dynamic_rebalance/reports/2026-05-26-vol-control-vs-factor-rotation-attribution.md` | 8 |
 | report | etf_dynamic_rebalance | 执行摘要 | `strategies/etf_dynamic_rebalance/reports/deep-research-report.md` | 0 |
+| research | etf_dynamic_rebalance | etf_dynamic_rebalance_vol_control_calmar | `strategies/etf_dynamic_rebalance/reports/research/portfolio_volatility/README.md` | 0 |
+| research | etf_dynamic_rebalance | ETF 动态调仓本地 Calmar 候选清单 | `strategies/etf_dynamic_rebalance/reports/research/portfolio_volatility/reports/local-calmar-shortlist.md` | 0 |
+| research | etf_dynamic_rebalance | 组合波动率行为完整扫描 | `strategies/etf_dynamic_rebalance/reports/research/portfolio_volatility/runs/2026-05-26-full-calmar/reports/portfolio-volatility-full-scan.md` | 0 |
+| research | etf_dynamic_rebalance | 组合波动率全量扫描性能冒烟 | `strategies/etf_dynamic_rebalance/reports/research/portfolio_volatility/runs/2026-05-26-smoke/reports/portfolio-volatility-performance-smoke.md` | 0 |
 | report | etf_dynamic_rebalance | ETF 动态调仓策略 (etf_dynamic_rebalance) 测试文档 | `strategies/etf_dynamic_rebalance/reports/test-guide.md` | 0 |
 | report | etf_dynamic_rebalance | 基于跨资产异构择时与多层协同架构的A股量化交易策略深度研究：AI概念、纳斯达克QDII与黄金资产的体系化演进 | `strategies/etf_dynamic_rebalance/reports/量化交易策略研究.md` | 0 |
 | report | etf_dynamic_rebalance | 黄金 + AI ETF + 纳指100 ETF 配比方案 | `strategies/etf_dynamic_rebalance/reports/黄金_AI_纳指100_配比方案.md` | 0 |
+| test_batch | etf_dynamic_rebalance | ETF 动态调仓波动率控制参数扫描报告 | `strategies/etf_dynamic_rebalance/test_batches/20260526-vol-control-calmar-confirm/report/param-scan-report.md` | 2 |
 | backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260505-0933-bt7a98269d2440d36f387fb95085dfb39d/report/backtest_report.md` | 0 |
 | backtest_run | etf_factor_rotation | 性能分析报告 | `strategies/etf_factor_rotation/backtest_runs/20260505-0933-bt7a98269d2440d36f387fb95085dfb39d/report/performance-analysis.md` | 0 |
 | backtest_run | etf_factor_rotation | 策略分析报告 | `strategies/etf_factor_rotation/backtest_runs/20260505-0933-bt7a98269d2440d36f387fb95085dfb39d/report/strategy-analysis.md` | 0 |

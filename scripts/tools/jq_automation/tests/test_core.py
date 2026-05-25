@@ -321,6 +321,19 @@ class CoreTests(unittest.TestCase):
         with self.assertRaisesRegex(CompileFailed, "bad strategy"):
             asyncio.run(wait_for_compile_completion(page, _compile_snippet, timeout_ms=1000, poll_ms=1))
 
+    def test_wait_for_compile_completion_ignores_blank_error_tab_after_compile_finishes(self) -> None:
+        page = _FakeCompilePage(
+            [
+                {"hasCancel": True, "hasError": False, "bodyText": "building"},
+                {"hasCancel": False, "hasError": True, "bodyText": "stale ERROR marker"},
+            ],
+            error_text=" \n ",
+        )
+
+        state = asyncio.run(wait_for_compile_completion(page, _compile_snippet, timeout_ms=1000, poll_ms=1))
+
+        self.assertEqual(state["bodyText"], "stale ERROR marker")
+
     def test_apply_params_overrides_only_updates_set_parameter_assignments(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             strategy_file = Path(tmp) / "demo.py"

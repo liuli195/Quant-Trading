@@ -4,6 +4,13 @@
 | --- | --- | --- | --- | --- | ---: | --- |
 | etf_dynamic_rebalance_backtest_runs | 20260504_1 | joinquant_backtest_run | research-platform | active | 804 | 2023-01-03 ~ 2026-04-30 |
 | etf_dynamic_rebalance_backtest_runs | 20260507-1622-bt9185c8dff5682cc51043774c05817179 | joinquant_backtest_run | research-platform | active | 1485 | 2021-01-04 ~ 2026-04-30 |
+| etf_dynamic_rebalance_backtest_runs | 20260526-0041-bt4ff080af1035efa8930129872f3f644d | joinquant_backtest_run | research-platform | active | 1289 | 2021-01-04 ~ 2026-04-30 |
+| etf_dynamic_rebalance_backtest_runs | 20260526-0130-btcf16d21b6c9aa1e55636a42a50d28d14 | joinquant_backtest_run | research-platform | active | 1289 | 2021-01-04 ~ 2026-04-30 |
+| etf_dynamic_rebalance_backtest_runs | 20260526-0214-bt24c9d8b410c21d7da6229fe0d3c94901 | joinquant_backtest_run | research-platform | active | 1289 | 2021-01-04 ~ 2026-04-30 |
+| etf_dynamic_rebalance_backtest_runs | 20260526-0217-bt649414737cca9f694bc92e09c5cdd140 | joinquant_backtest_run | research-platform | active | 1289 | 2021-01-04 ~ 2026-04-30 |
+| etf_dynamic_rebalance_backtest_runs | 20260526-0221-bt3259066658e5135eb443ce3f05689b72 | joinquant_backtest_run | research-platform | active | 1289 | 2021-01-04 ~ 2026-04-30 |
+| etf_dynamic_rebalance_backtest_runs | 20260526-0225-bt8a0c34a15f9adffd8446ae39d2e7ee7e | joinquant_backtest_run | research-platform | active | 1289 | 2021-01-04 ~ 2026-04-30 |
+| etf_dynamic_rebalance_backtest_runs | 20260526-0229-btee809d4cea8f278df764d8dd0c195e5f | joinquant_backtest_run | research-platform | active | 1289 | 2021-01-04 ~ 2026-04-30 |
 | etf_dynamic_rebalance_backtest_runs | etf_threshold_005_20260503_214900_8c080de9 | joinquant_backtest_run | research-platform | active | 0 |  ~  |
 | etf_dynamic_rebalance_backtest_runs | etf_threshold_010_20260503_215400_cedcd414 | joinquant_backtest_run | research-platform | active | 0 |  ~  |
 | etf_dynamic_rebalance_backtest_runs | etf_threshold_015_20260503_215600_9b64a0ee | joinquant_backtest_run | research-platform | active | 0 |  ~  |

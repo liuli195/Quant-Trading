@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "dataset_id": "etf_dynamic_rebalance_backtest_runs",
+  "snapshot_id": "20260526-0214-bt24c9d8b410c21d7da6229fe0d3c94901",
+  "fingerprint": "sha256:77360c7140841296dd01d90c232e0e9ddaa691f665c56739bf438b28470c22db",
+  "created_at": "2026-05-25T18:17:33+00:00",
+  "owner": "research-platform",
+  "created_by": "research-platform",
+  "lifecycle": "active",
+  "source": {
+    "kind": "joinquant_backtest_run",
+    "path": "D:/My Project/Quant Trading/strategies/etf_dynamic_rebalance/backtest_runs/20260526-0214-bt24c9d8b410c21d7da6229fe0d3c94901"
+  },
+  "storage": {
+    "canonical": "parquet",
+    "compression": "zstd",
+    "raw": "json.gz/jsonl.gz"
+  },
+  "row_count": 1289,
+  "date_range": [
+    "2021-01-04",
+    "2026-04-30"
+  ],
+  "run_id": "20260526-0214-bt24c9d8b410c21d7da6229fe0d3c94901",
+  "partial": false,
+  "missing_required_files": [],
+  "summary_metrics": {
+    "策略收益": "171.73%",
+    "策略年化收益": "21.40%",
+    "基准收益": "-7.75%",
+    "超额收益": "194.57%",
+    "最大回撤": "16.43%",
+    "最大回撤区间": "2021-11-22,2022-10-11",
+    "阿尔法": "0.195",
+    "贝塔": "0.387",
+    "夏普比率": "1.297",
+    "索提诺比率": "1.702",
+    "信息比率": "1.444",
+    "策略波动率": "0.134",
+    "基准波动率": "0.179",
+    "胜率": "0.715",
+    "盈亏比": "9.995",
+    "日胜率": "0.555",
+    "盈利次数": 176,
+    "亏损次数": 70
+  },
+  "source_metadata": {
+    "strategy_name": "ETF动态调仓",
+    "strategy_file": "",
+    "strategy_dir": "",
+    "start_date_requested": "",
+    "start_date_effective": "2021-01-04",
+    "end_date_requested": "",
+    "end_date_effective": "2026-04-30",
+    "capital": 500000,
+    "backtest_id": "24c9d8b410c21d7da6229fe0d3c94901",
+    "backtest_url": "",
+    "generated_at": "2026-05-26T02:17:19",
+    "extraction_method": "joinquant_research_get_backtest",
+    "primary_extraction_method": "joinquant_research_get_backtest",
+    "fallback_extraction_method": "",
+    "research_export_path": "jq_auto_exports/research_backtest_24c9d8b410c21d7da6229fe0d3c94901.json",
+    "research_downloaded": true,
+    "detail_api_used": true,
+    "frequency": "1d",
+    "py_version": "Python3",
+    "internal_backtest_id": "d3a91e45a513b9bb45c82af9531da3fd",
+    "audit_token": "etf_dynamic_rebalance-s01-local-shortlist-20260526021351-4a701d09",
+    "audit_path": "jq_auto_audit/etf_dynamic_rebalance-s01-local-shortlist-20260526021351-4a701d09.jsonl"
+  },
+  "audit_line_count": 3120,
+  "audit_date_range": [
+    "2021-01-04",
+    "2026-04-30"
+  ],
+  "audit_event_counts": {
+    "rebalance_order": 540,
+    "rebalance_signals": 1289,
+    "rebalance_skip": 1109,
+    "rebalance_trigger": 180,
+    "run_end": 1,
+    "run_start": 1
+  },
+  "etf_pool": [
+    "518880.XSHG",
+    "159819.XSHE",
+    "513100.XSHG"
+  ],
+  "report_files": [
+    "backtest_report.md",
+    "data-integrity.md"
+  ],
+  "files": {
+    "raw": "raw/source.json.gz",
+    "profile_json": "views/profile.json",
+    "audit_events": "data/audit_events.parquet",
+    "daily_returns": "data/data.parquet",
+    "canonical": "data/data.parquet",
+    "sample": "views/sample.csv",
+    "api_export_source": "raw/api_export.json.gz",
+    "detail_api_export_source": "raw/detail_api_export.json.gz",
+    "summary_metrics": "raw/summary_metrics.json.gz",
+    "audit_log_source": "raw/audit_log.jsonl.gz",
+    "daily_returns_source": "raw/daily_returns.md.gz",
+    "positioninfo_source": "raw/positioninfo.md.gz",
+    "transactioninfo_source": "raw/transactioninfo.md.gz",
+    "balances_source": "raw/balances.md.gz",
+    "period_risks_source": "raw/period_risks.md.gz",
+    "logs_source": "raw/logs.md.gz"
+  },
+  "raw_file_integrity": {
+    "api_export.json": {
+      "dataset_file": "raw/api_export.json.gz",
+      "original_sha256": "ffa7178923295fede8adc5ee3d6152154c53b58f207685675996487a4441cd13",
+      "compressed_sha256": "d65ce507649922df939dfa8289053673197e49a8398d67da6ecd92caf49e7925",
+      "original_bytes": 4853601
+    },
+    "detail_api_export.json": {
+      "dataset_file": "raw/detail_api_export.json.gz",
+      "original_sha256": "eb1fe331e9e9aedaa0bdd0d354a490ecfd613c58ee528cd409742eab215b02f1",
+      "compressed_sha256": "2ee1a9e297802a97784342f28c689f638386bf4baa6a6fbc64d67a77a912e146",
+      "original_bytes": 5548850
+    },
+    "summary_metrics.json": {
+      "dataset_file": "raw/summary_metrics.json.gz",
+      "original_sha256": "8b35ef7251f0b2fcfa969e935700e94bb22eff1ab46b00529ba86f337a7a804e",
+      "compressed_sha256": "972a3d178744f2cdd007d2e2635b45de10299224c9a2b69fa554caa79ecc5d82",
+      "original_bytes": 521
+    },
+    "tabs_raw/audit_log.jsonl": {
+      "dataset_file": "raw/audit_log.jsonl.gz",
+      "original_sha256": "ac8013d99d8dcc683fa452e2e466447421c1dda557cddf9c5b93dd8d70122580",
+      "compressed_sha256": "b492897488d9a311424b80f579aae22cf14d526165e0a2a21855b0f1788766f5",
+      "original_bytes": 2152431
+    },
+    "tabs_raw/daily_returns.md": {
+      "dataset_file": "raw/daily_returns.md.gz",
+      "original_sha256": "fcb22235c01279fdbbe35b0882fed975a653a2fdc615879a71d117a0d6c30b64",
+      "compressed_sha256": "596ceb7ab07941954a37909b9d9befd2b8b1170e2f696bec3ad9bc8a4265e7e5",
+      "original_bytes": 92571
+    },
+    "tabs_raw/positioninfo.md": {
+      "dataset_file": "raw/positioninfo.md.gz",
+      "original_sha256": "33612581189e03ae5fac0dc04886335730ed47aca109e53b36977c1d2793ab0b",
+      "compressed_sha256": "d2617b67c8e4dcc9e244fdb74225650b8a59f493860b89410ac087733574ddeb",
+      "original_bytes": 540872
+    },
+    "tabs_raw/transactioninfo.md": {
+      "dataset_file": "raw/transactioninfo.md.gz",
+      "original_sha256": "81b54ca8fafd08cf2f6c81d04f7f0d401dfbdea9f1de53d00d0773bb46d29d2f",
+      "compressed_sha256": "0aa5ced88593963491efe53849045e00b9aaa444d1ca11088539f81e752c97e8",
+      "original_bytes": 42408
+    },
+    "tabs_raw/balances.md": {
+      "dataset_file": "raw/balances.md.gz",
+      "original_sha256": "d94f81f1e30d9ecc409177352728e18eceeae222c2954884d16173c73d7eedeb",
+      "compressed_sha256": "120cb282f13a39ad38c566db824a0c25890fc413c098486c105d78b8fd8f92ce",
+      "original_bytes": 88147
+    },
+    "tabs_raw/period_risks.md": {
+      "dataset_file": "raw/period_risks.md.gz",
+      "original_sha256": "349413a1df1ccb00c57db8720e925276f0fab70bc87c7df26ed12aaae7889850",
+      "compressed_sha256": "f7b1ead24a06281549067681de1b6f03bffb58e33bc91d52b1e75fbecaf6649b",
+      "original_bytes": 62595
+    },
+    "tabs_raw/logs.md": {
+      "dataset_file": "raw/logs.md.gz",
+      "original_sha256": "d811c3e0aa782563080368e27c8bd9f2aa226afd30972ddc3c7cba7ca0fa2af3",
+      "compressed_sha256": "038b7cd8533275650655e24ff7107f5b12d4c8a05084442fe5aa4454842d982e",
+      "original_bytes": 290
+    }
+  }
+}

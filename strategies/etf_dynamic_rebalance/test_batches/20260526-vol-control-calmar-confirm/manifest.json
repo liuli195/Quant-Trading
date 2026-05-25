@@ -1,0 +1,59 @@
+{
+  "batch_id": "20260526-vol-control-calmar-confirm",
+  "strategy": "etf_dynamic_rebalance",
+  "created": "2026-05-26T00:00:00",
+  "status": "completed",
+  "scenarios": {
+    "s01-local-shortlist": {
+      "status": "completed",
+      "runs": [
+        {
+          "run_id": "20260526-0214-bt24c9d8b410c21d7da6229fe0d3c94901",
+          "label": "local-01-w40-tv0296684",
+          "params_diff": {
+            "portfolio_vol_window": 40,
+            "target_vol": 0.296684328514
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260526-0217-bt649414737cca9f694bc92e09c5cdd140",
+          "label": "local-02-w40-tv0296662",
+          "params_diff": {
+            "portfolio_vol_window": 40,
+            "target_vol": 0.296661808562
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260526-0221-bt3259066658e5135eb443ce3f05689b72",
+          "label": "local-03-w40-tv0296639",
+          "params_diff": {
+            "portfolio_vol_window": 40,
+            "target_vol": 0.296639288611
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260526-0225-bt8a0c34a15f9adffd8446ae39d2e7ee7e",
+          "label": "local-04-w40-tv0296851",
+          "params_diff": {
+            "portfolio_vol_window": 40,
+            "target_vol": 0.29685101376
+          },
+          "status": "completed"
+        },
+        {
+          "run_id": "20260526-0229-btee809d4cea8f278df764d8dd0c195e5f",
+          "label": "default-w40-tv008",
+          "params_diff": {
+            "portfolio_vol_window": 40,
+            "target_vol": 0.08
+          },
+          "status": "completed"
+        }
+      ]
+    }
+  },
+  "updated": "2026-05-26T02:32:56"
+}
