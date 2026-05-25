@@ -220,6 +220,8 @@ def _write_minimal_repo(root: Path) -> None:
         "所有进入主干的改动必须通过 PR\n直写主干 ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON\n"
         "禁止本地合并主干\nCodex Review Monitor\n"
         "主会话只负责流程编排\n任务优先分发给子agent执行\n子 agent 交叉评审\n"
+        "complete\npartial\n官方 Codex Review 跳过授权\n"
+        "本地安全 review\ncodex-security\nsecurity-guidance\n"
         "superpowers:subagent-driven-development/spec-reviewer-prompt.md\n"
         "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md\n"
         "reviewers:\n"
@@ -230,6 +232,8 @@ def _write_minimal_repo(root: Path) -> None:
     (root / "docs/rules/governance.md").write_text(
         ".githooks/reference-transaction ALLOW_MAIN_REF_UPDATE MAIN_REF_UPDATE_REASON "
         "ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON Codex Review Monitor "
+        "review_mode=complete 官方 Codex Review 跳过授权 "
+        "security_review 本地安全 review codex-security security-guidance "
         "git fetch origin main git merge --ff-only origin/main "
         "git branch -d <branch> git push origin --delete <branch> force delete\n",
         encoding="utf-8",
@@ -258,7 +262,9 @@ def _write_minimal_repo(root: Path) -> None:
         "superpowers:subagent-driven-development/spec-reviewer-prompt.md\n"
         "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md\n"
         "reviewers:\n"
-        "任务分发说明\nCodex Code Review 结论\n"
+        "任务分发说明\n官方 Codex Review 跳过授权\n"
+        "本地 AI review 模式\n不完全 Review 模式授权\nCodex Code Review 结论\n"
+        "本地安全 review\ncodex-security\nsecurity-guidance\n"
         "Codex\nscripts.research.governance gate\nwaiver\n证据\n",
         encoding="utf-8",
     )
@@ -278,6 +284,13 @@ def _write_minimal_repo(root: Path) -> None:
                 "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
                 "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
                 "reviewers:",
+                "review_mode=complete",
+                "review_mode=partial",
+                "security_review",
+                "本地安全 review",
+                "codex-security",
+                "security-guidance",
+                "官方 Codex Review 跳过授权",
                 "Codex Code Review 结论",
                 "结论: 通过",
                 "阻断问题: 无",
@@ -1234,6 +1247,12 @@ def test_reference_transaction_branch_protection_blocks_audited_non_fast_forward
     assert violations == ["main"]
 
 
+LOCAL_SECURITY_REVIEW_LINE = (
+    "- 本地安全 review: provider=codex；tool=codex-security；"
+    "evidence=Codex Security local review completed"
+)
+
+
 def _valid_codex_review_body(review_id: int = 4314779358) -> str:
     cross_review = (
         "- 子 agent 交叉评审: "
@@ -1249,6 +1268,7 @@ def _valid_codex_review_body(review_id: int = 4314779358) -> str:
             "- 风险等级: high",
             "- 是否需要官方 Codex Review: 是",
             "- 本地 AI review: `.local/ai-review/latest.md`",
+            LOCAL_SECURITY_REVIEW_LINE,
             cross_review,
             "- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent",
             "- P0/P1 未关闭项: 无",
@@ -1277,6 +1297,7 @@ def test_low_risk_pr_body_does_not_require_codex_review() -> None:
 - 风险等级: low
 - 是否需要官方 Codex Review: 否
 - 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence=Codex Security local review completed
 - 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
 - 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
@@ -1310,6 +1331,146 @@ def test_low_risk_pr_body_requires_cross_review_and_dispatch_evidence() -> None:
     assert not report.ok
     assert "子 agent 交叉评审 must be filled" in report.errors
     assert "任务分发说明 must be filled" in report.errors
+
+
+def test_low_risk_pr_body_requires_local_security_review_evidence() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "本地安全 review must be filled" in report.errors
+
+
+def test_low_risk_pr_body_rejects_template_security_review_placeholder() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex / claude；tool=codex-security / security-guidance；evidence=<安全 review 证据>
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "本地安全 review must not contain placeholder text" in report.errors
+
+
+def test_low_risk_pr_body_rejects_mismatched_security_review_tool_assignment() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=security-guidance；evidence=codex-security local review completed
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert (
+        "本地安全 review must include tool=codex-security for provider=codex"
+        in report.errors
+    )
+
+
+def test_low_risk_pr_body_rejects_empty_security_review_evidence() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence=
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "本地安全 review evidence must be filled" in report.errors
+
+
+def test_low_risk_pr_body_rejects_empty_security_review_chinese_evidence() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；证据=
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "本地安全 review evidence must be filled" in report.errors
+
+
+def test_low_risk_pr_body_rejects_unassigned_security_review_evidence() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "本地安全 review evidence must be filled" in report.errors
 
 
 def test_low_risk_pr_body_requires_superpowers_cross_review_skills() -> None:
@@ -1407,6 +1568,112 @@ def test_low_risk_pr_body_accepts_reviewer_names_without_fixed_phrase() -> None:
 - 风险等级: low
 - 是否需要官方 Codex Review: 否
 - 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence=Codex Security local review completed
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert report.ok, report.errors
+
+
+def test_pr_body_partial_ai_review_mode_requires_user_authorization() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 本地 AI review 模式: partial
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "不完全 Review 模式授权 must be filled" in report.errors
+
+
+def test_pr_body_partial_ai_review_mode_rejects_empty_authorization_values() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 官方 Codex Review 跳过授权: 无
+- 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence=Codex Security local review completed
+- 本地 AI review 模式: partial
+- 不完全 Review 模式授权: authorized_by=；reason=；evidence=
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "不完全 Review 模式授权 authorized_by must be filled" in report.errors
+    assert "不完全 Review 模式授权 reason must be filled" in report.errors
+    assert "不完全 Review 模式授权 evidence must be filled" in report.errors
+
+
+def test_pr_body_partial_ai_review_mode_rejects_unassigned_authorization_values() -> (
+    None
+):
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 官方 Codex Review 跳过授权: 无
+- 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence=Codex Security local review completed
+- 本地 AI review 模式: partial
+- 不完全 Review 模式授权: authorized_by reason evidence
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "不完全 Review 模式授权 authorized_by must be filled" in report.errors
+    assert "不完全 Review 模式授权 reason must be filled" in report.errors
+    assert "不完全 Review 模式授权 evidence must be filled" in report.errors
+
+
+def test_pr_body_partial_ai_review_mode_accepts_user_authorization() -> None:
+    body = """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 本地 AI review 模式: partial
+- 不完全 Review 模式授权: authorized_by=用户；reason=本次只做紧急小范围文档修订；evidence=当前对话中用户明确授权不完全 review 模式
+- 本地安全 review: provider=codex；tool=codex-security；evidence=Codex Security local review completed
 - 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
 - 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
@@ -1515,6 +1782,7 @@ def test_low_risk_pr_body_with_high_risk_changed_files_requires_codex_review() -
 - 风险等级: low
 - 是否需要官方 Codex Review: 否
 - 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence=Codex Security local review completed
 - 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
 - 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
@@ -1542,6 +1810,7 @@ def test_low_risk_pr_body_with_ai_risk_label_requires_codex_review() -> None:
 - 风险等级: low
 - 是否需要官方 Codex Review: 否
 - 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence=Codex Security local review completed
 - 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
 - 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
@@ -1571,6 +1840,7 @@ def test_low_risk_pr_body_requires_p2_section() -> None:
 - 风险等级: low
 - 是否需要官方 Codex Review: 否
 - 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence=Codex Security local review completed
 - 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
 - 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
@@ -1589,6 +1859,7 @@ def test_low_risk_pr_body_accepts_chinese_p2_fields() -> None:
 - 风险等级: low
 - 是否需要官方 Codex Review: 否
 - 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence=Codex Security local review completed
 - 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
 - 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
@@ -1613,6 +1884,7 @@ def test_low_risk_pr_body_rejects_p2_none_mixed_with_unjustified_item() -> None:
 - 风险等级: low
 - 是否需要官方 Codex Review: 否
 - 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence=Codex Security local review completed
 - 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
 - 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
@@ -1662,6 +1934,7 @@ def test_low_risk_pr_body_accepts_dispatched_detail_with_no_undispatched_items()
 - 风险等级: low
 - 是否需要官方 Codex Review: 否
 - 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence=Codex Security local review completed
 - 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
 - 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent；无未分发项
 - P0/P1 未关闭项: 无
@@ -1792,6 +2065,110 @@ def test_high_risk_pr_body_requires_codex_review() -> None:
     assert any(
         "PR comments must include the required @codex review trigger" in error
         for error in report.errors
+    )
+
+
+def _official_codex_skip_body(*, authorization: str | None = None) -> str:
+    authorization_line = (
+        authorization
+        if authorization is not None
+        else "authorized_by=用户；reason=当前 PR 官方 Codex review 成本高于风险；evidence=当前对话中用户明确授权跳过官方 Codex review"
+    )
+    return f"""
+## AI Review 风险分级
+
+- 风险等级: high
+- 是否需要官方 Codex Review: 否
+- 官方 Codex Review 跳过授权: {authorization_line}
+- 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence=Codex Security local review completed
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+
+def test_high_risk_pr_body_can_skip_codex_review_with_user_authorization() -> None:
+    report = validate_pr_body(_official_codex_skip_body(), comments=[])
+
+    assert report.ok, report.errors
+
+
+def test_high_risk_pr_body_rejects_skip_without_user_authorization() -> None:
+    report = validate_pr_body(
+        _official_codex_skip_body(authorization="无"),
+        comments=[],
+    )
+
+    assert not report.ok
+    assert "官方 Codex Review 跳过授权 must be filled" in report.errors
+    assert "PR body missing section: Codex Code Review 结论" in report.errors
+
+
+def test_high_risk_pr_body_rejects_template_skip_authorization_placeholder() -> None:
+    report = validate_pr_body(
+        _official_codex_skip_body(
+            authorization="无 / authorized_by=<授权人>；reason=<原因>；evidence=<授权证据>"
+        ),
+        comments=[],
+    )
+
+    assert not report.ok
+    assert (
+        "官方 Codex Review 跳过授权 must not contain placeholder text" in report.errors
+    )
+
+
+def test_high_risk_pr_body_rejects_empty_skip_authorization_values() -> None:
+    report = validate_pr_body(
+        _official_codex_skip_body(authorization="authorized_by=；reason=；evidence="),
+        comments=[],
+    )
+
+    assert not report.ok
+    assert "官方 Codex Review 跳过授权 authorized_by must be filled" in report.errors
+    assert "官方 Codex Review 跳过授权 reason must be filled" in report.errors
+    assert "官方 Codex Review 跳过授权 evidence must be filled" in report.errors
+
+
+def test_high_risk_pr_body_rejects_unassigned_skip_authorization_values() -> None:
+    report = validate_pr_body(
+        _official_codex_skip_body(authorization="authorized_by reason evidence"),
+        comments=[],
+    )
+
+    assert not report.ok
+    assert "官方 Codex Review 跳过授权 authorized_by must be filled" in report.errors
+    assert "官方 Codex Review 跳过授权 reason must be filled" in report.errors
+    assert "官方 Codex Review 跳过授权 evidence must be filled" in report.errors
+
+
+def test_codex_skip_authorization_does_not_bypass_unresolved_blocking_threads() -> None:
+    report = validate_pr_body(
+        _official_codex_skip_body(),
+        comments=[],
+        review_threads=[
+            {
+                "isResolved": False,
+                "isOutdated": False,
+                "comments": [
+                    {
+                        "body": "[P1] blocking finding",
+                        "author": {"login": "chatgpt-codex-connector[bot]"},
+                    }
+                ],
+            }
+        ],
+    )
+
+    assert not report.ok
+    assert (
+        "Codex review must not have unresolved non-outdated P0/P1 threads"
+        in report.errors
     )
 
 
@@ -2653,6 +3030,24 @@ def test_codex_review_monitor_reports_waiting_for_codex_after_trigger() -> None:
     assert report.status == "waiting_for_codex"
     assert report.trigger_found
     assert "等待 Codex review" in render_monitor_comment(report)
+
+
+def test_codex_review_monitor_passes_when_official_review_is_authorized_skipped() -> (
+    None
+):
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}, "body": _official_codex_skip_body()},
+        issue_comments=[],
+        reviews=[],
+        review_comments=[],
+    )
+
+    assert report.status == "skipped"
+    assert not report.trigger_found
+    assert "授权跳过" in render_monitor_comment(report)
 
 
 def test_codex_review_monitor_blocks_unresolved_blocking_threads() -> None:

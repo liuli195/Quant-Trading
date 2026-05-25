@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,12 +12,18 @@ from typing import Any
 
 
 BLOCKING_SEVERITIES = {"P0", "P1"}
+CURRENT_SCHEMA_VERSION = 2
 VALID_SEVERITIES = {"P0", "P1", "P2", "P3"}
 VALID_STATUSES = {"open", "fixed", "false_positive", "accepted"}
+VALID_REVIEW_MODES = {"complete", "partial"}
 REQUIRED_CROSS_REVIEW_SKILLS = (
     "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
     "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
 )
+REQUIRED_SECURITY_REVIEW_TOOLS = {
+    "codex": "codex-security",
+    "claude": "security-guidance",
+}
 HIGH_RISK_PREFIXES = (
     "strategies/",
     "scripts/research/platform/",
@@ -35,6 +42,8 @@ class AiReviewValidation:
     requires_official_codex_review: bool
     errors: tuple[str, ...]
     review_scope: str
+    official_codex_review_skipped: bool = False
+    review_mode: str = "complete"
 
 
 def validate_report_file(path: Path) -> AiReviewValidation:
@@ -53,13 +62,16 @@ def validate_report_file(path: Path) -> AiReviewValidation:
 
 def validate_report(payload: dict[str, Any]) -> AiReviewValidation:
     errors: list[str] = []
+    schema_version = payload.get("schema_version")
     risk_level = str(payload.get("risk_level") or "unknown")
     changed_files = _string_list(payload.get("changed_files"))
     findings = payload.get("findings")
-    if payload.get("schema_version") != 1:
-        errors.append("schema_version must be 1")
-    if str(payload.get("tool") or "") not in {"codex", "claude"}:
+    if schema_version != CURRENT_SCHEMA_VERSION:
+        errors.append("schema_version must be 2")
+    tool = str(payload.get("tool") or "")
+    if tool not in {"codex", "claude"}:
         errors.append("tool must be codex or claude")
+    errors.extend(_security_review_errors(payload.get("security_review"), tool))
     raw_reviewers = payload.get("reviewers")
     reviewers = _string_list(raw_reviewers)
     distinct_reviewers = {
@@ -86,6 +98,21 @@ def validate_report(payload: dict[str, Any]) -> AiReviewValidation:
     if not isinstance(findings, list):
         errors.append("findings must be a list")
         findings = []
+
+    review_mode = _review_mode(payload)
+    if review_mode not in VALID_REVIEW_MODES:
+        errors.append("review_mode must be complete or partial")
+    elif review_mode == "complete":
+        errors.extend(
+            _complete_review_errors(payload.get("complete_review"), reviewers)
+        )
+    elif review_mode == "partial":
+        errors.extend(
+            _authorization_errors(
+                payload.get("review_mode_authorization"),
+                "partial review mode",
+            )
+        )
 
     for item in findings:
         if not isinstance(item, dict):
@@ -114,25 +141,46 @@ def validate_report(payload: dict[str, Any]) -> AiReviewValidation:
                 )
 
     high_risk_by_path = any(_is_high_risk_path(path) for path in changed_files)
-    requires_official = (
+    natural_requires_official = (
         bool(payload.get("requires_official_codex_review"))
         or risk_level != "low"
         or high_risk_by_path
     )
+    skip_official = bool(payload.get("skip_official_codex_review"))
+    skip_auth_errors: list[str] = []
+    if skip_official:
+        skip_auth_errors = _authorization_errors(
+            payload.get("official_codex_review_skip_authorization"),
+            "official Codex review skip",
+        )
+        errors.extend(skip_auth_errors)
+    official_skip_authorized = skip_official and not skip_auth_errors
+    requires_official = natural_requires_official and not official_skip_authorized
     if high_risk_by_path and risk_level == "low":
         errors.append("high-risk changed files cannot be risk_level low")
         risk_level = "high"
-        requires_official = True
+        requires_official = not official_skip_authorized
     review_scope = build_codex_review_scope(
-        payload, requires_official=requires_official
+        payload,
+        requires_official=requires_official,
+        official_skip_authorized=official_skip_authorized,
     )
     return AiReviewValidation(
-        not errors, risk_level, requires_official, tuple(errors), review_scope
+        not errors,
+        risk_level,
+        requires_official,
+        tuple(errors),
+        review_scope,
+        official_codex_review_skipped=official_skip_authorized,
+        review_mode=review_mode,
     )
 
 
 def build_codex_review_scope(
-    payload: dict[str, Any], *, requires_official: bool
+    payload: dict[str, Any],
+    *,
+    requires_official: bool,
+    official_skip_authorized: bool = False,
 ) -> str:
     changed_files = _string_list(payload.get("changed_files"))
     high_risk_files = [path for path in changed_files if _is_high_risk_path(path)]
@@ -152,6 +200,12 @@ def build_codex_review_scope(
         if finding_lines
         else "- 无未关闭 P0/P1；无必须交给官方复核的本地发现。"
     )
+    if official_skip_authorized:
+        authorization = payload.get("official_codex_review_skip_authorization")
+        reason = ""
+        if isinstance(authorization, dict):
+            reason = _single_line_text(authorization.get("reason"))
+        return f"官方 Codex Review 已由用户授权跳过。原因: {reason or '未记录'}"
     if not requires_official:
         return "本 PR 当前不要求官方 Codex Review。"
     return (
@@ -183,8 +237,10 @@ def render_markdown_report(payload: dict[str, Any]) -> str:
         f"- Reviewers: {', '.join(_string_list(payload.get('reviewers')))}",
         f"- 风险等级: {result.risk_level}",
         f"- 是否需要官方 Codex Review: {'是' if result.requires_official_codex_review else '否'}",
+        f"- Review 模式: {result.review_mode}",
         f"- 校验结果: {'通过' if result.ok else '失败'}",
     ]
+    lines.extend(_render_security_review(payload.get("security_review")))
     lines.extend(_render_cross_review(payload.get("cross_review")))
     lines.extend(["", "## 变更文件", ""])
     lines.extend(f"- `{path}`" for path in changed_files)
@@ -282,6 +338,92 @@ def _cross_review_errors(value: Any) -> list[str]:
     return errors
 
 
+def _security_review_errors(value: Any, tool: str) -> list[str]:
+    required_tool = REQUIRED_SECURITY_REVIEW_TOOLS.get(tool)
+    if required_tool is None:
+        return []
+    if not isinstance(value, dict):
+        return [f"security_review.tool must be {required_tool} for {tool} local review"]
+    errors: list[str] = []
+    if str(value.get("tool") or "").strip().casefold() != required_tool:
+        errors.append(
+            f"security_review.tool must be {required_tool} for {tool} local review"
+        )
+    if not str(value.get("evidence") or "").strip():
+        errors.append("security_review.evidence must be filled")
+    return errors
+
+
+def _review_mode(payload: dict[str, Any]) -> str:
+    value = str(payload.get("review_mode") or "").strip()
+    if value:
+        return value
+    return "complete"
+
+
+def _complete_review_errors(value: Any, reviewers: list[str]) -> list[str]:
+    if not isinstance(value, dict):
+        return ["complete_review must be filled for complete review mode"]
+    errors: list[str] = []
+    if not str(value.get("evidence") or "").strip():
+        errors.append("complete_review.evidence must be filled")
+    iterations = value.get("iterations")
+    if not isinstance(iterations, list) or not iterations:
+        return errors + ["complete_review.iterations must not be empty"]
+
+    valid_iterations = [item for item in iterations if isinstance(item, dict)]
+    if len(valid_iterations) != len(iterations):
+        errors.append("complete_review.iterations must contain only objects")
+    for reviewer in reviewers:
+        normalized = _normalize_reviewer_identity(reviewer)
+        reviewer_iterations = [
+            item
+            for item in valid_iterations
+            if _normalize_reviewer_identity(str(item.get("reviewer") or ""))
+            == normalized
+        ]
+        reviewer_iterations.sort(key=_iteration_round)
+        final_iteration = reviewer_iterations[-1] if reviewer_iterations else None
+        if (
+            final_iteration is None
+            or final_iteration.get("no_new_findings") is not True
+        ):
+            errors.append(
+                f"complete_review reviewer {reviewer} must end with a no-new-findings iteration"
+            )
+            continue
+        if final_iteration.get("new_findings") != []:
+            errors.append(
+                f"complete_review reviewer {reviewer} final new_findings must be []"
+            )
+    return errors
+
+
+def _iteration_round(value: dict[str, Any]) -> int:
+    try:
+        return int(value.get("round") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _authorization_errors(value: Any, label: str) -> list[str]:
+    if not isinstance(value, dict):
+        return [f"{label} requires user authorization"]
+    errors: list[str] = []
+    for field in ("authorized_by", "reason", "evidence"):
+        field_value = _single_line_text(value.get(field))
+        if not field_value:
+            errors.append(f"{label} authorization missing {field}")
+        elif _is_placeholder_authorization_value(field_value):
+            errors.append(f"{label} authorization invalid {field}")
+    return errors
+
+
+def _is_placeholder_authorization_value(value: str) -> bool:
+    normalized = value.strip().strip("`\"'")
+    return bool(re.search(r"<[^>]+>", normalized))
+
+
 def _render_cross_review(value: Any) -> list[str]:
     lines = ["", "## 子 agent 交叉评审", ""]
     if not isinstance(value, dict):
@@ -296,6 +438,18 @@ def _render_cross_review(value: Any) -> list[str]:
     else:
         lines.append("- Superpowers 评审技能: 未记录")
     evidence = _single_line_text(value.get("evidence"))
+    lines.append(f"- 证据: {evidence or '未记录'}")
+    return lines
+
+
+def _render_security_review(value: Any) -> list[str]:
+    lines = ["", "## 本地安全 Review", ""]
+    if not isinstance(value, dict):
+        lines.append("- 未记录")
+        return lines
+    tool = _single_line_text(value.get("tool"))
+    evidence = _single_line_text(value.get("evidence"))
+    lines.append(f"- 工具: {tool or '未记录'}")
     lines.append(f"- 证据: {evidence or '未记录'}")
     return lines
 

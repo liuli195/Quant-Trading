@@ -25,6 +25,473 @@ def _cross_review() -> dict:
     }
 
 
+def _complete_review(*reviewers: str) -> dict:
+    reviewer_names = reviewers or ("spec-review-subagent", "quality-review-subagent")
+    return {
+        "evidence": "each reviewer continued searching until no new findings",
+        "iterations": [
+            {
+                "reviewer": reviewer,
+                "round": 1,
+                "new_findings": [],
+                "no_new_findings": True,
+            }
+            for reviewer in reviewer_names
+        ],
+    }
+
+
+def _review_mode_authorization() -> dict:
+    return {
+        "authorized_by": "用户",
+        "reason": "本次只做紧急小范围文档修订",
+        "evidence": "当前对话中用户明确授权不完全 review 模式",
+    }
+
+
+def _official_skip_authorization() -> dict:
+    return {
+        "authorized_by": "用户",
+        "reason": "当前 PR 官方 Codex review 成本高于风险",
+        "evidence": "当前对话中用户明确授权跳过官方 Codex review",
+    }
+
+
+def _security_review(tool: str = "codex") -> dict:
+    review_tool = {
+        "codex": "codex-security",
+        "claude": "security-guidance",
+    }[tool]
+    return {
+        "tool": review_tool,
+        "evidence": f"{review_tool} local security review completed",
+    }
+
+
+def test_codex_report_requires_codex_security_review(tmp_path: Path) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 2,
+            "tool": "codex",
+            "reviewers": ["spec-review-subagent", "quality-review-subagent"],
+            "risk_level": "low",
+            "requires_official_codex_review": False,
+            "cross_review": _cross_review(),
+            "complete_review": _complete_review(),
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert (
+        "security_review.tool must be codex-security for codex local review"
+        in result.errors
+    )
+
+
+def test_claude_report_requires_security_guidance_review(tmp_path: Path) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 2,
+            "tool": "claude",
+            "reviewers": ["spec-review-subagent", "quality-review-subagent"],
+            "risk_level": "low",
+            "requires_official_codex_review": False,
+            "cross_review": _cross_review(),
+            "complete_review": _complete_review(),
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert (
+        "security_review.tool must be security-guidance for claude local review"
+        in result.errors
+    )
+
+
+def test_schema_v2_defaults_to_complete_review_mode(tmp_path: Path) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 2,
+            "tool": "codex",
+            "reviewers": ["spec-review-subagent", "quality-review-subagent"],
+            "risk_level": "low",
+            "requires_official_codex_review": False,
+            "security_review": _security_review(),
+            "cross_review": _cross_review(),
+            "complete_review": _complete_review(),
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert result.ok, result.errors
+
+
+def test_complete_review_requires_each_reviewer_to_end_with_no_new_findings(
+    tmp_path: Path,
+) -> None:
+    complete_review = _complete_review()
+    complete_review["iterations"] = [
+        {
+            "reviewer": "spec-review-subagent",
+            "round": 1,
+            "new_findings": ["AIR-001"],
+        },
+        {
+            "reviewer": "quality-review-subagent",
+            "round": 1,
+            "new_findings": [],
+            "no_new_findings": True,
+        },
+    ]
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 2,
+            "tool": "codex",
+            "reviewers": ["spec-review-subagent", "quality-review-subagent"],
+            "risk_level": "low",
+            "requires_official_codex_review": False,
+            "cross_review": _cross_review(),
+            "complete_review": complete_review,
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert (
+        "complete_review reviewer spec-review-subagent must end with a no-new-findings iteration"
+        in result.errors
+    )
+
+
+def test_complete_review_requires_final_new_findings_to_be_explicitly_empty(
+    tmp_path: Path,
+) -> None:
+    complete_review = _complete_review()
+    complete_review["iterations"][0]["new_findings"] = [{"id": "P1"}]
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 2,
+            "tool": "codex",
+            "reviewers": ["spec-review-subagent", "quality-review-subagent"],
+            "risk_level": "low",
+            "requires_official_codex_review": False,
+            "security_review": _security_review(),
+            "cross_review": _cross_review(),
+            "complete_review": complete_review,
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert (
+        "complete_review reviewer spec-review-subagent final new_findings must be []"
+        in result.errors
+    )
+
+
+def test_partial_review_mode_requires_user_authorization(tmp_path: Path) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 2,
+            "tool": "codex",
+            "review_mode": "partial",
+            "reviewers": ["spec-review-subagent", "quality-review-subagent"],
+            "risk_level": "low",
+            "requires_official_codex_review": False,
+            "cross_review": _cross_review(),
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert "partial review mode requires user authorization" in result.errors
+
+
+def test_partial_review_mode_accepts_user_authorization(tmp_path: Path) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 2,
+            "tool": "codex",
+            "review_mode": "partial",
+            "review_mode_authorization": _review_mode_authorization(),
+            "reviewers": ["spec-review-subagent", "quality-review-subagent"],
+            "risk_level": "low",
+            "requires_official_codex_review": False,
+            "security_review": _security_review(),
+            "cross_review": _cross_review(),
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert result.ok, result.errors
+
+
+def test_partial_review_mode_rejects_placeholder_authorization_values(
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 2,
+            "tool": "codex",
+            "review_mode": "partial",
+            "review_mode_authorization": {
+                "authorized_by": "<授权人>",
+                "reason": "<原因>",
+                "evidence": "<授权证据>",
+            },
+            "reviewers": ["spec-review-subagent", "quality-review-subagent"],
+            "risk_level": "low",
+            "requires_official_codex_review": False,
+            "security_review": _security_review(),
+            "cross_review": _cross_review(),
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert "partial review mode authorization invalid authorized_by" in result.errors
+    assert "partial review mode authorization invalid reason" in result.errors
+    assert "partial review mode authorization invalid evidence" in result.errors
+
+
+def test_partial_review_mode_rejects_embedded_placeholder_authorization_values(
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 2,
+            "tool": "codex",
+            "review_mode": "partial",
+            "review_mode_authorization": {
+                "authorized_by": "user <template>",
+                "reason": "approved because <template>",
+                "evidence": "ticket <template>",
+            },
+            "reviewers": ["spec-review-subagent", "quality-review-subagent"],
+            "risk_level": "low",
+            "requires_official_codex_review": False,
+            "security_review": _security_review(),
+            "cross_review": _cross_review(),
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert "partial review mode authorization invalid authorized_by" in result.errors
+    assert "partial review mode authorization invalid reason" in result.errors
+    assert "partial review mode authorization invalid evidence" in result.errors
+
+
+def test_high_risk_report_requires_official_review_by_default(tmp_path: Path) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 2,
+            "tool": "codex",
+            "reviewers": ["spec-review-subagent", "quality-review-subagent"],
+            "risk_level": "high",
+            "requires_official_codex_review": False,
+            "security_review": _security_review(),
+            "cross_review": _cross_review(),
+            "complete_review": _complete_review(),
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert result.ok, result.errors
+    assert result.requires_official_codex_review
+
+
+def test_high_risk_report_can_skip_official_review_with_user_authorization(
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 2,
+            "tool": "codex",
+            "reviewers": ["spec-review-subagent", "quality-review-subagent"],
+            "risk_level": "high",
+            "requires_official_codex_review": False,
+            "skip_official_codex_review": True,
+            "official_codex_review_skip_authorization": _official_skip_authorization(),
+            "security_review": _security_review(),
+            "cross_review": _cross_review(),
+            "complete_review": _complete_review(),
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert result.ok, result.errors
+    assert not result.requires_official_codex_review
+
+
+def test_skip_official_review_requires_user_authorization(tmp_path: Path) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 2,
+            "tool": "codex",
+            "reviewers": ["spec-review-subagent", "quality-review-subagent"],
+            "risk_level": "high",
+            "requires_official_codex_review": False,
+            "skip_official_codex_review": True,
+            "cross_review": _cross_review(),
+            "complete_review": _complete_review(),
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert "official Codex review skip requires user authorization" in result.errors
+
+
+def test_skip_official_review_rejects_placeholder_authorization_values(
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 2,
+            "tool": "codex",
+            "reviewers": ["spec-review-subagent", "quality-review-subagent"],
+            "risk_level": "high",
+            "requires_official_codex_review": False,
+            "skip_official_codex_review": True,
+            "official_codex_review_skip_authorization": {
+                "authorized_by": "<授权人>",
+                "reason": "<原因>",
+                "evidence": "<授权证据>",
+            },
+            "security_review": _security_review(),
+            "cross_review": _cross_review(),
+            "complete_review": _complete_review(),
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert (
+        "official Codex review skip authorization invalid authorized_by"
+        in result.errors
+    )
+    assert "official Codex review skip authorization invalid reason" in result.errors
+    assert "official Codex review skip authorization invalid evidence" in result.errors
+
+
+def test_skip_official_review_rejects_embedded_placeholder_authorization_values(
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / "latest.json"
+    _write_report(
+        report,
+        {
+            "schema_version": 2,
+            "tool": "codex",
+            "reviewers": ["spec-review-subagent", "quality-review-subagent"],
+            "risk_level": "high",
+            "requires_official_codex_review": False,
+            "skip_official_codex_review": True,
+            "official_codex_review_skip_authorization": {
+                "authorized_by": "user <template>",
+                "reason": "approved because <template>",
+                "evidence": "ticket <template>",
+            },
+            "security_review": _security_review(),
+            "cross_review": _cross_review(),
+            "complete_review": _complete_review(),
+            "changed_files": ["docs/guides/example.md"],
+            "findings": [],
+            "checks": {"pytest": "pass"},
+        },
+    )
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert (
+        "official Codex review skip authorization invalid authorized_by"
+        in result.errors
+    )
+    assert "official Codex review skip authorization invalid reason" in result.errors
+    assert "official Codex review skip authorization invalid evidence" in result.errors
+
+
 def test_report_requires_two_distinct_reviewers_for_cross_review(
     tmp_path: Path,
 ) -> None:
@@ -32,7 +499,7 @@ def test_report_requires_two_distinct_reviewers_for_cross_review(
     _write_report(
         report,
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "tool": "codex",
             "reviewers": ["superpowers"],
             "risk_level": "low",
@@ -60,7 +527,7 @@ def test_report_rejects_duplicate_reviewers_for_cross_review(
     _write_report(
         report,
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "tool": "codex",
             "reviewers": ["superpowers", "superpowers"],
             "risk_level": "low",
@@ -86,7 +553,7 @@ def test_report_rejects_duplicate_reviewers_with_markup(tmp_path: Path) -> None:
     _write_report(
         report,
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "tool": "codex",
             "reviewers": ["alice", "`alice`"],
             "risk_level": "low",
@@ -114,7 +581,7 @@ def test_report_requires_delegated_cross_review_evidence(
     _write_report(
         report,
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "tool": "codex",
             "reviewers": ["spec-review-subagent", "quality-review-subagent"],
             "risk_level": "low",
@@ -136,7 +603,7 @@ def test_report_requires_superpowers_review_skills(tmp_path: Path) -> None:
     _write_report(
         report,
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "tool": "codex",
             "reviewers": ["spec-review-subagent", "quality-review-subagent"],
             "risk_level": "low",
@@ -166,7 +633,7 @@ def test_report_trims_reviewers_before_distinct_check(tmp_path: Path) -> None:
     _write_report(
         report,
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "tool": "codex",
             "reviewers": ["spec-review-subagent", " spec-review-subagent "],
             "risk_level": "low",
@@ -192,7 +659,7 @@ def test_report_rejects_non_string_reviewers(tmp_path: Path) -> None:
     _write_report(
         report,
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "tool": "codex",
             "reviewers": [None, "quality-review-subagent"],
             "risk_level": "low",
@@ -215,7 +682,7 @@ def test_report_rejects_placeholder_reviewers(tmp_path: Path) -> None:
     _write_report(
         report,
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "tool": "codex",
             "reviewers": ["<规格评审子agent>", "<代码质量评审子agent>"],
             "risk_level": "low",
@@ -238,7 +705,7 @@ def test_report_rejects_implementer_or_controller_reviewers(tmp_path: Path) -> N
     _write_report(
         report,
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "tool": "codex",
             "reviewers": ["主会话", "实现者"],
             "risk_level": "low",
@@ -261,11 +728,12 @@ def test_open_p1_blocks_progress(tmp_path: Path) -> None:
     _write_report(
         report,
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "tool": "codex",
             "reviewers": ["superpowers", "codex-security"],
             "risk_level": "high",
             "requires_official_codex_review": True,
+            "security_review": _security_review(),
             "cross_review": _cross_review(),
             "changed_files": ["strategies/etf_factor_rotation/etf_factor_rotation.py"],
             "findings": [
@@ -294,7 +762,7 @@ def test_p2_requires_defer_reason(tmp_path: Path) -> None:
     _write_report(
         report,
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "tool": "claude",
             "reviewers": ["pr-review-toolkit", "security-guidance"],
             "risk_level": "low",
@@ -327,12 +795,14 @@ def test_high_risk_scope_mentions_changed_file(tmp_path: Path) -> None:
     _write_report(
         report,
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "tool": "codex",
             "reviewers": ["superpowers", "codex-security"],
             "risk_level": "high",
             "requires_official_codex_review": True,
+            "security_review": _security_review(),
             "cross_review": _cross_review(),
+            "complete_review": _complete_review("superpowers", "codex-security"),
             "changed_files": ["scripts/research/governance/rules.py"],
             "findings": [],
             "checks": {"pytest": "pass", "governance_gate": "pass"},
@@ -354,12 +824,14 @@ def test_high_risk_scope_excludes_generated_strategy_artifacts(
     _write_report(
         report,
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "tool": "codex",
             "reviewers": ["superpowers", "codex-security"],
             "risk_level": "high",
             "requires_official_codex_review": True,
+            "security_review": _security_review(),
             "cross_review": _cross_review(),
+            "complete_review": _complete_review("superpowers", "codex-security"),
             "changed_files": [
                 "strategies/etf_factor_rotation/backtest_runs/run/api_export.json",
                 "strategies/etf_factor_rotation/etf_factor_rotation.py",
@@ -386,12 +858,14 @@ def test_markdown_summary_lists_risk_and_findings() -> None:
     cross_review = _cross_review()
     cross_review["evidence"] = "line one\n## injected heading"
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "tool": "codex",
         "reviewers": ["superpowers", "codex-security"],
         "risk_level": "low",
         "requires_official_codex_review": False,
+        "security_review": _security_review(),
         "cross_review": cross_review,
+        "complete_review": _complete_review("superpowers", "codex-security"),
         "changed_files": ["docs/guides/example.md"],
         "findings": [
             {
@@ -427,12 +901,14 @@ def test_markdown_summary_lists_risk_and_findings() -> None:
 def test_report_file_accepts_utf8_bom(tmp_path: Path) -> None:
     report = tmp_path / "latest.json"
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "tool": "codex",
         "reviewers": ["superpowers", "codex-security"],
         "risk_level": "low",
         "requires_official_codex_review": False,
+        "security_review": _security_review(),
         "cross_review": _cross_review(),
+        "complete_review": _complete_review("superpowers", "codex-security"),
         "changed_files": ["docs/guides/example.md"],
         "findings": [],
         "checks": {"pytest": "pass"},

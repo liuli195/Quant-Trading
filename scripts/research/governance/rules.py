@@ -65,6 +65,12 @@ PR_TEMPLATE_TOKENS = (
     "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
     "reviewers:",
     "任务分发说明",
+    "官方 Codex Review 跳过授权",
+    "本地 AI review 模式",
+    "本地安全 review",
+    "codex-security",
+    "security-guidance",
+    "不完全 Review 模式授权",
     "Codex Code Review 结论",
     "Codex",
     "scripts.research.governance gate",
@@ -84,6 +90,13 @@ REQUIRED_REVIEW_GUIDELINES_TOKENS = (
     "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
     "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
     "reviewers:",
+    "review_mode=complete",
+    "review_mode=partial",
+    "security_review",
+    "本地安全 review",
+    "codex-security",
+    "security-guidance",
+    "官方 Codex Review 跳过授权",
     "Codex Code Review 结论",
     "结论: 通过",
     "阻断问题: 无",
@@ -644,6 +657,12 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
             "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
             "reviewers:",
+            "complete",
+            "partial",
+            "官方 Codex Review 跳过授权",
+            "本地安全 review",
+            "codex-security",
+            "security-guidance",
         ):
             if token not in text:
                 findings.append(
@@ -662,6 +681,11 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             "ALLOW_DIRECT_MAIN_WRITE",
             "DIRECT_MAIN_WRITE_REASON",
             "Codex Review Monitor",
+            "review_mode=complete",
+            "security_review",
+            "codex-security",
+            "security-guidance",
+            "官方 Codex Review 跳过授权",
         ):
             if token not in text:
                 findings.append(
