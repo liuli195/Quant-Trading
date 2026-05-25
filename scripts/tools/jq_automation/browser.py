@@ -506,7 +506,14 @@ async def wait_for_compile_completion(
                 "(source) => new Function(source + '\\nreturn readCompileErrors();')()",
                 source,
             )
-            raise CompileFailed(errors or _trim_body(last_state))
+            error_text = str(errors or "").strip()
+            body_text = str(last_state.get("bodyText") or "")
+            if error_text:
+                raise CompileFailed(error_text)
+            if "Traceback" in body_text:
+                raise CompileFailed(_trim_body(last_state))
+            if seen_cancel and not last_state.get("hasCancel"):
+                return last_state
         if seen_cancel and not last_state.get("hasCancel"):
             return last_state
         await page.wait_for_timeout(poll_ms)
