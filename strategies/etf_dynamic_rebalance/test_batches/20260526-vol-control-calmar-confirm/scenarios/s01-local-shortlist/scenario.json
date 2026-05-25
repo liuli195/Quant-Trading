@@ -1,0 +1,54 @@
+{
+  "strategy_file": "d:/My Project/Quant Trading/strategies/etf_dynamic_rebalance/etf_dynamic_rebalance.py",
+  "strategy": "etf_dynamic_rebalance",
+  "strategy_name": "ETF动态调仓",
+  "scenario_id": "s01-local-shortlist",
+  "start_date": "2021-01-04",
+  "end_date": "2026-04-30",
+  "capital": 500000,
+  "frequency": "1d",
+  "py_version": "Python3",
+  "batch_id": "20260526-vol-control-calmar-confirm",
+  "estimated_minutes": 8,
+  "result_source": "auto",
+  "sweep": {
+    "strategy": "list",
+    "combinations": [
+      {
+        "label": "local-01-w40-tv0296684",
+        "params": {
+          "portfolio_vol_window": 40,
+          "target_vol": 0.296684328514
+        }
+      },
+      {
+        "label": "local-02-w40-tv0296662",
+        "params": {
+          "portfolio_vol_window": 40,
+          "target_vol": 0.296661808562
+        }
+      },
+      {
+        "label": "local-03-w40-tv0296639",
+        "params": {
+          "portfolio_vol_window": 40,
+          "target_vol": 0.296639288611
+        }
+      },
+      {
+        "label": "local-04-w40-tv0296851",
+        "params": {
+          "portfolio_vol_window": 40,
+          "target_vol": 0.296851013760
+        }
+      },
+      {
+        "label": "default-w40-tv008",
+        "params": {
+          "portfolio_vol_window": 40,
+          "target_vol": 0.08
+        }
+      }
+    ]
+  }
+}

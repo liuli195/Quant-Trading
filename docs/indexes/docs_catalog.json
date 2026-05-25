@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "catalog_type": "docs",
-  "generated_at": "2026-05-24T15:41:42+00:00",
+  "generated_at": "2026-05-25T19:25:33+00:00",
   "count": 46,
   "reports": [
     {
@@ -32,7 +32,7 @@
         "docs/indexes/docs_catalog.json",
         "docs/guides/feishu-relay-tools.md"
       ],
-      "updated_at": "2026-05-20T16:55:28+00:00"
+      "updated_at": "2026-05-24T17:55:26+00:00"
     },
     {
       "path": "docs/adr/0001-rule-source-and-governance-model.md",
@@ -117,7 +117,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-20T11:48:29+00:00"
+      "updated_at": "2026-05-25T03:31:23+00:00"
     },
     {
       "path": "docs/architecture/research-platform-architecture.md",
@@ -157,7 +157,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-19T17:13:34+00:00"
+      "updated_at": "2026-05-25T19:18:34+00:00"
     },
     {
       "path": "docs/design/cross-ai-skill-management.md",
@@ -188,7 +188,7 @@
         "repo/AGENTS.md",
         "repo/CLAUDE.md"
       ],
-      "updated_at": "2026-05-19T19:16:05+00:00"
+      "updated_at": "2026-05-25T19:18:34+00:00"
     },
     {
       "path": "docs/design/本地研究平台重构.md",
@@ -247,7 +247,7 @@
         "scripts/joinquant_tools/FeishuRelayTools.py",
         "docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md"
       ],
-      "updated_at": "2026-05-21T03:26:34+00:00"
+      "updated_at": "2026-05-24T17:55:26+00:00"
     },
     {
       "path": "docs/guides/local-python-env.md",
@@ -540,7 +540,7 @@
         "repo/AGENTS.md",
         "repo/CLAUDE.md"
       ],
-      "updated_at": "2026-05-20T11:48:29+00:00"
+      "updated_at": "2026-05-25T03:31:23+00:00"
     },
     {
       "path": "docs/rules/index.md",
@@ -580,7 +580,7 @@
         "repo/AGENTS.md",
         "repo/CLAUDE.md"
       ],
-      "updated_at": "2026-05-20T11:48:29+00:00"
+      "updated_at": "2026-05-25T03:31:23+00:00"
     },
     {
       "path": "docs/rules/research-workflow.md",
@@ -611,7 +611,7 @@
         "docs/rules/code-style.md",
         "docs/rules/docs-and-pathref.md"
       ],
-      "updated_at": "2026-05-20T11:48:29+00:00"
+      "updated_at": "2026-05-25T03:31:23+00:00"
     },
     {
       "path": "docs/superpowers/plans/2026-05-20-backtest-data-redundancy-compaction.md",
@@ -645,7 +645,7 @@
         "docs/rules/code-style.md",
         "repo/.gitignore"
       ],
-      "updated_at": "2026-05-24T13:37:33+00:00"
+      "updated_at": "2026-05-24T17:55:26+00:00"
     },
     {
       "path": "docs/superpowers/plans/2026-05-20-pr-risk-tiered-review-workflow.md",
@@ -670,7 +670,7 @@
         "repo/scripts/archive/RelayTools.py",
         "docs/rules/review-guidelines.md"
       ],
-      "updated_at": "2026-05-20T14:07:33+00:00"
+      "updated_at": "2026-05-24T17:55:26+00:00"
     }
   ]
 }

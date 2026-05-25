@@ -1,0 +1,14 @@
+{
+  "strategy_file": "d:/My Project/Quant Trading/strategies/etf_dynamic_rebalance/etf_dynamic_rebalance.py",
+  "strategy": "etf_dynamic_rebalance",
+  "strategy_name": "ETF动态调仓",
+  "scenario_id": "s01-default-baseline",
+  "start_date": "2021-01-04",
+  "end_date": "2026-04-30",
+  "capital": 500000,
+  "frequency": "1d",
+  "py_version": "Python3",
+  "batch_id": "20260526-vol-control-local-scan-baseline",
+  "estimated_minutes": 8,
+  "result_source": "auto"
+}

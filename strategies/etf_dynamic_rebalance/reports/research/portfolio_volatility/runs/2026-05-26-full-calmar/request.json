@@ -1,0 +1,6 @@
+{
+  "mode": "full",
+  "top_k": 5,
+  "cloud_top_k": 5,
+  "source_run_id": "2026-05-26-smoke"
+}

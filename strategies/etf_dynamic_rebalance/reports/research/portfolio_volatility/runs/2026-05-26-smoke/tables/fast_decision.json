@@ -1,0 +1,10 @@
+{
+  "mode": "fast",
+  "candidate_count": 1,
+  "shortlist_count": 1,
+  "smoke_passed": true,
+  "coverage_complete": true,
+  "feature_cache_hit": true,
+  "predicted_full_seconds": 118.19918059999306,
+  "target_seconds": 180.0
+}
