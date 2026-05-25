@@ -12,7 +12,7 @@ Claude Code 专属补充见 [CLAUDE.md](CLAUDE.md) <!-- pathref: repo/CLAUDE.md 
 
 - **输出**：简体中文，简洁直白。
 - **运行边界**：策略代码仅运行于聚宽云端；本地负责编写、测试、文档、回测分析。
-- **Python 环境**：须使用提权走项目 `.venv`。命令参考 [commands.md](docs/rules/commands.md) <!-- pathref: docs/rules/commands.md -->。
+- **Python 环境**：须走项目 `.venv`。命令参考 [commands.md](docs/rules/commands.md) <!-- pathref: docs/rules/commands.md -->。
 - **先调查**：不推测未读代码；不确定时说明并提出验证方法。
 - **请求范围**：只做要求的事，不明确时默认研究建议。不擅自重构或过度抽象。
 - **完成前验证**：逐项复核要求，跑测试与检查，说明已验证和无法验证的部分。

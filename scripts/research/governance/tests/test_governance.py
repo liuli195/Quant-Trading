@@ -110,7 +110,7 @@ def _write_minimal_repo(root: Path) -> None:
         "本仓库是基于 Python 的 A 股/场内基金量化策略仓库。\n\n"
         "规则索引见 indexes.md。所有回答和输出使用简体中文，简洁直白。"
         "策略代码仅在聚宽云端运行。"
-        "须使用提权走项目 `.venv`。命令参考 docs/rules/commands.md。"
+        "须走项目 `.venv`。命令参考 docs/rules/commands.md。"
         "进入主干须通过 PR；如用户显式授权，可以按直写主干链路直接提交和推送主干；"
         "禁止本地合并主干，细则见 docs/rules/pr-workflow.md。"
         "效率：所有任务默认优先派发子 agent，主会话负责编排。"
@@ -1018,8 +1018,7 @@ def test_governance_audit_flags_agents_without_sandbox_escalation_rule(
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "agent_entry_sync"
-        and "须使用提权走项目 `.venv`" in finding.message
+        finding.rule_id == "agent_entry_sync" and "须走项目 `.venv`" in finding.message
         for finding in report.findings
     )
 
