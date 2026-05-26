@@ -13,7 +13,7 @@ def test_default_tool_registry_has_unique_valid_tools() -> None:
     assert registry.get("tools.jq_automation").library == "scripts.tools.jq_automation"
     assert registry.get("research.portfolio_volatility").kind == "library"
     assert all(
-        tool["cli"].startswith(r".\.venv\Scripts\python.exe -m ")
+        tool["cli"].startswith(r"powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m ")
         for tool in registry.list()
         if tool["kind"] == "cli"
     )

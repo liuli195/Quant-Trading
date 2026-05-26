@@ -73,7 +73,7 @@ PR_TEMPLATE_TOKENS = (
     "不完全 Review 模式授权",
     "Codex Code Review 结论",
     "Codex",
-    "scripts.research.governance gate",
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate",
     "waiver",
     "证据",
 )
@@ -83,7 +83,7 @@ REQUIRED_REVIEW_GUIDELINES_TOKENS = (
     "AGENTS.md",
     "docs/rules/review-guidelines.md",
     "P0/P1",
-    "scripts.research.governance gate",
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate",
     "Codex Review Monitor",
     "至少两个独立 reviewer",
     "子 agent 交叉评审",
@@ -108,9 +108,13 @@ REQUIRED_COMMAND_RULE_TOKENS = (
     "scripts.research.governance",
     "scripts.research.registry",
     "scripts.tools.path_tools.refactor",
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File",
+    ".\\.githooks\\run-python.ps1",
+    ".githooks/run-python.sh",
     ".\\.venv\\Scripts\\python.exe",
     ".venv/bin/python",
-    ".githooks/run-python.sh",
+    "PYTHONUTF8",
+    "PYTHONIOENCODING",
 )
 REQUIRED_AGENT_ENTRY_TOKENS = (
     "indexes.md",
@@ -379,6 +383,16 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                         "governance_gate", "error", f"run-python.sh missing {token}"
                     )
                 )
+        if not re.search(r"export\s+PYTHONUTF8=1", text) or not re.search(
+            r"export\s+PYTHONIOENCODING=utf-8", text
+        ):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "run-python.sh missing UTF-8 environment",
+                )
+            )
         if "uname" not in text or not any(
             token in text for token in ("MINGW", "MSYS", "CYGWIN")
         ):
@@ -405,6 +419,43 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         findings.append(
             AuditFinding("governance_gate", "error", ".githooks/run-python.ps1 missing")
         )
+    else:
+        text = hook_python.read_text(encoding="utf-8", errors="ignore")
+        if ".venv\\Scripts\\python.exe" not in text:
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "run-python.ps1 missing .venv\\Scripts\\python.exe",
+                )
+            )
+        utf8_tokens = (
+            "Console]::InputEncoding",
+            "Console]::OutputEncoding",
+            "$OutputEncoding",
+        )
+        if (
+            not re.search(r"\$env:PYTHONUTF8\s*=\s*['\"]1['\"]", text)
+            or not re.search(r"\$env:PYTHONIOENCODING\s*=\s*['\"]utf-8['\"]", text)
+            or not all(token in text for token in utf8_tokens)
+        ):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "run-python.ps1 missing UTF-8 environment",
+                )
+            )
+        if re.search(r"\$Python\s*=\s*['\"]python['\"]", text) or re.search(
+            r"&\s+python(\s|$)", text
+        ):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "run-python.ps1 must not fall back to system Python",
+                )
+            )
 
     hook = root / ".githooks" / "pre-commit"
     if not hook.is_file():

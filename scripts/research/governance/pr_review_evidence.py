@@ -65,6 +65,11 @@ CODEX_NO_MAJOR_ISSUES_PATTERN = re.compile(
     re.IGNORECASE,
 )
 REQUIRED_TRIGGER_TOKENS = ("@codex review",)
+REQUIRED_GOVERNANCE_GATE_COMMANDS = (
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate",
+    "sh .githooks/run-python.sh -m scripts.research.governance gate",
+    ".githooks/run-python.sh -m scripts.research.governance gate",
+)
 
 
 @dataclass(frozen=True)
@@ -148,14 +153,22 @@ def validate_pr_body(
             )
     if comments is not None and not _required_trigger_comments(comments):
         errors.append("PR comments must include the required @codex review trigger")
-    if "scripts.research.governance gate" not in section:
-        errors.append("review evidence must include governance gate command")
+    if not _has_governance_gate_wrapper_command(section):
+        errors.append("review evidence must include governance gate wrapper command")
 
     return EvidenceReport(not errors, tuple(errors))
 
 
 def _extract_section(body: str) -> str | None:
     return _extract_named_section(body, SECTION_HEADER)
+
+
+def _has_governance_gate_wrapper_command(section: str) -> bool:
+    normalized_section = " ".join(section.replace("`", "").split()).casefold()
+    return any(
+        command.casefold() in normalized_section
+        for command in REQUIRED_GOVERNANCE_GATE_COMMANDS
+    )
 
 
 def _extract_named_section(body: str, header: str) -> str | None:

@@ -2,7 +2,7 @@
 
 本目录按平台5层核心整理工具视图，内容由工具注册表生成。
 
-生成命令：`.\.venv\Scripts\python.exe -m scripts.research.registry.tool_registry write-layers`
+生成命令：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.registry.tool_registry write-layers`
 
 | 层 | 文件 | 职责 | 工具数 |
 | --- | --- | --- | ---: |

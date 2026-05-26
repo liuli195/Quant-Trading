@@ -11,7 +11,7 @@
 生成本地不可运行的 JoinQuant 云端研究 Python 脚本。
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.etf_window_research.cli export-script `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.etf_window_research.cli export-script `
   --project-dir <dir> [--output <path>] [--export-path <path>] [--history-start <date>]
 ```
 
@@ -26,7 +26,7 @@
 通过 Chrome 自动化从聚宽获取原始价格数据包。
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.etf_window_research.cli fetch `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.etf_window_research.cli fetch `
   --project-dir <dir> [--output <path>] [--export-path <path>] `
   [--history-start <date>] [--user-data-dir <dir>] [--headless] [--slow-mo <ms>]
 ```
@@ -45,7 +45,7 @@
 运行本地分析并将结果持久化到一次 run。
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.etf_window_research.cli analyze `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.etf_window_research.cli analyze `
   --project-dir <dir> --run-id <id> [--raw-data <path>] [--audit-log <path>]
 ```
 

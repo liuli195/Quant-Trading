@@ -5,8 +5,8 @@
 ## 命令
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.governance audit
-.\.venv\Scripts\python.exe -m scripts.research.governance gate
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance audit
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance gate
 ```
 
 `gate` is the enforced entry for hooks and CI. It runs governance audit plus
@@ -36,17 +36,17 @@ make risk-check
 `.githooks/pre-push` calls all required push gates before handing off to Git LFS:
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.governance.branch_protection pre-push
-.\.venv\Scripts\python.exe -m scripts.research.governance gate
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance.branch_protection pre-push
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance gate
 git lfs pre-push
 ```
 
 It blocks direct pushes to `main` / `master` when remote rulesets are unavailable,
 reruns the full governance gate before push, and preserves the Git LFS hook.
-The shell hooks call `.githooks/run-python.sh`, which chooses `.venv/bin/python`
-on Codex Cloud/Linux and `.venv/Scripts/python.exe` on Windows. Keep
-`.githooks/run-python.ps1` as the direct PowerShell helper for local Windows
-commands.
+The shell hooks call `.githooks/run-python.sh`, which sets UTF-8 Python output
+and chooses `.venv/bin/python` on Codex Cloud/Linux or `.venv/Scripts/python.exe`
+on Windows. Use `.githooks/run-python.ps1` as the direct PowerShell helper for
+local Windows commands.
 
 `.githooks/reference-transaction` blocks local updates to `refs/heads/main` and
 `refs/heads/master`, including accidental local `git merge` or `git reset` into
@@ -129,7 +129,7 @@ Manual inspection is available through workflow dispatch, or locally with:
 $env:GITHUB_REPOSITORY="owner/repo"
 $env:PR_NUMBER="<number>"
 $env:GITHUB_TOKEN="<token>"
-.\.venv\Scripts\python.exe -m scripts.research.governance.codex_review_monitor
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance.codex_review_monitor
 ```
 
 审计范围：
@@ -152,5 +152,5 @@ $env:GITHUB_TOKEN="<token>"
 开发单测可用：
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.governance audit --skip-cli-help --skip-pathrefs
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance audit --skip-cli-help --skip-pathrefs
 ```

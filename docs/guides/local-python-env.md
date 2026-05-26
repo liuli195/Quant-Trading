@@ -4,8 +4,8 @@
 
 ## 推荐解释器
 
-- Windows PowerShell：`.\.venv\Scripts\python.exe`
-- Codex Cloud / Linux shell：`.venv/bin/python`
+- Windows PowerShell：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1`
+- Codex Cloud / Linux shell：`.githooks/run-python.sh`
 - Git hook / 自动化入口：`.githooks/run-python.sh`
 - 不建议直接使用系统 `python`，因为本机可能同时存在多个 Python 发行版，且默认 `python` 不一定带有 `pip`。
 - Codex/自动化执行本项目 Python 命令时，默认应请求/使用提权执行项目虚拟环境；不提权可能无法访问 `.venv` 或正确解析项目目录。
@@ -13,7 +13,7 @@
 ## 当前约定
 
 - 本地策略检查：使用 `.venv` 中的 Python 3.12
-- 自动化代理执行：Windows 本地优先提权调用 `.venv\Scripts\python.exe`；Codex Cloud/Linux 使用 `.venv/bin/python`；hook 通过 `.githooks/run-python.sh` 自动选择解释器，避免退回系统 Python
+- 自动化代理执行：Windows 本地优先提权调用 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1`；Codex Cloud/Linux 使用 `.githooks/run-python.sh`；wrapper 会设置 `PYTHONUTF8=1` 和 `PYTHONIOENCODING=utf-8`，再调用项目 `.venv`，避免退回系统 Python
 - JoinQuant 云端运行：仍以聚宽环境为准，本地仅做编写、静态检查、单元测试和文档分析
 - `jqlib` 不作为本地依赖安装要求；相关测试通过 stub 或 monkeypatch 隔离
 
@@ -47,21 +47,21 @@ git config core.hooksPath .githooks
 语法检查：
 
 ```powershell
-.\.venv\Scripts\python.exe -m py_compile strategies\etf_dynamic_rebalance\etf_dynamic_rebalance.py
-.\.venv\Scripts\python.exe -m py_compile strategies\etf_factor_rotation\etf_factor_rotation.py
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m py_compile strategies\etf_dynamic_rebalance\etf_dynamic_rebalance.py
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m py_compile strategies\etf_factor_rotation\etf_factor_rotation.py
 ```
 
 运行单元测试：
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest strategies\etf_dynamic_rebalance\tests -q
-.\.venv\Scripts\python.exe -m pytest strategies\etf_factor_rotation\tests -q
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m pytest strategies\etf_dynamic_rebalance\tests -q
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m pytest strategies\etf_factor_rotation\tests -q
 ```
 
 路径引用检查：
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.tools.path_tools.refactor check
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.tools.path_tools.refactor check
 ```
 
 ## 依赖说明

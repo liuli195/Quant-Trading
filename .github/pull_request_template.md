@@ -13,8 +13,8 @@
 
 ## 已运行检查
 
-- [ ] `.\.venv\Scripts\python.exe -m scripts.research.governance gate --skip-cli-help`
-- [ ] `.\.venv\Scripts\python.exe -m scripts.tools.path_tools.refactor check`
+- [ ] `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance gate --skip-cli-help`
+- [ ] `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.tools.path_tools.refactor check`
 - [ ] 相关 pytest / py_compile
 
 ## AI Review 风险分级
@@ -43,7 +43,7 @@
 - 阻断问题: 无 / 未确认
 - 关键证据:
   - Codex review 链接：
-  - `.\.venv\Scripts\python.exe -m scripts.research.governance gate`
+  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance gate`
 
 ## waiver
 

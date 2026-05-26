@@ -10,7 +10,7 @@ from typing import Any
 from .schemas import ToolDefinition
 
 
-VENV_PYTHON = r".\.venv\Scripts\python.exe"
+PYTHON_CLI_WRAPPER = r"powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1"
 
 
 LAYER_ORDER = (
@@ -51,7 +51,7 @@ LAYER_FILENAMES = {
 
 
 def _cli(module: str, suffix: str = "") -> str:
-    command = f"{VENV_PYTHON} -m {module}"
+    command = f"{PYTHON_CLI_WRAPPER} -m {module}"
     return f"{command} {suffix}".strip()
 
 
@@ -371,8 +371,8 @@ class ToolRegistry:
             if tool.tool_id in seen:
                 errors.append(f"duplicate tool_id: {tool.tool_id}")
             seen.add(tool.tool_id)
-            if tool.kind == "cli" and not (tool.cli or "").startswith(f"{VENV_PYTHON} -m "):
-                errors.append(f"{tool.tool_id}: cli must use {VENV_PYTHON}")
+            if tool.kind == "cli" and not (tool.cli or "").startswith(f"{PYTHON_CLI_WRAPPER} -m "):
+                errors.append(f"{tool.tool_id}: cli must use {PYTHON_CLI_WRAPPER}")
             for label, rel_path in (("README", tool.readme_path), ("docs", tool.docs_path)):
                 if rel_path and not (root / rel_path).is_file():
                     errors.append(f"{tool.tool_id}: missing {label}: {rel_path}")
@@ -420,7 +420,7 @@ class ToolRegistry:
             "",
             "本目录按平台5层核心整理工具视图，内容由工具注册表生成。",
             "",
-            f"生成命令：`{VENV_PYTHON} -m scripts.research.registry.tool_registry write-layers`",
+            f"生成命令：`{PYTHON_CLI_WRAPPER} -m scripts.research.registry.tool_registry write-layers`",
             "",
             "| 层 | 文件 | 职责 | 工具数 |",
             "| --- | --- | --- | ---: |",
