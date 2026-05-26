@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "catalog_type": "docs",
-  "generated_at": "2026-05-25T19:25:33+00:00",
-  "count": 46,
+  "generated_at": "2026-05-26T15:39:28+00:00",
+  "count": 48,
   "reports": [
     {
       "path": "docs/README.md",
@@ -500,9 +500,11 @@
       "date": null,
       "tags": [],
       "pathrefs": [
-        "docs/rules/commands.md"
+        "docs/rules/commands.md",
+        "docs/rules/environments.md",
+        "docs/rules/environments.md"
       ],
-      "updated_at": "2026-05-19T15:28:55+00:00"
+      "updated_at": "2026-05-26T07:08:48+00:00"
     },
     {
       "path": "docs/rules/commands.md",
@@ -528,6 +530,16 @@
       "tags": [],
       "pathrefs": [],
       "updated_at": "2026-05-18T21:37:05+00:00"
+    },
+    {
+      "path": "docs/rules/environments.md",
+      "title": "本地与聚宽环境差异",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-26T07:09:04+00:00"
     },
     {
       "path": "docs/rules/governance.md",
@@ -560,6 +572,7 @@
         "docs/rules/commands.md",
         "docs/rules/research-workflow.md",
         "docs/rules/code-style.md",
+        "docs/rules/environments.md",
         "docs/rules/docs-and-pathref.md",
         "docs/adr/0001-rule-source-and-governance-model.md",
         "docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md",
@@ -567,7 +580,7 @@
         "docs/adr/0004-codex-code-review-governance.md",
         "docs/adr/0005-ai-entry-progressive-disclosure.md"
       ],
-      "updated_at": "2026-05-19T15:28:55+00:00"
+      "updated_at": "2026-05-26T07:09:11+00:00"
     },
     {
       "path": "docs/rules/pr-workflow.md",
@@ -658,6 +671,20 @@
         "docs/rules/review-guidelines.md"
       ],
       "updated_at": "2026-05-20T11:48:29+00:00"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-05-26-etf-vol-relief-ab-test.md",
+      "title": "ETF Vol Relief A/B Test Implementation Plan",
+      "category": "docs",
+      "strategy": null,
+      "date": "2026-05-26",
+      "tags": [],
+      "pathrefs": [
+        "strategies/etf_factor_rotation/etf_factor_rotation.py",
+        "strategies/etf_factor_rotation/tests/test_etf_factor_rotation.py",
+        "scripts/tools/jq_automation/README.md"
+      ],
+      "updated_at": "2026-05-26T15:01:25+00:00"
     },
     {
       "path": "docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md",

@@ -96,6 +96,9 @@
 | etf_factor_rotation_backtest_runs | 20260518-2125-bt17c8ba539ebb20f374b4c36fc322b718 | joinquant_backtest_run | research-platform | active | 1289 | 2021-01-04 ~ 2026-04-30 |
 | etf_factor_rotation_backtest_runs | 20260518-2128-bt720a21be72ca92343877e3eed66a5644 | joinquant_backtest_run | research-platform | active | 1289 | 2021-01-04 ~ 2026-04-30 |
 | etf_factor_rotation_backtest_runs | 20260518-2130-btd3a302dab6ce74013cb2c7dfd6785a62 | joinquant_backtest_run | research-platform | active | 1289 | 2021-01-04 ~ 2026-04-30 |
+| etf_factor_rotation_backtest_runs | 20260526-2327-bta35e64a2599b009eba3c6b8219d61e22 | joinquant_backtest_run | research-platform | active | 1289 | 2021-01-04 ~ 2026-04-30 |
+| etf_factor_rotation_backtest_runs | 20260526-2330-btfefcb2db54c231df54d773457629bda1 | joinquant_backtest_run | research-platform | active | 1289 | 2021-01-04 ~ 2026-04-30 |
+| etf_factor_rotation_backtest_runs | 20260526-2333-bt36f34fb52505979aa53d97ef4949fc60 | joinquant_backtest_run | research-platform | active | 1289 | 2021-01-04 ~ 2026-04-30 |
 | etf_factor_rotation_baseline_audit | 2026-05-17T17-36-27Z_56361cf8a32e | joinquant_audit_log_jsonl | research-platform | active | 272 | 2021-01-01 ~ 2026-04-30 |
 | ma_crossover_backtest_runs | 20260505-1939-bt48ef4a644906d1ada69ba04637aa4bb6 | joinquant_backtest_run | research-platform | active | 56 | 2026-01-05 ~ 2026-03-31 |
 | ma_crossover_backtest_runs | 20260505-1947-bt9d35a958df27c3d1c9534f43644cdd46 | joinquant_backtest_run | research-platform | active | 56 | 2026-01-05 ~ 2026-03-31 |
