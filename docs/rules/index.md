@@ -19,7 +19,8 @@
 | [review-guidelines.md](review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md --> | Codex Code Review 触发方式、评审重点、PR 证据 |
 | [commands.md](commands.md) <!-- pathref: docs/rules/commands.md --> | 本地环境、虚拟环境和常用命令 |
 | [research-workflow.md](research-workflow.md) <!-- pathref: docs/rules/research-workflow.md --> | 本地研究、云端确认、报告同步 |
-| [code-style.md](code-style.md) <!-- pathref: docs/rules/code-style.md --> | 策略代码、注释、参数、测试 |
+| [code-style.md](code-style.md) <!-- pathref: docs/rules/code-style.md --> | 策略代码、注释、参数、测试、环境兼容约束 |
+| [environments.md](environments.md) <!-- pathref: docs/rules/environments.md --> | 本地与聚宽回测/模拟/研究四环境差异对照 |
 | [docs-and-pathref.md](docs-and-pathref.md) <!-- pathref: docs/rules/docs-and-pathref.md --> | Markdown、pathref、报告索引 |
 
 ## ADR
