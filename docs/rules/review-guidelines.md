@@ -10,6 +10,7 @@
 - 只有用户显式授权时，本地 AI review 才能使用 `partial` 不完全模式；必须记录 `authorized_by`、`reason` 和 `evidence`。
 - P0/P1 问题未以 `fixed` 或 `false_positive` 关闭前，不得进入下一阶段。
 - 高风险或 unknown PR 默认必须执行官方 Codex Code Review，并由 PR 评论明确触发。评论内容必须包含 `@codex review`。
+- 官方 Codex Review 触发评论必须保留仓库上下文：写明当前 PR、当前 head SHA、Review Scope 和本地门禁证据。禁止写“不要执行命令”“只做静态 diff review”“do not execute/run local commands”等会切断仓库、diff 或命令上下文的指令。
 - 用户显式授权时，可以跳过官方 Codex Code Review；必须记录 `官方 Codex Review 跳过授权` 的 `authorized_by`、`reason` 和 `evidence`。该授权不允许绕过未解决且未过期的 Codex P0/P1 thread。
 - Automatic reviews 可以作为补充，但不能替代上面的明确触发评论。
 - PR 中如存在 Codex 标出的 P0/P1 问题，不得填写通过结论。
@@ -19,6 +20,7 @@
 - 必须保留本地检查证据，至少包括 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance gate`。
 - `@codex review` 触发后由 Codex Review Monitor 监听结果。该监控在 PR head 更新、PR 描述更新、触发评论、Codex review 和 inline review comment 事件上汇总当前 head 的所有 Codex review 状态，并写入 `Codex Review Monitor` commit status；`Codex Review Monitor` 必须列为 GitHub `main` 的 required status check，但它不替代 Codex review 结论和 PR body 证据。
 - `pr-review-evidence` 与 `Codex Review Monitor` 必须读取 GitHub review thread 状态；只要存在未解决且未过期的 Codex P0/P1 thread，即使最新 Codex completion comment 显示无重大问题，也不得通过。
+- 如果 Codex review 显示无法读取当前 PR diff、要求额外提供 unified diff、引用不存在或非当前 head 的提交，门禁必须按 review 上下文失效处理并阻断合并；不得用额外评论粘贴 PR diff 链接来替代正常 review 链路。
 
 ## 本地 AI Review
 
@@ -50,6 +52,21 @@
 - 本地 AI review 报告缺失、无法解析或无法证明低风险。
 - 高风险路径或高风险规则命中。
 - 用户显式授权跳过官方 Codex Review 时，上述触发条件可以不触发官方 review，但 PR body 必须填写 `官方 Codex Review 跳过授权`。已有未解决且未过期的 Codex P0/P1 thread 仍然阻断。
+
+## 官方 Codex Review 触发评论格式
+
+```markdown
+@codex review
+
+请基于当前 PR 的仓库上下文和 GitHub diff 做 review。
+
+- PR: https://github.com/<owner>/<repo>/pull/<number>
+- 当前 head: `<full-head-sha>`
+- Review Scope: `.local/ai-review/codex-review-scope.md`
+- 本地门禁: `make pre-pr`、`make ai-review`、`make risk-check`
+
+请聚焦 P0/P1 风险：交易逻辑、治理门禁、安全边界、数据解释和测试缺口。P2/P3 只在影响合并判断时说明。
+```
 
 ## 评审重点
 

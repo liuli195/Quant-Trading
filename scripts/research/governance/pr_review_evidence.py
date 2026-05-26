@@ -60,9 +60,33 @@ BLOCKING_CODEX_FINDING_PATTERN = re.compile(
     r"(?:P[01] Badge|badge/P[01]-|(?:^|\n)\s*(?:\*\*)?\[P[01]\]\s+)",
     re.IGNORECASE,
 )
+CODEX_CONTEXT_INVALID_PATTERN = re.compile(
+    r"(?:provide\s+(?:the\s+)?(?:unified\s+)?diff|"
+    r"actual\s+code\s+diff|"
+    r"conversation\s+did\s+not\s+include.*diff|"
+    r"cannot\s+complete.*static\s+review.*diff|"
+    r"could\s+not\s+read.*diff|"
+    r"无法.*diff|"
+    r"实际代码差异|"
+    r"统一\s*diff)",
+    re.IGNORECASE | re.DOTALL,
+)
 CODEX_NO_MAJOR_ISSUES_PATTERN = re.compile(
     r"Codex Review:\s*(?:Didn['’]t|Did not) find any major issues",
     re.IGNORECASE,
+)
+CONTEXT_HOSTILE_TRIGGER_PATTERN = re.compile(
+    r"(?:do\s+not\s+(?:execute|run)|"
+    r"only\s+do\s+a\s+static\s+diff\s+review|"
+    r"不要执行|"
+    r"不执行本地命令|"
+    r"不要运行|"
+    r"只做静态\s*diff\s*review)",
+    re.IGNORECASE,
+)
+CONTEXT_INVALID_REVIEW_ERROR = "Codex review context is invalid for the current head"
+CONTEXT_HOSTILE_TRIGGER_ERROR = (
+    "required @codex review trigger must not disable repository context"
 )
 REQUIRED_TRIGGER_TOKENS = ("@codex review",)
 REQUIRED_GOVERNANCE_GATE_COMMANDS = (
@@ -151,8 +175,13 @@ def validate_pr_body(
                     comments=comments,
                 )
             )
-    if comments is not None and not _required_trigger_comments(comments):
-        errors.append("PR comments must include the required @codex review trigger")
+    if comments is not None:
+        if _has_context_hostile_trigger_comment(
+            comments, expected_head_created_at=expected_head_created_at
+        ):
+            errors.append(CONTEXT_HOSTILE_TRIGGER_ERROR)
+        if not _required_trigger_comments(comments):
+            errors.append("PR comments must include the required @codex review trigger")
     if not _has_governance_gate_wrapper_command(section):
         errors.append("review evidence must include governance gate wrapper command")
 
@@ -654,6 +683,12 @@ def _codex_review_errors(
     if matched_review is None:
         return ("Codex review link must match a Codex review on the current head",)
     errors: list[str] = []
+    if _review_has_context_invalid_findings(
+        matched_review,
+        review_id=review_id,
+        review_comments=review_comments,
+    ):
+        errors.append(CONTEXT_INVALID_REVIEW_ERROR)
     trigger_comments = (
         _required_trigger_comments(comments) if comments is not None else None
     )
@@ -672,7 +707,14 @@ def _codex_review_errors(
             errors.append(
                 "Codex review must be submitted after the required @codex review trigger"
             )
-    if _current_head_has_blocking_codex_review(
+    if codex_context_invalid_review_count(
+        reviews,
+        review_comments=review_comments,
+        expected_head_sha=expected_head_sha,
+    ):
+        if CONTEXT_INVALID_REVIEW_ERROR not in errors:
+            errors.append(CONTEXT_INVALID_REVIEW_ERROR)
+    elif _current_head_has_blocking_codex_review(
         reviews,
         review_comments=review_comments,
         expected_head_sha=expected_head_sha,
@@ -720,7 +762,13 @@ def _codex_completion_comment_errors(
             )
     elif not is_codex_completion_comment(comment):
         return ("Codex review link must match a Codex review on the current head",)
-    if _current_head_has_blocking_codex_review(
+    if codex_context_invalid_review_count(
+        reviews,
+        review_comments=review_comments,
+        expected_head_sha=expected_head_sha,
+    ):
+        errors.append(CONTEXT_INVALID_REVIEW_ERROR)
+    elif _current_head_has_blocking_codex_review(
         reviews,
         review_comments=review_comments,
         expected_head_sha=expected_head_sha,
@@ -794,18 +842,65 @@ def _thread_comments(thread: Mapping[str, object]) -> tuple[Mapping[str, object]
     return ()
 
 
+def _review_texts(
+    review: Mapping[str, object],
+    *,
+    review_id: str,
+    review_comments: Sequence[Mapping[str, object]] | None,
+) -> tuple[str, ...]:
+    texts = [str(review.get("body", ""))]
+    if review_comments is not None:
+        for comment in review_comments:
+            if str(comment.get("pull_request_review_id", "")) == review_id:
+                texts.append(str(comment.get("body", "")))
+    return tuple(texts)
+
+
+def _review_has_context_invalid_findings(
+    review: Mapping[str, object],
+    *,
+    review_id: str,
+    review_comments: Sequence[Mapping[str, object]] | None,
+) -> bool:
+    return any(
+        CODEX_CONTEXT_INVALID_PATTERN.search(text)
+        for text in _review_texts(
+            review, review_id=review_id, review_comments=review_comments
+        )
+    )
+
+
+def codex_context_invalid_review_count(
+    reviews: Sequence[Mapping[str, object]],
+    *,
+    review_comments: Sequence[Mapping[str, object]] | None,
+    expected_head_sha: str | None,
+) -> int:
+    count = 0
+    for review in reviews:
+        if not is_effective_codex_review(review):
+            continue
+        if expected_head_sha and str(review.get("commit_id", "")) != expected_head_sha:
+            continue
+        if _review_has_context_invalid_findings(
+            review, review_id=str(review.get("id", "")), review_comments=review_comments
+        ):
+            count += 1
+    return count
+
+
 def _review_has_blocking_findings(
     review: Mapping[str, object],
     *,
     review_id: str,
     review_comments: Sequence[Mapping[str, object]] | None,
 ) -> bool:
-    texts = [str(review.get("body", ""))]
-    if review_comments is not None:
-        for comment in review_comments:
-            if str(comment.get("pull_request_review_id", "")) == review_id:
-                texts.append(str(comment.get("body", "")))
-    return any(BLOCKING_CODEX_FINDING_PATTERN.search(text) for text in texts)
+    return any(
+        BLOCKING_CODEX_FINDING_PATTERN.search(text)
+        for text in _review_texts(
+            review, review_id=review_id, review_comments=review_comments
+        )
+    )
 
 
 def _current_head_has_blocking_codex_review(
@@ -850,6 +945,37 @@ def _required_trigger_comments(comments: Sequence[object]) -> tuple[object, ...]
     return tuple(matched)
 
 
+def _has_context_hostile_trigger_comment(
+    comments: Sequence[object], *, expected_head_created_at: str | None = None
+) -> bool:
+    for comment in comments:
+        if not _is_context_hostile_trigger_comment(comment):
+            continue
+        comment_time = (
+            _comment_effective_time(comment) if isinstance(comment, Mapping) else ""
+        )
+        if (
+            expected_head_created_at
+            and comment_time
+            and comment_time < expected_head_created_at
+        ):
+            continue
+        return True
+    return False
+
+
+def _is_context_hostile_trigger_comment(comment: object) -> bool:
+    if isinstance(comment, Mapping):
+        user = comment.get("user")
+        login = user.get("login") if isinstance(user, Mapping) else ""
+        if str(login) in CODEX_REVIEW_AUTHORS:
+            return False
+    body = _comment_body(comment)
+    return all(token in body for token in REQUIRED_TRIGGER_TOKENS) and bool(
+        CONTEXT_HOSTILE_TRIGGER_PATTERN.search(body)
+    )
+
+
 def _is_required_trigger_comment(comment: object) -> bool:
     if isinstance(comment, Mapping):
         user = comment.get("user")
@@ -857,6 +983,8 @@ def _is_required_trigger_comment(comment: object) -> bool:
         if str(login) in CODEX_REVIEW_AUTHORS:
             return False
     body = _comment_body(comment)
+    if CONTEXT_HOSTILE_TRIGGER_PATTERN.search(body):
+        return False
     return all(token in body for token in REQUIRED_TRIGGER_TOKENS)
 
 

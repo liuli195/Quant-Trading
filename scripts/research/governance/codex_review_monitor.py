@@ -15,8 +15,10 @@ from pathlib import Path
 
 from scripts.research.governance.pr_review_evidence import (
     BLOCKING_CODEX_FINDING_PATTERN,
+    CONTEXT_HOSTILE_TRIGGER_PATTERN,
     CODEX_REVIEW_AUTHORS,
     _fetch_pr_review_threads,
+    codex_context_invalid_review_count,
     has_codex_completion_reaction,
     head_updated_at_from_monitor_state,
     is_codex_completion_comment,
@@ -47,6 +49,8 @@ class MonitorReport:
     advisory_findings: int
     message: str
     head_updated_at: str | None = None
+    context_invalid_reviews: int = 0
+    trigger_invalid: bool = False
 
 
 def build_monitor_report(
@@ -68,6 +72,9 @@ def build_monitor_report(
         issue_comments, head_created_at=head_created_at
     )
     trigger_found = trigger_time is not None
+    trigger_invalid = _has_context_hostile_trigger_comment(
+        issue_comments, head_created_at=head_created_at
+    )
     current_head_reviews = _current_head_codex_reviews(reviews, head_sha=head_sha)
     post_trigger_reviews = _reviews_after_trigger(
         current_head_reviews, trigger_time=trigger_time
@@ -103,18 +110,36 @@ def build_monitor_report(
         if review_threads is not None
         else 0
     )
+    context_invalid_reviews = codex_context_invalid_review_count(
+        current_head_reviews,
+        review_comments=review_comments,
+        expected_head_sha=head_sha,
+    )
     advisory_findings = _count_reviews_findings(
         current_head_reviews,
         review_comments=review_comments,
         pattern=P2_FINDING_PATTERN,
     )
 
-    if blocking_findings:
+    if context_invalid_reviews:
+        status = "context_invalid"
+        message = (
+            "Codex review context invalid: review did not receive a reliable "
+            "current-head diff context. Treat this as a review workflow P1, not "
+            "as a passable code review finding."
+        )
+    elif blocking_findings:
         status = "blocked"
         message = "Codex review 含 P0/P1 阻断发现，不能填写通过结论。"
     elif skip_authorized:
         status = "skipped"
         message = "官方 Codex review 已由用户授权跳过。"
+    elif trigger_invalid:
+        status = "trigger_invalid"
+        message = (
+            "Codex review trigger context invalid: trigger comments must not "
+            "disable repository context or local command access."
+        )
     elif not trigger_found:
         status = "waiting_for_trigger"
         message = "未发现符合规则的 `@codex review` 触发评论。"
@@ -136,6 +161,8 @@ def build_monitor_report(
         advisory_findings=advisory_findings,
         message=message,
         head_updated_at=head_created_at,
+        context_invalid_reviews=context_invalid_reviews,
+        trigger_invalid=trigger_invalid,
     )
 
 
@@ -143,6 +170,8 @@ def render_monitor_comment(report: MonitorReport) -> str:
     status_label = {
         "waiting_for_trigger": "等待触发",
         "waiting_for_codex": "等待 Codex review",
+        "trigger_invalid": "trigger context invalid",
+        "context_invalid": "context invalid",
         "blocked": "阻断",
         "passed": "可更新通过证据",
         "skipped": "授权跳过",
@@ -165,6 +194,7 @@ def render_monitor_comment(report: MonitorReport) -> str:
             f"- 合规触发评论: {'已发现' if report.trigger_found else '未发现'}",
             f"- 最新当前 head Codex review: {latest_review}",
             f"- review commit: `{latest_sha}`",
+            f"- context invalid: `{report.context_invalid_reviews}`",
             f"- P0/P1: `{report.blocking_findings}`",
             f"- P2: `{report.advisory_findings}`",
             "",
@@ -203,6 +233,8 @@ def sync_commit_status(
     state = {
         "waiting_for_trigger": "failure",
         "waiting_for_codex": "pending",
+        "trigger_invalid": "failure",
+        "context_invalid": "failure",
         "blocked": "failure",
         "passed": "success",
         "skipped": "success",
@@ -215,6 +247,8 @@ def sync_commit_status(
     description = {
         "waiting_for_trigger": "Waiting for required @codex review trigger",
         "waiting_for_codex": "Waiting for Codex review on current head",
+        "trigger_invalid": "Codex review trigger disables required context",
+        "context_invalid": "Codex review context is invalid for current head",
         "blocked": "Codex review has P0/P1 findings",
         "passed": "Codex review has no P0/P1 findings",
         "skipped": "Official Codex review skipped by user authorization",
@@ -276,12 +310,43 @@ def _required_trigger_comments(
     return tuple(matched)
 
 
+def _has_context_hostile_trigger_comment(
+    issue_comments: Sequence[Mapping[str, object]],
+    *,
+    head_created_at: str | None = None,
+) -> bool:
+    for comment in issue_comments:
+        if not _is_context_hostile_trigger_comment(comment):
+            continue
+        effective_time = _comment_effective_time(comment)
+        if not effective_time:
+            if head_created_at:
+                continue
+        elif head_created_at and effective_time < head_created_at:
+            continue
+        return True
+    return False
+
+
+def _is_context_hostile_trigger_comment(comment: Mapping[str, object]) -> bool:
+    user = comment.get("user")
+    login = user.get("login") if isinstance(user, Mapping) else ""
+    if str(login) in CODEX_REVIEW_AUTHORS:
+        return False
+    body = str(comment.get("body", ""))
+    return all(token in body for token in REQUIRED_TRIGGER_TOKENS) and bool(
+        CONTEXT_HOSTILE_TRIGGER_PATTERN.search(body)
+    )
+
+
 def _is_required_trigger_comment(comment: Mapping[str, object]) -> bool:
     user = comment.get("user")
     login = user.get("login") if isinstance(user, Mapping) else ""
     if str(login) in CODEX_REVIEW_AUTHORS:
         return False
     body = str(comment.get("body", ""))
+    if CONTEXT_HOSTILE_TRIGGER_PATTERN.search(body):
+        return False
     return all(token in body for token in REQUIRED_TRIGGER_TOKENS)
 
 

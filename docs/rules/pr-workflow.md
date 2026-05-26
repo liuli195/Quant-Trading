@@ -16,6 +16,7 @@
 - 禁止本地合并主干；AI 助手不得用 `git switch main` 后接 `git merge` / `git reset` 把功能分支提交写入本地 `main`。
 - 低风险 PR 可以不触发官方 Codex Code Review，但必须提供本地 AI review 报告、CI 通过证据和 P2 保留说明。
 - 高风险或 unknown PR 默认必须加 `ai-risk-review`，并触发官方 Codex Code Review；用户显式授权跳过时，必须在 PR body 记录 `官方 Codex Review 跳过授权` 的 `authorized_by`、`reason` 和 `evidence`。
+- 官方 Codex Review 触发评论必须保留当前 PR、当前 head SHA、Review Scope 和本地门禁证据；禁止用“不要执行命令”“只做静态 diff review”这类指令切断仓库、diff 或命令上下文。
 - 大型 PR 的官方 Codex Code Review 必须使用 `Codex Review Scope`，只审高风险目录和高风险规则命中改动的 P0/P1 逻辑风险。
 - 无法生成明确 `Codex Review Scope` 的大型 PR，应拆分 PR；未拆分时按全量高风险 PR 处理。
 - 高风险或 unknown PR 合并前必须有 Codex Code Review 的通过结论，或用户显式授权跳过官方 review；并通过 CI 的 `pr-review-evidence` job 与 `Codex Review Monitor` status。二者必须拦截未解决且未过期的 Codex P0/P1 review thread，跳过授权不得绕过该阻断。

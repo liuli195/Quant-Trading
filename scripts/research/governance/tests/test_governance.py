@@ -2296,6 +2296,29 @@ def _codex_no_major_issues_comment(
     }
 
 
+def _codex_context_invalid_review(
+    *,
+    review_id: int = 4314779358,
+    head_sha: str = "0" * 40,
+    submitted_at: str = "2026-05-19T01:03:00Z",
+) -> dict[str, object]:
+    return {
+        "id": review_id,
+        "commit_id": head_sha,
+        "submitted_at": submitted_at,
+        "body": "\n".join(
+            [
+                "### Codex Review",
+                "",
+                "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  provide unified diff**",
+                "",
+                "I cannot complete a static review because this conversation did not include the actual code diff for commit `c933986f031fca7d7dce72d5d65cf9cdc15afbbf`.",
+            ]
+        ),
+        "user": {"login": "chatgpt-codex-connector[bot]"},
+    }
+
+
 def test_pr_review_evidence_accepts_approved_codex_conclusion() -> None:
     head_sha = "0" * 40
     report = validate_pr_body(
@@ -2315,6 +2338,59 @@ def test_pr_review_evidence_accepts_approved_codex_conclusion() -> None:
     )
     assert report.ok
     assert report.errors == ()
+
+
+def test_pr_review_evidence_rejects_context_invalid_codex_review() -> None:
+    head_sha = "0" * 40
+    report = validate_pr_body(
+        _valid_codex_review_body(),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        comments=[
+            {
+                "body": "@codex review",
+                "created_at": "2026-05-19T01:00:00Z",
+                "user": {"login": "liuli195"},
+            }
+        ],
+        reviews=[_codex_context_invalid_review(head_sha=head_sha)],
+        review_comments=[],
+    )
+
+    assert not report.ok
+    assert "Codex review context is invalid for the current head" in report.errors
+
+
+def test_pr_review_evidence_rejects_context_hostile_codex_trigger() -> None:
+    head_sha = "0" * 40
+    report = validate_pr_body(
+        _valid_codex_review_body(),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        comments=[
+            {
+                "body": "@codex review\nPlease only do a static diff review and do not execute local commands.",
+                "created_at": "2026-05-19T01:00:00Z",
+                "user": {"login": "liuli195"},
+            }
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T01:01:00Z",
+                "body": "### Codex Review\n\nNo blocking findings.",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+
+    assert not report.ok
+    assert (
+        "required @codex review trigger must not disable repository context"
+        in report.errors
+    )
 
 
 def test_low_risk_pr_body_can_still_require_official_codex_review() -> None:
@@ -3122,6 +3198,27 @@ def test_codex_review_monitor_reports_waiting_for_codex_after_trigger() -> None:
     assert "等待 Codex review" in render_monitor_comment(report)
 
 
+def test_codex_review_monitor_reports_context_hostile_trigger() -> None:
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": "0" * 40}},
+        issue_comments=[
+            {
+                "body": "@codex review\nDo not execute local commands; only do a static diff review.",
+                "created_at": "2026-05-19T01:00:00Z",
+                "user": {"login": "liuli195"},
+            }
+        ],
+        reviews=[],
+        review_comments=[],
+    )
+
+    assert report.status == "trigger_invalid"
+    assert report.trigger_invalid
+    assert "trigger context invalid" in render_monitor_comment(report)
+
+
 def test_codex_review_monitor_passes_when_official_review_is_authorized_skipped() -> (
     None
 ):
@@ -3377,6 +3474,28 @@ def test_codex_review_monitor_reports_passed_current_head_review() -> None:
         report.latest_review_url
         == "https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358"
     )
+
+
+def test_codex_review_monitor_reports_context_invalid_review() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        issue_comments=[
+            {
+                "body": "@codex review",
+                "created_at": "2026-05-19T01:00:00Z",
+                "user": {"login": "liuli195"},
+            }
+        ],
+        reviews=[_codex_context_invalid_review(head_sha=head_sha)],
+        review_comments=[],
+    )
+
+    assert report.status == "context_invalid"
+    assert report.context_invalid_reviews == 1
+    assert "context invalid" in render_monitor_comment(report)
 
 
 def test_codex_review_monitor_ignores_dismissed_reviews() -> None:
