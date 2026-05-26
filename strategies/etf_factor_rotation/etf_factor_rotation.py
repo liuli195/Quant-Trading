@@ -1477,6 +1477,8 @@ def compute_portfolio_vol_asset_scales(prices, pool, raw_weights, params):
     }
     if mode == "fixed_gold":
         return apply_fixed_gold_vol_relief(pool, raw_weights, asset_scales, meta, params)
+    if mode == "dyn_marginal":
+        return apply_dynamic_marginal_vol_relief(prices, pool, raw_weights, asset_scales, meta, params)
     return asset_scales, meta
 
 
@@ -1507,6 +1509,77 @@ def apply_fixed_gold_vol_relief(pool, raw_weights, asset_scales, meta, params):
     meta["relief_weight"] = float(raw_weights[gold_idx] * (new_scale - base_scale))
     meta["reason"] = "fixed_gold"
     return asset_scales, meta
+
+
+def apply_dynamic_marginal_vol_relief(prices, pool, raw_weights, asset_scales, meta, params):
+    """动态弱缩放：在正动量持仓中选择边际风险最低资产恢复仓位。"""
+    vol_ratio = meta["vol_ratio"]
+    base_scale = meta["base_scale"]
+
+    if vol_ratio is None or vol_ratio <= 1.0:
+        meta["reason"] = "vol_not_above_target"
+        return asset_scales, meta
+    if vol_ratio > params["DynamicVolReliefMaxRatio"]:
+        meta["reason"] = "ratio_too_high"
+        return asset_scales, meta
+
+    selected_idx, reason = select_dynamic_marginal_relief_asset(
+        prices, pool, raw_weights, params
+    )
+    if selected_idx is None:
+        meta["reason"] = reason
+        return asset_scales, meta
+
+    new_scale = min(1.0, base_scale + (1.0 - base_scale) * params["DynamicVolReliefFraction"])
+    asset_scales[selected_idx] = new_scale
+    meta["relief_asset"] = pool[selected_idx]
+    meta["relief_weight"] = float(raw_weights[selected_idx] * (new_scale - base_scale))
+    meta["reason"] = "selected_low_marginal_risk"
+    return asset_scales, meta
+
+
+def select_dynamic_marginal_relief_asset(prices, pool, raw_weights, params):
+    """返回动态弱缩放资产下标和原因。"""
+    active_indices = [i for i, weight in enumerate(raw_weights) if weight > 1e-8]
+    if not active_indices:
+        return None, "no_active_asset"
+
+    close_ret = prices.get("close_ret")
+    if close_ret is None:
+        return None, "insufficient_cov_data"
+
+    active_codes = [pool[i] for i in active_indices]
+    for code in active_codes:
+        if code not in close_ret.columns:
+            return None, "insufficient_cov_data"
+
+    cov_window = params["DynamicVolReliefCovWindow"]
+    active_returns = close_ret[active_codes].dropna().iloc[-cov_window:]
+    if len(active_returns) < cov_window:
+        return None, "insufficient_cov_data"
+
+    momentum_window = params["DynamicVolReliefMomentumWindow"]
+    positive_candidates = []
+    for active_pos, code in enumerate(active_codes):
+        momentum_ret = close_ret[code].dropna().iloc[-momentum_window:]
+        if len(momentum_ret) < momentum_window:
+            continue
+        momentum = float(np.prod(1.0 + momentum_ret.values) - 1.0)
+        if momentum >= 0.0:
+            positive_candidates.append(active_pos)
+
+    if not positive_candidates:
+        return None, "no_positive_momentum_asset"
+
+    cov_daily = np.atleast_2d(np.cov(active_returns.values, rowvar=False))
+    cov_annual = cov_daily * params["annual_factor"]
+    active_weights = np.array([raw_weights[i] for i in active_indices])
+    marginal_scores = cov_annual @ active_weights
+    best_active_pos = min(
+        positive_candidates,
+        key=lambda active_pos: marginal_scores[active_pos],
+    )
+    return active_indices[best_active_pos], "selected_low_marginal_risk"
 
 
 # ============================================================

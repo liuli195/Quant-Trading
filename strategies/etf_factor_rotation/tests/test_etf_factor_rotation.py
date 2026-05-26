@@ -1573,6 +1573,27 @@ class TestComputePortfolioVolScale:
         close = (1.0 + close_ret).cumprod()
         return {"close": close, "close_ret": close_ret}
 
+    def _make_dynamic_marginal_prices(self, pool, n_days=80, positive_momentum=True):
+        rng = np.random.default_rng(11 if positive_momentum else 13)
+        means = [0.0012, 0.0010, 0.0008] if positive_momentum else [-0.006, -0.006, -0.006]
+        sigmas = [0.006, 0.012, 0.014]
+        returns = {
+            etf: rng.normal(means[idx], sigmas[idx], n_days)
+            for idx, etf in enumerate(pool)
+        }
+        close_ret = pd.DataFrame(
+            returns,
+            index=pd.date_range("2020-01-01", periods=n_days, freq="B"),
+        )
+        if positive_momentum:
+            close_ret.iloc[-20:, 0] = 0.0010
+            close_ret.iloc[-20:, 1] = 0.0015
+            close_ret.iloc[-20:, 2] = 0.0020
+        else:
+            close_ret.iloc[-20:, :] = -0.0020
+        close = (1.0 + close_ret).cumprod()
+        return {"close": close, "close_ret": close_ret}
+
     def test_all_zero_weights_returns_one(self, strategy, mock_g):
         params = strategy.snapshot_params()
         n_days = 100
@@ -1760,6 +1781,98 @@ class TestComputePortfolioVolScale:
         assert np.allclose(asset_scales, np.full(len(mock_g.etf_pool), base_scale))
         assert meta["relief_asset"] is None
         assert meta["reason"] == "gold_not_active"
+
+    def test_dyn_marginal_selects_lowest_risk_positive_momentum_asset(self, strategy, mock_g):
+        mock_g.PortfolioVolWindow = 40
+        mock_g.TargetVol = 0.05
+        params = strategy.snapshot_params()
+        params["PortfolioVolReliefMode"] = "dyn_marginal"
+        params["DynamicVolReliefFraction"] = 1.0
+        params["DynamicVolReliefMaxRatio"] = 1.5
+        params["DynamicVolReliefMomentumWindow"] = 20
+        params["DynamicVolReliefCovWindow"] = 40
+        prices = self._make_dynamic_marginal_prices(mock_g.etf_pool)
+        raw_weights = np.array([0.3, 0.4, 0.3])
+        expected_code = "159819.XSHE"
+
+        asset_scales, meta = strategy.compute_portfolio_vol_asset_scales(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+
+        assert 1.0 < meta["vol_ratio"] <= 1.5
+        assert meta["relief_asset"] == expected_code
+        assert asset_scales[mock_g.etf_pool.index(expected_code)] == pytest.approx(1.0)
+        assert meta["relief_weight"] == pytest.approx(
+            raw_weights[0] * (1.0 - meta["base_scale"])
+        )
+        assert meta["reason"] == "selected_low_marginal_risk"
+
+    def test_dyn_marginal_skips_when_ratio_too_high(self, strategy, mock_g):
+        mock_g.PortfolioVolWindow = 40
+        mock_g.TargetVol = 0.08
+        params = strategy.snapshot_params()
+        params["PortfolioVolReliefMode"] = "dyn_marginal"
+        params["DynamicVolReliefMaxRatio"] = 1.5
+        prices = self._make_vol_control_prices(mock_g.etf_pool, sigma=0.04)
+        raw_weights = np.array([0.3, 0.4, 0.3])
+
+        base_scale = strategy.compute_portfolio_vol_scale(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+        asset_scales, meta = strategy.compute_portfolio_vol_asset_scales(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+
+        assert meta["vol_ratio"] > 1.5
+        assert np.allclose(asset_scales, np.full(len(mock_g.etf_pool), base_scale))
+        assert meta["relief_asset"] is None
+        assert meta["reason"] == "ratio_too_high"
+
+    def test_dyn_marginal_skips_when_no_positive_momentum_asset(self, strategy, mock_g):
+        mock_g.PortfolioVolWindow = 40
+        mock_g.TargetVol = 0.06
+        params = strategy.snapshot_params()
+        params["PortfolioVolReliefMode"] = "dyn_marginal"
+        params["DynamicVolReliefMaxRatio"] = 1.5
+        prices = self._make_dynamic_marginal_prices(
+            mock_g.etf_pool, positive_momentum=False
+        )
+        raw_weights = np.array([0.3, 0.4, 0.3])
+
+        base_scale = strategy.compute_portfolio_vol_scale(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+        asset_scales, meta = strategy.compute_portfolio_vol_asset_scales(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+
+        assert 1.0 < meta["vol_ratio"] <= 1.5
+        assert np.allclose(asset_scales, np.full(len(mock_g.etf_pool), base_scale))
+        assert meta["relief_asset"] is None
+        assert meta["reason"] == "no_positive_momentum_asset"
+
+    def test_dyn_marginal_skips_when_cov_data_insufficient(self, strategy, mock_g):
+        mock_g.PortfolioVolWindow = 20
+        mock_g.TargetVol = 0.08
+        params = strategy.snapshot_params()
+        params["PortfolioVolReliefMode"] = "dyn_marginal"
+        params["DynamicVolReliefMaxRatio"] = 1.5
+        params["DynamicVolReliefMomentumWindow"] = 20
+        params["DynamicVolReliefCovWindow"] = 40
+        prices = self._make_vol_control_prices(mock_g.etf_pool, sigma=0.012, n_days=30)
+        raw_weights = np.array([0.3, 0.4, 0.3])
+
+        base_scale = strategy.compute_portfolio_vol_scale(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+        asset_scales, meta = strategy.compute_portfolio_vol_asset_scales(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+
+        assert 1.0 < meta["vol_ratio"] <= 1.5
+        assert np.allclose(asset_scales, np.full(len(mock_g.etf_pool), base_scale))
+        assert meta["relief_asset"] is None
+        assert meta["reason"] == "insufficient_cov_data"
 
 
 # ============================================================
