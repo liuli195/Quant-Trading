@@ -178,6 +178,18 @@ class TestSetParameter:
         strategy.set_parameter(strategy)
         assert strategy.g.use_real_price is False
 
+    def test_portfolio_vol_relief_params_default_to_baseline(self, strategy):
+        """组合波控弱缩放默认关闭，保持现有基准行为。"""
+        strategy.set_parameter(strategy)
+        g = strategy.g
+        assert g.PortfolioVolReliefMode == "baseline"
+        assert g.GoldVolReliefFraction == 0.5
+        assert g.GoldVolReliefMaxRatio == 2.0
+        assert g.DynamicVolReliefFraction == 1.0
+        assert g.DynamicVolReliefMaxRatio == 1.5
+        assert g.DynamicVolReliefMomentumWindow == 20
+        assert g.DynamicVolReliefCovWindow == 40
+
 
 class TestEtfDisplayNames:
     """测试基金展示名始终保留编号，供报告和日志检索。"""
@@ -2472,6 +2484,10 @@ class TestSnapshotParams:
             "AmountMAWindow", "DeviationMAWindow", "CrowdVolWindow",
             "CrowdStart", "CrowdEnd", "MinCrowdPenalty",
             "PortfolioVolWindow", "TargetVol", "MaxPortfolioVolScale",
+            "PortfolioVolReliefMode",
+            "GoldVolReliefFraction", "GoldVolReliefMaxRatio",
+            "DynamicVolReliefFraction", "DynamicVolReliefMaxRatio",
+            "DynamicVolReliefMomentumWindow", "DynamicVolReliefCovWindow",
             "MaxWeight", "MinWeight", "RebalanceThreshold", "MaxTotalWeight",
             "ExecutionTimingMode",
             "use_real_price", "fq_mode", "history_buffer",
@@ -2489,6 +2505,16 @@ class TestSnapshotParams:
         assert params["history_buffer"] == mock_g.history_buffer
         assert params["etf_names"] == mock_g.etf_names
         assert params["ExecutionTimingMode"] == mock_g.ExecutionTimingMode
+
+    def test_snapshot_contains_portfolio_vol_relief_defaults(self, strategy, mock_g):
+        params = strategy.snapshot_params()
+        assert params["PortfolioVolReliefMode"] == "baseline"
+        assert params["GoldVolReliefFraction"] == 0.5
+        assert params["GoldVolReliefMaxRatio"] == 2.0
+        assert params["DynamicVolReliefFraction"] == 1.0
+        assert params["DynamicVolReliefMaxRatio"] == 1.5
+        assert params["DynamicVolReliefMomentumWindow"] == 20
+        assert params["DynamicVolReliefCovWindow"] == 40
 
     def test_snapshot_list_values_are_copies(self, strategy, mock_g):
         params = strategy.snapshot_params()
@@ -2678,6 +2704,24 @@ class TestValidateParams:
         mock_g.ExecutionTimingMode = "unknown"
         params = strategy.snapshot_params()
         with pytest.raises(ValueError, match="ExecutionTimingMode must be one of"):
+            strategy.validate_params(params)
+
+    def test_portfolio_vol_relief_mode_must_be_known(self, strategy, mock_g):
+        params = strategy.snapshot_params()
+        params["PortfolioVolReliefMode"] = "bad_mode"
+        with pytest.raises(ValueError, match="PortfolioVolReliefMode"):
+            strategy.validate_params(params)
+
+    def test_gold_vol_relief_fraction_must_be_in_unit_interval(self, strategy, mock_g):
+        params = strategy.snapshot_params()
+        params["GoldVolReliefFraction"] = 1.5
+        with pytest.raises(ValueError, match="GoldVolReliefFraction"):
+            strategy.validate_params(params)
+
+    def test_dynamic_vol_relief_window_must_be_positive_integer(self, strategy, mock_g):
+        params = strategy.snapshot_params()
+        params["DynamicVolReliefMomentumWindow"] = 0
+        with pytest.raises(ValueError, match="DynamicVolReliefMomentumWindow"):
             strategy.validate_params(params)
 
 

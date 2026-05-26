@@ -61,6 +61,11 @@ EXECUTION_TIMING_MODES = (
     "logic-2-delay-only",
     "logic-3-live-like",
 )
+PORTFOLIO_VOL_RELIEF_MODES = (
+    "baseline",
+    "fixed_gold",
+    "dyn_marginal",
+)
 
 
 def fund_code(security):
@@ -232,6 +237,13 @@ def snapshot_params():
         "PortfolioVolWindow": g.PortfolioVolWindow,
         "TargetVol": g.TargetVol,
         "MaxPortfolioVolScale": g.MaxPortfolioVolScale,
+        "PortfolioVolReliefMode": g.PortfolioVolReliefMode,
+        "GoldVolReliefFraction": g.GoldVolReliefFraction,
+        "GoldVolReliefMaxRatio": g.GoldVolReliefMaxRatio,
+        "DynamicVolReliefFraction": g.DynamicVolReliefFraction,
+        "DynamicVolReliefMaxRatio": g.DynamicVolReliefMaxRatio,
+        "DynamicVolReliefMomentumWindow": g.DynamicVolReliefMomentumWindow,
+        "DynamicVolReliefCovWindow": g.DynamicVolReliefCovWindow,
         "MaxWeight": g.MaxWeight,
         "MinWeight": g.MinWeight,
         "RebalanceThreshold": g.RebalanceThreshold,
@@ -279,6 +291,20 @@ def validate_params(params):
         errors.append("MinWeight must be in [0, MaxWeight]")
     if params["TargetVol"] <= 0:
         errors.append("TargetVol must be positive")
+    if params["PortfolioVolReliefMode"] not in PORTFOLIO_VOL_RELIEF_MODES:
+        errors.append("PortfolioVolReliefMode must be one of %s" % (PORTFOLIO_VOL_RELIEF_MODES,))
+    for fraction_name in ("GoldVolReliefFraction", "DynamicVolReliefFraction"):
+        value = params[fraction_name]
+        if not (0.0 <= value <= 1.0):
+            errors.append("%s must be in [0.0, 1.0]" % fraction_name)
+    for ratio_name in ("GoldVolReliefMaxRatio", "DynamicVolReliefMaxRatio"):
+        value = params[ratio_name]
+        if value <= 1.0:
+            errors.append("%s must be > 1.0" % ratio_name)
+    for window_name in ("DynamicVolReliefMomentumWindow", "DynamicVolReliefCovWindow"):
+        value = params[window_name]
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            errors.append("%s must be a positive integer" % window_name)
     if params["RSRS_M"] <= 0 or params["RSRS_N"] <= 1:
         errors.append("RSRS_M must be positive and RSRS_N must be > 1")
     if not (0 <= params["CrowdStart"] < params["CrowdEnd"] <= 1):
@@ -512,6 +538,13 @@ def set_parameter(context):
     g.PortfolioVolWindow = 40
     g.TargetVol = 0.08
     g.MaxPortfolioVolScale = 1.0
+    g.PortfolioVolReliefMode = "baseline"
+    g.GoldVolReliefFraction = 0.5
+    g.GoldVolReliefMaxRatio = 2.0
+    g.DynamicVolReliefFraction = 1.0
+    g.DynamicVolReliefMaxRatio = 1.5
+    g.DynamicVolReliefMomentumWindow = 20
+    g.DynamicVolReliefCovWindow = 40
 
     # ---- 仓位与交易约束 ----
     g.MaxWeight = 0.60
