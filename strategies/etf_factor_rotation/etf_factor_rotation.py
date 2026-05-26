@@ -1466,14 +1466,46 @@ def compute_portfolio_vol_asset_scales(prices, pool, raw_weights, params):
     """返回每只 ETF 的组合波控缩放系数和审计元数据。"""
     base_scale, vol_ratio = compute_portfolio_vol_scale_detail(prices, pool, raw_weights, params)
     asset_scales = np.full(len(pool), base_scale)
+    mode = params["PortfolioVolReliefMode"]
     meta = {
-        "mode": params["PortfolioVolReliefMode"],
+        "mode": mode,
         "vol_ratio": vol_ratio,
         "base_scale": base_scale,
         "relief_asset": None,
         "relief_weight": 0.0,
         "reason": "baseline",
     }
+    if mode == "fixed_gold":
+        return apply_fixed_gold_vol_relief(pool, raw_weights, asset_scales, meta, params)
+    return asset_scales, meta
+
+
+def apply_fixed_gold_vol_relief(pool, raw_weights, asset_scales, meta, params):
+    """固定黄金弱缩放：按参数恢复黄金被组合波控压掉的部分仓位。"""
+    gold_code = "518880.XSHG"
+    vol_ratio = meta["vol_ratio"]
+    base_scale = meta["base_scale"]
+
+    if vol_ratio is None or vol_ratio <= 1.0:
+        meta["reason"] = "vol_not_above_target"
+        return asset_scales, meta
+    if vol_ratio > params["GoldVolReliefMaxRatio"]:
+        meta["reason"] = "ratio_too_high"
+        return asset_scales, meta
+    if gold_code not in pool:
+        meta["reason"] = "gold_not_in_pool"
+        return asset_scales, meta
+
+    gold_idx = pool.index(gold_code)
+    if raw_weights[gold_idx] <= 1e-8:
+        meta["reason"] = "gold_not_active"
+        return asset_scales, meta
+
+    new_scale = min(1.0, base_scale + (1.0 - base_scale) * params["GoldVolReliefFraction"])
+    asset_scales[gold_idx] = new_scale
+    meta["relief_asset"] = gold_code
+    meta["relief_weight"] = float(raw_weights[gold_idx] * (new_scale - base_scale))
+    meta["reason"] = "fixed_gold"
     return asset_scales, meta
 
 

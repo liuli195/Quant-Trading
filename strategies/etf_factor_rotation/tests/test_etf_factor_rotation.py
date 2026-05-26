@@ -1560,6 +1560,19 @@ class TestComputeCrowdPenalties:
 class TestComputePortfolioVolScale:
     """测试组合波动率缩放系数。"""
 
+    def _make_vol_control_prices(self, pool, sigma=0.012, n_days=120, seed=7):
+        rng = np.random.default_rng(seed)
+        returns = {
+            etf: rng.normal(0.0002, sigma * (1.0 + idx * 0.1), n_days)
+            for idx, etf in enumerate(pool)
+        }
+        close_ret = pd.DataFrame(
+            returns,
+            index=pd.date_range("2020-01-01", periods=n_days, freq="B"),
+        )
+        close = (1.0 + close_ret).cumprod()
+        return {"close": close, "close_ret": close_ret}
+
     def test_all_zero_weights_returns_one(self, strategy, mock_g):
         params = strategy.snapshot_params()
         n_days = 100
@@ -1677,6 +1690,76 @@ class TestComputePortfolioVolScale:
         assert meta["relief_asset"] is None
         assert meta["relief_weight"] == 0.0
         assert meta["reason"] == "baseline"
+
+    def test_fixed_gold_relieves_gold_scale_when_ratio_allowed(self, strategy, mock_g):
+        mock_g.PortfolioVolWindow = 60
+        mock_g.TargetVol = 0.08
+        params = strategy.snapshot_params()
+        params["PortfolioVolReliefMode"] = "fixed_gold"
+        params["GoldVolReliefFraction"] = 0.5
+        params["GoldVolReliefMaxRatio"] = 2.0
+        prices = self._make_vol_control_prices(mock_g.etf_pool, sigma=0.012)
+        raw_weights = np.array([0.3, 0.3, 0.4])
+
+        base_scale = strategy.compute_portfolio_vol_scale(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+        asset_scales, meta = strategy.compute_portfolio_vol_asset_scales(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+        gold_idx = mock_g.etf_pool.index("518880.XSHG")
+
+        assert base_scale < 1.0
+        assert meta["vol_ratio"] <= 2.0
+        assert asset_scales[0] == pytest.approx(base_scale)
+        assert asset_scales[1] == pytest.approx(base_scale)
+        assert asset_scales[gold_idx] == pytest.approx(base_scale + (1.0 - base_scale) * 0.5)
+        assert meta["relief_asset"] == "518880.XSHG"
+        assert meta["relief_weight"] == pytest.approx(
+            raw_weights[gold_idx] * (asset_scales[gold_idx] - base_scale)
+        )
+        assert meta["reason"] == "fixed_gold"
+
+    def test_fixed_gold_skips_when_ratio_too_high(self, strategy, mock_g):
+        mock_g.PortfolioVolWindow = 60
+        mock_g.TargetVol = 0.08
+        params = strategy.snapshot_params()
+        params["PortfolioVolReliefMode"] = "fixed_gold"
+        params["GoldVolReliefMaxRatio"] = 2.0
+        prices = self._make_vol_control_prices(mock_g.etf_pool, sigma=0.04)
+        raw_weights = np.array([0.3, 0.3, 0.4])
+
+        base_scale = strategy.compute_portfolio_vol_scale(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+        asset_scales, meta = strategy.compute_portfolio_vol_asset_scales(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+
+        assert meta["vol_ratio"] > 2.0
+        assert np.allclose(asset_scales, np.full(len(mock_g.etf_pool), base_scale))
+        assert meta["relief_asset"] is None
+        assert meta["reason"] == "ratio_too_high"
+
+    def test_fixed_gold_skips_when_gold_not_active(self, strategy, mock_g):
+        mock_g.PortfolioVolWindow = 60
+        mock_g.TargetVol = 0.08
+        params = strategy.snapshot_params()
+        params["PortfolioVolReliefMode"] = "fixed_gold"
+        prices = self._make_vol_control_prices(mock_g.etf_pool, sigma=0.012)
+        raw_weights = np.array([0.5, 0.5, 0.0])
+
+        base_scale = strategy.compute_portfolio_vol_scale(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+        asset_scales, meta = strategy.compute_portfolio_vol_asset_scales(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+
+        assert meta["vol_ratio"] <= 2.0
+        assert np.allclose(asset_scales, np.full(len(mock_g.etf_pool), base_scale))
+        assert meta["relief_asset"] is None
+        assert meta["reason"] == "gold_not_active"
 
 
 # ============================================================
