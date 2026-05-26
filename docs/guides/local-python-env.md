@@ -1,46 +1,79 @@
 # 本地 Python 环境说明
 
-本文档约定仓库本地开发、静态检查和单元测试统一使用项目虚拟环境 `.venv`。
+本文档约定仓库本地开发、静态检查和单元测试统一使用当前 checkout 的项目虚拟环境 `.venv`。
 
-## 推荐解释器
+## 两阶段模型
 
-- Windows PowerShell：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1`
-- Codex Cloud / Linux shell：`.githooks/run-python.sh`
+- setup script：创建或修复当前 checkout 的 `.venv`，安装 [requirements-dev.txt](../../requirements-dev.txt) <!-- pathref: repo/requirements-dev.txt -->，并配置 `git config core.hooksPath .githooks`。
+- run-python wrapper：只负责设置 UTF-8 并调用当前 checkout 的 `.venv`。wrapper 找不到 `.venv` 时必须失败，不回退系统 Python。
+
+推荐入口：
+
+- Windows setup：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\setup-python.ps1`
+- Windows run：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1`
+- Codex Cloud / Linux setup：`bash .githooks/setup-python.sh`
+- Codex Cloud / Linux run：`.githooks/run-python.sh`
 - Git hook / 自动化入口：`.githooks/run-python.sh`
-- 不建议直接使用系统 `python`，因为本机可能同时存在多个 Python 发行版，且默认 `python` 不一定带有 `pip`。
-- Codex/自动化执行本项目 Python 命令时，默认应请求/使用提权执行项目虚拟环境；不提权可能无法访问 `.venv` 或正确解析项目目录。
 
-## 当前约定
+不建议直接使用系统 `python` 执行业务命令。系统 Python 只允许 setup script 用来 bootstrap `.venv`。
 
-- 本地策略检查：使用 `.venv` 中的 Python 3.12
-- 自动化代理执行：Windows 本地优先提权调用 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1`；Codex Cloud/Linux 使用 `.githooks/run-python.sh`；wrapper 会设置 `PYTHONUTF8=1` 和 `PYTHONIOENCODING=utf-8`，再调用项目 `.venv`，避免退回系统 Python
-- JoinQuant 云端运行：仍以聚宽环境为准，本地仅做编写、静态检查、单元测试和文档分析
-- `jqlib` 不作为本地依赖安装要求；相关测试通过 stub 或 monkeypatch 隔离
+## 本地或 worktree 初始化
 
-## 首次安装或修复
-
-如果 `.venv` 丢失或损坏，可在仓库根目录执行：
+如果 `.venv` 丢失、损坏，或你新建了一个 worktree，在该 checkout 根目录执行：
 
 ```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\setup-python.ps1
 ```
 
-如果已有 `.venv` 但入口损坏，可尝试：
+手动新建 worktree 的完整示例：
 
 ```powershell
-py -3.12 -m venv --upgrade .venv
+git worktree add ..\Quant-Trading-<name> -b <branch> <base-branch-or-commit>
+Set-Location ..\Quant-Trading-<name>
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\setup-python.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -c "import sys; print(sys.executable); print('中文')"
 ```
 
-Codex Cloud 可在 setup script 中使用：
+Codex App 创建的 Windows worktree 中，也使用同一条初始化命令：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\setup-python.ps1
+```
+
+## Codex Cloud Environment setup script
+
+Codex Cloud 环境设置页中可粘贴：
 
 ```bash
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install -r requirements.txt
-chmod +x .githooks/pre-commit .githooks/pre-push .githooks/reference-transaction .githooks/run-python.sh
-git config core.hooksPath .githooks
+set -eu
+
+bash .githooks/setup-python.sh
+.githooks/run-python.sh -c "import sys; print(sys.executable); print('中文')"
 ```
+
+官方依据：Codex Cloud 会先 checkout repo，再运行 setup script；setup 阶段可联网安装依赖，agent 阶段再执行命令。参考 <https://developers.openai.com/codex/cloud/environments>。
+
+## Codex App Local Environment
+
+Codex App Local Environment 的 Linux/macOS setup script 示例：
+
+```bash
+set -eu
+
+bash .githooks/setup-python.sh
+.githooks/run-python.sh -m scripts.research.governance gate
+```
+
+Windows Local Environment 示例：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\setup-python.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance gate
+```
+
+官方依据：Codex Local Environments 可为 worktree 配置 setup script，配置可由 Codex App 生成到仓库根目录 `.codex`。参考 <https://developers.openai.com/codex/app/local-environments>。
+
+Codex worktree 是独立 checkout，每个 worktree 都应该运行 setup script 并拥有自己的 `.venv`。参考 <https://developers.openai.com/codex/app/worktrees>。
 
 ## 常用命令
 
@@ -66,9 +99,6 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.p
 
 ## 依赖说明
 
-仓库根目录的 [`requirements.txt`](../../requirements.txt) <!-- pathref: repo/requirements.txt --> 覆盖当前本地开发和文档脚本所需的基础依赖：
+[requirements-dev.txt](../../requirements-dev.txt) <!-- pathref: repo/requirements-dev.txt --> 是本地治理、测试和 review gate 的 setup 入口。它包含 [requirements.txt](../../requirements.txt) <!-- pathref: repo/requirements.txt -->，并额外安装 `pre-commit`、`ruff`、`bandit`、`mypy`、`pip-audit` 等检查工具。
 
-- 策略和测试：`numpy`、`pandas`、`pytest`
-- 文档脚本：`requests`、`beautifulsoup4`、`markdownify`、`python-docx`
-
-如后续新增本地脚本依赖，请同步更新 `requirements.txt`。
+`jqlib` 不作为本地依赖安装要求；相关测试通过 stub 或 monkeypatch 隔离。

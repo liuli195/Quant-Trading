@@ -130,9 +130,16 @@ def _write_minimal_repo(root: Path) -> None:
     (root / "docs/rules/commands.md").write_text(
         "scripts.research.cli scripts.research.datasets scripts.research.variants "
         "scripts.research.governance scripts.research.governance gate scripts.research.registry "
-        "scripts.tools.path_tools.refactor .\\.githooks\\run-python.ps1 .githooks/run-python.sh "
+        "scripts.tools.path_tools.refactor .\\.githooks\\setup-python.ps1 "
+        ".\\.githooks\\run-python.ps1 .githooks/setup-python.sh .githooks/run-python.sh "
         ".\\.venv\\Scripts\\python.exe .venv/bin/python PYTHONUTF8 PYTHONIOENCODING "
         "powershell.exe -NoProfile -ExecutionPolicy Bypass -File",
+        encoding="utf-8",
+    )
+    (root / "docs/guides/local-python-env.md").write_text(
+        "git worktree add .\\.githooks\\setup-python.ps1 .githooks/setup-python.sh "
+        "Codex Cloud Environment setup script Codex App Local Environment "
+        "requirements-dev.txt\n",
         encoding="utf-8",
     )
     (root / ".githooks/pre-commit").write_text(
@@ -166,6 +173,16 @@ def _write_minimal_repo(root: Path) -> None:
         "Console]::InputEncoding Console]::OutputEncoding $OutputEncoding & .venv\\Scripts\\python.exe @args\n",
         encoding="utf-8",
     )
+    (root / ".githooks/setup-python.ps1").write_text(
+        "3.12\nrequirements-dev.txt\ngit config core.hooksPath .githooks\n"
+        "PYTHONUTF8\nPYTHONIOENCODING\n",
+        encoding="utf-8",
+    )
+    (root / ".githooks/setup-python.sh").write_text(
+        "python3.12\nrequirements-dev.txt\ngit config core.hooksPath .githooks\n"
+        "PYTHONUTF8\nPYTHONIOENCODING\n",
+        encoding="utf-8",
+    )
     (root / ".githooks/pre-push").write_text(
         "\n".join(
             [
@@ -180,7 +197,13 @@ def _write_minimal_repo(root: Path) -> None:
         "\n".join(
             [
                 "STATE=${1:-}",
+                "INPUT=$(cat)",
                 'if [ "$STATE" = "prepared" ]; then',
+                "if [ ! -x .venv/bin/python ] && [ ! -x .venv/Scripts/python.exe ]; then",
+                "grep refs/heads/main",
+                "grep refs/heads/master",
+                "Project virtualenv Python not found",
+                "fi",
                 "sh .githooks/run-python.sh -m scripts.research.governance.branch_protection reference-transaction",
                 "fi",
             ]
@@ -846,6 +869,56 @@ def test_governance_audit_flags_missing_posix_hook_python_wrapper(tmp_path) -> N
     )
 
 
+def test_governance_audit_flags_missing_python_setup_scripts(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/setup-python.ps1").unlink(missing_ok=True)
+    (tmp_path / ".githooks/setup-python.sh").unlink(missing_ok=True)
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and ".githooks/setup-python.ps1 missing" in finding.message
+        for finding in report.findings
+    )
+    assert any(
+        finding.rule_id == "governance_gate"
+        and ".githooks/setup-python.sh missing" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_python_env_docs_without_setup_examples(
+    tmp_path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / "docs/guides").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "docs/guides/local-python-env.md").write_text(
+        "run-python wrapper only\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "docs/rules/commands.md").write_text(
+        "scripts.research.cli scripts.research.datasets scripts.research.variants "
+        "scripts.research.governance scripts.research.registry "
+        "scripts.tools.path_tools.refactor .\\.githooks\\run-python.ps1 "
+        ".githooks/run-python.sh .\\.venv\\Scripts\\python.exe .venv/bin/python "
+        "PYTHONUTF8 PYTHONIOENCODING powershell.exe -NoProfile "
+        "-ExecutionPolicy Bypass -File",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "command_rules"
+        and "local-python-env.md missing worktree setup example" in finding.message
+        for finding in report.findings
+    )
+    assert any(
+        finding.rule_id == "command_rules"
+        and "commands.md missing .\\.githooks\\setup-python.ps1" in finding.message
+        for finding in report.findings
+    )
+
+
 def test_governance_audit_flags_single_platform_hook_python_wrapper(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / ".githooks/run-python.sh").write_text(
@@ -1036,6 +1109,33 @@ def test_governance_audit_flags_reference_transaction_without_branch_protection(
     assert any(
         finding.rule_id == "governance_gate"
         and "local branch protection" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_reference_transaction_without_pre_setup_guard(
+    tmp_path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/reference-transaction").write_text(
+        "\n".join(
+            [
+                "#!/bin/sh",
+                "set -eu",
+                'STATE="${1:-}"',
+                'if [ "$STATE" = "prepared" ]; then',
+                "  sh .githooks/run-python.sh -m scripts.research.governance.branch_protection reference-transaction",
+                "fi",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "reference-transaction hook missing pre-setup worktree guard"
+        in finding.message
         for finding in report.findings
     )
 
