@@ -2393,6 +2393,44 @@ def test_pr_review_evidence_rejects_context_hostile_codex_trigger() -> None:
     )
 
 
+def test_pr_review_evidence_allows_new_compliant_trigger_after_context_hostile_trigger() -> (
+    None
+):
+    head_sha = "0" * 40
+    report = validate_pr_body(
+        _valid_codex_review_body(),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        comments=[
+            {
+                "body": "@codex review\nPlease only do a static diff review and do not execute local commands.",
+                "created_at": "2026-05-19T01:00:00Z",
+                "user": {"login": "liuli195"},
+            },
+            {
+                "body": "@codex review\nPlease use the current PR context and GitHub diff.",
+                "created_at": "2026-05-19T01:05:00Z",
+                "user": {"login": "liuli195"},
+            },
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T01:06:00Z",
+                "body": "### Codex Review\n\nNo blocking findings.",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+
+    assert report.ok
+    assert "required @codex review trigger must not disable repository context" not in (
+        report.errors
+    )
+
+
 def test_low_risk_pr_body_can_still_require_official_codex_review() -> None:
     head_sha = "0" * 40
     report = validate_pr_body(
@@ -3217,6 +3255,34 @@ def test_codex_review_monitor_reports_context_hostile_trigger() -> None:
     assert report.status == "trigger_invalid"
     assert report.trigger_invalid
     assert "trigger context invalid" in render_monitor_comment(report)
+
+
+def test_codex_review_monitor_allows_new_compliant_trigger_after_context_hostile_trigger() -> (
+    None
+):
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": "0" * 40}},
+        issue_comments=[
+            {
+                "body": "@codex review\nDo not execute local commands; only do a static diff review.",
+                "created_at": "2026-05-19T01:00:00Z",
+                "user": {"login": "liuli195"},
+            },
+            {
+                "body": "@codex review\nPlease use the current PR context and GitHub diff.",
+                "created_at": "2026-05-19T01:05:00Z",
+                "user": {"login": "liuli195"},
+            },
+        ],
+        reviews=[],
+        review_comments=[],
+    )
+
+    assert report.status == "waiting_for_codex"
+    assert report.trigger_found
+    assert not report.trigger_invalid
 
 
 def test_codex_review_monitor_passes_when_official_review_is_authorized_skipped() -> (

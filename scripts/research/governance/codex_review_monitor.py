@@ -297,8 +297,23 @@ def _required_trigger_comments(
     head_created_at: str | None = None,
 ) -> tuple[Mapping[str, object], ...]:
     matched: list[Mapping[str, object]] = []
-    for comment in issue_comments:
+    for comment in _trigger_candidate_comments(
+        issue_comments, head_created_at=head_created_at
+    ):
         if not _is_required_trigger_comment(comment):
+            continue
+        matched.append(comment)
+    return tuple(matched)
+
+
+def _trigger_candidate_comments(
+    issue_comments: Sequence[Mapping[str, object]],
+    *,
+    head_created_at: str | None = None,
+) -> tuple[Mapping[str, object], ...]:
+    matched: list[Mapping[str, object]] = []
+    for comment in issue_comments:
+        if not _is_trigger_candidate_comment(comment):
             continue
         effective_time = _comment_effective_time(comment)
         if not effective_time:
@@ -315,39 +330,50 @@ def _has_context_hostile_trigger_comment(
     *,
     head_created_at: str | None = None,
 ) -> bool:
-    for comment in issue_comments:
-        if not _is_context_hostile_trigger_comment(comment):
-            continue
+    latest = _latest_trigger_candidate_comment(
+        issue_comments, head_created_at=head_created_at
+    )
+    return latest is not None and _is_context_hostile_trigger_comment(latest)
+
+
+def _latest_trigger_candidate_comment(
+    issue_comments: Sequence[Mapping[str, object]],
+    *,
+    head_created_at: str | None = None,
+) -> Mapping[str, object] | None:
+    latest: Mapping[str, object] | None = None
+    latest_time = ""
+    for comment in _trigger_candidate_comments(
+        issue_comments, head_created_at=head_created_at
+    ):
         effective_time = _comment_effective_time(comment)
-        if not effective_time:
-            if head_created_at:
-                continue
-        elif head_created_at and effective_time < head_created_at:
-            continue
-        return True
-    return False
+        if latest is None or not effective_time or not latest_time or latest_time <= effective_time:
+            latest = comment
+            latest_time = effective_time
+    return latest
 
 
-def _is_context_hostile_trigger_comment(comment: Mapping[str, object]) -> bool:
+def _is_trigger_candidate_comment(comment: Mapping[str, object]) -> bool:
     user = comment.get("user")
     login = user.get("login") if isinstance(user, Mapping) else ""
     if str(login) in CODEX_REVIEW_AUTHORS:
         return False
     body = str(comment.get("body", ""))
-    return all(token in body for token in REQUIRED_TRIGGER_TOKENS) and bool(
-        CONTEXT_HOSTILE_TRIGGER_PATTERN.search(body)
+    return all(token in body for token in REQUIRED_TRIGGER_TOKENS)
+
+
+def _is_context_hostile_trigger_comment(comment: Mapping[str, object]) -> bool:
+    return _is_trigger_candidate_comment(comment) and bool(
+        CONTEXT_HOSTILE_TRIGGER_PATTERN.search(str(comment.get("body", "")))
     )
 
 
 def _is_required_trigger_comment(comment: Mapping[str, object]) -> bool:
-    user = comment.get("user")
-    login = user.get("login") if isinstance(user, Mapping) else ""
-    if str(login) in CODEX_REVIEW_AUTHORS:
+    if not _is_trigger_candidate_comment(comment):
         return False
-    body = str(comment.get("body", ""))
-    if CONTEXT_HOSTILE_TRIGGER_PATTERN.search(body):
+    if CONTEXT_HOSTILE_TRIGGER_PATTERN.search(str(comment.get("body", ""))):
         return False
-    return all(token in body for token in REQUIRED_TRIGGER_TOKENS)
+    return True
 
 
 def _latest_codex_completion_comment(
