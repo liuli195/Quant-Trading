@@ -15,6 +15,7 @@ from pathlib import Path
 
 from scripts.research.governance.pr_review_evidence import (
     BLOCKING_CODEX_FINDING_PATTERN,
+    CODEX_CONTEXT_INVALID_PATTERN,
     CONTEXT_HOSTILE_TRIGGER_PATTERN,
     CODEX_REVIEW_AUTHORS,
     _fetch_pr_review_threads,
@@ -72,9 +73,6 @@ def build_monitor_report(
         issue_comments, head_created_at=head_created_at
     )
     trigger_found = trigger_time is not None
-    trigger_invalid = _has_context_hostile_trigger_comment(
-        issue_comments, head_created_at=head_created_at
-    )
     current_head_reviews = _current_head_codex_reviews(reviews, head_sha=head_sha)
     post_trigger_reviews = _reviews_after_trigger(
         current_head_reviews, trigger_time=trigger_time
@@ -100,6 +98,16 @@ def build_monitor_report(
             repo=repo, pr_number=pr_number, comment=completion_comment
         )
         latest_review_sha = head_sha
+    reviewed_until = None
+    if latest_review is not None:
+        reviewed_until = _review_submitted_at(latest_review)
+    elif completion_comment is not None:
+        reviewed_until = _comment_effective_time(completion_comment)
+    trigger_invalid = _has_context_hostile_trigger_comment(
+        issue_comments,
+        head_created_at=head_created_at,
+        before_or_at=reviewed_until,
+    )
     blocking_findings = _count_reviews_findings(
         current_head_reviews,
         review_comments=review_comments,
@@ -310,6 +318,7 @@ def _trigger_candidate_comments(
     issue_comments: Sequence[Mapping[str, object]],
     *,
     head_created_at: str | None = None,
+    before_or_at: str | None = None,
 ) -> tuple[Mapping[str, object], ...]:
     matched: list[Mapping[str, object]] = []
     for comment in issue_comments:
@@ -321,6 +330,8 @@ def _trigger_candidate_comments(
                 continue
         elif head_created_at and effective_time < head_created_at:
             continue
+        if before_or_at and effective_time and before_or_at < effective_time:
+            continue
         matched.append(comment)
     return tuple(matched)
 
@@ -329,9 +340,10 @@ def _has_context_hostile_trigger_comment(
     issue_comments: Sequence[Mapping[str, object]],
     *,
     head_created_at: str | None = None,
+    before_or_at: str | None = None,
 ) -> bool:
     latest = _latest_trigger_candidate_comment(
-        issue_comments, head_created_at=head_created_at
+        issue_comments, head_created_at=head_created_at, before_or_at=before_or_at
     )
     return latest is not None and _is_context_hostile_trigger_comment(latest)
 
@@ -340,11 +352,12 @@ def _latest_trigger_candidate_comment(
     issue_comments: Sequence[Mapping[str, object]],
     *,
     head_created_at: str | None = None,
+    before_or_at: str | None = None,
 ) -> Mapping[str, object] | None:
     latest: Mapping[str, object] | None = None
     latest_time = ""
     for comment in _trigger_candidate_comments(
-        issue_comments, head_created_at=head_created_at
+        issue_comments, head_created_at=head_created_at, before_or_at=before_or_at
     ):
         effective_time = _comment_effective_time(comment)
         if latest is None or not effective_time or not latest_time or latest_time <= effective_time:
@@ -484,6 +497,10 @@ def _count_review_findings(
     for comment in review_comments:
         if str(comment.get("pull_request_review_id", "")) == review_id:
             texts.append(str(comment.get("body", "")))
+    if pattern is BLOCKING_CODEX_FINDING_PATTERN and any(
+        CODEX_CONTEXT_INVALID_PATTERN.search(text) for text in texts
+    ):
+        return 0
     return sum(1 for text in texts if pattern.search(text))
 
 
