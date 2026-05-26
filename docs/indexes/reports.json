@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "catalog_type": "documents",
-  "generated_at": "2026-05-26T15:39:28+00:00",
-  "count": 415,
+  "generated_at": "2026-05-26T15:49:17+00:00",
+  "count": 416,
   "reports": [
     {
       "path": "docs/README.md",
@@ -4038,6 +4038,23 @@
       "tags": [],
       "pathrefs": [],
       "updated_at": "2026-05-18T08:34:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/reports/research/portfolio_volatility/vol-relief-ab-v1/deep-attribution.md",
+      "title": "组合波控弱缩放 A/B 深度归因",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-11-22",
+      "tags": [],
+      "pathrefs": [
+        "strategies/etf_factor_rotation/test_batches/20260526-vol-relief-ab/abtests/portfolio-vol-relief-ab-v1.json",
+        "strategies/etf_factor_rotation/test_batches/20260526-vol-relief-ab/report/ab-portfolio-vol-relief-ab-v1-comparison.md",
+        "strategies/etf_factor_rotation/reports/research/portfolio_volatility/vol-relief-ab-v1/summary.csv",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260526-2327-bta35e64a2599b009eba3c6b8219d61e22)/backtest_report.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260526-2330-btfefcb2db54c231df54d773457629bda1)/backtest_report.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260526-2333-bt36f34fb52505979aa53d97ef4949fc60)/backtest_report.md"
+      ],
+      "updated_at": "2026-05-26T15:48:57+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/reports/research/window_heterogeneity/README.md",

@@ -310,6 +310,7 @@
 | research | etf_factor_rotation | 组合波动率行为完整扫描 | `strategies/etf_factor_rotation/reports/research/portfolio_volatility/runs/2026-05-18-full-v1/reports/portfolio-volatility-full-scan.md` | 0 |
 | research | etf_factor_rotation | 组合波动率全量扫描性能冒烟 | `strategies/etf_factor_rotation/reports/research/portfolio_volatility/runs/2026-05-18-smoke-cold-v2/reports/portfolio-volatility-performance-smoke.md` | 0 |
 | research | etf_factor_rotation | 组合波动率全量扫描性能冒烟 | `strategies/etf_factor_rotation/reports/research/portfolio_volatility/runs/2026-05-18-smoke-warm-v2/reports/portfolio-volatility-performance-smoke.md` | 0 |
+| research | etf_factor_rotation | 组合波控弱缩放 A/B 深度归因 | `strategies/etf_factor_rotation/reports/research/portfolio_volatility/vol-relief-ab-v1/deep-attribution.md` | 6 |
 | research | etf_factor_rotation | README | `strategies/etf_factor_rotation/reports/research/window_heterogeneity/README.md` | 8 |
 | research | etf_factor_rotation | cloud_confirmation_plan | `strategies/etf_factor_rotation/reports/research/window_heterogeneity/docs/cloud_confirmation_plan.md` | 1 |
 | research | etf_factor_rotation | performance_optimization_plan | `strategies/etf_factor_rotation/reports/research/window_heterogeneity/docs/performance_optimization_plan.md` | 2 |
