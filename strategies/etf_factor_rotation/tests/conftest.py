@@ -195,7 +195,7 @@ def mock_g(strategy):
         PortfolioVolWindow=60,
         TargetVol=0.12,
         MaxPortfolioVolScale=1.0,
-        PortfolioVolReliefMode='baseline',
+        PortfolioVolReliefMode='dyn_marginal',
         GoldVolReliefFraction=0.5,
         GoldVolReliefMaxRatio=2.0,
         DynamicVolReliefFraction=1.0,

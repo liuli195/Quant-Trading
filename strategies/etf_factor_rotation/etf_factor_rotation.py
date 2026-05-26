@@ -538,7 +538,7 @@ def set_parameter(context):
     g.PortfolioVolWindow = 40
     g.TargetVol = 0.08
     g.MaxPortfolioVolScale = 1.0
-    g.PortfolioVolReliefMode = "baseline"
+    g.PortfolioVolReliefMode = "dyn_marginal"
     g.GoldVolReliefFraction = 0.5
     g.GoldVolReliefMaxRatio = 2.0
     g.DynamicVolReliefFraction = 1.0

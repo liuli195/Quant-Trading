@@ -5,7 +5,7 @@
 - `fixed_gold_f50_r2`：通过。年化收益相对 baseline 为 0.51%，最大回撤变化 -0.19%，Sharpe 变化 0.017，触发 127 次。
 - `dyn_marginal_f100_r1.5_mom`：通过。年化收益相对 baseline 为 0.90%，最大回撤变化 -0.39%，Sharpe 变化 0.084，触发 91 次。
 
-按本计划规则，`dyn_marginal_f100_r1.5_mom` 值得进入下一步默认候选评审；本次不直接改默认参数，策略默认仍保持 `PortfolioVolReliefMode="baseline"`。
+后续默认参数变更已采纳 `dyn_marginal_f100_r1.5_mom`：策略默认设为 `PortfolioVolReliefMode="dyn_marginal"`，并保留 `DynamicVolReliefFraction=1.0`、`DynamicVolReliefMaxRatio=1.5`、`DynamicVolReliefMomentumWindow=20`、`DynamicVolReliefCovWindow=40`。
 
 ## 输入
 
@@ -89,4 +89,4 @@
 
 ## 默认参数处理
 
-本次代码只新增可开关参数和 A/B 候选逻辑；正式默认仍为 `PortfolioVolReliefMode = "baseline"`。候选若要升级为默认，还需要单独的默认参数变更 PR/提交。
+默认参数已在后续变更中升级为 `dyn_marginal_f100_r1.5_mom`：`PortfolioVolReliefMode = "dyn_marginal"`，`DynamicVolReliefFraction = 1.0`，`DynamicVolReliefMaxRatio = 1.5`，`DynamicVolReliefMomentumWindow = 20`，`DynamicVolReliefCovWindow = 40`。

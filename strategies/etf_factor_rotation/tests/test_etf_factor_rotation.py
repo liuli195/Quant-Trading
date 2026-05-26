@@ -178,11 +178,11 @@ class TestSetParameter:
         strategy.set_parameter(strategy)
         assert strategy.g.use_real_price is False
 
-    def test_portfolio_vol_relief_params_default_to_baseline(self, strategy):
-        """组合波控弱缩放默认关闭，保持现有基准行为。"""
+    def test_portfolio_vol_relief_params_default_to_dyn_marginal(self, strategy):
+        """组合波控弱缩放默认启用动态低边际风险恢复档位。"""
         strategy.set_parameter(strategy)
         g = strategy.g
-        assert g.PortfolioVolReliefMode == "baseline"
+        assert g.PortfolioVolReliefMode == "dyn_marginal"
         assert g.GoldVolReliefFraction == 0.5
         assert g.GoldVolReliefMaxRatio == 2.0
         assert g.DynamicVolReliefFraction == 1.0
@@ -1699,6 +1699,7 @@ class TestComputePortfolioVolScale:
         prices = {'close': close_df, 'close_ret': close_df.pct_change()}
         raw_weights = np.array([0.5, 0.3, 0.2])
         params = strategy.snapshot_params()
+        params["PortfolioVolReliefMode"] = "baseline"
 
         base_scale = strategy.compute_portfolio_vol_scale(
             prices, mock_g.etf_pool, raw_weights, params
@@ -2730,9 +2731,10 @@ class TestSnapshotParams:
         assert params["etf_names"] == mock_g.etf_names
         assert params["ExecutionTimingMode"] == mock_g.ExecutionTimingMode
 
-    def test_snapshot_contains_portfolio_vol_relief_defaults(self, strategy, mock_g):
+    def test_snapshot_contains_portfolio_vol_relief_defaults(self, strategy):
+        strategy.set_parameter(strategy)
         params = strategy.snapshot_params()
-        assert params["PortfolioVolReliefMode"] == "baseline"
+        assert params["PortfolioVolReliefMode"] == "dyn_marginal"
         assert params["GoldVolReliefFraction"] == 0.5
         assert params["GoldVolReliefMaxRatio"] == 2.0
         assert params["DynamicVolReliefFraction"] == 1.0
