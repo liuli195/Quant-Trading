@@ -1,0 +1,109 @@
+{
+  "ab_experiments": {
+    "portfolio-vol-relief-ab-v1": {
+      "status": "completed",
+      "baseline": "baseline_current",
+      "controls": [
+        "baseline_current"
+      ],
+      "config_hash": "sha256:e08a1f79a3d5df78c3cdc4a236801e34bc9d21ac9612bd8ac839f2653e89e1ad",
+      "variants": [
+        {
+          "label": "baseline_current",
+          "scenario_id": "ab-portfolio-vol-relief-ab-v1-baseline_current",
+          "run_label": "baseline_current",
+          "run_id": "20260526-2327-bta35e64a2599b009eba3c6b8219d61e22",
+          "role": "control",
+          "variant_id": null,
+          "is_baseline": true,
+          "upload_index": 1,
+          "code_source": {
+            "type": "git",
+            "ref": "HEAD",
+            "commit": "bf802fb6865c76f842d60a527ba469ffa6f7a9da",
+            "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+          },
+          "params_mode": "params_diff",
+          "params_diff": {
+            "PortfolioVolReliefMode": "baseline"
+          },
+          "scan_source": null,
+          "uploaded_code_sha256": "sha256:7fdf6a8731c609e0eea11476ada87b1e0b1b98c1b0dd46a9879d552c0d9082c5",
+          "backtest_id": "a35e64a2599b009eba3c6b8219d61e22",
+          "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=a35e64a2599b009eba3c6b8219d61e22",
+          "status": "completed"
+        },
+        {
+          "label": "fixed_gold_f50_r2",
+          "scenario_id": "ab-portfolio-vol-relief-ab-v1-fixed_gold_f50_r2",
+          "run_label": "fixed_gold_f50_r2",
+          "run_id": "20260526-2330-btfefcb2db54c231df54d773457629bda1",
+          "role": "variant",
+          "variant_id": null,
+          "is_baseline": false,
+          "upload_index": 2,
+          "code_source": {
+            "type": "git",
+            "ref": "HEAD",
+            "commit": "bf802fb6865c76f842d60a527ba469ffa6f7a9da",
+            "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+          },
+          "params_mode": "params_diff",
+          "params_diff": {
+            "PortfolioVolReliefMode": "fixed_gold",
+            "GoldVolReliefFraction": 0.5,
+            "GoldVolReliefMaxRatio": 2.0
+          },
+          "scan_source": null,
+          "uploaded_code_sha256": "sha256:6836e390b5f5b76d1c10daa0be2c3d622a361aae8ab2419b0cce23a2d587aec2",
+          "backtest_id": "fefcb2db54c231df54d773457629bda1",
+          "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=fefcb2db54c231df54d773457629bda1",
+          "status": "completed"
+        },
+        {
+          "label": "dyn_marginal_f100_r1.5_mom",
+          "scenario_id": "ab-portfolio-vol-relief-ab-v1-dyn_marginal_f100_r1.5_mom",
+          "run_label": "dyn_marginal_f100_r1.5_mom",
+          "run_id": "20260526-2333-bt36f34fb52505979aa53d97ef4949fc60",
+          "role": "variant",
+          "variant_id": null,
+          "is_baseline": false,
+          "upload_index": 3,
+          "code_source": {
+            "type": "git",
+            "ref": "HEAD",
+            "commit": "bf802fb6865c76f842d60a527ba469ffa6f7a9da",
+            "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+          },
+          "params_mode": "params_diff",
+          "params_diff": {
+            "PortfolioVolReliefMode": "dyn_marginal",
+            "DynamicVolReliefFraction": 1.0,
+            "DynamicVolReliefMaxRatio": 1.5,
+            "DynamicVolReliefMomentumWindow": 20,
+            "DynamicVolReliefCovWindow": 40
+          },
+          "scan_source": null,
+          "uploaded_code_sha256": "sha256:74ec76f1260b61532ce907878c3ad7cdd863e140f0ed7b5c399d658f2009cad0",
+          "backtest_id": "36f34fb52505979aa53d97ef4949fc60",
+          "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=36f34fb52505979aa53d97ef4949fc60",
+          "status": "completed"
+        }
+      ],
+      "upload_session": {
+        "session_started_at": "2026-05-26T23:27:04",
+        "session_finished_at": "2026-05-26T23:35:46",
+        "strategy_name": "etf_factor_rotation",
+        "edit_url": null,
+        "candidate_order": [
+          "baseline_current",
+          "fixed_gold_f50_r2",
+          "dyn_marginal_f100_r1.5_mom"
+        ]
+      }
+    }
+  },
+  "batch_id": "20260526-vol-relief-ab",
+  "strategy": "etf_factor_rotation",
+  "updated": "2026-05-26T23:35:46"
+}

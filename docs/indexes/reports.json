@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "catalog_type": "documents",
-  "generated_at": "2026-05-25T19:25:33+00:00",
-  "count": 406,
+  "generated_at": "2026-05-26T15:49:17+00:00",
+  "count": 416,
   "reports": [
     {
       "path": "docs/README.md",
@@ -500,9 +500,11 @@
       "date": null,
       "tags": [],
       "pathrefs": [
-        "docs/rules/commands.md"
+        "docs/rules/commands.md",
+        "docs/rules/environments.md",
+        "docs/rules/environments.md"
       ],
-      "updated_at": "2026-05-19T15:28:55+00:00"
+      "updated_at": "2026-05-26T07:08:48+00:00"
     },
     {
       "path": "docs/rules/commands.md",
@@ -528,6 +530,16 @@
       "tags": [],
       "pathrefs": [],
       "updated_at": "2026-05-18T21:37:05+00:00"
+    },
+    {
+      "path": "docs/rules/environments.md",
+      "title": "本地与聚宽环境差异",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-26T07:09:04+00:00"
     },
     {
       "path": "docs/rules/governance.md",
@@ -560,6 +572,7 @@
         "docs/rules/commands.md",
         "docs/rules/research-workflow.md",
         "docs/rules/code-style.md",
+        "docs/rules/environments.md",
         "docs/rules/docs-and-pathref.md",
         "docs/adr/0001-rule-source-and-governance-model.md",
         "docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md",
@@ -567,7 +580,7 @@
         "docs/adr/0004-codex-code-review-governance.md",
         "docs/adr/0005-ai-entry-progressive-disclosure.md"
       ],
-      "updated_at": "2026-05-19T15:28:55+00:00"
+      "updated_at": "2026-05-26T07:09:11+00:00"
     },
     {
       "path": "docs/rules/pr-workflow.md",
@@ -658,6 +671,20 @@
         "docs/rules/review-guidelines.md"
       ],
       "updated_at": "2026-05-20T11:48:29+00:00"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-05-26-etf-vol-relief-ab-test.md",
+      "title": "ETF Vol Relief A/B Test Implementation Plan",
+      "category": "docs",
+      "strategy": null,
+      "date": "2026-05-26",
+      "tags": [],
+      "pathrefs": [
+        "strategies/etf_factor_rotation/etf_factor_rotation.py",
+        "strategies/etf_factor_rotation/tests/test_etf_factor_rotation.py",
+        "scripts/tools/jq_automation/README.md"
+      ],
+      "updated_at": "2026-05-26T15:01:25+00:00"
     },
     {
       "path": "docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md",
@@ -754,7 +781,7 @@
       "date": "2021-01-04",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-25T19:19:45+00:00"
+      "updated_at": "2026-05-26T05:20:27+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260526-0041-bt4ff080af1035efa8930129872f3f644d/report/data-integrity.md",
@@ -764,7 +791,7 @@
       "date": "2026-05-25",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-25T19:19:45+00:00"
+      "updated_at": "2026-05-26T05:20:27+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260526-0041-bt4ff080af1035efa8930129872f3f644d/report/vol-control-comparison-attribution.md",
@@ -778,7 +805,7 @@
         "backtest_run(strategy=etf_dynamic_rebalance, run_id=20260526-0041-bt4ff080af1035efa8930129872f3f644d)/metadata.json",
         "backtest_report_dir(strategy=etf_dynamic_rebalance, run_id=20260507-1622-bt9185c8dff5682cc51043774c05817179)/backtest_report.md"
       ],
-      "updated_at": "2026-05-25T19:19:45+00:00"
+      "updated_at": "2026-05-26T05:20:27+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260526-0130-btcf16d21b6c9aa1e55636a42a50d28d14/report/backtest_report.md",
@@ -788,7 +815,7 @@
       "date": "2021-01-04",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-25T19:19:45+00:00"
+      "updated_at": "2026-05-26T05:20:27+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260526-0130-btcf16d21b6c9aa1e55636a42a50d28d14/report/data-integrity.md",
@@ -798,7 +825,7 @@
       "date": "2026-05-25",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-25T19:19:45+00:00"
+      "updated_at": "2026-05-26T05:20:27+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260526-0214-bt24c9d8b410c21d7da6229fe0d3c94901/report/backtest_report.md",
@@ -808,7 +835,7 @@
       "date": "2021-01-04",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-25T19:19:45+00:00"
+      "updated_at": "2026-05-26T05:20:27+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260526-0214-bt24c9d8b410c21d7da6229fe0d3c94901/report/data-integrity.md",
@@ -818,7 +845,7 @@
       "date": "2026-05-25",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-25T19:19:45+00:00"
+      "updated_at": "2026-05-26T05:20:27+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260526-0217-bt649414737cca9f694bc92e09c5cdd140/report/backtest_report.md",
@@ -828,7 +855,7 @@
       "date": "2021-01-04",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-25T19:19:45+00:00"
+      "updated_at": "2026-05-26T05:20:27+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260526-0217-bt649414737cca9f694bc92e09c5cdd140/report/data-integrity.md",
@@ -838,7 +865,7 @@
       "date": "2026-05-25",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-25T19:19:45+00:00"
+      "updated_at": "2026-05-26T05:20:27+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260526-0221-bt3259066658e5135eb443ce3f05689b72/report/backtest_report.md",
@@ -848,7 +875,7 @@
       "date": "2021-01-04",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-25T19:19:45+00:00"
+      "updated_at": "2026-05-26T05:20:27+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260526-0221-bt3259066658e5135eb443ce3f05689b72/report/data-integrity.md",
@@ -858,7 +885,7 @@
       "date": "2026-05-25",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-25T19:19:45+00:00"
+      "updated_at": "2026-05-26T05:20:27+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260526-0225-bt8a0c34a15f9adffd8446ae39d2e7ee7e/report/backtest_report.md",
@@ -868,7 +895,7 @@
       "date": "2021-01-04",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-25T19:19:45+00:00"
+      "updated_at": "2026-05-26T05:20:27+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260526-0225-bt8a0c34a15f9adffd8446ae39d2e7ee7e/report/data-integrity.md",
@@ -878,7 +905,7 @@
       "date": "2026-05-25",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-25T19:19:45+00:00"
+      "updated_at": "2026-05-26T05:20:27+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260526-0229-btee809d4cea8f278df764d8dd0c195e5f/report/backtest_report.md",
@@ -888,7 +915,7 @@
       "date": "2021-01-04",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-25T19:19:45+00:00"
+      "updated_at": "2026-05-26T05:20:27+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/backtest_runs/20260526-0229-btee809d4cea8f278df764d8dd0c195e5f/report/data-integrity.md",
@@ -898,7 +925,7 @@
       "date": "2026-05-25",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-25T19:19:45+00:00"
+      "updated_at": "2026-05-26T05:20:27+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/backtest_runs/etf_threshold_005_20260503_214900_8c080de9/report/backtest_report.md",
@@ -1067,7 +1094,7 @@
         "strategies/etf_factor_rotation/reports/2026-05-14-deep-attribution.md",
         "strategies/etf_factor_rotation/reports/2026-05-17-momentum-strength-confirmation-decision.md"
       ],
-      "updated_at": "2026-05-25T19:19:45+00:00"
+      "updated_at": "2026-05-26T05:20:28+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/reports/deep-research-report.md",
@@ -1087,7 +1114,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-25T19:19:45+00:00"
+      "updated_at": "2026-05-26T05:20:28+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/reports/research/portfolio_volatility/reports/local-calmar-shortlist.md",
@@ -1097,7 +1124,7 @@
       "date": "2026-05-26",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-25T19:19:45+00:00"
+      "updated_at": "2026-05-26T05:20:28+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/reports/research/portfolio_volatility/runs/2026-05-26-full-calmar/reports/portfolio-volatility-full-scan.md",
@@ -1107,7 +1134,7 @@
       "date": "2026-05-26",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-25T19:19:45+00:00"
+      "updated_at": "2026-05-26T05:20:28+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/reports/research/portfolio_volatility/runs/2026-05-26-smoke/reports/portfolio-volatility-performance-smoke.md",
@@ -1117,7 +1144,7 @@
       "date": "2026-05-26",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-25T19:19:45+00:00"
+      "updated_at": "2026-05-26T05:20:28+00:00"
     },
     {
       "path": "strategies/etf_dynamic_rebalance/reports/test-guide.md",
@@ -1160,7 +1187,7 @@
         "strategies/etf_dynamic_rebalance/reports/research/portfolio_volatility/reports/local-calmar-shortlist.md",
         "strategies/etf_dynamic_rebalance/backtest_runs"
       ],
-      "updated_at": "2026-05-25T19:19:45+00:00"
+      "updated_at": "2026-05-26T05:20:28+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/backtest_runs/20260505-0933-bt7a98269d2440d36f387fb95085dfb39d/report/backtest_report.md",
@@ -3246,6 +3273,66 @@
       "updated_at": "2026-05-18T13:33:19+00:00"
     },
     {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260526-2327-bta35e64a2599b009eba3c6b8219d61e22/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-26T15:30:02+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260526-2327-bta35e64a2599b009eba3c6b8219d61e22/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-26",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-26T15:30:02+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260526-2330-btfefcb2db54c231df54d773457629bda1/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-26T15:32:42+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260526-2330-btfefcb2db54c231df54d773457629bda1/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-26",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-26T15:32:42+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260526-2333-bt36f34fb52505979aa53d97ef4949fc60/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-26T15:35:46+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260526-2333-bt36f34fb52505979aa53d97ef4949fc60/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-26",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-26T15:35:46+00:00"
+    },
+    {
       "path": "strategies/etf_factor_rotation/reports/2026-05-07-factor-vs-dynamic-rebalance-attribution.md",
       "title": "ETF 因子轮动 vs 动态再平衡深度归因报告",
       "category": "report",
@@ -3953,6 +4040,23 @@
       "updated_at": "2026-05-18T08:34:41+00:00"
     },
     {
+      "path": "strategies/etf_factor_rotation/reports/research/portfolio_volatility/vol-relief-ab-v1/deep-attribution.md",
+      "title": "组合波控弱缩放 A/B 深度归因",
+      "category": "research",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-11-22",
+      "tags": [],
+      "pathrefs": [
+        "strategies/etf_factor_rotation/test_batches/20260526-vol-relief-ab/abtests/portfolio-vol-relief-ab-v1.json",
+        "strategies/etf_factor_rotation/test_batches/20260526-vol-relief-ab/report/ab-portfolio-vol-relief-ab-v1-comparison.md",
+        "strategies/etf_factor_rotation/reports/research/portfolio_volatility/vol-relief-ab-v1/summary.csv",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260526-2327-bta35e64a2599b009eba3c6b8219d61e22)/backtest_report.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260526-2330-btfefcb2db54c231df54d773457629bda1)/backtest_report.md",
+        "backtest_report_dir(strategy=etf_factor_rotation, run_id=20260526-2333-bt36f34fb52505979aa53d97ef4949fc60)/backtest_report.md"
+      ],
+      "updated_at": "2026-05-26T15:48:57+00:00"
+    },
+    {
       "path": "strategies/etf_factor_rotation/reports/research/window_heterogeneity/README.md",
       "title": "README",
       "category": "research",
@@ -4416,6 +4520,16 @@
       "tags": [],
       "pathrefs": [],
       "updated_at": "2026-05-17T14:31:19+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/test_batches/20260526-vol-relief-ab/report/ab-portfolio-vol-relief-ab-v1-comparison.md",
+      "title": "AB 对比报告: portfolio-vol-relief-ab-v1",
+      "category": "test_batch",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-05-26",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-26T15:35:59+00:00"
     },
     {
       "path": "strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-alpha-20260524-dual-2/report/backtest_report.md",

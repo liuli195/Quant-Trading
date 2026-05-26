@@ -1,0 +1,97 @@
+{
+  "status": "completed",
+  "baseline": "baseline_current",
+  "controls": [
+    "baseline_current"
+  ],
+  "generated_at": "2026-05-26T23:35:59",
+  "variants": [
+    {
+      "label": "baseline_current",
+      "role": "control",
+      "variant_id": null,
+      "is_baseline": true,
+      "metrics": {
+        "excess_return": 1.3666999999999998,
+        "max_drawdown": 0.0799,
+        "actual_minutes": 1.7966666666666666,
+        "annual_return": 0.1635,
+        "sharpe": 1.498
+      },
+      "metadata": {
+        "backtest_id": "a35e64a2599b009eba3c6b8219d61e22",
+        "backtest_url": "",
+        "strategy_name": "etf_factor_rotation",
+        "start_date": "2021-01-01",
+        "end_date": "2026-04-30",
+        "capital": 100000,
+        "params_snapshot": {},
+        "extraction_method": "joinquant_research_get_backtest"
+      },
+      "artifacts_present": {
+        "has_backtest_report": true,
+        "has_strategy_analysis": false,
+        "has_performance_analysis": false
+      },
+      "issues": []
+    },
+    {
+      "label": "fixed_gold_f50_r2",
+      "role": "variant",
+      "variant_id": null,
+      "is_baseline": false,
+      "metrics": {
+        "excess_return": 1.4211,
+        "max_drawdown": 0.078,
+        "actual_minutes": 1.7536666666666667,
+        "annual_return": 0.1686,
+        "sharpe": 1.515
+      },
+      "metadata": {
+        "backtest_id": "fefcb2db54c231df54d773457629bda1",
+        "backtest_url": "",
+        "strategy_name": "etf_factor_rotation",
+        "start_date": "2021-01-01",
+        "end_date": "2026-04-30",
+        "capital": 100000,
+        "params_snapshot": {},
+        "extraction_method": "joinquant_research_get_backtest"
+      },
+      "artifacts_present": {
+        "has_backtest_report": true,
+        "has_strategy_analysis": false,
+        "has_performance_analysis": false
+      },
+      "issues": []
+    },
+    {
+      "label": "dyn_marginal_f100_r1.5_mom",
+      "role": "variant",
+      "variant_id": null,
+      "is_baseline": false,
+      "metrics": {
+        "excess_return": 1.4621000000000002,
+        "max_drawdown": 0.076,
+        "actual_minutes": 2.1258333333333335,
+        "annual_return": 0.1725,
+        "sharpe": 1.582
+      },
+      "metadata": {
+        "backtest_id": "36f34fb52505979aa53d97ef4949fc60",
+        "backtest_url": "",
+        "strategy_name": "etf_factor_rotation",
+        "start_date": "2021-01-01",
+        "end_date": "2026-04-30",
+        "capital": 100000,
+        "params_snapshot": {},
+        "extraction_method": "joinquant_research_get_backtest"
+      },
+      "artifacts_present": {
+        "has_backtest_report": true,
+        "has_strategy_analysis": false,
+        "has_performance_analysis": false
+      },
+      "issues": []
+    }
+  ]
+}

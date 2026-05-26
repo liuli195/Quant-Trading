@@ -1222,6 +1222,45 @@
     "lifecycle": "active"
   },
   {
+    "dataset_id": "etf_factor_rotation_backtest_runs",
+    "snapshot_id": "20260526-2327-bta35e64a2599b009eba3c6b8219d61e22",
+    "fingerprint": "sha256:29057bec8fbe36f012a1f0297ae1cb9191286d663947f40d5c79384ef85aa52a",
+    "row_count": 1289,
+    "date_range": [
+      "2021-01-04",
+      "2026-04-30"
+    ],
+    "source_kind": "joinquant_backtest_run",
+    "owner": "research-platform",
+    "lifecycle": "active"
+  },
+  {
+    "dataset_id": "etf_factor_rotation_backtest_runs",
+    "snapshot_id": "20260526-2330-btfefcb2db54c231df54d773457629bda1",
+    "fingerprint": "sha256:1f47edfa58f19475be36775f730c41692f6396f4602cc1bdee9c03c3ab9fcc47",
+    "row_count": 1289,
+    "date_range": [
+      "2021-01-04",
+      "2026-04-30"
+    ],
+    "source_kind": "joinquant_backtest_run",
+    "owner": "research-platform",
+    "lifecycle": "active"
+  },
+  {
+    "dataset_id": "etf_factor_rotation_backtest_runs",
+    "snapshot_id": "20260526-2333-bt36f34fb52505979aa53d97ef4949fc60",
+    "fingerprint": "sha256:a62c509ce271b4375397df27b7cdea34d7a437e41a2cab0b979ffe097092ed4b",
+    "row_count": 1289,
+    "date_range": [
+      "2021-01-04",
+      "2026-04-30"
+    ],
+    "source_kind": "joinquant_backtest_run",
+    "owner": "research-platform",
+    "lifecycle": "active"
+  },
+  {
     "dataset_id": "etf_factor_rotation_baseline_audit",
     "snapshot_id": "2026-05-17T17-36-27Z_56361cf8a32e",
     "fingerprint": "sha256:56361cf8a32ebdc6163cdb5c2f648285ab1a8ed8ff24373e9758b302e2dc047c",

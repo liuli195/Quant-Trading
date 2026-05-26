@@ -1,0 +1,56 @@
+{
+  "experiment_id": "portfolio-vol-relief-ab-v1",
+  "strategy": "etf_factor_rotation",
+  "batch_id": "20260526-vol-relief-ab",
+  "baseline": "baseline_current",
+  "controls": [
+    "baseline_current"
+  ],
+  "base": {
+    "code_source": {
+      "type": "git",
+      "ref": "HEAD",
+      "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+    },
+    "start_date": "2021-01-01",
+    "end_date": "2026-04-30",
+    "capital": 100000,
+    "estimated_minutes": 6,
+    "frequency": "1d",
+    "py_version": "Python3",
+    "result_source": "auto",
+    "allow_partial": false
+  },
+  "variants": [
+    {
+      "label": "baseline_current",
+      "role": "control",
+      "params_mode": "params_diff",
+      "params_diff": {
+        "PortfolioVolReliefMode": "baseline"
+      }
+    },
+    {
+      "label": "fixed_gold_f50_r2",
+      "role": "variant",
+      "params_mode": "params_diff",
+      "params_diff": {
+        "PortfolioVolReliefMode": "fixed_gold",
+        "GoldVolReliefFraction": 0.5,
+        "GoldVolReliefMaxRatio": 2.0
+      }
+    },
+    {
+      "label": "dyn_marginal_f100_r1.5_mom",
+      "role": "variant",
+      "params_mode": "params_diff",
+      "params_diff": {
+        "PortfolioVolReliefMode": "dyn_marginal",
+        "DynamicVolReliefFraction": 1.0,
+        "DynamicVolReliefMaxRatio": 1.5,
+        "DynamicVolReliefMomentumWindow": 20,
+        "DynamicVolReliefCovWindow": 40
+      }
+    }
+  ]
+}

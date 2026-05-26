@@ -31,7 +31,7 @@ except ImportError:
 核心公式：
   TiltedWeight_i = normalize(RPWeight_i × MomentumTilt_i × RSRSTilt_i)
   RawWeight_i = TiltedWeight_i × TrendGate_i × CrowdPenalty_i
-  FinalWeight_i = RawWeight_i × PortfolioVolScale
+  FinalWeight_i = RawWeight_i × PortfolioVolAssetScale_i
 
 调仓频率：每周开盘检查一次
 ============================================================
@@ -60,6 +60,11 @@ EXECUTION_TIMING_MODES = (
     "baseline",
     "logic-2-delay-only",
     "logic-3-live-like",
+)
+PORTFOLIO_VOL_RELIEF_MODES = (
+    "baseline",
+    "fixed_gold",
+    "dyn_marginal",
 )
 
 
@@ -232,6 +237,13 @@ def snapshot_params():
         "PortfolioVolWindow": g.PortfolioVolWindow,
         "TargetVol": g.TargetVol,
         "MaxPortfolioVolScale": g.MaxPortfolioVolScale,
+        "PortfolioVolReliefMode": g.PortfolioVolReliefMode,
+        "GoldVolReliefFraction": g.GoldVolReliefFraction,
+        "GoldVolReliefMaxRatio": g.GoldVolReliefMaxRatio,
+        "DynamicVolReliefFraction": g.DynamicVolReliefFraction,
+        "DynamicVolReliefMaxRatio": g.DynamicVolReliefMaxRatio,
+        "DynamicVolReliefMomentumWindow": g.DynamicVolReliefMomentumWindow,
+        "DynamicVolReliefCovWindow": g.DynamicVolReliefCovWindow,
         "MaxWeight": g.MaxWeight,
         "MinWeight": g.MinWeight,
         "RebalanceThreshold": g.RebalanceThreshold,
@@ -279,6 +291,20 @@ def validate_params(params):
         errors.append("MinWeight must be in [0, MaxWeight]")
     if params["TargetVol"] <= 0:
         errors.append("TargetVol must be positive")
+    if params["PortfolioVolReliefMode"] not in PORTFOLIO_VOL_RELIEF_MODES:
+        errors.append("PortfolioVolReliefMode must be one of %s" % (PORTFOLIO_VOL_RELIEF_MODES,))
+    for fraction_name in ("GoldVolReliefFraction", "DynamicVolReliefFraction"):
+        value = params[fraction_name]
+        if not (0.0 <= value <= 1.0):
+            errors.append("%s must be in [0.0, 1.0]" % fraction_name)
+    for ratio_name in ("GoldVolReliefMaxRatio", "DynamicVolReliefMaxRatio"):
+        value = params[ratio_name]
+        if value <= 1.0:
+            errors.append("%s must be > 1.0" % ratio_name)
+    for window_name in ("DynamicVolReliefMomentumWindow", "DynamicVolReliefCovWindow"):
+        value = params[window_name]
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            errors.append("%s must be a positive integer" % window_name)
     if params["RSRS_M"] <= 0 or params["RSRS_N"] <= 1:
         errors.append("RSRS_M must be positive and RSRS_N must be > 1")
     if not (0 <= params["CrowdStart"] < params["CrowdEnd"] <= 1):
@@ -512,6 +538,13 @@ def set_parameter(context):
     g.PortfolioVolWindow = 40
     g.TargetVol = 0.08
     g.MaxPortfolioVolScale = 1.0
+    g.PortfolioVolReliefMode = "dyn_marginal"
+    g.GoldVolReliefFraction = 0.5
+    g.GoldVolReliefMaxRatio = 2.0
+    g.DynamicVolReliefFraction = 1.0
+    g.DynamicVolReliefMaxRatio = 1.5
+    g.DynamicVolReliefMomentumWindow = 20
+    g.DynamicVolReliefCovWindow = 40
 
     # ---- 仓位与交易约束 ----
     g.MaxWeight = 0.60
@@ -635,11 +668,14 @@ def build_rebalance_plan(context):
     raw_weights = compose_raw_weights(tilted_weights, trend_gates, crowd_penalties)
 
     # 10. 组合波动率缩放
-    portfolio_vol_scale = compute_portfolio_vol_scale(prices, pool, raw_weights, params)
+    portfolio_vol_asset_scales, portfolio_vol_meta = compute_portfolio_vol_asset_scales(
+        prices, pool, raw_weights, params
+    )
+    portfolio_vol_scale = portfolio_vol_meta["base_scale"]
     log.info("[组合波动率缩放] PortfolioVolScale=%.4f", portfolio_vol_scale)
 
     # 11. 最终权重
-    final_weights = raw_weights * portfolio_vol_scale
+    final_weights = raw_weights * portfolio_vol_asset_scales
     _log_step("FinalWeight", "最终权重", pool, final_weights, fmt=".4f", etf_names=etf_names)
 
     # 12. 应用交易约束
@@ -660,6 +696,13 @@ def build_rebalance_plan(context):
         crowd_penalties=crowd_penalties,
         raw_weights=raw_weights,
         portfolio_vol_scale=portfolio_vol_scale,
+        portfolio_vol_relief_mode=portfolio_vol_meta["mode"],
+        portfolio_vol_ratio=portfolio_vol_meta["vol_ratio"],
+        portfolio_vol_base_scale=portfolio_vol_meta["base_scale"],
+        portfolio_vol_asset_scales=portfolio_vol_asset_scales,
+        portfolio_vol_relief_asset=portfolio_vol_meta["relief_asset"],
+        portfolio_vol_relief_weight=portfolio_vol_meta["relief_weight"],
+        portfolio_vol_relief_reason=portfolio_vol_meta["reason"],
         final_weights_before_constraints=final_weights_before_constraints,
         final_weights=final_weights,
         execution_timing_mode=params["ExecutionTimingMode"],
@@ -1364,14 +1407,14 @@ def percentile_rank(value, series):
 # ============================================================
 # compute_portfolio_vol_scale — 组合波动率缩放系数
 # ============================================================
-def compute_portfolio_vol_scale(prices, pool, raw_weights, params):
+def compute_portfolio_vol_scale_detail(prices, pool, raw_weights, params):
     """
     根据 RawWeight 和协方差矩阵计算组合波动率，按目标波动率缩放。
 
     使用 get_history_data 预计算的 close_ret，避免重复 pct_change()。
     只缩不放（最大系数为 1.0）。
 
-    返回: float
+    返回: (scale, vol_ratio)
     """
     close_ret = prices['close_ret']
     vol_window = params["PortfolioVolWindow"]
@@ -1382,20 +1425,20 @@ def compute_portfolio_vol_scale(prices, pool, raw_weights, params):
     active_indices = [i for i in range(n) if raw_weights[i] > 1e-8]
 
     if not active_indices:
-        return 1.0
+        return 1.0, None
 
     returns_list = []
     for i in active_indices:
         etf = pool[i]
         if etf not in close_ret.columns:
-            return 1.0
+            return 1.0, None
         ret = close_ret[etf].dropna().iloc[-vol_window:]
         if len(ret) < vol_window:
-            return 1.0
+            return 1.0, None
         returns_list.append(ret.values)
 
     if not returns_list:
-        return 1.0
+        return 1.0, None
 
     ret_matrix = np.column_stack(returns_list)
     cov_daily = np.atleast_2d(np.cov(ret_matrix, rowvar=False))
@@ -1404,12 +1447,139 @@ def compute_portfolio_vol_scale(prices, pool, raw_weights, params):
     active_weights = np.array([raw_weights[i] for i in active_indices])
     portfolio_var = active_weights @ cov_annual @ active_weights
     portfolio_vol = np.sqrt(max(portfolio_var, 0))
+    vol_ratio = float(portfolio_vol / target_vol)
 
     if portfolio_vol <= target_vol or portfolio_vol < 1e-8:
-        return 1.0
+        return 1.0, vol_ratio
 
     scale = target_vol / portfolio_vol
-    return min(scale, params["MaxPortfolioVolScale"])
+    return min(scale, params["MaxPortfolioVolScale"]), vol_ratio
+
+
+def compute_portfolio_vol_scale(prices, pool, raw_weights, params):
+    """返回原有组合级波动率缩放标量。"""
+    scale, _vol_ratio = compute_portfolio_vol_scale_detail(prices, pool, raw_weights, params)
+    return scale
+
+
+def compute_portfolio_vol_asset_scales(prices, pool, raw_weights, params):
+    """返回每只 ETF 的组合波控缩放系数和审计元数据。"""
+    base_scale, vol_ratio = compute_portfolio_vol_scale_detail(prices, pool, raw_weights, params)
+    asset_scales = np.full(len(pool), base_scale)
+    mode = params["PortfolioVolReliefMode"]
+    meta = {
+        "mode": mode,
+        "vol_ratio": vol_ratio,
+        "base_scale": base_scale,
+        "relief_asset": None,
+        "relief_weight": 0.0,
+        "reason": "baseline",
+    }
+    if mode == "fixed_gold":
+        return apply_fixed_gold_vol_relief(pool, raw_weights, asset_scales, meta, params)
+    if mode == "dyn_marginal":
+        return apply_dynamic_marginal_vol_relief(prices, pool, raw_weights, asset_scales, meta, params)
+    return asset_scales, meta
+
+
+def apply_fixed_gold_vol_relief(pool, raw_weights, asset_scales, meta, params):
+    """固定黄金弱缩放：按参数恢复黄金被组合波控压掉的部分仓位。"""
+    gold_code = "518880.XSHG"
+    vol_ratio = meta["vol_ratio"]
+    base_scale = meta["base_scale"]
+
+    if vol_ratio is None or vol_ratio <= 1.0:
+        meta["reason"] = "vol_not_above_target"
+        return asset_scales, meta
+    if vol_ratio > params["GoldVolReliefMaxRatio"]:
+        meta["reason"] = "ratio_too_high"
+        return asset_scales, meta
+    if gold_code not in pool:
+        meta["reason"] = "gold_not_in_pool"
+        return asset_scales, meta
+
+    gold_idx = pool.index(gold_code)
+    if raw_weights[gold_idx] <= 1e-8:
+        meta["reason"] = "gold_not_active"
+        return asset_scales, meta
+
+    new_scale = min(1.0, base_scale + (1.0 - base_scale) * params["GoldVolReliefFraction"])
+    asset_scales[gold_idx] = new_scale
+    meta["relief_asset"] = gold_code
+    meta["relief_weight"] = float(raw_weights[gold_idx] * (new_scale - base_scale))
+    meta["reason"] = "fixed_gold"
+    return asset_scales, meta
+
+
+def apply_dynamic_marginal_vol_relief(prices, pool, raw_weights, asset_scales, meta, params):
+    """动态弱缩放：在正动量持仓中选择边际风险最低资产恢复仓位。"""
+    vol_ratio = meta["vol_ratio"]
+    base_scale = meta["base_scale"]
+
+    if vol_ratio is None or vol_ratio <= 1.0:
+        meta["reason"] = "vol_not_above_target"
+        return asset_scales, meta
+    if vol_ratio > params["DynamicVolReliefMaxRatio"]:
+        meta["reason"] = "ratio_too_high"
+        return asset_scales, meta
+
+    selected_idx, reason = select_dynamic_marginal_relief_asset(
+        prices, pool, raw_weights, params
+    )
+    if selected_idx is None:
+        meta["reason"] = reason
+        return asset_scales, meta
+
+    new_scale = min(1.0, base_scale + (1.0 - base_scale) * params["DynamicVolReliefFraction"])
+    asset_scales[selected_idx] = new_scale
+    meta["relief_asset"] = pool[selected_idx]
+    meta["relief_weight"] = float(raw_weights[selected_idx] * (new_scale - base_scale))
+    meta["reason"] = "selected_low_marginal_risk"
+    return asset_scales, meta
+
+
+def select_dynamic_marginal_relief_asset(prices, pool, raw_weights, params):
+    """返回动态弱缩放资产下标和原因。"""
+    active_indices = [i for i, weight in enumerate(raw_weights) if weight > 1e-8]
+    if not active_indices:
+        return None, "no_active_asset"
+
+    close_ret = prices.get("close_ret")
+    if close_ret is None:
+        return None, "insufficient_cov_data"
+
+    active_codes = [pool[i] for i in active_indices]
+    for code in active_codes:
+        if code not in close_ret.columns:
+            return None, "insufficient_cov_data"
+
+    cov_window = params["DynamicVolReliefCovWindow"]
+    active_returns = close_ret[active_codes].dropna().iloc[-cov_window:]
+    if len(active_returns) < cov_window:
+        return None, "insufficient_cov_data"
+
+    momentum_window = params["DynamicVolReliefMomentumWindow"]
+    positive_candidates = []
+    for active_pos, code in enumerate(active_codes):
+        momentum_ret = close_ret[code].dropna().iloc[-momentum_window:]
+        if len(momentum_ret) < momentum_window:
+            continue
+        momentum = float(np.prod(1.0 + momentum_ret.values) - 1.0)
+        if momentum >= 0.0:
+            positive_candidates.append(active_pos)
+
+    if not positive_candidates:
+        return None, "no_positive_momentum_asset"
+
+    cov_daily = np.atleast_2d(np.cov(active_returns.values, rowvar=False))
+    cov_annual = cov_daily * params["annual_factor"]
+    active_weights = np.array([raw_weights[i] for i in active_indices])
+    marginal_scores = cov_annual @ active_weights
+    best_active_pos = min(
+        positive_candidates,
+        key=lambda active_pos: marginal_scores[active_pos],
+    )
+    return active_indices[best_active_pos], "selected_low_marginal_risk"
 
 
 # ============================================================

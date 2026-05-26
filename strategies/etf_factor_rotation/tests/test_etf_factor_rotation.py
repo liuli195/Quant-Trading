@@ -178,6 +178,18 @@ class TestSetParameter:
         strategy.set_parameter(strategy)
         assert strategy.g.use_real_price is False
 
+    def test_portfolio_vol_relief_params_default_to_dyn_marginal(self, strategy):
+        """组合波控弱缩放默认启用动态低边际风险恢复档位。"""
+        strategy.set_parameter(strategy)
+        g = strategy.g
+        assert g.PortfolioVolReliefMode == "dyn_marginal"
+        assert g.GoldVolReliefFraction == 0.5
+        assert g.GoldVolReliefMaxRatio == 2.0
+        assert g.DynamicVolReliefFraction == 1.0
+        assert g.DynamicVolReliefMaxRatio == 1.5
+        assert g.DynamicVolReliefMomentumWindow == 20
+        assert g.DynamicVolReliefCovWindow == 40
+
 
 class TestEtfDisplayNames:
     """测试基金展示名始终保留编号，供报告和日志检索。"""
@@ -1548,6 +1560,40 @@ class TestComputeCrowdPenalties:
 class TestComputePortfolioVolScale:
     """测试组合波动率缩放系数。"""
 
+    def _make_vol_control_prices(self, pool, sigma=0.012, n_days=120, seed=7):
+        rng = np.random.default_rng(seed)
+        returns = {
+            etf: rng.normal(0.0002, sigma * (1.0 + idx * 0.1), n_days)
+            for idx, etf in enumerate(pool)
+        }
+        close_ret = pd.DataFrame(
+            returns,
+            index=pd.date_range("2020-01-01", periods=n_days, freq="B"),
+        )
+        close = (1.0 + close_ret).cumprod()
+        return {"close": close, "close_ret": close_ret}
+
+    def _make_dynamic_marginal_prices(self, pool, n_days=80, positive_momentum=True):
+        rng = np.random.default_rng(11 if positive_momentum else 13)
+        means = [0.0012, 0.0010, 0.0008] if positive_momentum else [-0.006, -0.006, -0.006]
+        sigmas = [0.006, 0.012, 0.014]
+        returns = {
+            etf: rng.normal(means[idx], sigmas[idx], n_days)
+            for idx, etf in enumerate(pool)
+        }
+        close_ret = pd.DataFrame(
+            returns,
+            index=pd.date_range("2020-01-01", periods=n_days, freq="B"),
+        )
+        if positive_momentum:
+            close_ret.iloc[-20:, 0] = 0.0010
+            close_ret.iloc[-20:, 1] = 0.0015
+            close_ret.iloc[-20:, 2] = 0.0020
+        else:
+            close_ret.iloc[-20:, :] = -0.0020
+        close = (1.0 + close_ret).cumprod()
+        return {"close": close, "close_ret": close_ret}
+
     def test_all_zero_weights_returns_one(self, strategy, mock_g):
         params = strategy.snapshot_params()
         n_days = 100
@@ -1642,6 +1688,193 @@ class TestComputePortfolioVolScale:
         )
         assert 0.0 < scale <= 1.0
 
+    def test_baseline_asset_scales_match_scalar_scale(self, strategy, mock_g):
+        """baseline 模式下资产级缩放应等价于原组合级标量缩放。"""
+        mock_g.PortfolioVolWindow = 60
+        mock_g.TargetVol = 0.05
+        n_days = 200
+        close = {e: make_random_walk_prices(sigma=0.03, n_days=n_days)
+                 for e in mock_g.etf_pool}
+        close_df = make_prices_dataframe(close)
+        prices = {'close': close_df, 'close_ret': close_df.pct_change()}
+        raw_weights = np.array([0.5, 0.3, 0.2])
+        params = strategy.snapshot_params()
+        params["PortfolioVolReliefMode"] = "baseline"
+
+        base_scale = strategy.compute_portfolio_vol_scale(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+        asset_scales, meta = strategy.compute_portfolio_vol_asset_scales(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+
+        assert np.allclose(asset_scales, np.full(len(mock_g.etf_pool), base_scale))
+        assert meta["relief_asset"] is None
+        assert meta["relief_weight"] == 0.0
+        assert meta["reason"] == "baseline"
+
+    def test_fixed_gold_relieves_gold_scale_when_ratio_allowed(self, strategy, mock_g):
+        mock_g.PortfolioVolWindow = 60
+        mock_g.TargetVol = 0.08
+        params = strategy.snapshot_params()
+        params["PortfolioVolReliefMode"] = "fixed_gold"
+        params["GoldVolReliefFraction"] = 0.5
+        params["GoldVolReliefMaxRatio"] = 2.0
+        prices = self._make_vol_control_prices(mock_g.etf_pool, sigma=0.012)
+        raw_weights = np.array([0.3, 0.3, 0.4])
+
+        base_scale = strategy.compute_portfolio_vol_scale(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+        asset_scales, meta = strategy.compute_portfolio_vol_asset_scales(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+        gold_idx = mock_g.etf_pool.index("518880.XSHG")
+
+        assert base_scale < 1.0
+        assert meta["vol_ratio"] <= 2.0
+        assert asset_scales[0] == pytest.approx(base_scale)
+        assert asset_scales[1] == pytest.approx(base_scale)
+        assert asset_scales[gold_idx] == pytest.approx(base_scale + (1.0 - base_scale) * 0.5)
+        assert meta["relief_asset"] == "518880.XSHG"
+        assert meta["relief_weight"] == pytest.approx(
+            raw_weights[gold_idx] * (asset_scales[gold_idx] - base_scale)
+        )
+        assert meta["reason"] == "fixed_gold"
+
+    def test_fixed_gold_skips_when_ratio_too_high(self, strategy, mock_g):
+        mock_g.PortfolioVolWindow = 60
+        mock_g.TargetVol = 0.08
+        params = strategy.snapshot_params()
+        params["PortfolioVolReliefMode"] = "fixed_gold"
+        params["GoldVolReliefMaxRatio"] = 2.0
+        prices = self._make_vol_control_prices(mock_g.etf_pool, sigma=0.04)
+        raw_weights = np.array([0.3, 0.3, 0.4])
+
+        base_scale = strategy.compute_portfolio_vol_scale(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+        asset_scales, meta = strategy.compute_portfolio_vol_asset_scales(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+
+        assert meta["vol_ratio"] > 2.0
+        assert np.allclose(asset_scales, np.full(len(mock_g.etf_pool), base_scale))
+        assert meta["relief_asset"] is None
+        assert meta["reason"] == "ratio_too_high"
+
+    def test_fixed_gold_skips_when_gold_not_active(self, strategy, mock_g):
+        mock_g.PortfolioVolWindow = 60
+        mock_g.TargetVol = 0.08
+        params = strategy.snapshot_params()
+        params["PortfolioVolReliefMode"] = "fixed_gold"
+        prices = self._make_vol_control_prices(mock_g.etf_pool, sigma=0.012)
+        raw_weights = np.array([0.5, 0.5, 0.0])
+
+        base_scale = strategy.compute_portfolio_vol_scale(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+        asset_scales, meta = strategy.compute_portfolio_vol_asset_scales(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+
+        assert meta["vol_ratio"] <= 2.0
+        assert np.allclose(asset_scales, np.full(len(mock_g.etf_pool), base_scale))
+        assert meta["relief_asset"] is None
+        assert meta["reason"] == "gold_not_active"
+
+    def test_dyn_marginal_selects_lowest_risk_positive_momentum_asset(self, strategy, mock_g):
+        mock_g.PortfolioVolWindow = 40
+        mock_g.TargetVol = 0.05
+        params = strategy.snapshot_params()
+        params["PortfolioVolReliefMode"] = "dyn_marginal"
+        params["DynamicVolReliefFraction"] = 1.0
+        params["DynamicVolReliefMaxRatio"] = 1.5
+        params["DynamicVolReliefMomentumWindow"] = 20
+        params["DynamicVolReliefCovWindow"] = 40
+        prices = self._make_dynamic_marginal_prices(mock_g.etf_pool)
+        raw_weights = np.array([0.3, 0.4, 0.3])
+        expected_code = "159819.XSHE"
+
+        asset_scales, meta = strategy.compute_portfolio_vol_asset_scales(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+
+        assert 1.0 < meta["vol_ratio"] <= 1.5
+        assert meta["relief_asset"] == expected_code
+        assert asset_scales[mock_g.etf_pool.index(expected_code)] == pytest.approx(1.0)
+        assert meta["relief_weight"] == pytest.approx(
+            raw_weights[0] * (1.0 - meta["base_scale"])
+        )
+        assert meta["reason"] == "selected_low_marginal_risk"
+
+    def test_dyn_marginal_skips_when_ratio_too_high(self, strategy, mock_g):
+        mock_g.PortfolioVolWindow = 40
+        mock_g.TargetVol = 0.08
+        params = strategy.snapshot_params()
+        params["PortfolioVolReliefMode"] = "dyn_marginal"
+        params["DynamicVolReliefMaxRatio"] = 1.5
+        prices = self._make_vol_control_prices(mock_g.etf_pool, sigma=0.04)
+        raw_weights = np.array([0.3, 0.4, 0.3])
+
+        base_scale = strategy.compute_portfolio_vol_scale(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+        asset_scales, meta = strategy.compute_portfolio_vol_asset_scales(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+
+        assert meta["vol_ratio"] > 1.5
+        assert np.allclose(asset_scales, np.full(len(mock_g.etf_pool), base_scale))
+        assert meta["relief_asset"] is None
+        assert meta["reason"] == "ratio_too_high"
+
+    def test_dyn_marginal_skips_when_no_positive_momentum_asset(self, strategy, mock_g):
+        mock_g.PortfolioVolWindow = 40
+        mock_g.TargetVol = 0.06
+        params = strategy.snapshot_params()
+        params["PortfolioVolReliefMode"] = "dyn_marginal"
+        params["DynamicVolReliefMaxRatio"] = 1.5
+        prices = self._make_dynamic_marginal_prices(
+            mock_g.etf_pool, positive_momentum=False
+        )
+        raw_weights = np.array([0.3, 0.4, 0.3])
+
+        base_scale = strategy.compute_portfolio_vol_scale(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+        asset_scales, meta = strategy.compute_portfolio_vol_asset_scales(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+
+        assert 1.0 < meta["vol_ratio"] <= 1.5
+        assert np.allclose(asset_scales, np.full(len(mock_g.etf_pool), base_scale))
+        assert meta["relief_asset"] is None
+        assert meta["reason"] == "no_positive_momentum_asset"
+
+    def test_dyn_marginal_skips_when_cov_data_insufficient(self, strategy, mock_g):
+        mock_g.PortfolioVolWindow = 20
+        mock_g.TargetVol = 0.08
+        params = strategy.snapshot_params()
+        params["PortfolioVolReliefMode"] = "dyn_marginal"
+        params["DynamicVolReliefMaxRatio"] = 1.5
+        params["DynamicVolReliefMomentumWindow"] = 20
+        params["DynamicVolReliefCovWindow"] = 40
+        prices = self._make_vol_control_prices(mock_g.etf_pool, sigma=0.012, n_days=30)
+        raw_weights = np.array([0.3, 0.4, 0.3])
+
+        base_scale = strategy.compute_portfolio_vol_scale(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+        asset_scales, meta = strategy.compute_portfolio_vol_asset_scales(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+
+        assert 1.0 < meta["vol_ratio"] <= 1.5
+        assert np.allclose(asset_scales, np.full(len(mock_g.etf_pool), base_scale))
+        assert meta["relief_asset"] is None
+        assert meta["reason"] == "insufficient_cov_data"
+
 
 # ============================================================
 # 9. 集成测试 — weekly_check 完整流程
@@ -1712,7 +1945,11 @@ class TestWeeklyCheckIntegration:
         for key in [
             "trend_gates", "rp_weights", "momentum_scores", "momentum_tilts",
             "rsrs_tilts", "tilted_weights", "crowd_penalties", "raw_weights",
-            "portfolio_vol_scale", "final_weights",
+            "portfolio_vol_scale", "portfolio_vol_relief_mode",
+            "portfolio_vol_ratio", "portfolio_vol_base_scale",
+            "portfolio_vol_asset_scales", "portfolio_vol_relief_asset",
+            "portfolio_vol_relief_weight", "portfolio_vol_relief_reason",
+            "final_weights",
         ]:
             assert key in signal_event
 
@@ -2472,6 +2709,10 @@ class TestSnapshotParams:
             "AmountMAWindow", "DeviationMAWindow", "CrowdVolWindow",
             "CrowdStart", "CrowdEnd", "MinCrowdPenalty",
             "PortfolioVolWindow", "TargetVol", "MaxPortfolioVolScale",
+            "PortfolioVolReliefMode",
+            "GoldVolReliefFraction", "GoldVolReliefMaxRatio",
+            "DynamicVolReliefFraction", "DynamicVolReliefMaxRatio",
+            "DynamicVolReliefMomentumWindow", "DynamicVolReliefCovWindow",
             "MaxWeight", "MinWeight", "RebalanceThreshold", "MaxTotalWeight",
             "ExecutionTimingMode",
             "use_real_price", "fq_mode", "history_buffer",
@@ -2489,6 +2730,17 @@ class TestSnapshotParams:
         assert params["history_buffer"] == mock_g.history_buffer
         assert params["etf_names"] == mock_g.etf_names
         assert params["ExecutionTimingMode"] == mock_g.ExecutionTimingMode
+
+    def test_snapshot_contains_portfolio_vol_relief_defaults(self, strategy):
+        strategy.set_parameter(strategy)
+        params = strategy.snapshot_params()
+        assert params["PortfolioVolReliefMode"] == "dyn_marginal"
+        assert params["GoldVolReliefFraction"] == 0.5
+        assert params["GoldVolReliefMaxRatio"] == 2.0
+        assert params["DynamicVolReliefFraction"] == 1.0
+        assert params["DynamicVolReliefMaxRatio"] == 1.5
+        assert params["DynamicVolReliefMomentumWindow"] == 20
+        assert params["DynamicVolReliefCovWindow"] == 40
 
     def test_snapshot_list_values_are_copies(self, strategy, mock_g):
         params = strategy.snapshot_params()
@@ -2678,6 +2930,24 @@ class TestValidateParams:
         mock_g.ExecutionTimingMode = "unknown"
         params = strategy.snapshot_params()
         with pytest.raises(ValueError, match="ExecutionTimingMode must be one of"):
+            strategy.validate_params(params)
+
+    def test_portfolio_vol_relief_mode_must_be_known(self, strategy, mock_g):
+        params = strategy.snapshot_params()
+        params["PortfolioVolReliefMode"] = "bad_mode"
+        with pytest.raises(ValueError, match="PortfolioVolReliefMode"):
+            strategy.validate_params(params)
+
+    def test_gold_vol_relief_fraction_must_be_in_unit_interval(self, strategy, mock_g):
+        params = strategy.snapshot_params()
+        params["GoldVolReliefFraction"] = 1.5
+        with pytest.raises(ValueError, match="GoldVolReliefFraction"):
+            strategy.validate_params(params)
+
+    def test_dynamic_vol_relief_window_must_be_positive_integer(self, strategy, mock_g):
+        params = strategy.snapshot_params()
+        params["DynamicVolReliefMomentumWindow"] = 0
+        with pytest.raises(ValueError, match="DynamicVolReliefMomentumWindow"):
             strategy.validate_params(params)
 
 

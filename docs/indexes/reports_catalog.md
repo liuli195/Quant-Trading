@@ -245,6 +245,12 @@
 | backtest_run | etf_factor_rotation | 数据完整性报告 | `strategies/etf_factor_rotation/backtest_runs/20260518-2128-bt720a21be72ca92343877e3eed66a5644/report/data-integrity.md` | 0 |
 | backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260518-2130-btd3a302dab6ce74013cb2c7dfd6785a62/report/backtest_report.md` | 0 |
 | backtest_run | etf_factor_rotation | 数据完整性报告 | `strategies/etf_factor_rotation/backtest_runs/20260518-2130-btd3a302dab6ce74013cb2c7dfd6785a62/report/data-integrity.md` | 0 |
+| backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260526-2327-bta35e64a2599b009eba3c6b8219d61e22/report/backtest_report.md` | 0 |
+| backtest_run | etf_factor_rotation | 数据完整性报告 | `strategies/etf_factor_rotation/backtest_runs/20260526-2327-bta35e64a2599b009eba3c6b8219d61e22/report/data-integrity.md` | 0 |
+| backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260526-2330-btfefcb2db54c231df54d773457629bda1/report/backtest_report.md` | 0 |
+| backtest_run | etf_factor_rotation | 数据完整性报告 | `strategies/etf_factor_rotation/backtest_runs/20260526-2330-btfefcb2db54c231df54d773457629bda1/report/data-integrity.md` | 0 |
+| backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260526-2333-bt36f34fb52505979aa53d97ef4949fc60/report/backtest_report.md` | 0 |
+| backtest_run | etf_factor_rotation | 数据完整性报告 | `strategies/etf_factor_rotation/backtest_runs/20260526-2333-bt36f34fb52505979aa53d97ef4949fc60/report/data-integrity.md` | 0 |
 | report | etf_factor_rotation | ETF 因子轮动 vs 动态再平衡深度归因报告 | `strategies/etf_factor_rotation/reports/2026-05-07-factor-vs-dynamic-rebalance-attribution.md` | 16 |
 | report | etf_factor_rotation | 深度归因分析报告 | `strategies/etf_factor_rotation/reports/2026-05-14-deep-attribution.md` | 7 |
 | report | etf_factor_rotation | 拥挤度惩罚 AB 验证 — 最终决策 | `strategies/etf_factor_rotation/reports/2026-05-15-crowd-penalty-ab-decision.md` | 8 |
@@ -304,6 +310,7 @@
 | research | etf_factor_rotation | 组合波动率行为完整扫描 | `strategies/etf_factor_rotation/reports/research/portfolio_volatility/runs/2026-05-18-full-v1/reports/portfolio-volatility-full-scan.md` | 0 |
 | research | etf_factor_rotation | 组合波动率全量扫描性能冒烟 | `strategies/etf_factor_rotation/reports/research/portfolio_volatility/runs/2026-05-18-smoke-cold-v2/reports/portfolio-volatility-performance-smoke.md` | 0 |
 | research | etf_factor_rotation | 组合波动率全量扫描性能冒烟 | `strategies/etf_factor_rotation/reports/research/portfolio_volatility/runs/2026-05-18-smoke-warm-v2/reports/portfolio-volatility-performance-smoke.md` | 0 |
+| research | etf_factor_rotation | 组合波控弱缩放 A/B 深度归因 | `strategies/etf_factor_rotation/reports/research/portfolio_volatility/vol-relief-ab-v1/deep-attribution.md` | 6 |
 | research | etf_factor_rotation | README | `strategies/etf_factor_rotation/reports/research/window_heterogeneity/README.md` | 8 |
 | research | etf_factor_rotation | cloud_confirmation_plan | `strategies/etf_factor_rotation/reports/research/window_heterogeneity/docs/cloud_confirmation_plan.md` | 1 |
 | research | etf_factor_rotation | performance_optimization_plan | `strategies/etf_factor_rotation/reports/research/window_heterogeneity/docs/performance_optimization_plan.md` | 2 |
@@ -338,6 +345,7 @@
 | test_batch | etf_factor_rotation | ab-momentum-extreme-ab-comparison | `strategies/etf_factor_rotation/test_batches/20260517-momentum-extreme-ab/report/ab-momentum-extreme-ab-comparison.md` | 2 |
 | test_batch | etf_factor_rotation | 动量分桶检查 | `strategies/etf_factor_rotation/test_batches/20260517-momentum-extreme-ab/report/momentum-bucket-check.md` | 2 |
 | test_batch | etf_factor_rotation | AB 对比报告: momentum-strength-confirmation | `strategies/etf_factor_rotation/test_batches/20260517-momentum-strength-confirmation/report/ab-momentum-strength-confirmation-comparison.md` | 0 |
+| test_batch | etf_factor_rotation | AB 对比报告: portfolio-vol-relief-ab-v1 | `strategies/etf_factor_rotation/test_batches/20260526-vol-relief-ab/report/ab-portfolio-vol-relief-ab-v1-comparison.md` | 0 |
 | backtest_run | feishu_relay_smoke | 回测数据汇总 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-alpha-20260524-dual-2/report/backtest_report.md` | 0 |
 | backtest_run | feishu_relay_smoke | 数据完整性报告 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-alpha-20260524-dual-2/report/data-integrity.md` | 0 |
 | backtest_run | feishu_relay_smoke | 回测数据汇总 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-alpha-20260524-dual-3/report/backtest_report.md` | 0 |

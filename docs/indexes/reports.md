@@ -36,17 +36,19 @@
 | docs |  | JQ_行业概念数据 | `docs/joinquant-data/JQ_行业概念数据.md` | 0 |
 | docs |  | 定义一个全局变量, 保存要操作的股票 | `docs/reference/joinquant-api.md` | 28 |
 | docs |  | JoinQuant 参数分析框架分析报告 | `docs/reference/joinquant-parameter-analysis-framework.md` | 2 |
-| docs |  | 代码风格和策略实现规则 | `docs/rules/code-style.md` | 1 |
+| docs |  | 代码风格和策略实现规则 | `docs/rules/code-style.md` | 3 |
 | docs |  | 命令和本地环境规则 | `docs/rules/commands.md` | 4 |
 | docs |  | 文档和 Pathref 规则 | `docs/rules/docs-and-pathref.md` | 0 |
+| docs |  | 本地与聚宽环境差异 | `docs/rules/environments.md` | 0 |
 | docs |  | 治理门禁规则 | `docs/rules/governance.md` | 2 |
-| docs |  | 仓库规则总索引 | `docs/rules/index.md` | 16 |
+| docs |  | 仓库规则总索引 | `docs/rules/index.md` | 17 |
 | docs |  | PR 工作流规则 | `docs/rules/pr-workflow.md` | 2 |
 | docs |  | 研究流程规则 | `docs/rules/research-workflow.md` | 0 |
 | docs |  | PR Review 指南 | `docs/rules/review-guidelines.md` | 10 |
 | docs |  | 回测数据冗余压缩实施计划 | `docs/superpowers/plans/2026-05-20-backtest-data-redundancy-compaction.md` | 7 |
 | docs |  | Feishu Relay Tools Implementation Plan | `docs/superpowers/plans/2026-05-20-feishu-relay-tools-implementation.md` | 5 |
 | docs |  | PR 风险分级评审流程 Implementation Plan | `docs/superpowers/plans/2026-05-20-pr-risk-tiered-review-workflow.md` | 1 |
+| docs |  | ETF Vol Relief A/B Test Implementation Plan | `docs/superpowers/plans/2026-05-26-etf-vol-relief-ab-test.md` | 3 |
 | docs |  | 飞书交易通知工具设计 | `docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md` | 2 |
 | backtest_run | etf_dynamic_rebalance | 回测归因分析 — ETF 动态调仓策略 | `strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/attribution-analysis.md` | 0 |
 | backtest_run | etf_dynamic_rebalance | 回测报告 — ETF 动态调仓策略 | `strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/backtest_report.md` | 3 |
@@ -291,6 +293,12 @@
 | backtest_run | etf_factor_rotation | 数据完整性报告 | `strategies/etf_factor_rotation/backtest_runs/20260518-2128-bt720a21be72ca92343877e3eed66a5644/report/data-integrity.md` | 0 |
 | backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260518-2130-btd3a302dab6ce74013cb2c7dfd6785a62/report/backtest_report.md` | 0 |
 | backtest_run | etf_factor_rotation | 数据完整性报告 | `strategies/etf_factor_rotation/backtest_runs/20260518-2130-btd3a302dab6ce74013cb2c7dfd6785a62/report/data-integrity.md` | 0 |
+| backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260526-2327-bta35e64a2599b009eba3c6b8219d61e22/report/backtest_report.md` | 0 |
+| backtest_run | etf_factor_rotation | 数据完整性报告 | `strategies/etf_factor_rotation/backtest_runs/20260526-2327-bta35e64a2599b009eba3c6b8219d61e22/report/data-integrity.md` | 0 |
+| backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260526-2330-btfefcb2db54c231df54d773457629bda1/report/backtest_report.md` | 0 |
+| backtest_run | etf_factor_rotation | 数据完整性报告 | `strategies/etf_factor_rotation/backtest_runs/20260526-2330-btfefcb2db54c231df54d773457629bda1/report/data-integrity.md` | 0 |
+| backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260526-2333-bt36f34fb52505979aa53d97ef4949fc60/report/backtest_report.md` | 0 |
+| backtest_run | etf_factor_rotation | 数据完整性报告 | `strategies/etf_factor_rotation/backtest_runs/20260526-2333-bt36f34fb52505979aa53d97ef4949fc60/report/data-integrity.md` | 0 |
 | report | etf_factor_rotation | ETF 因子轮动 vs 动态再平衡深度归因报告 | `strategies/etf_factor_rotation/reports/2026-05-07-factor-vs-dynamic-rebalance-attribution.md` | 16 |
 | report | etf_factor_rotation | 深度归因分析报告 | `strategies/etf_factor_rotation/reports/2026-05-14-deep-attribution.md` | 7 |
 | report | etf_factor_rotation | 拥挤度惩罚 AB 验证 — 最终决策 | `strategies/etf_factor_rotation/reports/2026-05-15-crowd-penalty-ab-decision.md` | 8 |
@@ -350,6 +358,7 @@
 | research | etf_factor_rotation | 组合波动率行为完整扫描 | `strategies/etf_factor_rotation/reports/research/portfolio_volatility/runs/2026-05-18-full-v1/reports/portfolio-volatility-full-scan.md` | 0 |
 | research | etf_factor_rotation | 组合波动率全量扫描性能冒烟 | `strategies/etf_factor_rotation/reports/research/portfolio_volatility/runs/2026-05-18-smoke-cold-v2/reports/portfolio-volatility-performance-smoke.md` | 0 |
 | research | etf_factor_rotation | 组合波动率全量扫描性能冒烟 | `strategies/etf_factor_rotation/reports/research/portfolio_volatility/runs/2026-05-18-smoke-warm-v2/reports/portfolio-volatility-performance-smoke.md` | 0 |
+| research | etf_factor_rotation | 组合波控弱缩放 A/B 深度归因 | `strategies/etf_factor_rotation/reports/research/portfolio_volatility/vol-relief-ab-v1/deep-attribution.md` | 6 |
 | research | etf_factor_rotation | README | `strategies/etf_factor_rotation/reports/research/window_heterogeneity/README.md` | 8 |
 | research | etf_factor_rotation | cloud_confirmation_plan | `strategies/etf_factor_rotation/reports/research/window_heterogeneity/docs/cloud_confirmation_plan.md` | 1 |
 | research | etf_factor_rotation | performance_optimization_plan | `strategies/etf_factor_rotation/reports/research/window_heterogeneity/docs/performance_optimization_plan.md` | 2 |
@@ -384,6 +393,7 @@
 | test_batch | etf_factor_rotation | ab-momentum-extreme-ab-comparison | `strategies/etf_factor_rotation/test_batches/20260517-momentum-extreme-ab/report/ab-momentum-extreme-ab-comparison.md` | 2 |
 | test_batch | etf_factor_rotation | 动量分桶检查 | `strategies/etf_factor_rotation/test_batches/20260517-momentum-extreme-ab/report/momentum-bucket-check.md` | 2 |
 | test_batch | etf_factor_rotation | AB 对比报告: momentum-strength-confirmation | `strategies/etf_factor_rotation/test_batches/20260517-momentum-strength-confirmation/report/ab-momentum-strength-confirmation-comparison.md` | 0 |
+| test_batch | etf_factor_rotation | AB 对比报告: portfolio-vol-relief-ab-v1 | `strategies/etf_factor_rotation/test_batches/20260526-vol-relief-ab/report/ab-portfolio-vol-relief-ab-v1-comparison.md` | 0 |
 | backtest_run | feishu_relay_smoke | 回测数据汇总 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-alpha-20260524-dual-2/report/backtest_report.md` | 0 |
 | backtest_run | feishu_relay_smoke | 数据完整性报告 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-alpha-20260524-dual-2/report/data-integrity.md` | 0 |
 | backtest_run | feishu_relay_smoke | 回测数据汇总 | `strategies/feishu_relay_smoke/backtest_runs/feishu-smoke-dual-alpha-20260524-dual-3/report/backtest_report.md` | 0 |
