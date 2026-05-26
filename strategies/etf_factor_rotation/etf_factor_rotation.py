@@ -31,7 +31,7 @@ except ImportError:
 核心公式：
   TiltedWeight_i = normalize(RPWeight_i × MomentumTilt_i × RSRSTilt_i)
   RawWeight_i = TiltedWeight_i × TrendGate_i × CrowdPenalty_i
-  FinalWeight_i = RawWeight_i × PortfolioVolScale
+  FinalWeight_i = RawWeight_i × PortfolioVolAssetScale_i
 
 调仓频率：每周开盘检查一次
 ============================================================
@@ -668,11 +668,14 @@ def build_rebalance_plan(context):
     raw_weights = compose_raw_weights(tilted_weights, trend_gates, crowd_penalties)
 
     # 10. 组合波动率缩放
-    portfolio_vol_scale = compute_portfolio_vol_scale(prices, pool, raw_weights, params)
+    portfolio_vol_asset_scales, portfolio_vol_meta = compute_portfolio_vol_asset_scales(
+        prices, pool, raw_weights, params
+    )
+    portfolio_vol_scale = portfolio_vol_meta["base_scale"]
     log.info("[组合波动率缩放] PortfolioVolScale=%.4f", portfolio_vol_scale)
 
     # 11. 最终权重
-    final_weights = raw_weights * portfolio_vol_scale
+    final_weights = raw_weights * portfolio_vol_asset_scales
     _log_step("FinalWeight", "最终权重", pool, final_weights, fmt=".4f", etf_names=etf_names)
 
     # 12. 应用交易约束
@@ -693,6 +696,13 @@ def build_rebalance_plan(context):
         crowd_penalties=crowd_penalties,
         raw_weights=raw_weights,
         portfolio_vol_scale=portfolio_vol_scale,
+        portfolio_vol_relief_mode=portfolio_vol_meta["mode"],
+        portfolio_vol_ratio=portfolio_vol_meta["vol_ratio"],
+        portfolio_vol_base_scale=portfolio_vol_meta["base_scale"],
+        portfolio_vol_asset_scales=portfolio_vol_asset_scales,
+        portfolio_vol_relief_asset=portfolio_vol_meta["relief_asset"],
+        portfolio_vol_relief_weight=portfolio_vol_meta["relief_weight"],
+        portfolio_vol_relief_reason=portfolio_vol_meta["reason"],
         final_weights_before_constraints=final_weights_before_constraints,
         final_weights=final_weights,
         execution_timing_mode=params["ExecutionTimingMode"],
@@ -1397,14 +1407,14 @@ def percentile_rank(value, series):
 # ============================================================
 # compute_portfolio_vol_scale — 组合波动率缩放系数
 # ============================================================
-def compute_portfolio_vol_scale(prices, pool, raw_weights, params):
+def compute_portfolio_vol_scale_detail(prices, pool, raw_weights, params):
     """
     根据 RawWeight 和协方差矩阵计算组合波动率，按目标波动率缩放。
 
     使用 get_history_data 预计算的 close_ret，避免重复 pct_change()。
     只缩不放（最大系数为 1.0）。
 
-    返回: float
+    返回: (scale, vol_ratio)
     """
     close_ret = prices['close_ret']
     vol_window = params["PortfolioVolWindow"]
@@ -1415,20 +1425,20 @@ def compute_portfolio_vol_scale(prices, pool, raw_weights, params):
     active_indices = [i for i in range(n) if raw_weights[i] > 1e-8]
 
     if not active_indices:
-        return 1.0
+        return 1.0, None
 
     returns_list = []
     for i in active_indices:
         etf = pool[i]
         if etf not in close_ret.columns:
-            return 1.0
+            return 1.0, None
         ret = close_ret[etf].dropna().iloc[-vol_window:]
         if len(ret) < vol_window:
-            return 1.0
+            return 1.0, None
         returns_list.append(ret.values)
 
     if not returns_list:
-        return 1.0
+        return 1.0, None
 
     ret_matrix = np.column_stack(returns_list)
     cov_daily = np.atleast_2d(np.cov(ret_matrix, rowvar=False))
@@ -1437,12 +1447,34 @@ def compute_portfolio_vol_scale(prices, pool, raw_weights, params):
     active_weights = np.array([raw_weights[i] for i in active_indices])
     portfolio_var = active_weights @ cov_annual @ active_weights
     portfolio_vol = np.sqrt(max(portfolio_var, 0))
+    vol_ratio = float(portfolio_vol / target_vol)
 
     if portfolio_vol <= target_vol or portfolio_vol < 1e-8:
-        return 1.0
+        return 1.0, vol_ratio
 
     scale = target_vol / portfolio_vol
-    return min(scale, params["MaxPortfolioVolScale"])
+    return min(scale, params["MaxPortfolioVolScale"]), vol_ratio
+
+
+def compute_portfolio_vol_scale(prices, pool, raw_weights, params):
+    """返回原有组合级波动率缩放标量。"""
+    scale, _vol_ratio = compute_portfolio_vol_scale_detail(prices, pool, raw_weights, params)
+    return scale
+
+
+def compute_portfolio_vol_asset_scales(prices, pool, raw_weights, params):
+    """返回每只 ETF 的组合波控缩放系数和审计元数据。"""
+    base_scale, vol_ratio = compute_portfolio_vol_scale_detail(prices, pool, raw_weights, params)
+    asset_scales = np.full(len(pool), base_scale)
+    meta = {
+        "mode": params["PortfolioVolReliefMode"],
+        "vol_ratio": vol_ratio,
+        "base_scale": base_scale,
+        "relief_asset": None,
+        "relief_weight": 0.0,
+        "reason": "baseline",
+    }
+    return asset_scales, meta
 
 
 # ============================================================

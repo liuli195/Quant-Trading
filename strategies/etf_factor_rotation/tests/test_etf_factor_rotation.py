@@ -1654,6 +1654,30 @@ class TestComputePortfolioVolScale:
         )
         assert 0.0 < scale <= 1.0
 
+    def test_baseline_asset_scales_match_scalar_scale(self, strategy, mock_g):
+        """baseline 模式下资产级缩放应等价于原组合级标量缩放。"""
+        mock_g.PortfolioVolWindow = 60
+        mock_g.TargetVol = 0.05
+        n_days = 200
+        close = {e: make_random_walk_prices(sigma=0.03, n_days=n_days)
+                 for e in mock_g.etf_pool}
+        close_df = make_prices_dataframe(close)
+        prices = {'close': close_df, 'close_ret': close_df.pct_change()}
+        raw_weights = np.array([0.5, 0.3, 0.2])
+        params = strategy.snapshot_params()
+
+        base_scale = strategy.compute_portfolio_vol_scale(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+        asset_scales, meta = strategy.compute_portfolio_vol_asset_scales(
+            prices, mock_g.etf_pool, raw_weights, params
+        )
+
+        assert np.allclose(asset_scales, np.full(len(mock_g.etf_pool), base_scale))
+        assert meta["relief_asset"] is None
+        assert meta["relief_weight"] == 0.0
+        assert meta["reason"] == "baseline"
+
 
 # ============================================================
 # 9. 集成测试 — weekly_check 完整流程
@@ -1724,7 +1748,11 @@ class TestWeeklyCheckIntegration:
         for key in [
             "trend_gates", "rp_weights", "momentum_scores", "momentum_tilts",
             "rsrs_tilts", "tilted_weights", "crowd_penalties", "raw_weights",
-            "portfolio_vol_scale", "final_weights",
+            "portfolio_vol_scale", "portfolio_vol_relief_mode",
+            "portfolio_vol_ratio", "portfolio_vol_base_scale",
+            "portfolio_vol_asset_scales", "portfolio_vol_relief_asset",
+            "portfolio_vol_relief_weight", "portfolio_vol_relief_reason",
+            "final_weights",
         ]:
             assert key in signal_event
 
