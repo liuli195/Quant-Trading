@@ -71,9 +71,13 @@ def build_monitor_report(
     """Build a status summary for Codex reviews on the PR head."""
 
     head_sha = _head_sha(pr)
+    pr_url = str(pr.get("html_url", "")) or f"https://github.com/{repo}/pull/{pr_number}"
     skip_authorized = official_codex_review_skip_authorized(str(pr.get("body", "")))
     trigger_time = _required_trigger_time(
-        issue_comments, head_created_at=head_created_at
+        issue_comments,
+        head_created_at=head_created_at,
+        expected_pr_url=pr_url,
+        expected_head_sha=head_sha,
     )
     trigger_found = trigger_time is not None
     current_head_reviews = _current_head_codex_reviews(reviews, head_sha=head_sha)
@@ -87,6 +91,8 @@ def build_monitor_report(
         issue_comments,
         head_created_at=head_created_at,
         trigger_time=trigger_time,
+        expected_pr_url=pr_url,
+        expected_head_sha=head_sha,
     )
     completion_time = (
         _comment_effective_time(completion_comment) if completion_comment else ""
@@ -301,11 +307,16 @@ def _required_trigger_time(
     issue_comments: Sequence[Mapping[str, object]],
     *,
     head_created_at: str | None = None,
+    expected_pr_url: str | None = None,
+    expected_head_sha: str | None = None,
 ) -> str | None:
     matched_times = [
         _comment_effective_time(comment)
         for comment in _required_trigger_comments(
-            issue_comments, head_created_at=head_created_at
+            issue_comments,
+            head_created_at=head_created_at,
+            expected_pr_url=expected_pr_url,
+            expected_head_sha=expected_head_sha,
         )
     ]
     return max(matched_times) if matched_times else None
@@ -315,12 +326,18 @@ def _required_trigger_comments(
     issue_comments: Sequence[Mapping[str, object]],
     *,
     head_created_at: str | None = None,
+    expected_pr_url: str | None = None,
+    expected_head_sha: str | None = None,
 ) -> tuple[Mapping[str, object], ...]:
     matched: list[Mapping[str, object]] = []
     for comment in _trigger_candidate_comments(
         issue_comments, head_created_at=head_created_at
     ):
-        if not _is_required_trigger_comment(comment):
+        if not _is_required_trigger_comment(
+            comment,
+            expected_pr_url=expected_pr_url,
+            expected_head_sha=expected_head_sha,
+        ):
             continue
         matched.append(comment)
     return tuple(matched)
@@ -396,10 +413,19 @@ def _is_context_hostile_trigger_comment(comment: Mapping[str, object]) -> bool:
     )
 
 
-def _is_required_trigger_comment(comment: Mapping[str, object]) -> bool:
+def _is_required_trigger_comment(
+    comment: Mapping[str, object],
+    *,
+    expected_pr_url: str | None = None,
+    expected_head_sha: str | None = None,
+) -> bool:
     if not _is_trigger_candidate_comment(comment):
         return False
-    return is_codex_review_request(str(comment.get("body", "")))
+    return is_codex_review_request(
+        str(comment.get("body", "")),
+        expected_pr_url=expected_pr_url,
+        expected_head_sha=expected_head_sha,
+    )
 
 
 def _latest_codex_completion_comment(
@@ -407,6 +433,8 @@ def _latest_codex_completion_comment(
     *,
     head_created_at: str | None = None,
     trigger_time: str | None = None,
+    expected_pr_url: str | None = None,
+    expected_head_sha: str | None = None,
 ) -> Mapping[str, object] | None:
     matched: list[Mapping[str, object]] = []
     for comment in issue_comments:
@@ -415,9 +443,11 @@ def _latest_codex_completion_comment(
             continue
         if trigger_time and comment_time and comment_time < trigger_time:
             continue
-        if _is_required_trigger_comment(comment) and has_codex_completion_reaction(
-            comment
-        ):
+        if _is_required_trigger_comment(
+            comment,
+            expected_pr_url=expected_pr_url,
+            expected_head_sha=expected_head_sha,
+        ) and has_codex_completion_reaction(comment):
             matched.append(comment)
             continue
         if is_codex_completion_comment(comment):

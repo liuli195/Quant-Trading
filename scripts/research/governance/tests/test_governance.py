@@ -12,6 +12,7 @@ from scripts.research.governance.codex_review_monitor import (
     render_monitor_comment,
 )
 from scripts.research.governance.codex_review_contract import (
+    is_codex_review_request,
     render_codex_review_request,
 )
 import scripts.research.governance.pr_review_evidence as pr_review_evidence
@@ -27,8 +28,73 @@ from scripts.research.governance.rules import run_audit
 from scripts.research.registry import default_tool_registry
 
 
-def _codex_review_request_body() -> str:
-    return render_codex_review_request()
+def _codex_review_request_body(
+    *,
+    pr_url: str = "https://github.com/liuli195/Quant-Trading/pull/5",
+    head_sha: str = "0" * 40,
+    review_scope: tuple[str, ...] = (
+        "scripts/research/governance/pr_review_evidence.py",
+    ),
+) -> str:
+    return render_codex_review_request(
+        pr_url=pr_url,
+        head_sha=head_sha,
+        review_scope=review_scope,
+    )
+
+
+def test_codex_review_contract_accepts_fixed_template_with_scope() -> None:
+    body = _codex_review_request_body(
+        review_scope=(
+            "scripts/research/governance/pr_review_evidence.py",
+            "scripts/research/governance/codex_review_monitor.py",
+        )
+    )
+
+    assert body == "\n".join(
+        [
+            "@codex review",
+            "",
+            "PR：https://github.com/liuli195/Quant-Trading/pull/5",
+            f"HEAD：{'0' * 40}",
+            "Review Scope：",
+            "- scripts/research/governance/pr_review_evidence.py",
+            "- scripts/research/governance/codex_review_monitor.py",
+            "",
+            "审查重点：仅 P0/P1 合并阻断风险",
+        ]
+    )
+    assert is_codex_review_request(
+        body,
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha="0" * 40,
+    )
+
+
+def test_codex_review_contract_accepts_fixed_template_without_scope() -> None:
+    body = _codex_review_request_body(review_scope=())
+
+    assert body == "\n".join(
+        [
+            "@codex review",
+            "",
+            "PR：https://github.com/liuli195/Quant-Trading/pull/5",
+            f"HEAD：{'0' * 40}",
+            "Review Scope：",
+            "",
+            "审查重点：仅 P0/P1 合并阻断风险",
+        ]
+    )
+    assert is_codex_review_request(
+        body,
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha="0" * 40,
+    )
+    assert not is_codex_review_request(
+        "@codex review",
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha="0" * 40,
+    )
 
 
 def _write_minimal_repo(root: Path) -> None:
@@ -2410,7 +2476,7 @@ def _codex_completion_comment(
     return {
         "id": comment_id,
         "html_url": f"https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-{comment_id}",
-        "body": "@codex review",
+        "body": _codex_review_request_body(),
         "created_at": created_at,
         "reaction_items": [
             {
@@ -2465,7 +2531,7 @@ def test_pr_review_evidence_accepts_approved_codex_conclusion() -> None:
         _valid_codex_review_body(),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
         expected_head_sha=head_sha,
-        comments=["@codex review"],
+        comments=[_codex_review_request_body()],
         reviews=[
             {
                 "id": 4314779358,
@@ -2488,7 +2554,7 @@ def test_pr_review_evidence_rejects_context_invalid_codex_review() -> None:
         expected_head_sha=head_sha,
         comments=[
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T01:00:00Z",
                 "user": {"login": "liuli195"},
             }
@@ -2520,7 +2586,7 @@ def test_pr_review_evidence_rejects_equivalent_context_invalid_wording() -> None
             expected_head_sha=head_sha,
             comments=[
                 {
-                    "body": "@codex review",
+                    "body": _codex_review_request_body(),
                     "created_at": "2026-05-19T01:00:00Z",
                     "user": {"login": "liuli195"},
                 }
@@ -2578,7 +2644,7 @@ def test_pr_review_evidence_allows_no_blocking_issues_diff_wording() -> None:
         expected_head_sha=head_sha,
         comments=[
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T01:00:00Z",
                 "user": {"login": "liuli195"},
             }
@@ -2899,7 +2965,7 @@ def test_low_risk_pr_body_can_still_require_official_codex_review() -> None:
         _valid_codex_review_body().replace("- 风险等级: high", "- 风险等级: low"),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
         expected_head_sha=head_sha,
-        comments=["@codex review"],
+        comments=[_codex_review_request_body()],
         reviews=[
             {
                 "id": 4314779358,
@@ -3048,6 +3114,41 @@ def test_pr_review_evidence_rejects_template_extra_text_trigger() -> None:
         comments=[
             {
                 "body": "@codex review\nPlease use the current PR context and GitHub diff.",
+                "created_at": "2026-05-19T01:00:00Z",
+                "user": {"login": "liuli195"},
+            }
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T01:01:00Z",
+                "body": "### Codex Review\n\nNo blocking findings.",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+
+    assert not report.ok
+    assert (
+        "required @codex review trigger must not disable repository context"
+        in report.errors
+    )
+    assert "PR comments must include the required @codex review trigger" in (
+        report.errors
+    )
+
+
+def test_pr_review_evidence_rejects_single_line_template_trigger() -> None:
+    head_sha = "0" * 40
+    report = validate_pr_body(
+        _valid_codex_review_body(),
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        comments=[
+            {
+                "body": "@codex review",
                 "created_at": "2026-05-19T01:00:00Z",
                 "user": {"login": "liuli195"},
             }
@@ -3228,7 +3329,7 @@ def test_pr_review_evidence_accepts_codex_no_major_issues_comment() -> None:
             {
                 "id": 4484212277,
                 "html_url": "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484212277",
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T01:00:00Z",
             },
             _codex_no_major_issues_comment(),
@@ -3256,7 +3357,7 @@ def test_pr_review_evidence_completion_comment_supersedes_earlier_invalid_review
             {
                 "id": 4484212277,
                 "html_url": "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484212277",
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T01:00:00Z",
                 "user": {"login": "liuli195"},
             },
@@ -3291,7 +3392,7 @@ def test_pr_review_evidence_completion_comment_keeps_earlier_blocking_review() -
             {
                 "id": 4484212277,
                 "html_url": "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484212277",
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T01:00:00Z",
                 "user": {"login": "liuli195"},
             },
@@ -3331,7 +3432,7 @@ def test_pr_review_evidence_completion_comment_rejects_later_invalid_review() ->
             {
                 "id": 4484212277,
                 "html_url": "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484212277",
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T01:00:00Z",
                 "user": {"login": "liuli195"},
             },
@@ -3389,7 +3490,7 @@ def test_pr_review_evidence_main_uses_current_pr_body_over_stale_event_env(
             {
                 "id": 4484212277,
                 "html_url": "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484212277",
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T01:00:00Z",
                 "user": {"login": "liuli195"},
             },
@@ -3469,7 +3570,7 @@ def test_pr_review_evidence_ignores_codex_help_text_when_matching_trigger() -> N
             {
                 "id": 4484212277,
                 "html_url": "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484212277",
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T01:00:00Z",
                 "user": {"login": "liuli195"},
             },
@@ -3499,7 +3600,7 @@ def test_pr_review_evidence_ignores_later_non_trigger_comment_for_no_major_issue
             {
                 "id": 4484212277,
                 "html_url": "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484212277",
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T01:00:00Z",
             },
             _codex_no_major_issues_comment(created_at="2026-05-19T01:05:00Z"),
@@ -3556,7 +3657,7 @@ def test_pr_review_evidence_rejects_completion_before_latest_required_trigger() 
         comments=[
             _codex_completion_comment(created_at="2026-05-19T01:00:00Z"),
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T01:05:00Z",
             },
         ],
@@ -3679,7 +3780,7 @@ def test_pr_review_evidence_rejects_review_before_required_trigger_comment() -> 
         expected_head_sha=head_sha,
         comments=[
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T00:10:00Z",
             }
         ],
@@ -3710,11 +3811,11 @@ def test_pr_review_evidence_waits_for_review_after_latest_required_trigger() -> 
         expected_head_created_at="2026-05-19T00:00:00Z",
         comments=[
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T00:05:00Z",
             },
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T00:15:00Z",
             },
         ],
@@ -3757,7 +3858,7 @@ def test_pr_review_evidence_rejects_trigger_before_current_head() -> None:
         expected_head_created_at="2026-05-19T00:10:00Z",
         comments=[
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T00:09:00Z",
             }
         ],
@@ -3800,7 +3901,7 @@ def test_pr_review_evidence_uses_comment_updated_at_for_trigger_time() -> None:
         expected_head_created_at="2026-05-19T00:07:00Z",
         comments=[
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T00:08:00Z",
                 "updated_at": "2026-05-19T00:12:00Z",
             }
@@ -3843,7 +3944,7 @@ def test_pr_review_evidence_rejects_any_current_head_blocking_codex_review() -> 
         expected_head_sha=head_sha,
         comments=[
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T00:09:00Z",
             }
         ],
@@ -3881,7 +3982,7 @@ def test_pr_review_evidence_rejects_unresolved_blocking_codex_threads() -> None:
         expected_head_sha=head_sha,
         comments=[
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T00:09:00Z",
             }
         ],
@@ -3931,7 +4032,7 @@ def test_codex_review_monitor_reports_waiting_for_codex_after_trigger() -> None:
         repo="liuli195/Quant-Trading",
         pr_number="5",
         pr={"head": {"sha": "0" * 40}},
-        issue_comments=[{"body": "@codex review"}],
+        issue_comments=[{"body": _codex_review_request_body()}],
         reviews=[],
         review_comments=[],
     )
@@ -4013,7 +4114,7 @@ def test_codex_review_monitor_blocks_unresolved_blocking_threads() -> None:
         repo="liuli195/Quant-Trading",
         pr_number="5",
         pr={"head": {"sha": head_sha}},
-        issue_comments=[{"body": "@codex review"}],
+        issue_comments=[{"body": _codex_review_request_body()}],
         reviews=[],
         review_comments=[],
         review_threads=[
@@ -4060,7 +4161,7 @@ def test_codex_review_monitor_passes_on_codex_no_major_issues_comment() -> None:
         head_created_at="2026-05-19T00:59:00Z",
         issue_comments=[
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T01:00:00Z",
             },
             _codex_no_major_issues_comment(),
@@ -4092,7 +4193,7 @@ def test_codex_review_monitor_ignores_codex_help_text_when_matching_trigger() ->
         head_created_at="2026-05-19T00:59:00Z",
         issue_comments=[
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T01:00:00Z",
                 "user": {"login": "liuli195"},
             },
@@ -4121,7 +4222,7 @@ def test_codex_review_monitor_waits_for_completion_after_latest_required_trigger
         issue_comments=[
             _codex_completion_comment(created_at="2026-05-19T01:00:00Z"),
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T01:05:00Z",
             },
         ],
@@ -4142,7 +4243,7 @@ def test_codex_review_monitor_rejects_trigger_before_current_head() -> None:
         head_created_at="2026-05-19T01:00:00Z",
         issue_comments=[
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T00:59:00Z",
             }
         ],
@@ -4170,7 +4271,7 @@ def test_codex_review_monitor_waits_for_review_after_required_trigger() -> None:
         head_created_at="2026-05-19T01:00:00Z",
         issue_comments=[
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T01:02:00Z",
             }
         ],
@@ -4198,11 +4299,11 @@ def test_codex_review_monitor_waits_for_review_after_latest_required_trigger() -
         head_created_at="2026-05-19T01:00:00Z",
         issue_comments=[
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T01:02:00Z",
             },
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T01:05:00Z",
             },
         ],
@@ -4227,7 +4328,7 @@ def test_codex_review_monitor_reports_passed_current_head_review() -> None:
         repo="liuli195/Quant-Trading",
         pr_number="5",
         pr={"head": {"sha": head_sha}},
-        issue_comments=[{"body": "@codex review"}],
+        issue_comments=[{"body": _codex_review_request_body()}],
         reviews=[
             {
                 "id": 4314779358,
@@ -4254,7 +4355,7 @@ def test_codex_review_monitor_reports_context_invalid_review() -> None:
         pr={"head": {"sha": head_sha}},
         issue_comments=[
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T01:00:00Z",
                 "user": {"login": "liuli195"},
             }
@@ -4276,7 +4377,7 @@ def test_codex_review_monitor_ignores_superseded_context_invalid_review() -> Non
         pr={"head": {"sha": head_sha}},
         issue_comments=[
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T01:00:00Z",
                 "user": {"login": "liuli195"},
             }
@@ -4311,7 +4412,7 @@ def test_codex_review_monitor_completion_supersedes_context_invalid_review() -> 
         head_created_at="2026-05-19T00:59:00Z",
         issue_comments=[
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T01:00:00Z",
                 "user": {"login": "liuli195"},
             },
@@ -4379,7 +4480,7 @@ def test_codex_review_monitor_ignores_dismissed_reviews() -> None:
         pr={"head": {"sha": head_sha}},
         issue_comments=[
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T01:00:00Z",
             }
         ],
@@ -4405,7 +4506,7 @@ def test_codex_review_monitor_reports_blocked_on_p1_inline_comment() -> None:
         repo="liuli195/Quant-Trading",
         pr_number="5",
         pr={"head": {"sha": head_sha}},
-        issue_comments=[{"body": "@codex review"}],
+        issue_comments=[{"body": _codex_review_request_body()}],
         reviews=[
             {
                 "id": 4314779358,
@@ -4437,7 +4538,7 @@ def test_codex_review_priority_patterns_match_plain_text_titles() -> None:
         pr={"head": {"sha": head_sha}},
         issue_comments=[
             {
-                "body": "@codex review",
+                "body": _codex_review_request_body(),
                 "created_at": "2026-05-19T01:00:00Z",
             }
         ],
@@ -4466,7 +4567,7 @@ def test_codex_review_monitor_blocks_on_any_current_head_codex_review() -> None:
         repo="liuli195/Quant-Trading",
         pr_number="5",
         pr={"head": {"sha": head_sha}},
-        issue_comments=[{"body": "@codex review"}],
+        issue_comments=[{"body": _codex_review_request_body()}],
         reviews=[
             {
                 "id": 4314779358,

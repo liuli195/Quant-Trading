@@ -188,6 +188,7 @@ def validate_pr_body(
                     review_link,
                     reviews=reviews,
                     review_comments=review_comments,
+                    expected_pr_url=expected_pr_url,
                     expected_head_sha=expected_head_sha,
                     expected_head_created_at=expected_head_created_at,
                     comments=comments,
@@ -200,7 +201,12 @@ def validate_pr_body(
             before_or_at=reviewed_until,
         ):
             errors.append(CONTEXT_HOSTILE_TRIGGER_ERROR)
-        if not _required_trigger_comments(comments, before_or_at=reviewed_until):
+        if not _required_trigger_comments(
+            comments,
+            before_or_at=reviewed_until,
+            expected_pr_url=expected_pr_url,
+            expected_head_sha=expected_head_sha,
+        ):
             errors.append("PR comments must include the required @codex review trigger")
     if not _has_governance_gate_wrapper_command(section):
         errors.append("review evidence must include governance gate wrapper command")
@@ -672,6 +678,7 @@ def _codex_review_errors(
     *,
     reviews: Sequence[Mapping[str, object]],
     review_comments: Sequence[Mapping[str, object]] | None,
+    expected_pr_url: str | None,
     expected_head_sha: str | None,
     expected_head_created_at: str | None,
     comments: Sequence[object] | None,
@@ -685,6 +692,7 @@ def _codex_review_errors(
                 comments=comments,
                 reviews=reviews,
                 review_comments=review_comments,
+                expected_pr_url=expected_pr_url,
                 expected_head_sha=expected_head_sha,
                 expected_head_created_at=expected_head_created_at,
             )
@@ -710,7 +718,13 @@ def _codex_review_errors(
     ):
         errors.append(CONTEXT_INVALID_REVIEW_ERROR)
     trigger_comments = (
-        _required_trigger_comments(comments) if comments is not None else None
+        _required_trigger_comments(
+            comments,
+            expected_pr_url=expected_pr_url,
+            expected_head_sha=expected_head_sha,
+        )
+        if comments is not None
+        else None
     )
     if trigger_comments is not None:
         if not _has_required_trigger_after_current_head(
@@ -774,6 +788,7 @@ def _codex_completion_comment_errors(
     comments: Sequence[object],
     reviews: Sequence[Mapping[str, object]],
     review_comments: Sequence[Mapping[str, object]] | None,
+    expected_pr_url: str | None,
     expected_head_sha: str | None,
     expected_head_created_at: str | None,
 ) -> tuple[str, ...]:
@@ -782,7 +797,11 @@ def _codex_completion_comment_errors(
         return ("Codex review link must match a Codex review on the current head",)
 
     errors: list[str] = []
-    trigger_comments = _required_trigger_comments(comments)
+    trigger_comments = _required_trigger_comments(
+        comments,
+        expected_pr_url=expected_pr_url,
+        expected_head_sha=expected_head_sha,
+    )
     if not _has_required_trigger_after_current_head(
         trigger_comments, expected_head_created_at
     ):
@@ -798,7 +817,11 @@ def _codex_completion_comment_errors(
         errors.append(
             "Codex completion comment must match the latest required @codex review trigger"
         )
-    if _is_required_trigger_comment(comment):
+    if _is_required_trigger_comment(
+        comment,
+        expected_pr_url=expected_pr_url,
+        expected_head_sha=expected_head_sha,
+    ):
         if not has_codex_completion_reaction(comment):
             errors.append(
                 "Codex completion comment must include a Codex thumbs-up reaction"
@@ -1036,6 +1059,8 @@ def _required_trigger_comments(
     *,
     expected_head_created_at: str | None = None,
     before_or_at: str | None = None,
+    expected_pr_url: str | None = None,
+    expected_head_sha: str | None = None,
 ) -> tuple[object, ...]:
     matched: list[object] = []
     for comment in _trigger_candidate_comments(
@@ -1043,7 +1068,11 @@ def _required_trigger_comments(
         expected_head_created_at=expected_head_created_at,
         before_or_at=before_or_at,
     ):
-        if _is_required_trigger_comment(comment):
+        if _is_required_trigger_comment(
+            comment,
+            expected_pr_url=expected_pr_url,
+            expected_head_sha=expected_head_sha,
+        ):
             matched.append(comment)
     return tuple(matched)
 
@@ -1132,10 +1161,19 @@ def _is_context_hostile_trigger_comment(comment: object) -> bool:
     )
 
 
-def _is_required_trigger_comment(comment: object) -> bool:
+def _is_required_trigger_comment(
+    comment: object,
+    *,
+    expected_pr_url: str | None = None,
+    expected_head_sha: str | None = None,
+) -> bool:
     if not _is_trigger_candidate_comment(comment):
         return False
-    return is_codex_review_request(_comment_body(comment))
+    return is_codex_review_request(
+        _comment_body(comment),
+        expected_pr_url=expected_pr_url,
+        expected_head_sha=expected_head_sha,
+    )
 
 
 def _comment_body(comment: object) -> str:
