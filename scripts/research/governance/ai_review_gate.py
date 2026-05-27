@@ -44,6 +44,9 @@ HIGH_RISK_PREFIXES = (
 CODEX_REVIEW_LINK_PATTERN = re.compile(
     r"https://github\.com/[^\s`]+/[^\s`]+/pull/\d+#pullrequestreview-\d+"
 )
+CODEX_COMPLETION_COMMENT_LINK_PATTERN = re.compile(
+    r"https://github\.com/[^\s`]+/[^\s`]+/(?:pull|issues)/\d+#issuecomment-\d+"
+)
 
 
 @dataclass(frozen=True)
@@ -733,7 +736,9 @@ def _format_official_codex_review_evidence(item: str) -> str:
     if "Codex review 链接" in text:
         return text
     unquoted = text.strip("`")
-    if CODEX_REVIEW_LINK_PATTERN.search(unquoted):
+    if CODEX_REVIEW_LINK_PATTERN.search(
+        unquoted
+    ) or CODEX_COMPLETION_COMMENT_LINK_PATTERN.search(unquoted):
         return f"Codex review 链接：{unquoted}"
     return text
 

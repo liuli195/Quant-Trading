@@ -432,6 +432,44 @@ def test_pr_body_prefixes_raw_codex_review_link_for_validator(
     assert evidence.ok, evidence.errors
 
 
+def test_pr_body_prefixes_raw_codex_completion_comment_link_for_validator(
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / "latest.json"
+    output = tmp_path / "pr-body.md"
+    payload = _valid_complete_payload(
+        changed_files=["scripts/research/governance/ai_review_gate.py"],
+        risk_level="high",
+        requires_official=True,
+    )
+    payload["official_codex_review"] = {
+        "reviewer": "Codex",
+        "trigger": "@codex review",
+        "conclusion": "通过",
+        "blocking_issues": "无",
+        "evidence": [
+            "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4557969190",
+            GOVERNANCE_GATE_COMMAND,
+        ],
+    }
+    _write_report(report, payload)
+
+    code = ai_review_gate.main(
+        ["pr-body", "--report", str(report), "--output", str(output)]
+    )
+
+    assert code == 0
+    body = output.read_text(encoding="utf-8")
+    assert "#issuecomment-4557969190" in body
+    evidence = validate_pr_body(
+        body,
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        changed_files=payload["changed_files"],
+        labels=["ai-risk-review"],
+    )
+    assert evidence.ok, evidence.errors
+
+
 def test_codex_report_requires_codex_security_review(tmp_path: Path) -> None:
     report = tmp_path / "latest.json"
     _write_report(
