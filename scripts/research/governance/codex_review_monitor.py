@@ -176,6 +176,9 @@ def build_monitor_report(
     elif blocking_findings:
         status = "blocked"
         message = "Codex review 含 P0/P1 阻断发现，不能填写通过结论。"
+    elif skip_authorized and official_errors:
+        status = "evidence_invalid"
+        message = "PR review evidence invalid: " + "; ".join(official_errors)
     elif skip_authorized:
         status = "skipped"
         message = "官方 Codex review 已由用户授权跳过。"
@@ -220,6 +223,7 @@ def render_monitor_comment(report: MonitorReport) -> str:
         "waiting_for_codex": "等待 Codex review",
         "trigger_invalid": "trigger context invalid",
         "context_invalid": "context invalid",
+        "evidence_invalid": "PR evidence invalid",
         "blocked": "阻断",
         "passed": "可更新通过证据",
         "skipped": "授权跳过",
@@ -283,6 +287,7 @@ def sync_commit_status(
         "waiting_for_codex": "pending",
         "trigger_invalid": "failure",
         "context_invalid": "failure",
+        "evidence_invalid": "failure",
         "blocked": "failure",
         "passed": "success",
         "skipped": "success",
@@ -297,6 +302,7 @@ def sync_commit_status(
         "waiting_for_codex": "Waiting for Codex review on current head",
         "trigger_invalid": "Codex review trigger disables required context",
         "context_invalid": "Codex review context is invalid for current head",
+        "evidence_invalid": "PR review evidence invalid",
         "blocked": "Codex review has P0/P1 findings",
         "passed": "Codex review has no P0/P1 findings",
         "skipped": "Official Codex review not required or skipped",

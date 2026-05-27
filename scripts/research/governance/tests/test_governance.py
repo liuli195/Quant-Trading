@@ -310,7 +310,7 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     (root / ".github/workflows/codex-review-monitor.yml").write_text(
-        "on:\n  pull_request:\n    types: [opened, synchronize, reopened]\n"
+        "on:\n  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
         "  issue_comment:\n  pull_request_review:\n"
         "    types: [submitted, edited, dismissed]\n"
         "  pull_request_review_comment:\n"
@@ -910,6 +910,26 @@ def test_governance_audit_flags_monitor_without_review_dismissed_event(
     assert any(
         finding.rule_id == "codex_review_monitor"
         and "dismissed events" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_monitor_without_label_events(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".github/workflows/codex-review-monitor.yml").write_text(
+        "on:\n  pull_request:\n    types: [opened, synchronize, reopened, edited]\n"
+        "  issue_comment:\n    types: [created, edited, deleted]\n"
+        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
+        "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
+        "permissions:\n  statuses: write\nsteps:\n"
+        "  - run: python -m scripts.research.governance.codex_review_monitor --sync-comment --sync-status\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "codex_review_monitor"
+        and "pull_request labeled and unlabeled events" in finding.message
         for finding in report.findings
     )
 
@@ -4187,6 +4207,25 @@ def test_codex_review_monitor_passes_when_official_review_is_authorized_skipped(
     assert report.status == "skipped"
     assert not report.trigger_found
     assert "授权跳过" in render_monitor_comment(report)
+
+
+def test_codex_review_monitor_blocks_official_errors_before_skip_authorization() -> (
+    None
+):
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}, "body": _official_codex_skip_body()},
+        issue_comments=[],
+        reviews=[],
+        review_comments=[],
+        changed_files=("scripts/research/governance/pr_review_evidence.py",),
+        labels=(),
+    )
+
+    assert report.status == "evidence_invalid"
+    assert "ai-risk-review" in report.message
 
 
 def test_codex_review_monitor_passes_low_risk_without_official_review() -> None:

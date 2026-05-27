@@ -811,6 +811,16 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "monitor workflow must listen to Codex review submitted, edited, and dismissed events",
                 )
             )
+        if not _workflow_event_types_include(
+            text, "pull_request", ("labeled", "unlabeled")
+        ):
+            findings.append(
+                AuditFinding(
+                    "codex_review_monitor",
+                    "error",
+                    "monitor workflow must listen to pull_request labeled and unlabeled events",
+                )
+            )
 
     pr_workflow = root / "docs" / "rules" / "pr-workflow.md"
     if pr_workflow.is_file():
