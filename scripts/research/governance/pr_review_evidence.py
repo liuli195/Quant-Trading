@@ -12,6 +12,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from scripts.research.governance.codex_review_contract import (
+    is_codex_review_request,
+)
+
 
 REQUIRED_REVIEWER = "Codex"
 SECTION_HEADER = "Codex Code Review 结论"
@@ -62,8 +66,12 @@ BLOCKING_CODEX_FINDING_PATTERN = re.compile(
 )
 CODEX_CONTEXT_INVALID_PATTERN = re.compile(
     r"(?:(?:cannot|can(?:'|\u2019)t|can\s*not|unable\s+to|could\s+not|couldn(?:'|\u2019)t)\s+"
-    r".*?(?:review|complete|read|access|see|view).*?(?:diff|code\s+diff|unified\s+diff)|"
+    r".*?(?:review|complete|read|access).*?(?:diff|code\s+diff|unified\s+diff)|"
+    r"(?:cannot|can(?:'|\u2019)t|can\s*not|unable\s+to|could\s+not|couldn(?:'|\u2019)t)\s+"
+    r"(?:see|view)\s+(?:the\s+)?(?:(?:current|PR|pull\s+request)\s+)?(?:diff|code\s+diff|unified\s+diff)|"
     r"(?:don(?:'|\u2019)t|do\s+not)\s+have\s+access\s+to\s+(?:the\s+)?(?:PR\s+)?diff|"
+    r"(?:don(?:'|\u2019)t|do\s+not)\s+have\s+access\s+to\s+(?:the\s+)?"
+    r"(?:repository|repo|codebase)\s+or\s+(?:the\s+)?(?:PR\s+|unified\s+)?diff|"
     r"conversation\s+did\s+not\s+include.*diff|"
     r"cannot\s+complete.*static\s+review.*diff|"
     r"could\s+not\s+read.*diff|"
@@ -84,8 +92,9 @@ CONTEXT_HOSTILE_TRIGGER_PATTERN = re.compile(
     r"(?:do\s+not|don(?:'|\u2019)t)\s+use\s+(?:tools?|wrapper)|"
     r"(?:do\s+not|don(?:'|\u2019)t)\s+read\s+(?:the\s+)?(?:repository|repo|GitHub\s+diff|diff)|"
     r"only\s+do\s+a\s+static\s+diff\s+review|"
-    r"(?:不要|不)(?:执行|运行|使用|读取).*?(?:命令|工具|本地命令|wrapper|检查|测试|仓库|代码库|GitHub\s*diff|diff)|"
-    r"只(?:做|看).*?(?:静态\s*)?diff\s*(?:review|评审)?|"
+    r"(?:不要|不)(?:执行|运行)(?![^。；;\n]*(?:破坏性|危险)).*?(?:命令|本地命令|wrapper|检查|测试)|"
+    r"(?:不要|不)(?:使用|读取).*?(?:工具|仓库|代码库|GitHub\s*diff|diff|wrapper)|"
+    r"(?:只|仅)(?:做|看).*?(?:静态\s*)?diff\s*(?:review|评审)?|"
     r"只做静态\s*diff\s*review)",
     re.IGNORECASE,
 )
@@ -1115,17 +1124,18 @@ def _is_trigger_candidate_comment(comment: object) -> bool:
 
 
 def _is_context_hostile_trigger_comment(comment: object) -> bool:
-    return _is_trigger_candidate_comment(comment) and bool(
-        CONTEXT_HOSTILE_TRIGGER_PATTERN.search(_comment_body(comment))
+    if not _is_trigger_candidate_comment(comment):
+        return False
+    body = _comment_body(comment)
+    return not is_codex_review_request(body) or bool(
+        CONTEXT_HOSTILE_TRIGGER_PATTERN.search(body)
     )
 
 
 def _is_required_trigger_comment(comment: object) -> bool:
     if not _is_trigger_candidate_comment(comment):
         return False
-    if CONTEXT_HOSTILE_TRIGGER_PATTERN.search(_comment_body(comment)):
-        return False
-    return True
+    return is_codex_review_request(_comment_body(comment))
 
 
 def _comment_body(comment: object) -> str:

@@ -13,6 +13,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from scripts.research.governance.codex_review_contract import (
+    is_codex_review_request,
+)
 from scripts.research.governance.pr_review_evidence import (
     BLOCKING_CODEX_FINDING_PATTERN,
     CODEX_CONTEXT_INVALID_PATTERN,
@@ -385,17 +388,18 @@ def _is_trigger_candidate_comment(comment: Mapping[str, object]) -> bool:
 
 
 def _is_context_hostile_trigger_comment(comment: Mapping[str, object]) -> bool:
-    return _is_trigger_candidate_comment(comment) and bool(
-        CONTEXT_HOSTILE_TRIGGER_PATTERN.search(str(comment.get("body", "")))
+    if not _is_trigger_candidate_comment(comment):
+        return False
+    body = str(comment.get("body", ""))
+    return not is_codex_review_request(body) or bool(
+        CONTEXT_HOSTILE_TRIGGER_PATTERN.search(body)
     )
 
 
 def _is_required_trigger_comment(comment: Mapping[str, object]) -> bool:
     if not _is_trigger_candidate_comment(comment):
         return False
-    if CONTEXT_HOSTILE_TRIGGER_PATTERN.search(str(comment.get("body", ""))):
-        return False
-    return True
+    return is_codex_review_request(str(comment.get("body", "")))
 
 
 def _latest_codex_completion_comment(
