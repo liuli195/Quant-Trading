@@ -15,6 +15,11 @@ from scripts.research.governance.pr_review_evidence import (
     validate_pr_body,
 )
 
+GOVERNANCE_GATE_COMMAND = (
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File "
+    ".\\.githooks\\run-python.ps1 -m scripts.research.governance gate"
+)
+
 
 def _write_report(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -94,7 +99,7 @@ def _valid_complete_payload(
         ),
         "changed_files": changed_files or ["docs/guides/example.md"],
         "findings": [],
-        "checks": {"pytest": "pass"},
+        "checks": {"governance gate": GOVERNANCE_GATE_COMMAND, "pytest": "pass"},
     }
 
 
@@ -292,6 +297,8 @@ def test_pr_body_command_renders_low_risk_body_accepted_by_validator(
     assert f"## {AI_REVIEW_SECTION_HEADER}" in body
     assert f"## {P2_SECTION_HEADER}" in body
     assert f"## {SECTION_HEADER}" not in body
+    assert "## 已运行检查" in body
+    assert GOVERNANCE_GATE_COMMAND in body
     evidence = validate_pr_body(
         body,
         changed_files=payload["changed_files"],

@@ -1769,6 +1769,10 @@ def test_low_risk_pr_body_does_not_require_codex_review() -> None:
 - 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
 
+## 已运行检查
+
+- governance gate: `.githooks/run-python.sh -m scripts.research.governance gate`
+
 ## P2 保留项
 
 - 无
@@ -2075,6 +2079,10 @@ def test_low_risk_pr_body_accepts_reviewer_names_without_fixed_phrase() -> None:
 - 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
 
+## 已运行检查
+
+- governance gate: `.githooks/run-python.sh -m scripts.research.governance gate`
+
 ## P2 保留项
 
 - 无
@@ -2179,6 +2187,10 @@ def test_pr_body_partial_ai_review_mode_accepts_user_authorization() -> None:
 - 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
 - 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
+
+## 已运行检查
+
+- governance gate: `.githooks/run-python.sh -m scripts.research.governance gate`
 
 ## P2 保留项
 
@@ -2373,6 +2385,10 @@ def test_pr_body_accepts_p2_none_before_managed_block_end() -> None:
 - 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
 
+## 已运行检查
+
+- governance gate: `{pr_review_evidence.REQUIRED_GOVERNANCE_GATE_COMMANDS[0]}`
+
 ## {pr_review_evidence.P2_SECTION_HEADER}
 
 - 无
@@ -2382,6 +2398,32 @@ def test_pr_body_accepts_p2_none_before_managed_block_end() -> None:
     report = validate_pr_body(body, comments=[])
 
     assert report.ok, report.errors
+
+
+def test_low_risk_pr_body_requires_local_governance_gate_command() -> None:
+    body = f"""
+## {pr_review_evidence.AI_REVIEW_SECTION_HEADER}
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence=Codex Security local review completed
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## {pr_review_evidence.P2_SECTION_HEADER}
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert (
+        "local check evidence must include governance gate wrapper command"
+        in report.errors
+    )
 
 
 def test_low_risk_pr_body_accepts_chinese_p2_fields() -> None:
@@ -2395,6 +2437,10 @@ def test_low_risk_pr_body_accepts_chinese_p2_fields() -> None:
 - 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
 - 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
+
+## 已运行检查
+
+- governance gate: `.githooks/run-python.sh -m scripts.research.governance gate`
 
 ## P2 保留项
 
@@ -2470,6 +2516,10 @@ def test_low_risk_pr_body_accepts_dispatched_detail_with_no_undispatched_items()
 - 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
 - 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent；无未分发项
 - P0/P1 未关闭项: 无
+
+## 已运行检查
+
+- governance gate: `.githooks/run-python.sh -m scripts.research.governance gate`
 
 ## P2 保留项
 
@@ -2618,6 +2668,10 @@ def _official_codex_skip_body(*, authorization: str | None = None) -> str:
 - 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
 
+## 已运行检查
+
+- governance gate: `.githooks/run-python.sh -m scripts.research.governance gate`
+
 ## P2 保留项
 
 - 无
@@ -2638,6 +2692,10 @@ def _low_risk_no_official_review_body() -> str:
 - 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
 - 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
+
+## 已运行检查
+
+- governance gate: `.githooks/run-python.sh -m scripts.research.governance gate`
 
 ## P2 保留项
 

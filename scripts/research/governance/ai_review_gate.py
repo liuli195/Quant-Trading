@@ -303,9 +303,17 @@ def render_pr_body(payload: dict[str, Any]) -> str:
         f"- 任务分发说明: {_format_task_dispatch_field(payload)}",
         f"- P0/P1 未关闭项: {_blocking_findings_summary(findings)}",
         "",
-        f"## {P2_SECTION_HEADER}",
+        "## 已运行检查",
         "",
     ]
+    lines.extend(_render_pr_body_check_lines(payload))
+    lines.extend(
+        [
+            "",
+        f"## {P2_SECTION_HEADER}",
+        "",
+        ]
+    )
     p2_lines = _render_p2_body_lines(findings)
     lines.extend(p2_lines)
     official_lines = _render_official_codex_review_lines(payload)
@@ -684,6 +692,16 @@ def _render_p2_body_lines(findings: Sequence[dict[str, Any]]) -> list[str]:
         lines.append(
             f"  - handling: {_single_line_text(item.get('handling')) or '未记录'}"
         )
+    return lines
+
+
+def _render_pr_body_check_lines(payload: dict[str, Any]) -> list[str]:
+    checks = payload.get("checks")
+    if not isinstance(checks, dict) or not checks:
+        return ["- 未记录"]
+    lines: list[str] = []
+    for name, status in checks.items():
+        lines.append(f"- {_single_line_text(name)}: {_single_line_text(status)}")
     return lines
 
 
