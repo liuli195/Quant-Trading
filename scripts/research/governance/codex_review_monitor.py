@@ -79,12 +79,15 @@ def build_monitor_report(
 
     head_sha = _head_sha(pr)
     pr_url = str(pr.get("html_url", "")) or f"https://github.com/{repo}/pull/{pr_number}"
-    skip_authorized = official_codex_review_skip_authorized(str(pr.get("body", "")))
+    pr_body = str(pr.get("body", ""))
+    skip_authorized = official_codex_review_skip_authorized(pr_body)
     official_required, official_errors = _official_codex_required(
-        str(pr.get("body", "")),
+        pr_body,
         changed_files=changed_files,
         labels=labels,
     )
+    if not pr_body.strip() and changed_files is None and labels is None:
+        official_errors = []
     official_review_required = official_required or bool(official_errors)
     trigger_time = _required_trigger_time(
         issue_comments,
@@ -176,7 +179,7 @@ def build_monitor_report(
     elif blocking_findings:
         status = "blocked"
         message = "Codex review 含 P0/P1 阻断发现，不能填写通过结论。"
-    elif skip_authorized and official_errors:
+    elif official_errors:
         status = "evidence_invalid"
         message = "PR review evidence invalid: " + "; ".join(official_errors)
     elif skip_authorized:

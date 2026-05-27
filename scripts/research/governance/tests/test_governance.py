@@ -4228,6 +4228,31 @@ def test_codex_review_monitor_blocks_official_errors_before_skip_authorization()
     assert "ai-risk-review" in report.message
 
 
+def test_codex_review_monitor_blocks_official_errors_after_codex_review() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}, "body": _valid_codex_review_body()},
+        issue_comments=[{"body": _codex_review_request_body()}],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T01:01:00Z",
+                "body": "### Codex Review\n\nNo blocking findings.",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+        changed_files=("scripts/research/governance/codex_review_monitor.py",),
+        labels=(),
+    )
+
+    assert report.status == "evidence_invalid"
+    assert "ai-risk-review" in report.message
+
+
 def test_codex_review_monitor_passes_low_risk_without_official_review() -> None:
     head_sha = "0" * 40
     report = build_monitor_report(
