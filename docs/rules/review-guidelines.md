@@ -10,7 +10,7 @@
 - 只有用户显式授权时，本地 AI review 才能使用 `partial` 不完全模式；必须记录 `authorized_by`、`reason` 和 `evidence`。
 - P0/P1 问题未以 `fixed` 或 `false_positive` 关闭前，不得进入下一阶段。
 - 高风险或 unknown PR 默认必须执行官方 Codex Code Review，并由 PR 评论明确触发。评论内容必须包含 `@codex review`。
-- 官方 Codex Review 触发评论必须保留仓库上下文：写明当前 PR、当前 head SHA、Review Scope 和本地门禁证据。禁止写“不要执行命令”“只做静态 diff review”“do not execute/run local commands”等会切断仓库、diff 或命令上下文的指令。
+- 官方 Codex Review 触发评论必须严格使用固定模板：写明当前 PR、当前 head SHA、Review Scope（可为空）和审查重点。禁止写模板外文案，禁止写“不要执行命令”“只做静态 diff review”“do not execute/run local commands”等会切断仓库、diff 或命令上下文的指令。
 - 用户显式授权时，可以跳过官方 Codex Code Review；必须记录 `官方 Codex Review 跳过授权` 的 `authorized_by`、`reason` 和 `evidence`。该授权不允许绕过未解决且未过期的 Codex P0/P1 thread。
 - Automatic reviews 可以作为补充，但不能替代上面的明确触发评论。
 - PR 中如存在 Codex 标出的 P0/P1 问题，不得填写通过结论。
@@ -58,15 +58,15 @@
 ```markdown
 @codex review
 
-请基于当前 PR 的仓库上下文和 GitHub diff 做 review。
+PR：https://github.com/<owner>/<repo>/pull/<number>
+HEAD：<full-head-sha>
+Review Scope：
+- <path-or-scope-entry>
 
-- PR: https://github.com/<owner>/<repo>/pull/<number>
-- 当前 head: `<full-head-sha>`
-- Review Scope: `.local/ai-review/codex-review-scope.md`
-- 本地门禁: `make pre-pr`、`make ai-review`、`make risk-check`
-
-请聚焦 P0/P1 风险：交易逻辑、治理门禁、安全边界、数据解释和测试缺口。P2/P3 只在影响合并判断时说明。
+审查重点：仅 P0/P1 合并阻断风险
 ```
+
+`Review Scope：` 下方可以为空，也可以用 `- <path-or-scope-entry>` 列出路径或范围项；评论不得包含模板外文案。
 
 ## 评审重点
 

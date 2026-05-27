@@ -39,7 +39,7 @@
 
 - Reviewer: `Codex`
 - 触发方式: `@codex review`
-- 标准触发评论: 按 `docs/rules/review-guidelines.md` 填写当前 PR、当前 head SHA、Review Scope 和本地门禁证据；不得要求 Codex 不读取仓库上下文或不执行本地命令。
+- 标准触发评论: 按 `docs/rules/review-guidelines.md` 的固定模板填写当前 PR、当前 head SHA、Review Scope（可为空）和审查重点；不得写模板外文案。
 - 结论: 未要求 / 未执行 / 通过
 - 阻断问题: 无 / 未确认
 - 关键证据:
