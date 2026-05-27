@@ -2,6 +2,14 @@
 
 Review 细则见 [review-guidelines.md](review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md -->；门禁见 [governance.md](governance.md) <!-- pathref: docs/rules/governance.md -->。
 
+## PR 自动化入口
+
+- Git hooks 只守本地不变量：pre-commit 走快速治理门禁，pre-push 和 CI 走完整治理门禁。
+- `scripts.research.governance.pr_flow` 负责 PR 准备、GitHub 同步、`ai-risk-review` label、`@codex review` 触发和 required checks 等待。
+- 常用入口是 `make pr-ready TITLE="<PR标题>"`，等价于 `.\.githooks\run-python.ps1 -m scripts.research.governance.pr_flow ready --title "<PR标题>"`。
+- Skills / agents 负责 review 判断和结论；`pr_flow` 只渲染和同步结构化证据，不伪造安全 review、交叉 review 或官方 Codex review 结论。
+- 规则文档是 fallback 和审计依据，不是主要执行界面；优先使用 `pr_flow` 更新 PR body 的 `pr-flow` 托管区。
+
 ## MUST
 
 - 多个 AI agent 并行写入时，每个 agent 使用独立 Git 分支；不得并行写同一 repo-tracked 分支。

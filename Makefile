@@ -1,4 +1,4 @@
-.PHONY: pre-pr ai-review risk-check
+.PHONY: pre-pr ai-review risk-check pr-ready
 
 ifeq ($(OS),Windows_NT)
 PYTHON ?= powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./.githooks/run-python.ps1
@@ -29,3 +29,6 @@ ai-review:
 
 risk-check:
 	$(PYTHON) -m scripts.research.governance.ai_review_gate risk --report $(AI_REVIEW_REPORT)
+
+pr-ready:
+	$(PYTHON) -m scripts.research.governance.pr_flow ready --title "$(TITLE)"

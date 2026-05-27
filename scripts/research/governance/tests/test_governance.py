@@ -11,6 +11,8 @@ from scripts.research.governance.codex_review_monitor import (
     build_monitor_report,
     render_monitor_comment,
 )
+from scripts.research.governance import __main__ as governance_main
+from scripts.research.governance import gate as governance_gate
 from scripts.research.governance.codex_review_contract import (
     is_codex_review_request,
     render_codex_review_request,
@@ -164,6 +166,7 @@ def _write_minimal_repo(root: Path) -> None:
         "scripts/research/platform/tests/test_platform.py",
         "scripts/research/registry/tests/test_registry.py",
         "scripts/research/governance/tests/test_governance.py",
+        "scripts/research/governance/tests/test_pr_flow.py",
         "scripts/research/research_core/tests/test_research_core.py",
         "scripts/research/etf_window_research/tests/test_analysis.py",
         "scripts/research/momentum_tilt_research/tests/test_analysis.py",
@@ -185,7 +188,8 @@ def _write_minimal_repo(root: Path) -> None:
         "本仓库是基于 Python 的 A 股/场内基金量化策略仓库。\n\n"
         "规则索引见 indexes.md。所有回答和输出使用简体中文，简洁直白。"
         "策略代码仅在聚宽云端运行。"
-        "须走项目 `.venv`。命令参考 docs/rules/commands.md。"
+        "项目 `.venv` 默认提权执行，否则无法读取base Python路径。"
+        "命令参考 docs/rules/commands.md。"
         "`gh` CLI 默认提权执行。"
         "进入主干须通过 PR；如用户显式授权，可以按直写主干链路直接提交和推送主干；"
         "禁止把功能分支本地合入 main，细则见 docs/rules/pr-workflow.md。"
@@ -223,7 +227,7 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / ".githooks/pre-commit").write_text(
         "pre-commit run --hook-stage pre-commit\n"
-        "sh .githooks/run-python.sh -m scripts.research.governance gate\n",
+        "sh .githooks/run-python.sh -m scripts.research.governance gate --fast\n",
         encoding="utf-8",
     )
     (root / "Makefile").write_text(
@@ -234,7 +238,8 @@ def _write_minimal_repo(root: Path) -> None:
         "endif\n"
         "pre-pr:\n\t$(PYTHON) -m pre_commit run --all-files\n"
         "ai-review:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate validate --report .local/ai-review/latest.json\n"
-        "risk-check:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate risk --report .local/ai-review/latest.json\n",
+        "risk-check:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate risk --report .local/ai-review/latest.json\n"
+        'pr-ready:\n\t$(PYTHON) -m scripts.research.governance.pr_flow ready --title "$(TITLE)"\n',
         encoding="utf-8",
     )
     (root / ".pre-commit-config.yaml").write_text(
@@ -369,8 +374,22 @@ def _write_minimal_repo(root: Path) -> None:
         "本地 AI review 模式\n不完全 Review 模式授权\nCodex Code Review 结论\n"
         "本地安全 review\ncodex-security\nsecurity-guidance\n"
         "Codex\n"
+        "<!-- pr-flow:start -->\n<!-- pr-flow:end -->\n"
         "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate\n"
         "waiver\n证据\n",
+        encoding="utf-8",
+    )
+    (root / ".github/pull_request_template.md").write_text(
+        "## 改动目标\n\n"
+        "-\n\n"
+        "## 影响范围\n\n"
+        "-\n\n"
+        "<!-- pr-flow:start -->\n"
+        '运行 `make pr-ready TITLE="<PR标题>"` 后由脚本更新本区块。\n'
+        "<!-- pr-flow:end -->\n\n"
+        "## 人工补充\n\n"
+        "- 额外证据链接：\n"
+        "- waiver：\n",
         encoding="utf-8",
     )
     (root / "docs/rules/review-guidelines.md").write_text(
@@ -512,6 +531,105 @@ def test_governance_audit_passes_minimal_repo_without_expensive_checks(
     assert report.findings == ()
 
 
+def test_governance_main_forwards_fast_gate(monkeypatch, tmp_path: Path) -> None:
+    captured: list[str] = []
+
+    def fake_gate_main(argv: list[str]) -> int:
+        captured.extend(argv)
+        return 0
+
+    monkeypatch.setattr(governance_main, "gate_main", fake_gate_main)
+
+    code = governance_main.main(["gate", "--repo-root", str(tmp_path), "--fast"])
+
+    assert code == 0
+    assert captured == ["--repo-root", str(tmp_path), "--fast"]
+
+
+def test_governance_gate_fast_skips_slow_checks_and_fails_on_audit_errors(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class StubAudit:
+        ok = False
+
+        def to_dict(self) -> dict[str, object]:
+            return {"ok": False, "findings": ["audit error"]}
+
+    def fake_run_audit(
+        root: Path,
+        *,
+        check_cli_help: bool,
+        check_pathrefs: bool,
+    ) -> StubAudit:
+        captured["root"] = root
+        captured["check_cli_help"] = check_cli_help
+        captured["check_pathrefs"] = check_pathrefs
+        return StubAudit()
+
+    def fail_pathref(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("fast gate must not run pathref")
+
+    monkeypatch.setattr(governance_gate, "run_audit", fake_run_audit)
+    monkeypatch.setattr(governance_gate.subprocess, "run", fail_pathref)
+
+    code = governance_gate.main(["--repo-root", str(tmp_path), "--fast"])
+
+    assert code == 1
+    assert captured == {
+        "root": tmp_path.resolve(),
+        "check_cli_help": False,
+        "check_pathrefs": False,
+    }
+
+
+def test_governance_audit_flags_pre_commit_without_fast_gate(
+    tmp_path: Path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/pre-commit").write_text(
+        "pre-commit run --hook-stage pre-commit\n"
+        "sh .githooks/run-python.sh -m scripts.research.governance gate\n",
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "pre-commit hook must use fast governance gate" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_pre_push_with_fast_gate(
+    tmp_path: Path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/pre-push").write_text(
+        "\n".join(
+            [
+                "sh .githooks/run-python.sh -m scripts.research.governance.branch_protection pre-push",
+                "sh .githooks/run-python.sh -m scripts.research.governance gate --fast",
+                "git lfs pre-push",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "pre-push hook must use full governance gate" in finding.message
+        for finding in report.findings
+    )
+
+
 def test_local_review_entrypoints_are_tracked(tmp_path: Path) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / "Makefile").write_text(
@@ -522,7 +640,8 @@ def test_local_review_entrypoints_are_tracked(tmp_path: Path) -> None:
         "endif\n"
         "pre-pr:\n\t$(PYTHON) -m pre_commit run --all-files\n"
         "ai-review:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate validate --report .local/ai-review/latest.json\n"
-        "risk-check:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate risk --report .local/ai-review/latest.json\n",
+        "risk-check:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate risk --report .local/ai-review/latest.json\n"
+        'pr-ready:\n\t$(PYTHON) -m scripts.research.governance.pr_flow ready --title "$(TITLE)"\n',
         encoding="utf-8",
     )
     (tmp_path / ".pre-commit-config.yaml").write_text(
@@ -538,13 +657,41 @@ def test_local_review_entrypoints_are_tracked(tmp_path: Path) -> None:
     )
     (tmp_path / ".githooks/pre-commit").write_text(
         "pre-commit run --hook-stage pre-commit\n"
-        "sh .githooks/run-python.sh -m scripts.research.governance gate\n",
+        "sh .githooks/run-python.sh -m scripts.research.governance gate --fast\n",
         encoding="utf-8",
     )
 
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
 
     assert report.ok, [finding.message for finding in report.findings]
+
+
+def test_local_review_entrypoints_require_pr_ready(tmp_path: Path) -> None:
+    _write_minimal_repo(tmp_path)
+    makefile = tmp_path / "Makefile"
+    makefile.write_text(
+        makefile.read_text(encoding="utf-8").replace(
+            'pr-ready:\n\t$(PYTHON) -m scripts.research.governance.pr_flow ready --title "$(TITLE)"\n',
+            "",
+        ),
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "local_review"
+        and "Makefile missing pr-ready" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_tool_registry_registers_pr_flow_cli() -> None:
+    tool = default_tool_registry().get("research.pr_flow")
+
+    assert tool.entry_module == "scripts.research.governance.pr_flow"
+    assert "ready" in (tool.cli or "")
 
 
 def test_local_review_entrypoints_require_posix_make_wrapper(
@@ -698,7 +845,26 @@ def test_governance_audit_flags_invalid_pr_template(tmp_path) -> None:
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "pr_template" and "规则同步" in finding.message
+        finding.rule_id == "pr_template" and "pr-flow:start" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_pr_template_without_pr_flow_block(
+    tmp_path: Path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    template = tmp_path / ".github/pull_request_template.md"
+    template.write_text(
+        template.read_text(encoding="utf-8").replace("<!-- pr-flow:start -->", ""),
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "pr_template" and "pr-flow:start" in finding.message
         for finding in report.findings
     )
 
@@ -1299,7 +1465,8 @@ def test_governance_audit_flags_agents_without_sandbox_escalation_rule(
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "agent_entry_sync" and "须走项目 `.venv`" in finding.message
+        finding.rule_id == "agent_entry_sync"
+        and "项目 `.venv` 默认提权执行，否则无法读取base Python路径" in finding.message
         for finding in report.findings
     )
 

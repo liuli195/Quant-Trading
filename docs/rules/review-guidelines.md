@@ -2,6 +2,8 @@
 
 入口见 [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->；PR 流程见 [pr-workflow.md](pr-workflow.md) <!-- pathref: docs/rules/pr-workflow.md -->。
 
+本页保留 evidence schema 和 review 要求。日常不要手工复制整段 PR 证据；先让 Skills / agents 产出 `.local/ai-review/latest.json`，再运行 `make pr-ready TITLE="<PR标题>"`，由 `scripts.research.governance.pr_flow` 渲染 `.local/ai-review/pr-body.md` 并更新 PR body 的 `pr-flow` 托管区。
+
 ## MUST
 
 - 所有 PR 必须完成本地 AI review、问题评级和风险分级。

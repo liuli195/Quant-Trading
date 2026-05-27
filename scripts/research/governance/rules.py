@@ -56,7 +56,7 @@ REQUIRED_CODEOWNER_PATTERNS = (
     "path_aliases.json",
     "strategies/**",
 )
-PR_TEMPLATE_TOKENS = (
+_OLD_PR_TEMPLATE_TOKENS = (
     "改动目标",
     "影响范围",
     "规则同步",
@@ -75,10 +75,22 @@ PR_TEMPLATE_TOKENS = (
     "不完全 Review 模式授权",
     "Codex Code Review 结论",
     "Codex",
+    "pr-flow:start",
     "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate",
     "waiver",
     "证据",
 )
+_SIMPLIFIED_PR_TEMPLATE_TOKENS = (
+    "改动目标",
+    "影响范围",
+    "pr-flow:start",
+    "pr-flow:end",
+    "make pr-ready",
+    "人工补充",
+    "额外证据链接",
+    "waiver",
+)
+PR_TEMPLATE_TOKENS = _SIMPLIFIED_PR_TEMPLATE_TOKENS
 REQUIRED_REVIEW_GUIDELINES_TOKENS = (
     "Codex Code Review",
     "@codex review",
@@ -127,7 +139,7 @@ REQUIRED_AGENT_ENTRY_TOKENS = (
     "docs/rules/review-guidelines.md",
     "简体中文，简洁直白",
     "聚宽云端",
-    "须走项目 `.venv`",
+    "项目 `.venv` 默认提权执行，否则无法读取base Python路径",
     "docs/rules/commands.md",
     "`gh` CLI 默认提权执行",
     "进入主干须通过 PR",
@@ -586,6 +598,14 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "governance_gate", "error", "pre-commit hook must use run-python.sh"
                 )
             )
+        if "scripts.research.governance gate --fast" not in text:
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "pre-commit hook must use fast governance gate",
+                )
+            )
 
     pre_push = root / ".githooks" / "pre-push"
     if not pre_push.is_file():
@@ -606,6 +626,14 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             findings.append(
                 AuditFinding(
                     "governance_gate", "error", "pre-push hook missing governance gate"
+                )
+            )
+        if "scripts.research.governance gate --fast" in text:
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "pre-push hook must use full governance gate",
                 )
             )
         if "git lfs pre-push" not in text:
@@ -881,7 +909,9 @@ def _audit_local_review_entrypoints(root: Path) -> list[AuditFinding]:
         "pre-pr",
         "ai-review",
         "risk-check",
+        "pr-ready",
         "scripts.research.governance.ai_review_gate",
+        "scripts.research.governance.pr_flow",
     ):
         if token not in make_text:
             findings.append(

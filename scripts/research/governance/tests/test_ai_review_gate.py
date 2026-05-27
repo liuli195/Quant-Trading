@@ -3,9 +3,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from scripts.research.governance import ai_review_gate
 from scripts.research.governance.ai_review_gate import (
     render_markdown_report,
     validate_report_file,
+)
+from scripts.research.governance.pr_review_evidence import (
+    AI_REVIEW_SECTION_HEADER,
+    P2_SECTION_HEADER,
+    SECTION_HEADER,
+    validate_pr_body,
 )
 
 
@@ -66,6 +73,315 @@ def _security_review(tool: str = "codex") -> dict:
         "tool": review_tool,
         "evidence": f"{review_tool} local security review completed",
     }
+
+
+def _valid_complete_payload(
+    *,
+    changed_files: list[str] | None = None,
+    risk_level: str = "low",
+    requires_official: bool = False,
+) -> dict:
+    return {
+        "schema_version": 2,
+        "tool": "codex",
+        "reviewers": ["spec-review-subagent", "quality-review-subagent"],
+        "risk_level": risk_level,
+        "requires_official_codex_review": requires_official,
+        "security_review": _security_review(),
+        "cross_review": _cross_review(),
+        "complete_review": _complete_review(
+            "spec-review-subagent", "quality-review-subagent"
+        ),
+        "changed_files": changed_files or ["docs/guides/example.md"],
+        "findings": [],
+        "checks": {"pytest": "pass"},
+    }
+
+
+def test_discover_changed_files_merges_cached_and_worktree(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    commands: list[tuple[str, ...]] = []
+
+    class FakeResult:
+        def __init__(self, stdout: str, returncode: int = 0) -> None:
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = ""
+
+    def fake_run(command: list[str], **kwargs: object) -> FakeResult:
+        commands.append(tuple(command))
+        assert kwargs["cwd"] == tmp_path
+        if command == ["git", "diff", "--name-only", "--cached"]:
+            return FakeResult("scripts\\research\\governance\\ai_review_gate.py\n")
+        if command == ["git", "diff", "--name-only"]:
+            return FakeResult(
+                "docs/guides/example.md\nscripts/research/governance/ai_review_gate.py\n"
+            )
+        if command == ["git", "merge-base", "--fork-point", "origin/main", "HEAD"]:
+            return FakeResult("abc123\n")
+        if command == ["git", "diff", "--name-only", "abc123...HEAD"]:
+            return FakeResult("scripts/research/governance/pr_flow.py\n")
+        if command == ["git", "ls-files", "--others", "--exclude-standard"]:
+            return FakeResult("docs/superpowers/plans/new-plan.md\n")
+        raise AssertionError(f"unexpected command: {command}")
+
+    monkeypatch.setattr(ai_review_gate.subprocess, "run", fake_run)
+
+    changed_files = ai_review_gate._discover_changed_files(tmp_path)
+
+    assert commands == [
+        ("git", "diff", "--name-only", "--cached"),
+        ("git", "diff", "--name-only"),
+        ("git", "merge-base", "--fork-point", "origin/main", "HEAD"),
+        ("git", "diff", "--name-only", "abc123...HEAD"),
+        ("git", "ls-files", "--others", "--exclude-standard"),
+    ]
+    assert changed_files == [
+        "docs/guides/example.md",
+        "docs/superpowers/plans/new-plan.md",
+        "scripts/research/governance/ai_review_gate.py",
+        "scripts/research/governance/pr_flow.py",
+    ]
+
+
+def test_discover_changed_files_uses_merge_base_fallback(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    class FakeResult:
+        def __init__(self, stdout: str = "", returncode: int = 0) -> None:
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = ""
+
+    def fake_run(command: list[str], **kwargs: object) -> FakeResult:
+        assert kwargs["cwd"] == tmp_path
+        if command in (
+            ["git", "diff", "--name-only", "--cached"],
+            ["git", "diff", "--name-only"],
+            ["git", "ls-files", "--others", "--exclude-standard"],
+        ):
+            return FakeResult("")
+        if command == ["git", "merge-base", "--fork-point", "origin/main", "HEAD"]:
+            return FakeResult(returncode=1)
+        if command == ["git", "merge-base", "origin/main", "HEAD"]:
+            return FakeResult("base456\n")
+        if command == ["git", "diff", "--name-only", "base456...HEAD"]:
+            return FakeResult("docs/rules/pr-workflow.md\n")
+        raise AssertionError(f"unexpected command: {command}")
+
+    monkeypatch.setattr(ai_review_gate.subprocess, "run", fake_run)
+
+    assert ai_review_gate._discover_changed_files(tmp_path) == [
+        "docs/rules/pr-workflow.md"
+    ]
+
+
+def test_discover_changed_files_returns_none_for_clean_branch_without_base(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    class FakeResult:
+        def __init__(self, stdout: str = "", returncode: int = 0) -> None:
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = ""
+
+    def fake_run(command: list[str], **kwargs: object) -> FakeResult:
+        assert kwargs["cwd"] == tmp_path
+        if command in (
+            ["git", "diff", "--name-only", "--cached"],
+            ["git", "diff", "--name-only"],
+            ["git", "ls-files", "--others", "--exclude-standard"],
+        ):
+            return FakeResult("")
+        if command[:2] == ["git", "merge-base"]:
+            return FakeResult(returncode=1)
+        raise AssertionError(f"unexpected command: {command}")
+
+    monkeypatch.setattr(ai_review_gate.subprocess, "run", fake_run)
+
+    assert ai_review_gate._discover_changed_files(tmp_path) is None
+
+
+def test_draft_command_writes_high_risk_defaults(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / ".local/ai-review/latest.draft.json"
+    monkeypatch.setattr(
+        ai_review_gate,
+        "_discover_changed_files",
+        lambda repo_root: ["scripts/research/governance/ai_review_gate.py"],
+    )
+
+    code = ai_review_gate.main(["draft", "--output", str(output)])
+
+    assert code == 0
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload == {
+        "schema_version": 2,
+        "tool": "codex",
+        "review_mode": "complete",
+        "risk_level": "high",
+        "requires_official_codex_review": True,
+        "changed_files": ["scripts/research/governance/ai_review_gate.py"],
+        "findings": [],
+        "checks": {},
+    }
+    assert "security_review" not in payload
+    assert "cross_review" not in payload
+    assert "complete_review" not in payload
+
+
+def test_draft_command_marks_docs_only_changes_low_risk(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "draft.json"
+    monkeypatch.setattr(
+        ai_review_gate,
+        "_discover_changed_files",
+        lambda repo_root: ["docs/guides/example.md"],
+    )
+
+    code = ai_review_gate.main(["draft", "--output", str(output)])
+
+    assert code == 0
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["risk_level"] == "low"
+    assert payload["requires_official_codex_review"] is False
+
+
+def test_draft_command_marks_undetected_changes_unknown(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "draft.json"
+    monkeypatch.setattr(
+        ai_review_gate,
+        "_discover_changed_files",
+        lambda repo_root: None,
+    )
+
+    code = ai_review_gate.main(["draft", "--output", str(output)])
+
+    assert code == 0
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["risk_level"] == "unknown"
+    assert payload["requires_official_codex_review"] is True
+    assert payload["changed_files"] == []
+
+
+def test_pr_body_command_renders_low_risk_body_accepted_by_validator(
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / ".local/ai-review/latest.json"
+    output = tmp_path / ".local/ai-review/pr-body.md"
+    payload = _valid_complete_payload()
+    _write_report(report, payload)
+
+    code = ai_review_gate.main(
+        ["pr-body", "--report", str(report), "--output", str(output)]
+    )
+
+    assert code == 0
+    body = output.read_text(encoding="utf-8")
+    assert f"## {AI_REVIEW_SECTION_HEADER}" in body
+    assert f"## {P2_SECTION_HEADER}" in body
+    assert f"## {SECTION_HEADER}" not in body
+    evidence = validate_pr_body(
+        body,
+        changed_files=payload["changed_files"],
+        labels=[],
+    )
+    assert evidence.ok, evidence.errors
+
+
+def test_pr_body_command_renders_accepted_p2_details(
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / "latest.json"
+    output = tmp_path / "pr-body.md"
+    payload = _valid_complete_payload()
+    payload["findings"] = [
+        {
+            "id": "AIR-003",
+            "severity": "P2",
+            "title": "文档说明不足",
+            "path": "docs/guides/example.md",
+            "status": "accepted",
+            "defer_reason": "统一随下一批文档补齐",
+            "risk_acceptance": "不影响代码执行和治理门禁",
+            "handling": "保留为后续文档任务",
+        }
+    ]
+    _write_report(report, payload)
+
+    code = ai_review_gate.main(
+        ["pr-body", "--report", str(report), "--output", str(output)]
+    )
+
+    assert code == 0
+    body = output.read_text(encoding="utf-8")
+    assert "defer_reason: 统一随下一批文档补齐" in body
+    assert "risk_acceptance: 不影响代码执行和治理门禁" in body
+    assert "handling: 保留为后续文档任务" in body
+    evidence = validate_pr_body(
+        body,
+        changed_files=payload["changed_files"],
+        labels=[],
+    )
+    assert evidence.ok, evidence.errors
+
+
+def test_pr_body_renders_codex_section_only_when_evidence_is_present(
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / "latest.json"
+    output = tmp_path / "pr-body.md"
+    payload = _valid_complete_payload(
+        changed_files=["scripts/research/governance/ai_review_gate.py"],
+        risk_level="high",
+        requires_official=True,
+    )
+    _write_report(report, payload)
+
+    code = ai_review_gate.main(
+        ["pr-body", "--report", str(report), "--output", str(output)]
+    )
+
+    assert code == 0
+    assert f"## {SECTION_HEADER}" not in output.read_text(encoding="utf-8")
+
+    payload["official_codex_review"] = {
+        "reviewer": "Codex",
+        "trigger": "@codex review",
+        "conclusion": "通过",
+        "blocking_issues": "无",
+        "evidence": [
+            "Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
+            "`powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate`",
+        ],
+    }
+    _write_report(report, payload)
+
+    code = ai_review_gate.main(
+        ["pr-body", "--report", str(report), "--output", str(output)]
+    )
+
+    assert code == 0
+    body = output.read_text(encoding="utf-8")
+    assert f"## {SECTION_HEADER}" in body
+    evidence = validate_pr_body(
+        body,
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        changed_files=payload["changed_files"],
+        labels=["ai-risk-review"],
+    )
+    assert evidence.ok, evidence.errors
 
 
 def test_codex_report_requires_codex_security_review(tmp_path: Path) -> None:
