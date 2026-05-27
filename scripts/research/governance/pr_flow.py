@@ -23,6 +23,19 @@ CODEX_REVIEW_PENDING_EXIT_CODE = 3
 PR_BODY_GOVERNANCE_GATE_COMMAND = (
     ".githooks/run-python.sh -m scripts.research.governance gate"
 )
+CODEX_REVIEW_AUTHORS = {"chatgpt-codex-connector", "chatgpt-codex-connector[bot]"}
+DISQUALIFIED_CODEX_REVIEW_STATES = {"DISMISSED", "PENDING"}
+CODEX_REVIEW_URL_PATTERN = re.compile(
+    r"https://github\.com/(?P<repo>[^/\s]+/[^/\s]+)/pull/(?P<number>\d+)#pullrequestreview-(?P<review_id>\d+)"
+)
+CODEX_COMPLETION_COMMENT_URL_PATTERN = re.compile(
+    r"https://github\.com/(?P<repo>[^/\s]+/[^/\s]+)/(?:pull|issues)/(?P<number>\d+)#issuecomment-(?P<comment_id>\d+)"
+)
+CODEX_NO_MAJOR_ISSUES_PATTERN = re.compile(
+    r"Codex Review:\s*(?:Didn['’]t|Did not) find any major issues",
+    re.IGNORECASE,
+)
+BLOCKING_CODEX_FINDING_PATTERN = re.compile(r"\bP[01]\b|P[01]\s*Badge")
 
 
 @dataclass(frozen=True)
@@ -264,7 +277,13 @@ def sync(
 
     if (
         result.requires_official_codex_review
-        and not _official_codex_review_evidence_present(payload)
+        and not _official_codex_review_evidence_valid_for_current_pr(
+            payload,
+            pr_url=pr_url,
+            head_sha=head_sha,
+            root=root,
+            runner=runner,
+        )
     ):
         scope_path = local / "codex-review-scope.md"
         scope_text = result.review_scope
@@ -335,10 +354,19 @@ def ready(
     latest = root / ".local" / "ai-review" / "latest.json"
     payload = _read_json_object(latest)
     result = ai_review_gate.validate_report_file(latest)
+    metadata = _current_pr_metadata(root, runner)
+    pr_url = str(metadata.get("url") or "")
+    head_sha = _command_stdout(runner.run(["git", "rev-parse", "HEAD"], cwd=root))
     if (
         payload is not None
         and result.requires_official_codex_review
-        and not _official_codex_review_evidence_present(payload)
+        and not _official_codex_review_evidence_valid_for_current_pr(
+            payload,
+            pr_url=pr_url,
+            head_sha=head_sha,
+            root=root,
+            runner=runner,
+        )
     ):
         print(
             "official Codex review requested; add official_codex_review evidence and rerun ready",
@@ -499,11 +527,15 @@ def _replace_managed_block(existing_body: str, managed_body: str) -> str:
     return f"{block}\n"
 
 
-def _current_pr_number(root: Path, runner: Runner) -> str:
+def _current_pr_metadata(root: Path, runner: Runner) -> dict[str, Any]:
     view = runner.run(["gh", "pr", "view", "--json", "number,url,state,isDraft"], cwd=root)
     if view.returncode != 0:
-        return ""
-    return str(_json_from_result(view).get("number") or "")
+        return {}
+    return _json_from_result(view)
+
+
+def _current_pr_number(root: Path, runner: Runner) -> str:
+    return str(_current_pr_metadata(root, runner).get("number") or "")
 
 
 def _current_pr_labels(root: Path, runner: Runner) -> tuple[str, ...]:
@@ -561,8 +593,263 @@ def _scope_items(scope_text: str, payload: dict[str, Any]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(items))
 
 
-def _official_codex_review_evidence_present(payload: dict[str, Any]) -> bool:
-    return bool(ai_review_gate._render_official_codex_review_lines(payload))
+def _official_codex_review_evidence_valid_for_current_pr(
+    payload: dict[str, Any],
+    *,
+    pr_url: str,
+    head_sha: str,
+    root: Path,
+    runner: Runner,
+) -> bool:
+    value = payload.get("official_codex_review")
+    if not isinstance(value, dict):
+        return False
+    if not _official_codex_review_fields_are_passing(value):
+        return False
+    links = _official_codex_review_links(value, pr_url=pr_url)
+    if not links:
+        return False
+    for kind, repo, pr_number, item_id in links:
+        if kind == "review" and _codex_review_link_matches_current_head(
+            repo=repo,
+            pr_number=pr_number,
+            review_id=item_id,
+            head_sha=head_sha,
+            root=root,
+            runner=runner,
+        ):
+            return True
+        if kind == "comment" and _codex_completion_comment_matches_current_head(
+            repo=repo,
+            pr_number=pr_number,
+            comment_id=item_id,
+            head_sha=head_sha,
+            pr_url=pr_url,
+            root=root,
+            runner=runner,
+        ):
+            return True
+    return False
+
+
+def _official_codex_review_fields_are_passing(value: dict[str, Any]) -> bool:
+    reviewer = _single_line_text(value.get("reviewer")) or "Codex"
+    trigger = _single_line_text(value.get("trigger"))
+    conclusion = _single_line_text(value.get("conclusion")).casefold()
+    blockers = _single_line_text(value.get("blocking_issues")).casefold()
+    return (
+        reviewer == "Codex"
+        and "@codex review" in trigger
+        and conclusion in {"通过", "pass", "passed", "approved"}
+        and blockers in {"无", "none", "no", "n/a", "na", "0"}
+    )
+
+
+def _official_codex_review_links(
+    value: dict[str, Any],
+    *,
+    pr_url: str,
+) -> tuple[tuple[str, str, str, str], ...]:
+    match = re.match(r"https://github\.com/(?P<repo>[^/\s]+/[^/\s]+)/pull/(?P<number>\d+)", pr_url)
+    if not match:
+        return ()
+    expected_repo = match.group("repo")
+    expected_number = match.group("number")
+    links: list[tuple[str, str, str, str]] = []
+    for item in _string_or_list(value.get("evidence")):
+        text = item.strip("`")
+        review_match = CODEX_REVIEW_URL_PATTERN.search(text)
+        if review_match and _github_link_matches_pr(
+            review_match,
+            expected_repo=expected_repo,
+            expected_number=expected_number,
+        ):
+            links.append(
+                (
+                    "review",
+                    review_match.group("repo"),
+                    review_match.group("number"),
+                    review_match.group("review_id"),
+                )
+            )
+            continue
+        comment_match = CODEX_COMPLETION_COMMENT_URL_PATTERN.search(text)
+        if comment_match and _github_link_matches_pr(
+            comment_match,
+            expected_repo=expected_repo,
+            expected_number=expected_number,
+        ):
+            links.append(
+                (
+                    "comment",
+                    comment_match.group("repo"),
+                    comment_match.group("number"),
+                    comment_match.group("comment_id"),
+                )
+            )
+    return tuple(links)
+
+
+def _github_link_matches_pr(
+    match: re.Match[str],
+    *,
+    expected_repo: str,
+    expected_number: str,
+) -> bool:
+    return (
+        match.group("repo") == expected_repo
+        and match.group("number") == expected_number
+    )
+
+
+def _codex_review_link_matches_current_head(
+    *,
+    repo: str,
+    pr_number: str,
+    review_id: str,
+    head_sha: str,
+    root: Path,
+    runner: Runner,
+) -> bool:
+    reviews = _gh_api_list(root, runner, f"repos/{repo}/pulls/{pr_number}/reviews?per_page=100")
+    matched_review: dict[str, Any] | None = None
+    for review in reviews:
+        if str(review.get("id", "")) == review_id:
+            matched_review = review
+            break
+    if matched_review is None:
+        return False
+    user = matched_review.get("user")
+    login = str(user.get("login", "")) if isinstance(user, dict) else ""
+    state = str(matched_review.get("state", "")).upper()
+    if login not in CODEX_REVIEW_AUTHORS:
+        return False
+    if state in DISQUALIFIED_CODEX_REVIEW_STATES:
+        return False
+    if str(matched_review.get("commit_id", "")) != head_sha:
+        return False
+    review_comments = _gh_api_list(root, runner, f"repos/{repo}/pulls/{pr_number}/comments?per_page=100")
+    return not any(
+        str(comment.get("pull_request_review_id", "")) == review_id
+        and BLOCKING_CODEX_FINDING_PATTERN.search(str(comment.get("body", "")))
+        for comment in review_comments
+    )
+
+
+def _codex_completion_comment_matches_current_head(
+    *,
+    repo: str,
+    pr_number: str,
+    comment_id: str,
+    head_sha: str,
+    pr_url: str,
+    root: Path,
+    runner: Runner,
+) -> bool:
+    comments = _gh_api_list(root, runner, f"repos/{repo}/issues/{pr_number}/comments?per_page=100")
+    matched_comment = next(
+        (comment for comment in comments if str(comment.get("id", "")) == comment_id),
+        None,
+    )
+    if matched_comment is None:
+        return False
+    trigger_time = _latest_codex_trigger_time(comments, pr_url=pr_url, head_sha=head_sha)
+    if not trigger_time:
+        return False
+    if _is_codex_trigger_comment(matched_comment, pr_url=pr_url, head_sha=head_sha):
+        if not _codex_trigger_has_completion_reaction(
+            repo=repo,
+            comment_id=comment_id,
+            root=root,
+            runner=runner,
+        ):
+            return False
+    elif not _is_codex_completion_comment(matched_comment):
+        return False
+    return _comment_time(matched_comment) >= trigger_time
+
+
+def _gh_api_list(root: Path, runner: Runner, path: str) -> list[dict[str, Any]]:
+    result = runner.run(["gh", "api", path], cwd=root)
+    if result.returncode != 0:
+        return []
+    try:
+        payload = json.loads(result.stdout or "[]")
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(payload, list):
+        return []
+    return [item for item in payload if isinstance(item, dict)]
+
+
+def _latest_codex_trigger_time(
+    comments: Sequence[dict[str, Any]],
+    *,
+    pr_url: str,
+    head_sha: str,
+) -> str:
+    times = [
+        _comment_time(comment)
+        for comment in comments
+        if _is_codex_trigger_comment(comment, pr_url=pr_url, head_sha=head_sha)
+    ]
+    return max(times) if times else ""
+
+
+def _is_codex_trigger_comment(
+    comment: dict[str, Any],
+    *,
+    pr_url: str,
+    head_sha: str,
+) -> bool:
+    body = str(comment.get("body", ""))
+    return "@codex review" in body and pr_url in body and head_sha in body
+
+
+def _is_codex_completion_comment(comment: dict[str, Any]) -> bool:
+    user = comment.get("user")
+    login = str(user.get("login", "")) if isinstance(user, dict) else ""
+    body = str(comment.get("body", ""))
+    return (
+        login in CODEX_REVIEW_AUTHORS
+        and CODEX_NO_MAJOR_ISSUES_PATTERN.search(body) is not None
+        and BLOCKING_CODEX_FINDING_PATTERN.search(body) is None
+    )
+
+
+def _codex_trigger_has_completion_reaction(
+    *,
+    repo: str,
+    comment_id: str,
+    root: Path,
+    runner: Runner,
+) -> bool:
+    reactions = _gh_api_list(root, runner, f"repos/{repo}/issues/comments/{comment_id}/reactions?per_page=100")
+    for reaction in reactions:
+        user = reaction.get("user")
+        login = str(user.get("login", "")) if isinstance(user, dict) else ""
+        if str(reaction.get("content", "")) == "+1" and login in CODEX_REVIEW_AUTHORS:
+            return True
+    return False
+
+
+def _comment_time(comment: dict[str, Any]) -> str:
+    created = str(comment.get("created_at", ""))
+    updated = str(comment.get("updated_at", ""))
+    if created and updated:
+        return max(created, updated)
+    return updated or created
+
+
+def _string_or_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [text for item in value if (text := _single_line_text(item))]
+    text = _single_line_text(value)
+    return [text] if text else []
+
+
+def _single_line_text(value: Any) -> str:
+    return " ".join(str(value or "").split())
 
 
 def _failing_check_names(output: str) -> list[str]:

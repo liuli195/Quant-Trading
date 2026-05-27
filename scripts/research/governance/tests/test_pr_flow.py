@@ -93,11 +93,15 @@ class FakeRunner:
         pr_body: str = "",
         labels: list[str] | None = None,
         fail_body_view: bool = False,
+        api_review_commit: str | None = None,
+        api_review_comments: list[dict[str, object]] | None = None,
     ) -> None:
         self.existing_pr = existing_pr
         self.pr_body = pr_body
         self.labels = labels or []
         self.fail_body_view = fail_body_view
+        self.api_review_commit = api_review_commit or "1" * 40
+        self.api_review_comments = api_review_comments or []
         self.calls: list[list[str]] = []
         self.edited_bodies: list[str] = []
         self.created_bodies: list[str] = []
@@ -160,6 +164,36 @@ class FakeRunner:
             body_file = Path(command[command.index("--body-file") + 1])
             self.comments.append(body_file.read_text(encoding="utf-8"))
             return pr_flow.CommandResult(0, "", "")
+        if command == [
+            "gh",
+            "api",
+            "repos/liuli195/Quant-Trading/pulls/7/reviews?per_page=100",
+        ]:
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    [
+                        {
+                            "id": 1,
+                            "user": {"login": "chatgpt-codex-connector"},
+                            "state": "COMMENTED",
+                            "commit_id": self.api_review_commit,
+                            "body": "Codex Review: Didn't find any major issues.",
+                        }
+                    ]
+                ),
+                "",
+            )
+        if command == [
+            "gh",
+            "api",
+            "repos/liuli195/Quant-Trading/pulls/7/comments?per_page=100",
+        ]:
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(self.api_review_comments),
+                "",
+            )
         if command == [
             "gh",
             "pr",
@@ -542,3 +576,24 @@ def test_ready_does_not_retrigger_codex_review_when_evidence_exists(
         "--interval",
         "10",
     ] in runner.calls
+
+
+def test_ready_retriggers_codex_review_when_evidence_is_for_old_head(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _write_valid_report(
+        tmp_path,
+        risk_level="high",
+        requires_official=True,
+        changed_files=["scripts/research/governance/rules.py"],
+        official_evidence=True,
+    )
+    runner = FakeRunner(existing_pr=True, api_review_commit="2" * 40)
+    monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+
+    code = pr_flow.ready(repo_root=tmp_path, title="governance update", runner=runner)
+
+    assert code == pr_flow.CODEX_REVIEW_PENDING_EXIT_CODE
+    assert any(call[:3] == ["gh", "pr", "comment"] for call in runner.calls)
+    assert not any(call[:4] == ["gh", "pr", "checks", "7"] for call in runner.calls)
