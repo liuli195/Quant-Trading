@@ -37,18 +37,20 @@
 | docs |  | 定义一个全局变量, 保存要操作的股票 | `docs/reference/joinquant-api.md` | 28 |
 | docs |  | JoinQuant 参数分析框架分析报告 | `docs/reference/joinquant-parameter-analysis-framework.md` | 2 |
 | docs |  | 代码风格和策略实现规则 | `docs/rules/code-style.md` | 2 |
+| docs |  | 协作规则 | `docs/rules/collaboration.md` | 0 |
 | docs |  | 命令和本地环境规则 | `docs/rules/commands.md` | 4 |
 | docs |  | 文档和 Pathref 规则 | `docs/rules/docs-and-pathref.md` | 0 |
 | docs |  | 本地与聚宽环境差异 | `docs/rules/environments.md` | 0 |
 | docs |  | 治理门禁规则 | `docs/rules/governance.md` | 0 |
-| docs |  | 仓库规则总索引 | `docs/rules/index.md` | 13 |
-| docs |  | PR 工作流规则 | `docs/rules/pr-workflow.md` | 4 |
+| docs |  | 仓库规则总索引 | `docs/rules/index.md` | 14 |
+| docs |  | PR 工作流规则 | `docs/rules/pr-workflow.md` | 3 |
 | docs |  | 研究流程规则 | `docs/rules/research-workflow.md` | 0 |
 | docs |  | PR Review 指南 | `docs/rules/review-guidelines.md` | 11 |
 | docs |  | 回测数据冗余压缩实施计划 | `docs/superpowers/plans/2026-05-20-backtest-data-redundancy-compaction.md` | 7 |
 | docs |  | Feishu Relay Tools Implementation Plan | `docs/superpowers/plans/2026-05-20-feishu-relay-tools-implementation.md` | 5 |
 | docs |  | PR 风险分级评审流程 Implementation Plan | `docs/superpowers/plans/2026-05-20-pr-risk-tiered-review-workflow.md` | 1 |
 | docs |  | ETF Vol Relief A/B Test Implementation Plan | `docs/superpowers/plans/2026-05-26-etf-vol-relief-ab-test.md` | 3 |
+| docs |  | PR Flow Automation Implementation Plan | `docs/superpowers/plans/2026-05-28-pr-flow-automation.md` | 0 |
 | docs |  | 飞书交易通知工具设计 | `docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md` | 2 |
 | backtest_run | etf_dynamic_rebalance | 回测归因分析 — ETF 动态调仓策略 | `strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/attribution-analysis.md` | 0 |
 | backtest_run | etf_dynamic_rebalance | 回测报告 — ETF 动态调仓策略 | `strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/backtest_report.md` | 3 |

@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "catalog_type": "documents",
-  "generated_at": "2026-05-27T15:59:11+00:00",
-  "count": 416,
+  "generated_at": "2026-05-27T20:44:41+00:00",
+  "count": 418,
   "reports": [
     {
       "path": "docs/README.md",
@@ -117,7 +117,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-27T15:27:15+00:00"
+      "updated_at": "2026-05-27T17:11:21+00:00"
     },
     {
       "path": "docs/architecture/research-platform-architecture.md",
@@ -505,7 +505,17 @@
         "docs/rules/environments.md",
         "docs/rules/commands.md"
       ],
-      "updated_at": "2026-05-27T15:22:20+00:00"
+      "updated_at": "2026-05-27T17:11:21+00:00"
+    },
+    {
+      "path": "docs/rules/collaboration.md",
+      "title": "协作规则",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-27T20:43:15+00:00"
     },
     {
       "path": "docs/rules/commands.md",
@@ -520,7 +530,7 @@
         "scripts/tools/jq_automation/README.md",
         "scripts/tools/path_tools/README.md"
       ],
-      "updated_at": "2026-05-27T15:57:48+00:00"
+      "updated_at": "2026-05-27T19:34:57+00:00"
     },
     {
       "path": "docs/rules/docs-and-pathref.md",
@@ -530,7 +540,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-27T15:22:21+00:00"
+      "updated_at": "2026-05-27T17:11:21+00:00"
     },
     {
       "path": "docs/rules/environments.md",
@@ -540,7 +550,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-27T15:22:20+00:00"
+      "updated_at": "2026-05-27T17:11:21+00:00"
     },
     {
       "path": "docs/rules/governance.md",
@@ -550,7 +560,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-27T15:30:52+00:00"
+      "updated_at": "2026-05-27T19:53:14+00:00"
     },
     {
       "path": "docs/rules/index.md",
@@ -568,13 +578,14 @@
         "docs/rules/environments.md",
         "docs/rules/code-style.md",
         "docs/rules/research-workflow.md",
+        "docs/rules/collaboration.md",
         "docs/rules/docs-and-pathref.md",
         "docs/rules/pr-workflow.md",
         "docs/rules/review-guidelines.md",
         "docs/rules/governance.md",
         "docs/adr"
       ],
-      "updated_at": "2026-05-27T15:22:19+00:00"
+      "updated_at": "2026-05-27T20:43:15+00:00"
     },
     {
       "path": "docs/rules/pr-workflow.md",
@@ -586,10 +597,9 @@
       "pathrefs": [
         "docs/rules/review-guidelines.md",
         "docs/rules/governance.md",
-        "repo/AGENTS.md",
-        "repo/CLAUDE.md"
+        "docs/rules/review-guidelines.md"
       ],
-      "updated_at": "2026-05-27T15:42:56+00:00"
+      "updated_at": "2026-05-27T20:43:15+00:00"
     },
     {
       "path": "docs/rules/research-workflow.md",
@@ -599,7 +609,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-27T15:22:20+00:00"
+      "updated_at": "2026-05-27T17:11:21+00:00"
     },
     {
       "path": "docs/rules/review-guidelines.md",
@@ -621,7 +631,7 @@
         "docs/rules/governance.md",
         "docs/rules/review-guidelines.md"
       ],
-      "updated_at": "2026-05-27T15:30:52+00:00"
+      "updated_at": "2026-05-27T18:22:41+00:00"
     },
     {
       "path": "docs/superpowers/plans/2026-05-20-backtest-data-redundancy-compaction.md",
@@ -682,6 +692,16 @@
         "scripts/tools/jq_automation/README.md"
       ],
       "updated_at": "2026-05-26T16:45:04+00:00"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-05-28-pr-flow-automation.md",
+      "title": "PR Flow Automation Implementation Plan",
+      "category": "docs",
+      "strategy": null,
+      "date": "2026-05-28",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-27T19:02:32+00:00"
     },
     {
       "path": "docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md",

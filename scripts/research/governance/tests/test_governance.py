@@ -127,6 +127,8 @@ def _write_minimal_repo(root: Path) -> None:
         ".githooks",
         ".claude/skills/jq-research",
         ".claude/skills/jq-ab-test",
+        ".codex/skills/quant-pr-workflow/agents",
+        ".codex/skills/quant-research-workflow/agents",
         "research_datasets/demo/snap/raw",
         "research_datasets/demo/snap/data",
     ):
@@ -155,6 +157,7 @@ def _write_minimal_repo(root: Path) -> None:
         "docs/rules/commands.md",
         "docs/rules/environments.md",
         "docs/rules/research-workflow.md",
+        "docs/rules/collaboration.md",
         "docs/rules/code-style.md",
         "docs/rules/docs-and-pathref.md",
         "docs/adr/0001-rule-source-and-governance-model.md",
@@ -206,7 +209,8 @@ def _write_minimal_repo(root: Path) -> None:
         "AGENTS.md CLAUDE.md docs/rules/index.md docs/rules/commands.md "
         "docs/rules/review-guidelines.md docs/rules/pr-workflow.md docs/rules/governance.md "
         "docs/rules/environments.md docs/rules/code-style.md "
-        "docs/rules/research-workflow.md docs/rules/docs-and-pathref.md docs/adr",
+        "docs/rules/research-workflow.md docs/rules/collaboration.md "
+        "docs/rules/docs-and-pathref.md docs/adr",
         encoding="utf-8",
     )
     (root / "docs/rules/commands.md").write_text(
@@ -332,9 +336,14 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / "docs/rules/pr-workflow.md").write_text(
         "所有进入主干的改动必须通过 PR\n直写主干 ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON\n"
-        "禁止把功能分支本地合入\n有可用子 agent 能力\n无能力时记录原因\n"
+        "禁止把功能分支本地合入\n"
         "git fetch origin main\ngit merge --ff-only origin/main\n"
         "git branch -d <branch>\ngit push origin --delete <branch>\n",
+        encoding="utf-8",
+    )
+    (root / "docs/rules/collaboration.md").write_text(
+        "多个 AI agent\n分支名使用 ASCII\n本地共享工作区\n只读分析不要求创建分支\n"
+        "有可用子 agent 能力\n无能力时记录原因\n不采用任务登记\n",
         encoding="utf-8",
     )
     (root / "docs/rules/governance.md").write_text(
@@ -354,6 +363,7 @@ def _write_minimal_repo(root: Path) -> None:
                 "indexes.md @research-platform",
                 "docs/rules/** @research-platform",
                 "docs/adr/** @research-platform",
+                ".codex/skills/** @research-platform",
                 ".claude/skills/** @research-platform",
                 ".github/workflows/** @research-platform",
                 ".githooks/** @research-platform",
@@ -432,6 +442,24 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / ".claude/skills/jq-ab-test/SKILL.md").write_text(
         "variant_id 参数变体 结构变体 scripts.research.variants",
+        encoding="utf-8",
+    )
+    (root / ".codex/skills/quant-pr-workflow/SKILL.md").write_text(
+        "Quant PR Workflow docs/rules/pr-workflow.md make pr-ready "
+        "scripts.research.governance.pr_flow 不要把功能分支本地合入 main",
+        encoding="utf-8",
+    )
+    (root / ".codex/skills/quant-pr-workflow/agents/openai.yaml").write_text(
+        'display_name: "Quant PR 工作流"\n',
+        encoding="utf-8",
+    )
+    (root / ".codex/skills/quant-research-workflow/SKILL.md").write_text(
+        "Quant Research Workflow docs/rules/research-workflow.md "
+        "scripts.research.cli scripts.research.governance 不要把本地 replay 结论包装成云端确认",
+        encoding="utf-8",
+    )
+    (root / ".codex/skills/quant-research-workflow/agents/openai.yaml").write_text(
+        'display_name: "Quant Research 工作流"\n',
         encoding="utf-8",
     )
     (root / "path_aliases.json").write_text(
@@ -1507,6 +1535,38 @@ def test_governance_audit_flags_claude_with_codex_or_review_rules(tmp_path) -> N
     )
 
 
+def test_governance_audit_flags_missing_codex_pr_skill(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".codex/skills/quant-pr-workflow/SKILL.md").unlink()
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "skill_sync"
+        and "quant-pr-workflow skill missing" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_stale_codex_research_skill(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".codex/skills/quant-research-workflow/SKILL.md").write_text(
+        "Quant Research Workflow",
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "skill_sync"
+        and "quant-research-workflow skill missing docs/rules/research-workflow.md"
+        in finding.message
+        for finding in report.findings
+    )
+
+
 def test_governance_audit_flags_missing_root_indexes(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / "indexes.md").unlink()
@@ -1519,7 +1579,7 @@ def test_governance_audit_flags_missing_pr_cleanup_workflow_tokens(tmp_path) -> 
     _write_minimal_repo(tmp_path)
     (tmp_path / "docs/rules/pr-workflow.md").write_text(
         "所有进入主干的改动必须通过 PR\n直写主干 ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON\n"
-        "禁止把功能分支本地合入\n有可用子 agent 能力\n无能力时记录原因\n"
+        "禁止把功能分支本地合入\n"
         "git fetch origin main\ngit merge --ff-only origin/main\n",
         encoding="utf-8",
     )
@@ -1536,11 +1596,9 @@ def test_governance_audit_flags_missing_dispatch_first_workflow_tokens(
     tmp_path,
 ) -> None:
     _write_minimal_repo(tmp_path)
-    (tmp_path / "docs/rules/pr-workflow.md").write_text(
-        "所有进入主干的改动必须通过 PR\n直写主干 ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON\n"
-        "禁止把功能分支本地合入\n"
-        "git fetch origin main\ngit merge --ff-only origin/main\n"
-        "git branch -d <branch>\ngit push origin --delete <branch>\n",
+    (tmp_path / "docs/rules/collaboration.md").write_text(
+        "多个 AI agent\n分支名使用 ASCII\n本地共享工作区\n只读分析不要求创建分支\n"
+        "不采用任务登记\n",
         encoding="utf-8",
     )
 
@@ -1549,7 +1607,7 @@ def test_governance_audit_flags_missing_dispatch_first_workflow_tokens(
     assert not report.ok
     assert any(
         finding.rule_id == "governance_gate"
-        and "有可用子 agent 能力" in finding.message
+        and "collaboration.md missing 有可用子 agent 能力" in finding.message
         for finding in report.findings
     )
 

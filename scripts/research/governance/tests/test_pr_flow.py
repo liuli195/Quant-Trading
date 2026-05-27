@@ -92,10 +92,12 @@ class FakeRunner:
         existing_pr: bool,
         pr_body: str = "",
         labels: list[str] | None = None,
+        fail_body_view: bool = False,
     ) -> None:
         self.existing_pr = existing_pr
         self.pr_body = pr_body
         self.labels = labels or []
+        self.fail_body_view = fail_body_view
         self.calls: list[list[str]] = []
         self.edited_bodies: list[str] = []
         self.created_bodies: list[str] = []
@@ -129,6 +131,8 @@ class FakeRunner:
                 "",
             )
         if command == ["gh", "pr", "view", "--json", "body"]:
+            if self.fail_body_view:
+                return pr_flow.CommandResult(1, "", "body read failed")
             return pr_flow.CommandResult(0, json.dumps({"body": self.pr_body}), "")
         if command == ["gh", "pr", "view", "--json", "labels"]:
             return pr_flow.CommandResult(
@@ -187,7 +191,7 @@ class RecordingRunner:
 
 def test_select_local_checks_for_changed_files() -> None:
     cases = [
-        (["docs/guides/a.md"], ["governance-fast", "pathref"]),
+        (["docs/guides/a.md"], ["governance-full"]),
         (
             ["scripts/research/governance/rules.py"],
             [
@@ -272,6 +276,32 @@ def test_prepare_selects_checks_from_latest_report_when_diff_is_empty(
     )
 
 
+def test_prepare_records_full_governance_gate_evidence(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _write_valid_report(
+        tmp_path,
+        changed_files=["docs/guides/example.md"],
+    )
+    monkeypatch.setattr(pr_flow.ai_review_gate, "_discover_changed_files", lambda _root: [])
+    runner = RecordingRunner()
+
+    code = pr_flow.prepare(repo_root=tmp_path, runner=runner)
+
+    assert code == 0
+    payload = json.loads(
+        (tmp_path / ".local/ai-review/latest.json").read_text(encoding="utf-8")
+    )
+    gate_evidence = payload["checks"]["governance gate"]
+    assert (
+        "powershell.exe -NoProfile -ExecutionPolicy Bypass -File "
+        ".\\.githooks\\run-python.ps1 -m scripts.research.governance gate"
+    ) in gate_evidence
+    body = (tmp_path / ".local/ai-review/pr-body.md").read_text(encoding="utf-8")
+    assert gate_evidence in body
+
+
 def test_prepare_uses_report_files_for_strategy_checks(
     monkeypatch,
     tmp_path: Path,
@@ -341,6 +371,18 @@ def test_sync_updates_existing_pr_block_label_and_codex_comment(
     assert "scripts/research/governance/rules.py" in runner.comments[0]
 
 
+def test_sync_stops_when_existing_pr_body_cannot_be_read(
+    tmp_path: Path,
+) -> None:
+    _write_valid_report(tmp_path)
+    runner = FakeRunner(existing_pr=True, fail_body_view=True)
+
+    code = pr_flow.sync(repo_root=tmp_path, title="文档更新", runner=runner)
+
+    assert code == 1
+    assert not runner.edited_bodies
+
+
 def test_sync_generates_missing_codex_review_scope_from_validation(
     tmp_path: Path,
 ) -> None:
@@ -360,6 +402,30 @@ def test_sync_generates_missing_codex_review_scope_from_validation(
     assert scope_path.is_file()
     assert any(call[:3] == ["gh", "pr", "comment"] for call in runner.calls)
     assert "scripts/research/governance/rules.py" in runner.comments[0]
+
+
+def test_sync_refreshes_stale_codex_review_scope_before_commenting(
+    tmp_path: Path,
+) -> None:
+    _write_valid_report(
+        tmp_path,
+        risk_level="high",
+        requires_official=True,
+        changed_files=["scripts/research/governance/pr_flow.py"],
+    )
+    scope_path = tmp_path / ".local/ai-review/codex-review-scope.md"
+    scope_path.write_text(
+        "## Review Scope\n\n### 高风险文件\n- `docs/old.md`\n",
+        encoding="utf-8",
+    )
+    runner = FakeRunner(existing_pr=True)
+
+    code = pr_flow.sync(repo_root=tmp_path, title="治理改造", runner=runner)
+
+    assert code == 0
+    assert "docs/old.md" not in runner.comments[0]
+    assert "scripts/research/governance/pr_flow.py" in runner.comments[0]
+    assert "docs/old.md" not in scope_path.read_text(encoding="utf-8")
 
 
 def test_sync_creates_missing_draft_pr_without_label_or_codex_comment(

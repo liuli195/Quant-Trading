@@ -391,6 +391,47 @@ def test_pr_body_renders_codex_section_only_when_evidence_is_present(
     assert evidence.ok, evidence.errors
 
 
+def test_pr_body_prefixes_raw_codex_review_link_for_validator(
+    tmp_path: Path,
+) -> None:
+    report = tmp_path / "latest.json"
+    output = tmp_path / "pr-body.md"
+    payload = _valid_complete_payload(
+        changed_files=["scripts/research/governance/ai_review_gate.py"],
+        risk_level="high",
+        requires_official=True,
+    )
+    payload["official_codex_review"] = {
+        "reviewer": "Codex",
+        "trigger": "@codex review",
+        "conclusion": "通过",
+        "blocking_issues": "无",
+        "evidence": [
+            "https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
+            GOVERNANCE_GATE_COMMAND,
+        ],
+    }
+    _write_report(report, payload)
+
+    code = ai_review_gate.main(
+        ["pr-body", "--report", str(report), "--output", str(output)]
+    )
+
+    assert code == 0
+    body = output.read_text(encoding="utf-8")
+    assert (
+        "Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5"
+        "#pullrequestreview-4314779358"
+    ) in body
+    evidence = validate_pr_body(
+        body,
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        changed_files=payload["changed_files"],
+        labels=["ai-risk-review"],
+    )
+    assert evidence.ok, evidence.errors
+
+
 def test_codex_report_requires_codex_security_review(tmp_path: Path) -> None:
     report = tmp_path / "latest.json"
     _write_report(
@@ -1111,6 +1152,28 @@ def test_p2_requires_defer_reason(tmp_path: Path) -> None:
 
     assert not result.ok
     assert "P2 finding AIR-002 accepted without defer_reason" in result.errors
+
+
+def test_p2_requires_handling(tmp_path: Path) -> None:
+    report = tmp_path / "latest.json"
+    payload = _valid_complete_payload()
+    payload["findings"] = [
+        {
+            "id": "AIR-004",
+            "severity": "P2",
+            "title": "说明不够完整",
+            "path": "docs/guides/example.md",
+            "status": "accepted",
+            "defer_reason": "后续文档批次统一补充",
+            "risk_acceptance": "不影响代码执行",
+        }
+    ]
+    _write_report(report, payload)
+
+    result = validate_report_file(report)
+
+    assert not result.ok
+    assert "P2 finding AIR-004 accepted without handling" in result.errors
 
 
 def test_high_risk_scope_mentions_changed_file(tmp_path: Path) -> None:

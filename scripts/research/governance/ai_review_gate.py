@@ -41,6 +41,9 @@ HIGH_RISK_PREFIXES = (
     "docs/rules/",
     "docs/adr/",
 )
+CODEX_REVIEW_LINK_PATTERN = re.compile(
+    r"https://github\.com/[^\s`]+/[^\s`]+/pull/\d+#pullrequestreview-\d+"
+)
 
 
 @dataclass(frozen=True)
@@ -147,6 +150,8 @@ def validate_report(payload: dict[str, Any]) -> AiReviewValidation:
                 errors.append(
                     f"P2 finding {finding_id} accepted without risk_acceptance"
                 )
+            if not str(item.get("handling") or "").strip():
+                errors.append(f"P2 finding {finding_id} accepted without handling")
 
     high_risk_by_path = any(_is_high_risk_path(path) for path in changed_files)
     natural_requires_official = (
@@ -719,8 +724,18 @@ def _render_official_codex_review_lines(payload: dict[str, Any]) -> list[str]:
         f"- 阻断问题: {_single_line_text(value.get('blocking_issues'))}",
         "- 关键证据:",
     ]
-    lines.extend(f"  - {item}" for item in evidence)
+    lines.extend(f"  - {_format_official_codex_review_evidence(item)}" for item in evidence)
     return lines
+
+
+def _format_official_codex_review_evidence(item: str) -> str:
+    text = _single_line_text(item)
+    if "Codex review 链接" in text:
+        return text
+    unquoted = text.strip("`")
+    if CODEX_REVIEW_LINK_PATTERN.search(unquoted):
+        return f"Codex review 链接：{unquoted}"
+    return text
 
 
 def _string_or_list(value: Any) -> list[str]:

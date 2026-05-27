@@ -1,0 +1,4 @@
+interface:
+  display_name: "Quant PR 工作流"
+  short_description: "使用仓库 PR 工作流规则，不复制规则正文。"
+  default_prompt: "使用 $quant-pr-workflow 准备 Quant Trading 的治理 PR。"

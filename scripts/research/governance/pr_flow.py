@@ -20,6 +20,10 @@ MANAGED_BLOCK_START = "<!-- pr-flow:start -->"
 MANAGED_BLOCK_END = "<!-- pr-flow:end -->"
 AI_RISK_REVIEW_LABEL = "ai-risk-review"
 CODEX_REVIEW_PENDING_EXIT_CODE = 3
+WINDOWS_GOVERNANCE_GATE_COMMAND = (
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File "
+    ".\\.githooks\\run-python.ps1 -m scripts.research.governance gate"
+)
 
 
 @dataclass(frozen=True)
@@ -94,8 +98,7 @@ def select_local_checks(changed_files: Sequence[str]) -> list[str]:
         _append_unique(selected, "governance-full")
         return selected
 
-    for check in ("governance-fast", "pathref"):
-        _append_unique(selected, check)
+    _append_unique(selected, "governance-full")
     return selected
 
 
@@ -116,11 +119,13 @@ def prepare(
         else []
     )
     check_files = sorted({*(changed_files or []), *report_files})
+    passed_checks: list[str] = []
     for check in select_local_checks(check_files):
         check_result = _run_local_check(check, root=root, runner=runner, changed_files=check_files)
         if check_result.returncode != 0:
             _print_command_failure(check, check_result)
             return check_result.returncode
+        passed_checks.append(check)
 
     local.mkdir(parents=True, exist_ok=True)
     if not latest.is_file():
@@ -138,6 +143,15 @@ def prepare(
         for error in validation.errors:
             print(f"error: {error}", file=sys.stderr)
         return 1
+    payload = _payload_with_prepare_evidence(
+        payload,
+        changed_files=check_files,
+        passed_checks=passed_checks,
+    )
+    latest.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
     (local / "latest.md").write_text(
         ai_review_gate.render_markdown_report(payload),
@@ -193,6 +207,9 @@ def sync(
         existing_body = ""
         if body_view.returncode == 0:
             existing_body = str(_json_from_result(body_view).get("body") or "")
+        else:
+            _print_command_failure("gh pr view --json body", body_view)
+            return body_view.returncode
         body_file = _write_managed_body_file(local, existing_body, pr_body)
         edit = runner.run(["gh", "pr", "edit", pr_number, "--body-file", str(body_file)], cwd=root)
         if edit.returncode != 0:
@@ -251,14 +268,8 @@ def sync(
         and not _official_codex_review_evidence_present(payload)
     ):
         scope_path = local / "codex-review-scope.md"
-        if scope_path.is_file():
-            scope_text = scope_path.read_text(
-                encoding="utf-8",
-                errors="ignore",
-            )
-        else:
-            scope_text = result.review_scope
-            scope_path.write_text(scope_text, encoding="utf-8")
+        scope_text = result.review_scope
+        scope_path.write_text(scope_text, encoding="utf-8")
         scope_items = _scope_items(scope_text, payload)
         comment_body = render_codex_review_request(
             pr_url=pr_url,
@@ -423,6 +434,45 @@ def _strategy_test_dirs(root: Path, changed_files: Sequence[str]) -> set[str]:
             if candidate.is_dir():
                 dirs.add(candidate.relative_to(root).as_posix())
     return dirs
+
+
+def _payload_with_prepare_evidence(
+    payload: dict[str, Any],
+    *,
+    changed_files: Sequence[str],
+    passed_checks: Sequence[str],
+) -> dict[str, Any]:
+    updated = dict(payload)
+    if changed_files:
+        updated["changed_files"] = sorted(dict.fromkeys(changed_files))
+    checks = payload.get("checks")
+    merged_checks = dict(checks) if isinstance(checks, dict) else {}
+    for check in passed_checks:
+        if check == "governance-full":
+            merged_checks["governance gate"] = (
+                f"{WINDOWS_GOVERNANCE_GATE_COMMAND}; passed"
+            )
+        elif check == "governance-fast":
+            merged_checks["governance fast gate"] = "passed"
+        elif check == "pathref":
+            merged_checks["pathref"] = "passed"
+        elif check == "ruff-governance":
+            merged_checks["ruff governance"] = "passed"
+        elif check == "bandit-governance":
+            merged_checks["bandit governance"] = "passed"
+        elif check == "mypy-governance":
+            merged_checks["mypy governance"] = "passed"
+        elif check == "pytest-governance":
+            merged_checks["pytest governance tests"] = "passed"
+        elif check == "pip-audit":
+            merged_checks["pip-audit"] = "passed"
+        elif check == "py-compile-strategy":
+            merged_checks["py_compile strategy"] = "passed"
+        elif check == "pytest-strategy-if-present":
+            merged_checks["pytest strategy tests"] = "passed"
+    if merged_checks:
+        updated["checks"] = merged_checks
+    return updated
 
 
 def _write_managed_body_file(

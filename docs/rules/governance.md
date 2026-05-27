@@ -30,6 +30,7 @@
 - `indexes.md`
 - `docs/rules/**`
 - `docs/adr/**`
+- `.codex/skills/**`
 - `.claude/skills/**`
 - `.github/workflows/**`
 - `.githooks/**`
