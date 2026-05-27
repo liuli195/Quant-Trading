@@ -22,6 +22,10 @@ from scripts.research.governance.pr_review_evidence import (
     CONTEXT_HOSTILE_TRIGGER_PATTERN,
     CODEX_REVIEW_AUTHORS,
     _fetch_pr_review_threads,
+    _fetch_issue_metadata,
+    _fetch_pr_changed_files,
+    _issue_label_names,
+    _official_codex_required,
     codex_context_invalid_review_count,
     codex_completion_effective_time,
     has_codex_completion_reaction,
@@ -67,6 +71,8 @@ def build_monitor_report(
     reviews: Sequence[Mapping[str, object]],
     review_comments: Sequence[Mapping[str, object]],
     review_threads: Sequence[Mapping[str, object]] | None = None,
+    changed_files: Sequence[str] | None = None,
+    labels: Sequence[str] | None = None,
     head_created_at: str | None = None,
 ) -> MonitorReport:
     """Build a status summary for Codex reviews on the PR head."""
@@ -74,6 +80,12 @@ def build_monitor_report(
     head_sha = _head_sha(pr)
     pr_url = str(pr.get("html_url", "")) or f"https://github.com/{repo}/pull/{pr_number}"
     skip_authorized = official_codex_review_skip_authorized(str(pr.get("body", "")))
+    official_required, official_errors = _official_codex_required(
+        str(pr.get("body", "")),
+        changed_files=changed_files,
+        labels=labels,
+    )
+    official_review_required = official_required or bool(official_errors)
     trigger_time = _required_trigger_time(
         issue_comments,
         head_created_at=head_created_at,
@@ -167,6 +179,9 @@ def build_monitor_report(
     elif skip_authorized:
         status = "skipped"
         message = "官方 Codex review 已由用户授权跳过。"
+    elif not official_review_required:
+        status = "skipped"
+        message = "官方 Codex review 按 PR 风险证据无需执行。"
     elif trigger_invalid:
         status = "trigger_invalid"
         message = (
@@ -284,7 +299,7 @@ def sync_commit_status(
         "context_invalid": "Codex review context is invalid for current head",
         "blocked": "Codex review has P0/P1 findings",
         "passed": "Codex review has no P0/P1 findings",
-        "skipped": "Official Codex review skipped by user authorization",
+        "skipped": "Official Codex review not required or skipped",
     }.get(report.status, "Codex review monitor status unavailable")
     _request_json(
         method="POST",
@@ -739,6 +754,8 @@ def main(argv: list[str] | None = None) -> int:
     reviews = _as_mapping_list(_read_json_file(args.reviews_file))
     review_comments = _as_mapping_list(_read_json_file(args.review_comments_file))
     review_threads = _as_mapping_list(_read_json_file(args.review_threads_file))
+    changed_files: Sequence[str] | None = None
+    labels: Sequence[str] | None = None
     head_created_at = _read_env(args.head_updated_at_env) or _read_env(
         args.head_created_at_env
     )
@@ -773,6 +790,12 @@ def main(argv: list[str] | None = None) -> int:
             review_threads = _fetch_pr_review_threads(
                 repo=repo, pr_number=pr_number, token=token
             )
+        changed_files = _fetch_pr_changed_files(
+            repo=repo, pr_number=pr_number, token=token
+        )
+        labels = _issue_label_names(
+            _fetch_issue_metadata(repo=repo, pr_number=pr_number, token=token)
+        )
         if not head_created_at:
             head_created_at = head_updated_at_from_monitor_state(
                 issue_comments,
@@ -793,6 +816,8 @@ def main(argv: list[str] | None = None) -> int:
         reviews=reviews,
         review_comments=review_comments,
         review_threads=review_threads,
+        changed_files=changed_files,
+        labels=labels,
         head_created_at=head_created_at,
     )
     body = render_monitor_comment(report)

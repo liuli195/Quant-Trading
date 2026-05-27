@@ -1,62 +1,29 @@
 # 本地与聚宽环境差异
 
-策略代码运行于聚宽云端（回测/模拟），本地仅负责编写、测试、分析。
+策略代码只在聚宽回测/模拟运行；本地负责开发、测试、文档和分析。
 
-## 环境速览
+## 环境
 
-| | 本地 .venv | 回测 | 模拟交易 | 研究 |
-| --- | --- | --- | --- | --- |
-| Python | 3.12 | 3.6 | 3.6 | 3.6 |
-| numpy/pandas | 最新 | 旧版 | 旧版 | 旧版 |
-| scipy | ✅ | ✅ | ✅ | ✅ |
-| statsmodels | ✅ | ✅ | ✅ | ✅ |
-| cvxpy | ✅ | ❌ | ❌ | ⚠️ 手动安装 |
-| matplotlib/seaborn | ✅ | ❌ | ❌ | ✅ |
-| jqdata API | ❌ | ✅ | ✅ | ✅ |
-| 网络请求 | ✅ | ❌ | ❌ | ✅ |
-| 文件系统 | ✅ 完整 | ⚠️ 仅研究目录 | ⚠️ 仅研究目录 | ✅ |
-
-## 库白名单
-
-策略代码（回测/模拟）中可用的第三方库：
-
-| 库 | 回测 | 模拟 | 研究 |
+| 项 | 本地 `.venv` | 回测/模拟 | 聚宽研究 |
 | --- | --- | --- | --- |
-| numpy | ✅ | ✅ | ✅ |
-| pandas | ✅ | ✅ | ✅ |
-| scipy | ✅ | ✅ | ✅ |
-| statsmodels | ✅ | ✅ | ✅ |
-| scikit-learn | ✅ | ✅ | ✅ |
-| ta / talib | ✅ | ✅ | ✅ |
-| matplotlib | ❌ | ❌ | ✅ |
-| seaborn | ❌ | ❌ | ✅ |
-| cvxpy | ❌ | ❌ | ⚠️ |
+| Python | 3.12 | 3.6 | 3.6 |
+| 数据 API | 无 `jqdata` | 有 | 有 |
+| 网络 | 可用 | 不可用 | 可用 |
+| 文件系统 | 完整 | 受限 | 可用 |
+| 本地依赖保证 | `requirements.txt` | 不适用 | 不适用 |
+| 可选分析库 | `scipy`、`statsmodels`、`scikit-learn`、`matplotlib`、`seaborn`、`cvxpy` 仅在已安装时可用 | 不保证 | 可手动安装，文件数不得超 10000 |
 
-研究环境可通过 `!pip install --target=...` 手动安装额外库，但文件数不得超 10000。
+## 策略代码
 
-## 语法约束
+- 必须兼容聚宽 Python 3.6 和旧版 `numpy/pandas`。
+- 禁用 `f"{x=}"`、`X | Y`、`match/case`、`list[float]`。
+- 禁用聚宽旧版 pandas 不支持的新参数，例如 `groupby(dropna=...)`。
+- 策略内不得依赖 `matplotlib`、`seaborn`、`cvxpy`、网络请求或本地文件系统完整权限。
+- 本地测试需 mock `get_price`、`order_target_value` 等聚宽 API。
+- 上传前用 `scripts.tools.jq_automation compile-check` 做兼容检查。
 
-策略代码运行于 Python 3.6，以下特性**禁止**：
+## 分工
 
-| 禁止 | 替代方案 |
-| --- | --- |
-| `f"{x=}"` | `f"x={x}"` |
-| `X \| Y` | `from typing import Union` |
-| `match/case` | `if/elif/else` |
-| `list[float]` | `from typing import List` |
-
-## 开发经验
-
-**写策略时**：
-- 本地测试需要 mock 聚宽 API（`get_price`、`order_target_value` 等）
-- 上传前运行 `jq-auto compile-check` 验证语法兼容
-- 策略间共享代码放聚宽研究根目录，用 `import xxx` 导入
-
-**做分析时**：
-- 重型计算（cvxpy 优化、回归归因）放研究 Notebook 或本地
-- 计算结果存为文件上传到研究，策略用 `read_file()` 读取
-- 研究环境安装额外库：`!pip install 库名 --target="/home/jquser/目录"`
-
-**本地便利**：
-- 本地 numpy/pandas 版本远高于聚宽，避免使用聚宽不支持的新 API 参数
-- 本地有完整 pyarrow、playwright 等工具链，聚宽没有
+- 重型计算、回归、优化、画图放本地或聚宽研究。
+- 研究结果可落文件；策略用聚宽支持的读文件方式消费。
+- 策略间共享代码放聚宽研究根目录，并用聚宽可解析的导入方式。

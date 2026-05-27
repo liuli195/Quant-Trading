@@ -151,6 +151,7 @@ def _write_minimal_repo(root: Path) -> None:
         "docs/rules/governance.md",
         "docs/rules/review-guidelines.md",
         "docs/rules/commands.md",
+        "docs/rules/environments.md",
         "docs/rules/research-workflow.md",
         "docs/rules/code-style.md",
         "docs/rules/docs-and-pathref.md",
@@ -185,20 +186,23 @@ def _write_minimal_repo(root: Path) -> None:
         "规则索引见 indexes.md。所有回答和输出使用简体中文，简洁直白。"
         "策略代码仅在聚宽云端运行。"
         "须走项目 `.venv`。命令参考 docs/rules/commands.md。"
+        "`gh` CLI 默认提权执行。"
         "进入主干须通过 PR；如用户显式授权，可以按直写主干链路直接提交和推送主干；"
-        "禁止本地合并主干，细则见 docs/rules/pr-workflow.md。"
+        "禁止把功能分支本地合入 main，细则见 docs/rules/pr-workflow.md。"
+        "分支名使用 ASCII 模板，提交说明使用简体中文。"
         "效率：所有任务默认优先派发子 agent，主会话负责编排。"
         "Markdown 内部文件引用使用可点击链接和 pathref。"
         "每次任务后清理临时产物。\n\n"
-        "## Review guidelines\n\n"
-        "Before reviewing, read and apply docs/rules/review-guidelines.md. "
-        "If you cannot access that file, treat the review as blocked.\n",
+        "## Review 指南\n\n"
+        "Review 前必须先阅读并遵守 docs/rules/review-guidelines.md。"
+        "如果无法访问该文件，视为 review 被阻塞。\n",
         encoding="utf-8",
     )
     (root / "indexes.md").write_text(
         "AGENTS.md CLAUDE.md docs/rules/index.md docs/rules/commands.md "
         "docs/rules/review-guidelines.md docs/rules/pr-workflow.md docs/rules/governance.md "
-        "docs/rules/code-style.md docs/rules/research-workflow.md docs/rules/docs-and-pathref.md docs/adr",
+        "docs/rules/environments.md docs/rules/code-style.md "
+        "docs/rules/research-workflow.md docs/rules/docs-and-pathref.md docs/adr",
         encoding="utf-8",
     )
     (root / "docs/rules/commands.md").write_text(
@@ -207,7 +211,8 @@ def _write_minimal_repo(root: Path) -> None:
         "scripts.tools.path_tools.refactor .\\.githooks\\setup-python.ps1 "
         ".\\.githooks\\run-python.ps1 .githooks/setup-python.sh .githooks/run-python.sh "
         ".\\.venv\\Scripts\\python.exe .venv/bin/python PYTHONUTF8 PYTHONIOENCODING "
-        "powershell.exe -NoProfile -ExecutionPolicy Bypass -File",
+        "powershell.exe -NoProfile -ExecutionPolicy Bypass -File "
+        "gh pr checks `gh` CLI 默认提权执行",
         encoding="utf-8",
     )
     (root / "docs/guides/local-python-env.md").write_text(
@@ -322,13 +327,7 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / "docs/rules/pr-workflow.md").write_text(
         "所有进入主干的改动必须通过 PR\n直写主干 ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON\n"
-        "禁止本地合并主干\nCodex Review Monitor\n"
-        "主会话只负责流程编排\n任务优先分发给子agent执行\n子 agent 交叉评审\n"
-        "complete\npartial\n官方 Codex Review 跳过授权\n"
-        "本地安全 review\ncodex-security\nsecurity-guidance\n"
-        "superpowers:subagent-driven-development/spec-reviewer-prompt.md\n"
-        "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md\n"
-        "reviewers:\n"
+        "禁止把功能分支本地合入\n有可用子 agent 能力\n无能力时记录原因\n"
         "git fetch origin main\ngit merge --ff-only origin/main\n"
         "git branch -d <branch>\ngit push origin --delete <branch>\n",
         encoding="utf-8",
@@ -366,7 +365,7 @@ def _write_minimal_repo(root: Path) -> None:
         "superpowers:subagent-driven-development/spec-reviewer-prompt.md\n"
         "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md\n"
         "reviewers:\n"
-        "任务分发说明\n官方 Codex Review 跳过授权\n"
+        "任务分发说明\nhigh/unknown PR label\n官方 Codex Review 跳过授权\n"
         "本地 AI review 模式\n不完全 Review 模式授权\nCodex Code Review 结论\n"
         "本地安全 review\ncodex-security\nsecurity-guidance\n"
         "Codex\n"
@@ -1285,6 +1284,26 @@ def test_governance_audit_flags_agents_without_sandbox_escalation_rule(
     )
 
 
+def test_governance_audit_flags_agents_without_gh_cli_escalation_rule(
+    tmp_path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    agents = tmp_path / "AGENTS.md"
+    agents.write_text(
+        agents.read_text(encoding="utf-8").replace("`gh` CLI 默认提权执行。", ""),
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "agent_entry_sync"
+        and "`gh` CLI 默认提权执行" in finding.message
+        for finding in report.findings
+    )
+
+
 def test_governance_audit_flags_claude_with_codex_or_review_rules(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / "CLAUDE.md").write_text(
@@ -1313,7 +1332,7 @@ def test_governance_audit_flags_missing_pr_cleanup_workflow_tokens(tmp_path) -> 
     _write_minimal_repo(tmp_path)
     (tmp_path / "docs/rules/pr-workflow.md").write_text(
         "所有进入主干的改动必须通过 PR\n直写主干 ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON\n"
-        "禁止本地合并主干\nCodex Review Monitor\n"
+        "禁止把功能分支本地合入\n有可用子 agent 能力\n无能力时记录原因\n"
         "git fetch origin main\ngit merge --ff-only origin/main\n",
         encoding="utf-8",
     )
@@ -1332,7 +1351,7 @@ def test_governance_audit_flags_missing_dispatch_first_workflow_tokens(
     _write_minimal_repo(tmp_path)
     (tmp_path / "docs/rules/pr-workflow.md").write_text(
         "所有进入主干的改动必须通过 PR\n直写主干 ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON\n"
-        "禁止本地合并主干\nCodex Review Monitor\n"
+        "禁止把功能分支本地合入\n"
         "git fetch origin main\ngit merge --ff-only origin/main\n"
         "git branch -d <branch>\ngit push origin --delete <branch>\n",
         encoding="utf-8",
@@ -1343,7 +1362,7 @@ def test_governance_audit_flags_missing_dispatch_first_workflow_tokens(
     assert not report.ok
     assert any(
         finding.rule_id == "governance_gate"
-        and "主会话只负责流程编排" in finding.message
+        and "有可用子 agent 能力" in finding.message
         for finding in report.findings
     )
 
@@ -2123,6 +2142,13 @@ def test_low_risk_pr_body_with_ai_risk_label_requires_codex_review() -> None:
     assert "PR body missing section: Codex Code Review 结论" in report.errors
 
 
+def test_high_risk_pr_body_requires_ai_risk_label_when_labels_available() -> None:
+    report = validate_pr_body(_valid_codex_review_body(), comments=[], labels=[])
+
+    assert not report.ok
+    assert "high/unknown PR must include ai-risk-review label" in report.errors
+
+
 def test_issue_label_names_extracts_github_issue_labels() -> None:
     assert _issue_label_names(
         {"labels": [{"name": "ai-risk-review"}, {"name": "docs"}]}
@@ -2380,6 +2406,27 @@ def _official_codex_skip_body(*, authorization: str | None = None) -> str:
 - 本地安全 review: provider=codex；tool=codex-security；evidence=Codex Security local review completed
 - 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
 - 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## P2 保留项
+
+- 无
+"""
+
+
+def _low_risk_no_official_review_body() -> str:
+    return """
+## AI Review 风险分级
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 官方 Codex Review 跳过授权: 无
+- 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence=Codex Security local review completed
+- 本地 AI review 模式: complete
+- 不完全 Review 模式授权: 无
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
 
 ## P2 保留项
@@ -3556,7 +3603,7 @@ def test_pr_review_evidence_main_uses_current_pr_body_over_stale_event_env(
     monkeypatch.setattr(
         pr_review_evidence,
         "_fetch_issue_metadata",
-        lambda *, repo, pr_number, token: {"labels": []},
+        lambda *, repo, pr_number, token: {"labels": [{"name": "ai-risk-review"}]},
     )
 
     assert (
@@ -4140,6 +4187,24 @@ def test_codex_review_monitor_passes_when_official_review_is_authorized_skipped(
     assert report.status == "skipped"
     assert not report.trigger_found
     assert "授权跳过" in render_monitor_comment(report)
+
+
+def test_codex_review_monitor_passes_low_risk_without_official_review() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr={"head": {"sha": head_sha}, "body": _low_risk_no_official_review_body()},
+        pr_number="5",
+        issue_comments=[],
+        reviews=[],
+        review_comments=[],
+        changed_files=("docs/README.md",),
+        labels=(),
+    )
+
+    assert report.status == "skipped"
+    assert not report.trigger_found
+    assert "无需执行" in render_monitor_comment(report)
 
 
 def test_codex_review_monitor_blocks_unresolved_blocking_threads() -> None:

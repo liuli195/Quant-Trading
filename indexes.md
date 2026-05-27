@@ -9,15 +9,15 @@
 
 ## 规则文件
 
-- [index.md](docs/rules/index.md) <!-- pathref: docs/rules/index.md --> — 规则文档总索引，含 MUST/SHOULD/MAY 分级说明
-- [pr-workflow.md](docs/rules/pr-workflow.md) <!-- pathref: docs/rules/pr-workflow.md --> — 分支模型、PR 创建与合并流程
-- [governance.md](docs/rules/governance.md) <!-- pathref: docs/rules/governance.md --> — CI 门禁、主干保护、CODEOWNERS、waiver 机制
-- [review-guidelines.md](docs/rules/review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md --> — Code Review 触发条件、评审重点与证据要求
-- [commands.md](docs/rules/commands.md) <!-- pathref: docs/rules/commands.md --> — Python 环境、虚拟环境和本地常用命令
-- [research-workflow.md](docs/rules/research-workflow.md) <!-- pathref: docs/rules/research-workflow.md --> — 本地研究→云端确认→报告同步全流程
-- [code-style.md](docs/rules/code-style.md) <!-- pathref: docs/rules/code-style.md --> — 策略代码规范、环境兼容约束、注释与测试要求
-- [environments.md](docs/rules/environments.md) <!-- pathref: docs/rules/environments.md --> — 本地与聚宽四环境差异、库白名单、语法约束
-- [docs-and-pathref.md](docs/rules/docs-and-pathref.md) <!-- pathref: docs/rules/docs-and-pathref.md --> — Markdown 规范、pathref 引用格式、报告索引规则
+- [index.md](docs/rules/index.md) <!-- pathref: docs/rules/index.md --> — 规则总索引和分级
+- [commands.md](docs/rules/commands.md) <!-- pathref: docs/rules/commands.md --> — `.venv`、wrapper、常用命令
+- [environments.md](docs/rules/environments.md) <!-- pathref: docs/rules/environments.md --> — 本地与聚宽环境边界
+- [code-style.md](docs/rules/code-style.md) <!-- pathref: docs/rules/code-style.md --> — 策略代码和兼容写法
+- [research-workflow.md](docs/rules/research-workflow.md) <!-- pathref: docs/rules/research-workflow.md --> — 研究、数据和报告流程
+- [docs-and-pathref.md](docs/rules/docs-and-pathref.md) <!-- pathref: docs/rules/docs-and-pathref.md --> — Markdown、pathref、报告索引
+- [pr-workflow.md](docs/rules/pr-workflow.md) <!-- pathref: docs/rules/pr-workflow.md --> — 分支、PR、主干同步
+- [review-guidelines.md](docs/rules/review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md --> — 本地 AI review 和 Codex Review
+- [governance.md](docs/rules/governance.md) <!-- pathref: docs/rules/governance.md --> — CI、hooks、CODEOWNERS、waiver
 
 ## 决策记录
 
