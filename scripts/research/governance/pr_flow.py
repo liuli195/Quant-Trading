@@ -20,9 +20,8 @@ MANAGED_BLOCK_START = "<!-- pr-flow:start -->"
 MANAGED_BLOCK_END = "<!-- pr-flow:end -->"
 AI_RISK_REVIEW_LABEL = "ai-risk-review"
 CODEX_REVIEW_PENDING_EXIT_CODE = 3
-WINDOWS_GOVERNANCE_GATE_COMMAND = (
-    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File "
-    ".\\.githooks\\run-python.ps1 -m scripts.research.governance gate"
+PR_BODY_GOVERNANCE_GATE_COMMAND = (
+    ".githooks/run-python.sh -m scripts.research.governance gate"
 )
 
 
@@ -450,7 +449,7 @@ def _payload_with_prepare_evidence(
     for check in passed_checks:
         if check == "governance-full":
             merged_checks["governance gate"] = (
-                f"{WINDOWS_GOVERNANCE_GATE_COMMAND}; passed"
+                f"{PR_BODY_GOVERNANCE_GATE_COMMAND}; passed"
             )
         elif check == "governance-fast":
             merged_checks["governance fast gate"] = "passed"

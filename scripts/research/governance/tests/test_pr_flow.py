@@ -294,10 +294,7 @@ def test_prepare_records_full_governance_gate_evidence(
         (tmp_path / ".local/ai-review/latest.json").read_text(encoding="utf-8")
     )
     gate_evidence = payload["checks"]["governance gate"]
-    assert (
-        "powershell.exe -NoProfile -ExecutionPolicy Bypass -File "
-        ".\\.githooks\\run-python.ps1 -m scripts.research.governance gate"
-    ) in gate_evidence
+    assert ".githooks/run-python.sh -m scripts.research.governance gate" in gate_evidence
     body = (tmp_path / ".local/ai-review/pr-body.md").read_text(encoding="utf-8")
     assert gate_evidence in body
 
