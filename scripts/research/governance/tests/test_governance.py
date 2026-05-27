@@ -2361,6 +2361,29 @@ def test_low_risk_pr_body_requires_p2_section() -> None:
     assert "PR body missing section: P2 保留项" in report.errors
 
 
+def test_pr_body_accepts_p2_none_before_managed_block_end() -> None:
+    body = f"""
+## {pr_review_evidence.AI_REVIEW_SECTION_HEADER}
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence=Codex Security local review completed
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## {pr_review_evidence.P2_SECTION_HEADER}
+
+- 无
+<!-- pr-flow:end -->
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert report.ok, report.errors
+
+
 def test_low_risk_pr_body_accepts_chinese_p2_fields() -> None:
     body = """
 ## AI Review 风险分级
