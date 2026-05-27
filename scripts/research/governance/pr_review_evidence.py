@@ -284,6 +284,13 @@ def _official_codex_required(
     if blockers != "无":
         errors.append("P0/P1 未关闭项 must be 无")
     high_risk_files = _high_risk_changed_files(changed_files)
+    has_ai_risk_review_label = _has_ai_risk_review_label(labels)
+    if (
+        labels is not None
+        and risk in {"high", "unknown"}
+        and not has_ai_risk_review_label
+    ):
+        errors.append("high/unknown PR must include ai-risk-review label")
     if high_risk_files:
         if risk == "low":
             errors.append("high-risk changed files require official Codex Review")
@@ -294,7 +301,7 @@ def _official_codex_required(
             elif risk != "low":
                 return False, errors
         return True, errors
-    if _has_ai_risk_review_label(labels):
+    if has_ai_risk_review_label:
         if risk == "low":
             errors.append("ai-risk-review label requires official Codex Review")
         if requires in {"否", "不需要", "false", "False"}:

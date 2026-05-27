@@ -21,6 +21,7 @@
 
 - 风险等级: low / high / unknown
 - 是否需要官方 Codex Review: 是 / 否（低风险无需 / 用户授权跳过）
+- high/unknown PR label: `ai-risk-review` / 不适用
 - 官方 Codex Review 跳过授权: 无 / authorized_by=<授权人>；reason=<原因>；evidence=<授权证据>
 - 本地 AI review: `.local/ai-review/latest.md`
 - 本地安全 review: provider=codex / claude；tool=codex-security / security-guidance；evidence=<安全 review 证据>

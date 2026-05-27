@@ -2,7 +2,7 @@ name: Codex Review Monitor
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited]
+    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]
   issue_comment:
     types: [created, edited, deleted]
   pull_request_review:

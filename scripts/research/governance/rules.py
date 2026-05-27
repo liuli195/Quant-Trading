@@ -37,6 +37,7 @@ REQUIRED_RULE_DOCS = (
     "docs/rules/governance.md",
     "docs/rules/review-guidelines.md",
     "docs/rules/commands.md",
+    "docs/rules/environments.md",
     "docs/rules/research-workflow.md",
     "docs/rules/code-style.md",
     "docs/rules/docs-and-pathref.md",
@@ -65,6 +66,7 @@ PR_TEMPLATE_TOKENS = (
     "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
     "reviewers:",
     "任务分发说明",
+    "high/unknown PR label",
     "官方 Codex Review 跳过授权",
     "本地 AI review 模式",
     "本地安全 review",
@@ -117,6 +119,8 @@ REQUIRED_COMMAND_RULE_TOKENS = (
     ".venv/bin/python",
     "PYTHONUTF8",
     "PYTHONIOENCODING",
+    "gh pr checks",
+    "`gh` CLI 默认提权执行",
 )
 REQUIRED_AGENT_ENTRY_TOKENS = (
     "indexes.md",
@@ -125,10 +129,12 @@ REQUIRED_AGENT_ENTRY_TOKENS = (
     "聚宽云端",
     "须走项目 `.venv`",
     "docs/rules/commands.md",
+    "`gh` CLI 默认提权执行",
     "进入主干须通过 PR",
     "直写主干",
-    "禁止本地合并主干",
+    "禁止把功能分支本地合入",
     "docs/rules/pr-workflow.md",
+    "分支名使用 ASCII",
     "优先派发子 agent",
     "主会话负责编排",
     "可点击链接",
@@ -398,13 +404,24 @@ def _audit_review_guidelines(root: Path) -> list[AuditFinding]:
     agents = root / "AGENTS.md"
     if agents.is_file():
         agents_text = agents.read_text(encoding="utf-8", errors="ignore")
-        for token in ("## Review guidelines", "docs/rules/review-guidelines.md"):
-            if token not in agents_text:
-                findings.append(
-                    AuditFinding(
-                        "review_guidelines", "error", f"AGENTS.md missing {token}"
-                    )
+        if not any(
+            token in agents_text for token in ("## Review guidelines", "## Review 指南")
+        ):
+            findings.append(
+                AuditFinding(
+                    "review_guidelines",
+                    "error",
+                    "AGENTS.md missing Review guidelines heading",
                 )
+            )
+        if "docs/rules/review-guidelines.md" not in agents_text:
+            findings.append(
+                AuditFinding(
+                    "review_guidelines",
+                    "error",
+                    "AGENTS.md missing docs/rules/review-guidelines.md",
+                )
+            )
     return findings
 
 
@@ -794,6 +811,16 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "monitor workflow must listen to Codex review submitted, edited, and dismissed events",
                 )
             )
+        if not _workflow_event_types_include(
+            text, "pull_request", ("labeled", "unlabeled")
+        ):
+            findings.append(
+                AuditFinding(
+                    "codex_review_monitor",
+                    "error",
+                    "monitor workflow must listen to pull_request labeled and unlabeled events",
+                )
+            )
 
     pr_workflow = root / "docs" / "rules" / "pr-workflow.md"
     if pr_workflow.is_file():
@@ -803,23 +830,13 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             "直写主干",
             "ALLOW_DIRECT_MAIN_WRITE",
             "DIRECT_MAIN_WRITE_REASON",
-            "禁止本地合并主干",
+            "禁止把功能分支本地合入",
             "git fetch origin main",
             "git merge --ff-only origin/main",
             "git branch -d <branch>",
             "git push origin --delete <branch>",
-            "主会话只负责流程编排",
-            "任务优先分发给子agent执行",
-            "子 agent 交叉评审",
-            "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
-            "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
-            "reviewers:",
-            "complete",
-            "partial",
-            "官方 Codex Review 跳过授权",
-            "本地安全 review",
-            "codex-security",
-            "security-guidance",
+            "有可用子 agent 能力",
+            "无能力时记录原因",
         ):
             if token not in text:
                 findings.append(
