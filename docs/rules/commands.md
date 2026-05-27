@@ -35,6 +35,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.p
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.tools.path_tools.refactor check
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.docs index
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance gate
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance.pr_flow ready --title "<PR标题>"
 gh pr checks <PR号或URL> --required --watch --interval 10
 gh pr checks <PR号或URL> --required
 ```
@@ -49,6 +50,7 @@ gh pr checks <PR号或URL> --required
 | `scripts.research.variants` | `list`、`register`、`materialize`、`branch-plan`、`branch-create`、`merge-plan`、`merge-apply` |
 | `scripts.research.registry.tool_registry` | `list`、`validate` |
 | `scripts.research.governance` | `audit`、`gate` |
+| `scripts.research.governance.pr_flow` | `prepare`、`sync`、`wait`、`ready` |
 
 POSIX 示例把 Windows wrapper 替换为 `.githooks/run-python.sh`。
 

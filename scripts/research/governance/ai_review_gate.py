@@ -5,10 +5,18 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from .pr_review_evidence import (
+    AI_REVIEW_SECTION_HEADER,
+    P2_SECTION_HEADER,
+    SECTION_HEADER,
+)
 
 
 BLOCKING_SEVERITIES = {"P0", "P1"}
@@ -32,6 +40,12 @@ HIGH_RISK_PREFIXES = (
     ".githooks/",
     "docs/rules/",
     "docs/adr/",
+)
+CODEX_REVIEW_LINK_PATTERN = re.compile(
+    r"https://github\.com/[^\s`]+/[^\s`]+/pull/\d+#pullrequestreview-\d+"
+)
+CODEX_COMPLETION_COMMENT_LINK_PATTERN = re.compile(
+    r"https://github\.com/[^\s`]+/[^\s`]+/(?:pull|issues)/\d+#issuecomment-\d+"
 )
 
 
@@ -139,6 +153,8 @@ def validate_report(payload: dict[str, Any]) -> AiReviewValidation:
                 errors.append(
                     f"P2 finding {finding_id} accepted without risk_acceptance"
                 )
+            if not str(item.get("handling") or "").strip():
+                errors.append(f"P2 finding {finding_id} accepted without handling")
 
     high_risk_by_path = any(_is_high_risk_path(path) for path in changed_files)
     natural_requires_official = (
@@ -274,6 +290,146 @@ def render_markdown_report(payload: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_pr_body(payload: dict[str, Any]) -> str:
+    result = validate_report(payload)
+    review_mode = result.review_mode
+    findings = [
+        item for item in payload.get("findings") or [] if isinstance(item, dict)
+    ]
+    requires = "是" if result.requires_official_codex_review else "否"
+    lines = [
+        f"## {AI_REVIEW_SECTION_HEADER}",
+        "",
+        f"- 风险等级: {result.risk_level}",
+        f"- 是否需要官方 Codex Review: {requires}",
+        f"- 本地 AI review 模式: {review_mode}",
+        f"- 不完全 Review 模式授权: {_format_authorization(payload.get('review_mode_authorization')) if review_mode == 'partial' else '无'}",
+        f"- 官方 Codex Review 跳过授权: {_format_authorization(payload.get('official_codex_review_skip_authorization')) if result.official_codex_review_skipped else '无'}",
+        "- 本地 AI review: `.local/ai-review/latest.md`",
+        f"- 本地安全 review: {_format_security_review_field(payload)}",
+        f"- 子 agent 交叉评审: {_format_cross_review_field(payload)}",
+        f"- 任务分发说明: {_format_task_dispatch_field(payload)}",
+        f"- P0/P1 未关闭项: {_blocking_findings_summary(findings)}",
+        "",
+        "## 已运行检查",
+        "",
+    ]
+    lines.extend(_render_pr_body_check_lines(payload))
+    lines.extend(
+        [
+            "",
+        f"## {P2_SECTION_HEADER}",
+        "",
+        ]
+    )
+    p2_lines = _render_p2_body_lines(findings)
+    lines.extend(p2_lines)
+    official_lines = _render_official_codex_review_lines(payload)
+    if result.requires_official_codex_review and official_lines:
+        lines.extend(["", f"## {SECTION_HEADER}", ""])
+        lines.extend(official_lines)
+    return "\n".join(lines) + "\n"
+
+
+def draft_review_payload(changed_files: Sequence[str] | None) -> dict[str, Any]:
+    files = sorted({_normalize_repo_path(path) for path in changed_files or [] if path})
+    if changed_files is None:
+        risk_level = "unknown"
+    elif any(_is_high_risk_path(path) for path in files):
+        risk_level = "high"
+    else:
+        risk_level = "low"
+    return {
+        "schema_version": CURRENT_SCHEMA_VERSION,
+        "tool": "codex",
+        "review_mode": "complete",
+        "risk_level": risk_level,
+        "requires_official_codex_review": risk_level != "low",
+        "changed_files": files,
+        "findings": [],
+        "checks": {},
+    }
+
+
+def _discover_changed_files(repo_root: str | Path = ".") -> list[str] | None:
+    root = Path(repo_root)
+    discovered: list[str] = []
+    for command in (
+        ["git", "diff", "--name-only", "--cached"],
+        ["git", "diff", "--name-only"],
+    ):
+        result = subprocess.run(
+            command,
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        if result.returncode != 0:
+            return None
+        discovered.extend(result.stdout.splitlines())
+    base = _discover_branch_diff_base(root)
+    if base:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", f"{base}...HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        if result.returncode != 0:
+            return None
+        discovered.extend(result.stdout.splitlines())
+    untracked = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if untracked.returncode != 0:
+        return None
+    discovered.extend(untracked.stdout.splitlines())
+    if not discovered and base is None:
+        return None
+    return sorted(
+        {
+            normalized
+            for path in discovered
+            if (normalized := _normalize_repo_path(path))
+        }
+    )
+
+
+def _discover_branch_diff_base(root: Path) -> str | None:
+    for command in (
+        ["git", "merge-base", "--fork-point", "origin/main", "HEAD"],
+        ["git", "merge-base", "origin/main", "HEAD"],
+        ["git", "merge-base", "origin/master", "HEAD"],
+        ["git", "merge-base", "main", "HEAD"],
+        ["git", "merge-base", "master", "HEAD"],
+    ):
+        result = subprocess.run(
+            command,
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        base = result.stdout.strip()
+        if result.returncode == 0 and base:
+            return base
+    return None
+
+
 def _is_high_risk_path(path: str) -> bool:
     normalized = path.replace("\\", "/")
     if normalized.startswith("./"):
@@ -282,6 +438,13 @@ def _is_high_risk_path(path: str) -> bool:
     if _is_generated_strategy_artifact(normalized):
         return False
     return any(normalized.startswith(prefix) for prefix in HIGH_RISK_PREFIXES)
+
+
+def _normalize_repo_path(path: str) -> str:
+    normalized = path.replace("\\", "/").strip()
+    if normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized.lstrip("/")
 
 
 def _is_generated_strategy_artifact(path: str) -> bool:
@@ -458,29 +621,190 @@ def _single_line_text(value: Any) -> str:
     return " ".join(str(value or "").split())
 
 
+def _format_authorization(value: Any) -> str:
+    if not isinstance(value, dict):
+        return "无"
+    return (
+        f"authorized_by={_single_line_text(value.get('authorized_by'))}; "
+        f"reason={_single_line_text(value.get('reason'))}; "
+        f"evidence={_single_line_text(value.get('evidence'))}"
+    )
+
+
+def _format_security_review_field(payload: dict[str, Any]) -> str:
+    value = payload.get("security_review")
+    provider = _single_line_text(payload.get("tool"))
+    if not isinstance(value, dict):
+        return f"provider={provider}; tool=; evidence="
+    return (
+        f"provider={provider}; "
+        f"tool={_single_line_text(value.get('tool'))}; "
+        f"evidence={_single_line_text(value.get('evidence'))}"
+    )
+
+
+def _format_cross_review_field(payload: dict[str, Any]) -> str:
+    value = payload.get("cross_review")
+    reviewers = _string_list(payload.get("reviewers"))
+    if not isinstance(value, dict):
+        return f"已分发； reviewers: {', '.join(reviewers)}"
+    skills = _string_list(value.get("review_skills"))
+    skill_text = ", ".join(f"`{skill}`" for skill in skills)
+    evidence = _single_line_text(value.get("evidence"))
+    return (
+        f"已分发； reviewers: {', '.join(reviewers)}； "
+        f"skills: {skill_text}； evidence={evidence}"
+    )
+
+
+def _format_task_dispatch_field(payload: dict[str, Any]) -> str:
+    reviewers = _string_list(payload.get("reviewers"))
+    value = payload.get("cross_review")
+    evidence = ""
+    if isinstance(value, dict):
+        evidence = _single_line_text(value.get("evidence"))
+    return f"已分发给 {', '.join(reviewers)}； evidence={evidence or '见子 agent 交叉评审'}"
+
+
+def _blocking_findings_summary(findings: Sequence[dict[str, Any]]) -> str:
+    open_blockers = []
+    for item in findings:
+        severity = str(item.get("severity") or "")
+        status = str(item.get("status") or "")
+        if severity in BLOCKING_SEVERITIES and status not in {
+            "fixed",
+            "false_positive",
+        }:
+            open_blockers.append(str(item.get("id") or "<missing-id>"))
+    return "无" if not open_blockers else ", ".join(open_blockers)
+
+
+def _render_p2_body_lines(findings: Sequence[dict[str, Any]]) -> list[str]:
+    accepted = [
+        item
+        for item in findings
+        if str(item.get("severity") or "") == "P2"
+        and str(item.get("status") or "") == "accepted"
+    ]
+    if not accepted:
+        return ["- 无"]
+    lines: list[str] = []
+    for item in accepted:
+        lines.append(f"- {item.get('id')}: {item.get('title')} (`{item.get('path')}`)")
+        lines.append(
+            f"  - defer_reason: {_single_line_text(item.get('defer_reason')) or '未记录'}"
+        )
+        lines.append(
+            f"  - risk_acceptance: {_single_line_text(item.get('risk_acceptance')) or '未记录'}"
+        )
+        lines.append(
+            f"  - handling: {_single_line_text(item.get('handling')) or '未记录'}"
+        )
+    return lines
+
+
+def _render_pr_body_check_lines(payload: dict[str, Any]) -> list[str]:
+    checks = payload.get("checks")
+    if not isinstance(checks, dict) or not checks:
+        return ["- 未记录"]
+    lines: list[str] = []
+    for name, status in checks.items():
+        lines.append(f"- {_single_line_text(name)}: {_single_line_text(status)}")
+    return lines
+
+
+def _render_official_codex_review_lines(payload: dict[str, Any]) -> list[str]:
+    value = payload.get("official_codex_review")
+    if not isinstance(value, dict):
+        return []
+    evidence = _string_or_list(value.get("evidence"))
+    if not evidence:
+        return []
+    lines = [
+        f"- Reviewer: {_single_line_text(value.get('reviewer')) or 'Codex'}",
+        f"- 触发方式: {_single_line_text(value.get('trigger'))}",
+        f"- 结论: {_single_line_text(value.get('conclusion'))}",
+        f"- 阻断问题: {_single_line_text(value.get('blocking_issues'))}",
+        "- 关键证据:",
+    ]
+    lines.extend(f"  - {_format_official_codex_review_evidence(item)}" for item in evidence)
+    return lines
+
+
+def _format_official_codex_review_evidence(item: str) -> str:
+    text = _single_line_text(item)
+    if "Codex review 链接" in text:
+        return text
+    unquoted = text.strip("`")
+    if CODEX_REVIEW_LINK_PATTERN.search(
+        unquoted
+    ) or CODEX_COMPLETION_COMMENT_LINK_PATTERN.search(unquoted):
+        return f"Codex review 链接：{unquoted}"
+    return text
+
+
+def _string_or_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [text for item in value if (text := _single_line_text(item))]
+    text = _single_line_text(value)
+    return [text] if text else []
+
+
+def _read_report_payload(path: Path) -> dict[str, Any] | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
-    for name in ("validate", "risk", "scope", "markdown"):
+    draft = subparsers.add_parser("draft")
+    draft.add_argument("--repo-root", type=Path, default=Path("."))
+    draft.add_argument("--output", type=Path, required=True)
+    for name in ("validate", "risk", "scope", "markdown", "pr-body"):
         subparser = subparsers.add_parser(name)
         subparser.add_argument("--report", type=Path, required=True)
-        if name in {"scope", "markdown"}:
+        if name in {"scope", "markdown", "pr-body"}:
             subparser.add_argument("--output", type=Path, required=True)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "draft":
+        draft_payload = draft_review_payload(_discover_changed_files(args.repo_root))
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(
+            json.dumps(draft_payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return 0
+
     result = validate_report_file(args.report)
+    if args.command == "pr-body":
+        report_payload = _read_report_payload(args.report)
+        if report_payload is None:
+            print(
+                f"error: AI review report invalid JSON: {args.report}", file=sys.stderr
+            )
+            return 1
+        if not result.ok:
+            for error in result.errors:
+                print(f"error: {error}", file=sys.stderr)
+            return 1
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(render_pr_body(report_payload), encoding="utf-8")
+        return 0
+
     if args.command == "scope":
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(result.review_scope, encoding="utf-8")
     if args.command == "markdown":
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            payload = json.loads(args.report.read_text(encoding="utf-8-sig"))
-        except (OSError, json.JSONDecodeError):
-            payload = {}
+        payload = _read_report_payload(args.report) or {}
         args.output.write_text(render_markdown_report(payload), encoding="utf-8")
     if args.command == "risk":
         print(result.risk_level)

@@ -3,6 +3,9 @@
 ## MUST
 
 - `scripts.research.governance gate` 是本地 hook 和 CI 的强门禁入口。
+- `.githooks/pre-commit` 使用 `scripts.research.governance gate --fast`，只跑快速治理审计，跳过 CLI help 和 pathref gate。
+- `.githooks/pre-push` 和 CI 必须使用完整 `scripts.research.governance gate`，覆盖完整治理审计和 pathref gate。
+- `scripts.research.governance.pr_flow` 是本地 PR 自动化入口；`make pr-ready TITLE="<PR标题>"` 负责准备 PR evidence、同步 GitHub draft PR、触发必要的 Codex review 并等待 required checks。
 - GitHub `main` 必须启用 branch protection 或 ruleset：Require pull request、Require status checks、Require review from Code Owners、Block force pushes。
 - required checks 必须包括 `Research Governance / governance`、`Research Governance / pr-review-evidence`、`Codex Review Monitor`。
 - `Research Governance / governance` 汇总静态扫描、类型检查、依赖漏洞扫描、测试、pathref 和 governance gate。
@@ -27,6 +30,7 @@
 - `indexes.md`
 - `docs/rules/**`
 - `docs/adr/**`
+- `.codex/skills/**`
 - `.claude/skills/**`
 - `.github/workflows/**`
 - `.githooks/**`

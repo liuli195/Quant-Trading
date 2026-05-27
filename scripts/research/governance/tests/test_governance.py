@@ -11,6 +11,8 @@ from scripts.research.governance.codex_review_monitor import (
     build_monitor_report,
     render_monitor_comment,
 )
+from scripts.research.governance import __main__ as governance_main
+from scripts.research.governance import gate as governance_gate
 from scripts.research.governance.codex_review_contract import (
     is_codex_review_request,
     render_codex_review_request,
@@ -125,6 +127,8 @@ def _write_minimal_repo(root: Path) -> None:
         ".githooks",
         ".claude/skills/jq-research",
         ".claude/skills/jq-ab-test",
+        ".codex/skills/quant-pr-workflow/agents",
+        ".codex/skills/quant-research-workflow/agents",
         "research_datasets/demo/snap/raw",
         "research_datasets/demo/snap/data",
     ):
@@ -153,6 +157,7 @@ def _write_minimal_repo(root: Path) -> None:
         "docs/rules/commands.md",
         "docs/rules/environments.md",
         "docs/rules/research-workflow.md",
+        "docs/rules/collaboration.md",
         "docs/rules/code-style.md",
         "docs/rules/docs-and-pathref.md",
         "docs/adr/0001-rule-source-and-governance-model.md",
@@ -164,6 +169,7 @@ def _write_minimal_repo(root: Path) -> None:
         "scripts/research/platform/tests/test_platform.py",
         "scripts/research/registry/tests/test_registry.py",
         "scripts/research/governance/tests/test_governance.py",
+        "scripts/research/governance/tests/test_pr_flow.py",
         "scripts/research/research_core/tests/test_research_core.py",
         "scripts/research/etf_window_research/tests/test_analysis.py",
         "scripts/research/momentum_tilt_research/tests/test_analysis.py",
@@ -185,7 +191,8 @@ def _write_minimal_repo(root: Path) -> None:
         "本仓库是基于 Python 的 A 股/场内基金量化策略仓库。\n\n"
         "规则索引见 indexes.md。所有回答和输出使用简体中文，简洁直白。"
         "策略代码仅在聚宽云端运行。"
-        "须走项目 `.venv`。命令参考 docs/rules/commands.md。"
+        "项目 `.venv` 默认提权执行，否则无法读取base Python路径。"
+        "命令参考 docs/rules/commands.md。"
         "`gh` CLI 默认提权执行。"
         "进入主干须通过 PR；如用户显式授权，可以按直写主干链路直接提交和推送主干；"
         "禁止把功能分支本地合入 main，细则见 docs/rules/pr-workflow.md。"
@@ -202,7 +209,8 @@ def _write_minimal_repo(root: Path) -> None:
         "AGENTS.md CLAUDE.md docs/rules/index.md docs/rules/commands.md "
         "docs/rules/review-guidelines.md docs/rules/pr-workflow.md docs/rules/governance.md "
         "docs/rules/environments.md docs/rules/code-style.md "
-        "docs/rules/research-workflow.md docs/rules/docs-and-pathref.md docs/adr",
+        "docs/rules/research-workflow.md docs/rules/collaboration.md "
+        "docs/rules/docs-and-pathref.md docs/adr",
         encoding="utf-8",
     )
     (root / "docs/rules/commands.md").write_text(
@@ -223,7 +231,7 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / ".githooks/pre-commit").write_text(
         "pre-commit run --hook-stage pre-commit\n"
-        "sh .githooks/run-python.sh -m scripts.research.governance gate\n",
+        "sh .githooks/run-python.sh -m scripts.research.governance gate --fast\n",
         encoding="utf-8",
     )
     (root / "Makefile").write_text(
@@ -234,7 +242,8 @@ def _write_minimal_repo(root: Path) -> None:
         "endif\n"
         "pre-pr:\n\t$(PYTHON) -m pre_commit run --all-files\n"
         "ai-review:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate validate --report .local/ai-review/latest.json\n"
-        "risk-check:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate risk --report .local/ai-review/latest.json\n",
+        "risk-check:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate risk --report .local/ai-review/latest.json\n"
+        'pr-ready:\n\t$(PYTHON) -m scripts.research.governance.pr_flow ready --title "$(TITLE)"\n',
         encoding="utf-8",
     )
     (root / ".pre-commit-config.yaml").write_text(
@@ -327,9 +336,14 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / "docs/rules/pr-workflow.md").write_text(
         "所有进入主干的改动必须通过 PR\n直写主干 ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON\n"
-        "禁止把功能分支本地合入\n有可用子 agent 能力\n无能力时记录原因\n"
+        "禁止把功能分支本地合入\n"
         "git fetch origin main\ngit merge --ff-only origin/main\n"
         "git branch -d <branch>\ngit push origin --delete <branch>\n",
+        encoding="utf-8",
+    )
+    (root / "docs/rules/collaboration.md").write_text(
+        "多个 AI agent\n分支名使用 ASCII\n本地共享工作区\n只读分析不要求创建分支\n"
+        "有可用子 agent 能力\n无能力时记录原因\n不采用任务登记\n",
         encoding="utf-8",
     )
     (root / "docs/rules/governance.md").write_text(
@@ -349,6 +363,7 @@ def _write_minimal_repo(root: Path) -> None:
                 "indexes.md @research-platform",
                 "docs/rules/** @research-platform",
                 "docs/adr/** @research-platform",
+                ".codex/skills/** @research-platform",
                 ".claude/skills/** @research-platform",
                 ".github/workflows/** @research-platform",
                 ".githooks/** @research-platform",
@@ -369,8 +384,22 @@ def _write_minimal_repo(root: Path) -> None:
         "本地 AI review 模式\n不完全 Review 模式授权\nCodex Code Review 结论\n"
         "本地安全 review\ncodex-security\nsecurity-guidance\n"
         "Codex\n"
+        "<!-- pr-flow:start -->\n<!-- pr-flow:end -->\n"
         "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate\n"
         "waiver\n证据\n",
+        encoding="utf-8",
+    )
+    (root / ".github/pull_request_template.md").write_text(
+        "## 改动目标\n\n"
+        "-\n\n"
+        "## 影响范围\n\n"
+        "-\n\n"
+        "<!-- pr-flow:start -->\n"
+        '运行 `make pr-ready TITLE="<PR标题>"` 后由脚本更新本区块。\n'
+        "<!-- pr-flow:end -->\n\n"
+        "## 人工补充\n\n"
+        "- 额外证据链接：\n"
+        "- waiver：\n",
         encoding="utf-8",
     )
     (root / "docs/rules/review-guidelines.md").write_text(
@@ -413,6 +442,24 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / ".claude/skills/jq-ab-test/SKILL.md").write_text(
         "variant_id 参数变体 结构变体 scripts.research.variants",
+        encoding="utf-8",
+    )
+    (root / ".codex/skills/quant-pr-workflow/SKILL.md").write_text(
+        "Quant PR Workflow docs/rules/pr-workflow.md make pr-ready "
+        "scripts.research.governance.pr_flow 不要把功能分支本地合入 main",
+        encoding="utf-8",
+    )
+    (root / ".codex/skills/quant-pr-workflow/agents/openai.yaml").write_text(
+        'display_name: "Quant PR 工作流"\n',
+        encoding="utf-8",
+    )
+    (root / ".codex/skills/quant-research-workflow/SKILL.md").write_text(
+        "Quant Research Workflow docs/rules/research-workflow.md "
+        "scripts.research.cli scripts.research.governance 不要把本地 replay 结论包装成云端确认",
+        encoding="utf-8",
+    )
+    (root / ".codex/skills/quant-research-workflow/agents/openai.yaml").write_text(
+        'display_name: "Quant Research 工作流"\n',
         encoding="utf-8",
     )
     (root / "path_aliases.json").write_text(
@@ -512,6 +559,105 @@ def test_governance_audit_passes_minimal_repo_without_expensive_checks(
     assert report.findings == ()
 
 
+def test_governance_main_forwards_fast_gate(monkeypatch, tmp_path: Path) -> None:
+    captured: list[str] = []
+
+    def fake_gate_main(argv: list[str]) -> int:
+        captured.extend(argv)
+        return 0
+
+    monkeypatch.setattr(governance_main, "gate_main", fake_gate_main)
+
+    code = governance_main.main(["gate", "--repo-root", str(tmp_path), "--fast"])
+
+    assert code == 0
+    assert captured == ["--repo-root", str(tmp_path), "--fast"]
+
+
+def test_governance_gate_fast_skips_slow_checks_and_fails_on_audit_errors(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class StubAudit:
+        ok = False
+
+        def to_dict(self) -> dict[str, object]:
+            return {"ok": False, "findings": ["audit error"]}
+
+    def fake_run_audit(
+        root: Path,
+        *,
+        check_cli_help: bool,
+        check_pathrefs: bool,
+    ) -> StubAudit:
+        captured["root"] = root
+        captured["check_cli_help"] = check_cli_help
+        captured["check_pathrefs"] = check_pathrefs
+        return StubAudit()
+
+    def fail_pathref(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("fast gate must not run pathref")
+
+    monkeypatch.setattr(governance_gate, "run_audit", fake_run_audit)
+    monkeypatch.setattr(governance_gate.subprocess, "run", fail_pathref)
+
+    code = governance_gate.main(["--repo-root", str(tmp_path), "--fast"])
+
+    assert code == 1
+    assert captured == {
+        "root": tmp_path.resolve(),
+        "check_cli_help": False,
+        "check_pathrefs": False,
+    }
+
+
+def test_governance_audit_flags_pre_commit_without_fast_gate(
+    tmp_path: Path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/pre-commit").write_text(
+        "pre-commit run --hook-stage pre-commit\n"
+        "sh .githooks/run-python.sh -m scripts.research.governance gate\n",
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "pre-commit hook must use fast governance gate" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_pre_push_with_fast_gate(
+    tmp_path: Path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/pre-push").write_text(
+        "\n".join(
+            [
+                "sh .githooks/run-python.sh -m scripts.research.governance.branch_protection pre-push",
+                "sh .githooks/run-python.sh -m scripts.research.governance gate --fast",
+                "git lfs pre-push",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "pre-push hook must use full governance gate" in finding.message
+        for finding in report.findings
+    )
+
+
 def test_local_review_entrypoints_are_tracked(tmp_path: Path) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / "Makefile").write_text(
@@ -522,7 +668,8 @@ def test_local_review_entrypoints_are_tracked(tmp_path: Path) -> None:
         "endif\n"
         "pre-pr:\n\t$(PYTHON) -m pre_commit run --all-files\n"
         "ai-review:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate validate --report .local/ai-review/latest.json\n"
-        "risk-check:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate risk --report .local/ai-review/latest.json\n",
+        "risk-check:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate risk --report .local/ai-review/latest.json\n"
+        'pr-ready:\n\t$(PYTHON) -m scripts.research.governance.pr_flow ready --title "$(TITLE)"\n',
         encoding="utf-8",
     )
     (tmp_path / ".pre-commit-config.yaml").write_text(
@@ -538,13 +685,41 @@ def test_local_review_entrypoints_are_tracked(tmp_path: Path) -> None:
     )
     (tmp_path / ".githooks/pre-commit").write_text(
         "pre-commit run --hook-stage pre-commit\n"
-        "sh .githooks/run-python.sh -m scripts.research.governance gate\n",
+        "sh .githooks/run-python.sh -m scripts.research.governance gate --fast\n",
         encoding="utf-8",
     )
 
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
 
     assert report.ok, [finding.message for finding in report.findings]
+
+
+def test_local_review_entrypoints_require_pr_ready(tmp_path: Path) -> None:
+    _write_minimal_repo(tmp_path)
+    makefile = tmp_path / "Makefile"
+    makefile.write_text(
+        makefile.read_text(encoding="utf-8").replace(
+            'pr-ready:\n\t$(PYTHON) -m scripts.research.governance.pr_flow ready --title "$(TITLE)"\n',
+            "",
+        ),
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "local_review"
+        and "Makefile missing pr-ready" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_tool_registry_registers_pr_flow_cli() -> None:
+    tool = default_tool_registry().get("research.pr_flow")
+
+    assert tool.entry_module == "scripts.research.governance.pr_flow"
+    assert "ready" in (tool.cli or "")
 
 
 def test_local_review_entrypoints_require_posix_make_wrapper(
@@ -698,7 +873,26 @@ def test_governance_audit_flags_invalid_pr_template(tmp_path) -> None:
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "pr_template" and "规则同步" in finding.message
+        finding.rule_id == "pr_template" and "pr-flow:start" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_pr_template_without_pr_flow_block(
+    tmp_path: Path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    template = tmp_path / ".github/pull_request_template.md"
+    template.write_text(
+        template.read_text(encoding="utf-8").replace("<!-- pr-flow:start -->", ""),
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "pr_template" and "pr-flow:start" in finding.message
         for finding in report.findings
     )
 
@@ -1299,7 +1493,8 @@ def test_governance_audit_flags_agents_without_sandbox_escalation_rule(
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "agent_entry_sync" and "须走项目 `.venv`" in finding.message
+        finding.rule_id == "agent_entry_sync"
+        and "项目 `.venv` 默认提权执行，否则无法读取base Python路径" in finding.message
         for finding in report.findings
     )
 
@@ -1340,6 +1535,38 @@ def test_governance_audit_flags_claude_with_codex_or_review_rules(tmp_path) -> N
     )
 
 
+def test_governance_audit_flags_missing_codex_pr_skill(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".codex/skills/quant-pr-workflow/SKILL.md").unlink()
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "skill_sync"
+        and "quant-pr-workflow skill missing" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_stale_codex_research_skill(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".codex/skills/quant-research-workflow/SKILL.md").write_text(
+        "Quant Research Workflow",
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "skill_sync"
+        and "quant-research-workflow skill missing docs/rules/research-workflow.md"
+        in finding.message
+        for finding in report.findings
+    )
+
+
 def test_governance_audit_flags_missing_root_indexes(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / "indexes.md").unlink()
@@ -1352,7 +1579,7 @@ def test_governance_audit_flags_missing_pr_cleanup_workflow_tokens(tmp_path) -> 
     _write_minimal_repo(tmp_path)
     (tmp_path / "docs/rules/pr-workflow.md").write_text(
         "所有进入主干的改动必须通过 PR\n直写主干 ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON\n"
-        "禁止把功能分支本地合入\n有可用子 agent 能力\n无能力时记录原因\n"
+        "禁止把功能分支本地合入\n"
         "git fetch origin main\ngit merge --ff-only origin/main\n",
         encoding="utf-8",
     )
@@ -1369,11 +1596,9 @@ def test_governance_audit_flags_missing_dispatch_first_workflow_tokens(
     tmp_path,
 ) -> None:
     _write_minimal_repo(tmp_path)
-    (tmp_path / "docs/rules/pr-workflow.md").write_text(
-        "所有进入主干的改动必须通过 PR\n直写主干 ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON\n"
-        "禁止把功能分支本地合入\n"
-        "git fetch origin main\ngit merge --ff-only origin/main\n"
-        "git branch -d <branch>\ngit push origin --delete <branch>\n",
+    (tmp_path / "docs/rules/collaboration.md").write_text(
+        "多个 AI agent\n分支名使用 ASCII\n本地共享工作区\n只读分析不要求创建分支\n"
+        "不采用任务登记\n",
         encoding="utf-8",
     )
 
@@ -1382,7 +1607,7 @@ def test_governance_audit_flags_missing_dispatch_first_workflow_tokens(
     assert not report.ok
     assert any(
         finding.rule_id == "governance_gate"
-        and "有可用子 agent 能力" in finding.message
+        and "collaboration.md missing 有可用子 agent 能力" in finding.message
         for finding in report.findings
     )
 
@@ -1601,6 +1826,10 @@ def test_low_risk_pr_body_does_not_require_codex_review() -> None:
 - 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
 - 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
+
+## 已运行检查
+
+- governance gate: `.githooks/run-python.sh -m scripts.research.governance gate`
 
 ## P2 保留项
 
@@ -1908,6 +2137,10 @@ def test_low_risk_pr_body_accepts_reviewer_names_without_fixed_phrase() -> None:
 - 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
 
+## 已运行检查
+
+- governance gate: `.githooks/run-python.sh -m scripts.research.governance gate`
+
 ## P2 保留项
 
 - 无
@@ -2012,6 +2245,10 @@ def test_pr_body_partial_ai_review_mode_accepts_user_authorization() -> None:
 - 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
 - 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
+
+## 已运行检查
+
+- governance gate: `.githooks/run-python.sh -m scripts.research.governance gate`
 
 ## P2 保留项
 
@@ -2194,6 +2431,59 @@ def test_low_risk_pr_body_requires_p2_section() -> None:
     assert "PR body missing section: P2 保留项" in report.errors
 
 
+def test_pr_body_accepts_p2_none_before_managed_block_end() -> None:
+    body = f"""
+## {pr_review_evidence.AI_REVIEW_SECTION_HEADER}
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence=Codex Security local review completed
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## 已运行检查
+
+- governance gate: `{pr_review_evidence.REQUIRED_GOVERNANCE_GATE_COMMANDS[0]}`
+
+## {pr_review_evidence.P2_SECTION_HEADER}
+
+- 无
+<!-- pr-flow:end -->
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert report.ok, report.errors
+
+
+def test_low_risk_pr_body_requires_local_governance_gate_command() -> None:
+    body = f"""
+## {pr_review_evidence.AI_REVIEW_SECTION_HEADER}
+
+- 风险等级: low
+- 是否需要官方 Codex Review: 否
+- 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence=Codex Security local review completed
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
+- P0/P1 未关闭项: 无
+
+## {pr_review_evidence.P2_SECTION_HEADER}
+
+- 无
+"""
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert (
+        "local check evidence must include governance gate wrapper command"
+        in report.errors
+    )
+
+
 def test_low_risk_pr_body_accepts_chinese_p2_fields() -> None:
     body = """
 ## AI Review 风险分级
@@ -2205,6 +2495,10 @@ def test_low_risk_pr_body_accepts_chinese_p2_fields() -> None:
 - 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
 - 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
+
+## 已运行检查
+
+- governance gate: `.githooks/run-python.sh -m scripts.research.governance gate`
 
 ## P2 保留项
 
@@ -2280,6 +2574,10 @@ def test_low_risk_pr_body_accepts_dispatched_detail_with_no_undispatched_items()
 - 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
 - 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent；无未分发项
 - P0/P1 未关闭项: 无
+
+## 已运行检查
+
+- governance gate: `.githooks/run-python.sh -m scripts.research.governance gate`
 
 ## P2 保留项
 
@@ -2428,6 +2726,10 @@ def _official_codex_skip_body(*, authorization: str | None = None) -> str:
 - 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
 
+## 已运行检查
+
+- governance gate: `.githooks/run-python.sh -m scripts.research.governance gate`
+
 ## P2 保留项
 
 - 无
@@ -2448,6 +2750,10 @@ def _low_risk_no_official_review_body() -> str:
 - 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
 - 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
+
+## 已运行检查
+
+- governance gate: `.githooks/run-python.sh -m scripts.research.governance gate`
 
 ## P2 保留项
 

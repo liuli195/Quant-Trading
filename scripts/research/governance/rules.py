@@ -39,6 +39,7 @@ REQUIRED_RULE_DOCS = (
     "docs/rules/commands.md",
     "docs/rules/environments.md",
     "docs/rules/research-workflow.md",
+    "docs/rules/collaboration.md",
     "docs/rules/code-style.md",
     "docs/rules/docs-and-pathref.md",
 )
@@ -48,6 +49,7 @@ REQUIRED_CODEOWNER_PATTERNS = (
     "indexes.md",
     "docs/rules/**",
     "docs/adr/**",
+    ".codex/skills/**",
     ".claude/skills/**",
     ".github/workflows/**",
     ".githooks/**",
@@ -56,7 +58,27 @@ REQUIRED_CODEOWNER_PATTERNS = (
     "path_aliases.json",
     "strategies/**",
 )
-PR_TEMPLATE_TOKENS = (
+REQUIRED_CODEX_SKILLS = (
+    (
+        "quant-pr-workflow",
+        (
+            "docs/rules/pr-workflow.md",
+            "make pr-ready",
+            "scripts.research.governance.pr_flow",
+            "不要把功能分支本地合入",
+        ),
+    ),
+    (
+        "quant-research-workflow",
+        (
+            "docs/rules/research-workflow.md",
+            "scripts.research.cli",
+            "scripts.research.governance",
+            "不要把本地 replay 结论包装成云端确认",
+        ),
+    ),
+)
+_OLD_PR_TEMPLATE_TOKENS = (
     "改动目标",
     "影响范围",
     "规则同步",
@@ -75,10 +97,22 @@ PR_TEMPLATE_TOKENS = (
     "不完全 Review 模式授权",
     "Codex Code Review 结论",
     "Codex",
+    "pr-flow:start",
     "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate",
     "waiver",
     "证据",
 )
+_SIMPLIFIED_PR_TEMPLATE_TOKENS = (
+    "改动目标",
+    "影响范围",
+    "pr-flow:start",
+    "pr-flow:end",
+    "make pr-ready",
+    "人工补充",
+    "额外证据链接",
+    "waiver",
+)
+PR_TEMPLATE_TOKENS = _SIMPLIFIED_PR_TEMPLATE_TOKENS
 REQUIRED_REVIEW_GUIDELINES_TOKENS = (
     "Codex Code Review",
     "@codex review",
@@ -127,7 +161,7 @@ REQUIRED_AGENT_ENTRY_TOKENS = (
     "docs/rules/review-guidelines.md",
     "简体中文，简洁直白",
     "聚宽云端",
-    "须走项目 `.venv`",
+    "项目 `.venv` 默认提权执行，否则无法读取base Python路径",
     "docs/rules/commands.md",
     "`gh` CLI 默认提权执行",
     "进入主干须通过 PR",
@@ -380,6 +414,30 @@ def _audit_claude_and_skills(root: Path) -> list[AuditFinding]:
                         "skill_sync", "error", f"jq-ab-test skill missing {token}"
                     )
                 )
+    for skill_name, required_tokens in REQUIRED_CODEX_SKILLS:
+        skill = root / ".codex" / "skills" / skill_name / "SKILL.md"
+        if not skill.is_file():
+            findings.append(
+                AuditFinding("skill_sync", "error", f"{skill_name} skill missing")
+            )
+            continue
+        text = skill.read_text(encoding="utf-8", errors="ignore")
+        for token in required_tokens:
+            if token not in text:
+                findings.append(
+                    AuditFinding(
+                        "skill_sync", "error", f"{skill_name} skill missing {token}"
+                    )
+                )
+        agent = root / ".codex" / "skills" / skill_name / "agents" / "openai.yaml"
+        if not agent.is_file():
+            findings.append(
+                AuditFinding(
+                    "skill_sync",
+                    "error",
+                    f"{skill_name} openai agent manifest missing",
+                )
+            )
     return findings
 
 
@@ -586,6 +644,14 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "governance_gate", "error", "pre-commit hook must use run-python.sh"
                 )
             )
+        if "scripts.research.governance gate --fast" not in text:
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "pre-commit hook must use fast governance gate",
+                )
+            )
 
     pre_push = root / ".githooks" / "pre-push"
     if not pre_push.is_file():
@@ -606,6 +672,14 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             findings.append(
                 AuditFinding(
                     "governance_gate", "error", "pre-push hook missing governance gate"
+                )
+            )
+        if "scripts.research.governance gate --fast" in text:
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "pre-push hook must use full governance gate",
                 )
             )
         if "git lfs pre-push" not in text:
@@ -835,13 +909,32 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             "git merge --ff-only origin/main",
             "git branch -d <branch>",
             "git push origin --delete <branch>",
-            "有可用子 agent 能力",
-            "无能力时记录原因",
         ):
             if token not in text:
                 findings.append(
                     AuditFinding(
                         "governance_gate", "error", f"pr-workflow.md missing {token}"
+                    )
+                )
+
+    collaboration = root / "docs" / "rules" / "collaboration.md"
+    if collaboration.is_file():
+        text = collaboration.read_text(encoding="utf-8", errors="ignore")
+        for token in (
+            "多个 AI agent",
+            "分支名使用 ASCII",
+            "本地共享工作区",
+            "只读分析不要求创建分支",
+            "有可用子 agent 能力",
+            "无能力时记录原因",
+            "不采用任务登记",
+        ):
+            if token not in text:
+                findings.append(
+                    AuditFinding(
+                        "governance_gate",
+                        "error",
+                        f"collaboration.md missing {token}",
                     )
                 )
 
@@ -881,7 +974,9 @@ def _audit_local_review_entrypoints(root: Path) -> list[AuditFinding]:
         "pre-pr",
         "ai-review",
         "risk-check",
+        "pr-ready",
         "scripts.research.governance.ai_review_gate",
+        "scripts.research.governance.pr_flow",
     ):
         if token not in make_text:
             findings.append(

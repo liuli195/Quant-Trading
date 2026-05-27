@@ -14,8 +14,9 @@
 - [environments.md](docs/rules/environments.md) <!-- pathref: docs/rules/environments.md --> — 本地与聚宽环境边界
 - [code-style.md](docs/rules/code-style.md) <!-- pathref: docs/rules/code-style.md --> — 策略代码和兼容写法
 - [research-workflow.md](docs/rules/research-workflow.md) <!-- pathref: docs/rules/research-workflow.md --> — 研究、数据和报告流程
+- [collaboration.md](docs/rules/collaboration.md) <!-- pathref: docs/rules/collaboration.md --> — AI 协作、分支命名、共享工作区
 - [docs-and-pathref.md](docs/rules/docs-and-pathref.md) <!-- pathref: docs/rules/docs-and-pathref.md --> — Markdown、pathref、报告索引
-- [pr-workflow.md](docs/rules/pr-workflow.md) <!-- pathref: docs/rules/pr-workflow.md --> — 分支、PR、主干同步
+- [pr-workflow.md](docs/rules/pr-workflow.md) <!-- pathref: docs/rules/pr-workflow.md --> — PR、主干同步、分支清理
 - [review-guidelines.md](docs/rules/review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md --> — 本地 AI review 和 Codex Review
 - [governance.md](docs/rules/governance.md) <!-- pathref: docs/rules/governance.md --> — CI、hooks、CODEOWNERS、waiver
 

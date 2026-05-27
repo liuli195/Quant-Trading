@@ -18,8 +18,9 @@
 | [environments.md](environments.md) <!-- pathref: docs/rules/environments.md --> | 本地、聚宽回测/模拟/研究环境边界 |
 | [code-style.md](code-style.md) <!-- pathref: docs/rules/code-style.md --> | 策略代码、测试、注释、兼容写法 |
 | [research-workflow.md](research-workflow.md) <!-- pathref: docs/rules/research-workflow.md --> | 本地研究、云端确认、数据和报告 |
+| [collaboration.md](collaboration.md) <!-- pathref: docs/rules/collaboration.md --> | AI 协作、分支命名、共享工作区 |
 | [docs-and-pathref.md](docs-and-pathref.md) <!-- pathref: docs/rules/docs-and-pathref.md --> | Markdown、pathref、报告索引 |
-| [pr-workflow.md](pr-workflow.md) <!-- pathref: docs/rules/pr-workflow.md --> | 分支、PR、主干同步、分支清理 |
+| [pr-workflow.md](pr-workflow.md) <!-- pathref: docs/rules/pr-workflow.md --> | PR、主干同步、分支清理 |
 | [review-guidelines.md](review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md --> | 本地 AI review、Codex Code Review、PR 证据 |
 | [governance.md](governance.md) <!-- pathref: docs/rules/governance.md --> | CI、hooks、CODEOWNERS、waiver、漂移检查 |
 

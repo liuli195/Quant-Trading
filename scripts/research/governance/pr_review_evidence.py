@@ -281,6 +281,8 @@ def _official_codex_required(
         )
     )
     errors.extend(_p2_section_errors(body))
+    if not _has_governance_gate_wrapper_command(body):
+        errors.append("local check evidence must include governance gate wrapper command")
     if blockers != "无":
         errors.append("P0/P1 未关闭项 must be 无")
     high_risk_files = _high_risk_changed_files(changed_files)
@@ -553,8 +555,16 @@ def _section_contains_any(section: str, tokens: Sequence[str]) -> bool:
 
 
 def _p2_section_declares_none_only(section: str) -> bool:
-    lines = [line.strip() for line in section.splitlines() if line.strip()]
+    lines = [
+        line
+        for raw_line in section.splitlines()
+        if (line := raw_line.strip()) and not _is_html_comment_line(line)
+    ]
     return lines == ["- 无"] or lines == ["* 无"]
+
+
+def _is_html_comment_line(line: str) -> bool:
+    return line.startswith("<!--") and line.endswith("-->")
 
 
 def _high_risk_changed_files(changed_files: Sequence[str] | None) -> tuple[str, ...]:
