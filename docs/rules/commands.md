@@ -35,7 +35,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.p
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.tools.path_tools.refactor check
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.docs index
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance gate
-gh pr checks <PR号或URL> --required --watch --fail-fast --interval 10
+gh pr checks <PR号或URL> --required --watch --interval 10
+gh pr checks <PR号或URL> --required
 ```
 
 可用 CLI：

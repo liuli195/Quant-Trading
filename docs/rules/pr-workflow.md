@@ -8,7 +8,7 @@ Review 细则见 [review-guidelines.md](review-guidelines.md) <!-- pathref: docs
 - 有可用子 agent 能力时，任务优先分发给子 agent；无能力、只读查询、强串行依赖或权限只在主会话可用时，记录不分发原因；无能力时记录原因和替代证据。
 - 所有进入主干的改动必须通过 PR，除非用户在当前对话中显式授权直写主干。
 - “合并到主干”默认指创建、更新或准备 PR，不是本地合并 `main`。
-- 等待云端 Codex review 时，默认使用 `gh pr checks <PR号或URL> --required --watch --fail-fast --interval 10` 等待 required checks；超时后只做一次 `scripts.research.governance.codex_review_monitor` 手动兜底；不得自行定时轮询 GitHub 原始评论。
+- 等待云端 Codex review 时，默认使用 `gh pr checks <PR号或URL> --required --watch --interval 10` 等待 required checks；等待结束或失败后再用 `gh pr checks <PR号或URL> --required` 查看最终状态；超时后只做一次 `scripts.research.governance.codex_review_monitor` 手动兜底；不得自行定时轮询 GitHub 原始评论。
 - 禁止把功能分支本地合入 `main`；GitHub 合并后的本地同步只能走受控 fast-forward。
 - 直写主干必须设置 `ALLOW_DIRECT_MAIN_WRITE=1` 和 `DIRECT_MAIN_WRITE_REASON=<reason>`，且只允许 fast-forward，禁止 reset、删除或 force rewrite。
 - PR 在 GitHub 合并后，本地 `main` 先 `git fetch origin main`，再设置 `ALLOW_MAIN_REF_UPDATE=1` 和 `MAIN_REF_UPDATE_REASON=<reason>`，并只用 `git merge --ff-only origin/main` 或等价 fast-forward 同步。
