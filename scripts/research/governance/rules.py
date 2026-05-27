@@ -870,6 +870,17 @@ def _audit_local_review_entrypoints(root: Path) -> list[AuditFinding]:
             findings.append(
                 AuditFinding("local_review", "error", f"Makefile missing {token}")
             )
+    if "powershell.exe" in make_text and (
+        ".githooks/run-python.sh" not in make_text
+        or "ifeq ($(OS),Windows_NT)" not in make_text
+    ):
+        findings.append(
+            AuditFinding(
+                "local_review",
+                "error",
+                "Makefile must use run-python.sh on non-Windows",
+            )
+        )
 
     pre_commit = root / ".pre-commit-config.yaml"
     if not pre_commit.is_file():

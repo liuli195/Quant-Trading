@@ -77,7 +77,7 @@ CODEX_NO_MAJOR_ISSUES_PATTERN = re.compile(
     re.IGNORECASE,
 )
 CONTEXT_HOSTILE_TRIGGER_PATTERN = re.compile(
-    r"(?:do\s+not\s+(?:execute|run)\s+(?:any\s+)?(?:local\s+)?"
+    r"(?:(?:do\s+not|don(?:'|\u2019)t)\s+(?:execute|run)\s+(?:any\s+)?(?:local\s+)?"
     r"(?:commands?|checks?|tests?|wrapper)|"
     r"only\s+do\s+a\s+static\s+diff\s+review|"
     r"(?:不要|不)(?:执行|运行).*?(?:本地命令|wrapper|检查|测试)|"
@@ -795,12 +795,14 @@ def _codex_completion_comment_errors(
         reviews,
         review_comments=review_comments,
         expected_head_sha=expected_head_sha,
+        submitted_after=comment_time,
     ):
         errors.append(CONTEXT_INVALID_REVIEW_ERROR)
     elif _current_head_has_blocking_codex_review(
         reviews,
         review_comments=review_comments,
         expected_head_sha=expected_head_sha,
+        submitted_after=comment_time,
     ):
         errors.append(
             "Codex review must not contain P0/P1 findings on the current head"
@@ -904,9 +906,12 @@ def codex_context_invalid_review_count(
     *,
     review_comments: Sequence[Mapping[str, object]] | None,
     expected_head_sha: str | None,
+    submitted_after: str | None = None,
 ) -> int:
     latest_review = _latest_effective_codex_review(
-        reviews, expected_head_sha=expected_head_sha
+        reviews,
+        expected_head_sha=expected_head_sha,
+        submitted_after=submitted_after,
     )
     if latest_review is None:
         return 0
@@ -920,7 +925,10 @@ def codex_context_invalid_review_count(
 
 
 def _latest_effective_codex_review(
-    reviews: Sequence[Mapping[str, object]], *, expected_head_sha: str | None
+    reviews: Sequence[Mapping[str, object]],
+    *,
+    expected_head_sha: str | None,
+    submitted_after: str | None = None,
 ) -> Mapping[str, object] | None:
     matched = []
     for review in reviews:
@@ -928,10 +936,23 @@ def _latest_effective_codex_review(
             continue
         if expected_head_sha and str(review.get("commit_id", "")) != expected_head_sha:
             continue
+        if not _review_is_after_time(review, submitted_after):
+            continue
         matched.append(review)
     if not matched:
         return None
     return sorted(matched, key=_review_sort_key)[-1]
+
+
+def _review_is_after_time(
+    review: Mapping[str, object], submitted_after: str | None
+) -> bool:
+    if not submitted_after:
+        return True
+    submitted_at = _review_submitted_time(review)
+    if not submitted_at:
+        return True
+    return submitted_after < submitted_at
 
 
 def _review_sort_key(review: Mapping[str, object]) -> str:
@@ -965,11 +986,14 @@ def _current_head_has_blocking_codex_review(
     *,
     review_comments: Sequence[Mapping[str, object]] | None,
     expected_head_sha: str | None,
+    submitted_after: str | None = None,
 ) -> bool:
     for review in reviews:
         if not is_effective_codex_review(review):
             continue
         if expected_head_sha and str(review.get("commit_id", "")) != expected_head_sha:
+            continue
+        if not _review_is_after_time(review, submitted_after):
             continue
         if _review_has_blocking_findings(
             review, review_id=str(review.get("id", "")), review_comments=review_comments
