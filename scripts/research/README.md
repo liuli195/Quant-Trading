@@ -177,6 +177,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.p
 
 ### 中央工具注册（registry）
 
+Windows：
+
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.registry.tool_registry list
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.registry.tool_registry list --group-by-library
@@ -185,7 +187,17 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.p
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.registry.tool_registry write-layers
 ```
 
-登记工具 ID、所属层、入口模块、CLI、输入输出、README、文档和测试锚点。
+POSIX / Codex Cloud：
+
+```bash
+.githooks/run-python.sh -m scripts.research.registry.tool_registry list
+.githooks/run-python.sh -m scripts.research.registry.tool_registry list --group-by-library
+.githooks/run-python.sh -m scripts.research.registry.tool_registry list --group-by-layer
+.githooks/run-python.sh -m scripts.research.registry.tool_registry validate
+.githooks/run-python.sh -m scripts.research.registry.tool_registry write-layers
+```
+
+登记工具 ID、所属层、入口模块、Windows/POSIX CLI、输入输出、README、文档和测试锚点。
 `write-layers` 会从注册表生成 [layers](layers) <!-- pathref: scripts/research/layers --> 下的5层工具索引。
 
 ### 治理审计（governance）

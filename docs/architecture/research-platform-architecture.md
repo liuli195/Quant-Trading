@@ -102,7 +102,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.p
 
 中央工具注册表按 `library` 管理正式工具。`scripts.research`、`scripts.research.research_core`、专题研究库、`scripts.tools.jq_automation` 和 `scripts.tools.path_tools` 都必须有明确登记项。
 
-登记项包含 `tool_id`、`library`、`layer`、`kind`、`entry_module`、`cli`、README、文档、测试锚点、输入和输出。CLI 元数据必须使用 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m ...`。
+登记项包含 `tool_id`、`library`、`layer`、`kind`、`entry_module`、`cli`、`cli_windows`、`cli_posix`、README、文档、测试锚点、输入和输出。CLI 元数据必须同时生成 Windows `run-python.ps1` 命令和 POSIX `run-python.sh` 命令。
 
 [layers](../../scripts/research/layers) <!-- pathref: scripts/research/layers --> 是按5层生成的工具索引目录，来源仍是同一份 registry；源码继续按库维护，避免为了分层视图重复搬迁实现。
 
@@ -110,6 +110,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.p
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.registry.tool_registry write-layers
+```
+
+```bash
+.githooks/run-python.sh -m scripts.research.registry.tool_registry write-layers
 ```
 
 治理审计会：

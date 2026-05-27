@@ -49,6 +49,8 @@ bash .githooks/setup-python.sh
 
 ## 常用命令
 
+以下示例默认使用 Windows 本地入口；Codex Cloud / Linux / POSIX 环境把命令前缀替换为 `.githooks/run-python.sh -m`。
+
 ```powershell
 # 语法检查
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m py_compile strategies\<strategy>\<strategy>.py
