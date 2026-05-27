@@ -62,13 +62,15 @@ BLOCKING_CODEX_FINDING_PATTERN = re.compile(
 )
 CODEX_CONTEXT_INVALID_PATTERN = re.compile(
     r"(?:(?:cannot|can't|can\s*not|unable\s+to|could\s+not)\s+"
-    r".*?(?:review|complete|read|access).*?(?:diff|code\s+diff|unified\s+diff)|"
+    r".*?(?:review|complete|read|access|see|view).*?(?:diff|code\s+diff|unified\s+diff)|"
+    r"(?:don't|do\s+not)\s+have\s+access\s+to\s+(?:the\s+)?(?:PR\s+)?diff|"
     r"conversation\s+did\s+not\s+include.*diff|"
     r"cannot\s+complete.*static\s+review.*diff|"
     r"could\s+not\s+read.*diff|"
     r"(?:provide|paste)\s+(?:the\s+)?(?:unified\s+)?diff\s+"
-    r"(?:to|before|for)\s+(?:complete|perform|review)|"
-    r"无法.*?(?:审查|完成|读取|获取).*?(?:diff|差异|统一\s*diff)|"
+    r"(?:to|before|for|so\s+I\s+can)\s+(?:complete|perform|review)|"
+    r"(?:provide|paste)\s+(?:the\s+)?PR\s+diff\s+so\s+I\s+can\s+review|"
+    r"无法.*?(?:审查|完成|读取|获取|查看).*?(?:diff|差异|统一\s*diff)|"
     r"(?:缺少|未包含).*?(?:diff|差异|统一\s*diff))",
     re.IGNORECASE | re.DOTALL,
 )
@@ -79,8 +81,10 @@ CODEX_NO_MAJOR_ISSUES_PATTERN = re.compile(
 CONTEXT_HOSTILE_TRIGGER_PATTERN = re.compile(
     r"(?:(?:do\s+not|don(?:'|\u2019)t)\s+(?:execute|run)\s+(?:any\s+)?(?:local\s+)?"
     r"(?:commands?|checks?|tests?|wrapper)|"
+    r"(?:do\s+not|don(?:'|\u2019)t)\s+use\s+(?:tools?|wrapper)|"
+    r"(?:do\s+not|don(?:'|\u2019)t)\s+read\s+(?:the\s+)?(?:repository|repo|GitHub\s+diff|diff)|"
     r"only\s+do\s+a\s+static\s+diff\s+review|"
-    r"(?:不要|不)(?:执行|运行).*?(?:本地命令|wrapper|检查|测试)|"
+    r"(?:不要|不)(?:执行|运行|使用|读取).*?(?:命令|工具|本地命令|wrapper|检查|测试|仓库|代码库|GitHub\s*diff|diff)|"
     r"只做静态\s*diff\s*review)",
     re.IGNORECASE,
 )
@@ -802,7 +806,6 @@ def _codex_completion_comment_errors(
         reviews,
         review_comments=review_comments,
         expected_head_sha=expected_head_sha,
-        submitted_after=comment_time,
     ):
         errors.append(
             "Codex review must not contain P0/P1 findings on the current head"
