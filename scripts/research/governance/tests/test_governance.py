@@ -2472,6 +2472,7 @@ def _codex_completion_comment(
     comment_id: int = 4484023766,
     *,
     created_at: str = "2026-05-19T01:00:00Z",
+    reaction_created_at: str = "2026-05-19T01:01:00Z",
 ) -> dict[str, object]:
     return {
         "id": comment_id,
@@ -2481,7 +2482,7 @@ def _codex_completion_comment(
         "reaction_items": [
             {
                 "content": "+1",
-                "created_at": "2026-05-19T01:01:00Z",
+                "created_at": reaction_created_at,
                 "user": {"login": "chatgpt-codex-connector"},
             }
         ],
@@ -3362,6 +3363,39 @@ def test_pr_review_evidence_completion_comment_supersedes_earlier_invalid_review
                 "user": {"login": "liuli195"},
             },
             _codex_no_major_issues_comment(created_at="2026-05-19T01:05:00Z"),
+        ],
+        reviews=[
+            _codex_context_invalid_review(
+                review_id=4314779358,
+                head_sha=head_sha,
+                submitted_at="2026-05-19T01:02:00Z",
+            )
+        ],
+        review_comments=[],
+    )
+
+    assert report.ok
+    assert "Codex review context is invalid for the current head" not in report.errors
+
+
+def test_pr_review_evidence_completion_reaction_supersedes_earlier_invalid_review() -> (
+    None
+):
+    head_sha = "0" * 40
+    body = _valid_codex_review_body().replace(
+        "https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
+        "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484023766",
+    )
+    report = validate_pr_body(
+        body,
+        expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
+        expected_head_sha=head_sha,
+        expected_head_created_at="2026-05-19T00:59:00Z",
+        comments=[
+            _codex_completion_comment(
+                created_at="2026-05-19T01:00:00Z",
+                reaction_created_at="2026-05-19T01:05:00Z",
+            ),
         ],
         reviews=[
             _codex_context_invalid_review(
@@ -4433,6 +4467,39 @@ def test_codex_review_monitor_completion_supersedes_context_invalid_review() -> 
     assert (
         report.latest_review_url
         == "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484229220"
+    )
+
+
+def test_codex_review_monitor_completion_reaction_supersedes_context_invalid_review() -> (
+    None
+):
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        head_created_at="2026-05-19T00:59:00Z",
+        issue_comments=[
+            _codex_completion_comment(
+                created_at="2026-05-19T01:00:00Z",
+                reaction_created_at="2026-05-19T01:05:00Z",
+            ),
+        ],
+        reviews=[
+            _codex_context_invalid_review(
+                review_id=4314779358,
+                head_sha=head_sha,
+                submitted_at="2026-05-19T01:02:00Z",
+            )
+        ],
+        review_comments=[],
+    )
+
+    assert report.status == "passed"
+    assert report.context_invalid_reviews == 0
+    assert (
+        report.latest_review_url
+        == "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484023766"
     )
 
 

@@ -812,7 +812,11 @@ def _codex_completion_comment_errors(
         trigger_comments,
         expected_head_created_at=expected_head_created_at,
     )
-    comment_time = _comment_effective_time(comment)
+    comment_time = codex_completion_effective_time(
+        comment,
+        expected_pr_url=expected_pr_url,
+        expected_head_sha=expected_head_sha,
+    )
     if latest_trigger_time and comment_time and comment_time < latest_trigger_time:
         errors.append(
             "Codex completion comment must match the latest required @codex review trigger"
@@ -1196,7 +1200,29 @@ def _find_comment_by_id(
 
 
 def has_codex_completion_reaction(comment: Mapping[str, object]) -> bool:
+    return _codex_completion_reaction_time(comment) is not None
+
+
+def codex_completion_effective_time(
+    comment: Mapping[str, object],
+    *,
+    expected_pr_url: str | None = None,
+    expected_head_sha: str | None = None,
+) -> str:
+    if _is_required_trigger_comment(
+        comment,
+        expected_pr_url=expected_pr_url,
+        expected_head_sha=expected_head_sha,
+    ):
+        reaction_time = _codex_completion_reaction_time(comment)
+        if reaction_time:
+            return reaction_time
+    return _comment_effective_time(comment)
+
+
+def _codex_completion_reaction_time(comment: Mapping[str, object]) -> str | None:
     comment_time = _comment_effective_time(comment)
+    matched_times: list[str] = []
     for reaction in _comment_reaction_items(comment):
         if str(reaction.get("content", "")) != "+1":
             continue
@@ -1207,8 +1233,10 @@ def has_codex_completion_reaction(comment: Mapping[str, object]) -> bool:
         reaction_time = _first_value(reaction, "created_at")
         if reaction_time and comment_time and reaction_time < comment_time:
             continue
-        return True
-    return False
+        matched_times.append(reaction_time or comment_time)
+    if not matched_times:
+        return None
+    return max(matched_times)
 
 
 def is_codex_completion_comment(comment: Mapping[str, object]) -> bool:

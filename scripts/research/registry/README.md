@@ -4,6 +4,8 @@
 
 ## 命令
 
+Windows：
+
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.registry.tool_registry list
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.registry.tool_registry list --group-by-library
@@ -11,6 +13,17 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.p
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.registry.tool_registry list --format markdown
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.registry.tool_registry validate
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.registry.tool_registry write-layers
+```
+
+POSIX / Codex Cloud：
+
+```bash
+.githooks/run-python.sh -m scripts.research.registry.tool_registry list
+.githooks/run-python.sh -m scripts.research.registry.tool_registry list --group-by-library
+.githooks/run-python.sh -m scripts.research.registry.tool_registry list --group-by-layer
+.githooks/run-python.sh -m scripts.research.registry.tool_registry list --format markdown
+.githooks/run-python.sh -m scripts.research.registry.tool_registry validate
+.githooks/run-python.sh -m scripts.research.registry.tool_registry write-layers
 ```
 
 ## 登记字段
@@ -28,7 +41,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.p
 
 - 新正式 CLI 必须登记。
 - 新库级工具至少登记到所属库。
-- CLI 元数据必须使用 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m ...`。
+- CLI 元数据必须同时生成 Windows `run-python.ps1` 命令和 POSIX `run-python.sh` 命令。
 - 每个登记项必须有 owner 和 lifecycle。
 - 治理审计会扫描未登记 CLI，并按 registry 自动执行 `--help` 检查。
 - [layers](../layers) <!-- pathref: scripts/research/layers --> 是 registry 生成的5层工具索引，缺失或过期会被治理审计拦截。

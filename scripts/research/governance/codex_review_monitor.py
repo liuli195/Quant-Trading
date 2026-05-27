@@ -23,6 +23,7 @@ from scripts.research.governance.pr_review_evidence import (
     CODEX_REVIEW_AUTHORS,
     _fetch_pr_review_threads,
     codex_context_invalid_review_count,
+    codex_completion_effective_time,
     has_codex_completion_reaction,
     head_updated_at_from_monitor_state,
     is_codex_completion_comment,
@@ -95,7 +96,13 @@ def build_monitor_report(
         expected_head_sha=head_sha,
     )
     completion_time = (
-        _comment_effective_time(completion_comment) if completion_comment else ""
+        codex_completion_effective_time(
+            completion_comment,
+            expected_pr_url=pr_url,
+            expected_head_sha=head_sha,
+        )
+        if completion_comment
+        else ""
     )
     latest_review_time = _review_submitted_at(latest_review) if latest_review else ""
     completion_is_latest = completion_comment is not None and (
@@ -454,7 +461,14 @@ def _latest_codex_completion_comment(
             matched.append(comment)
     if not matched:
         return None
-    return sorted(matched, key=_comment_effective_time)[-1]
+    return sorted(
+        matched,
+        key=lambda comment: codex_completion_effective_time(
+            comment,
+            expected_pr_url=expected_pr_url,
+            expected_head_sha=expected_head_sha,
+        ),
+    )[-1]
 
 
 def _comment_effective_time(comment: Mapping[str, object]) -> str:
