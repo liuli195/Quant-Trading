@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "catalog_type": "docs",
-  "generated_at": "2026-05-26T15:49:17+00:00",
+  "generated_at": "2026-05-26T20:05:15+00:00",
   "count": 48,
   "reports": [
     {
@@ -32,7 +32,7 @@
         "docs/indexes/docs_catalog.json",
         "docs/guides/feishu-relay-tools.md"
       ],
-      "updated_at": "2026-05-24T17:55:26+00:00"
+      "updated_at": "2026-05-26T18:22:48+00:00"
     },
     {
       "path": "docs/adr/0001-rule-source-and-governance-model.md",
@@ -147,7 +147,7 @@
         "docs/indexes/reports.md",
         "scripts/research/layers"
       ],
-      "updated_at": "2026-05-20T11:48:29+00:00"
+      "updated_at": "2026-05-26T18:22:48+00:00"
     },
     {
       "path": "docs/design/cc-switch-cli.md",
@@ -257,9 +257,11 @@
       "date": null,
       "tags": [],
       "pathrefs": [
+        "repo/requirements-dev.txt",
+        "repo/requirements-dev.txt",
         "repo/requirements.txt"
       ],
-      "updated_at": "2026-05-19T06:47:01+00:00"
+      "updated_at": "2026-05-26T19:57:45+00:00"
     },
     {
       "path": "docs/guides/research-workflow-migration.md",
@@ -288,7 +290,7 @@
         "scripts/research/platform",
         "docs/architecture/research-platform-architecture.md"
       ],
-      "updated_at": "2026-05-18T21:37:05+00:00"
+      "updated_at": "2026-05-26T18:22:48+00:00"
     },
     {
       "path": "docs/joinquant-data/JQ_Alpha101.md",
@@ -515,11 +517,12 @@
       "tags": [],
       "pathrefs": [
         "repo/AGENTS.md",
+        "docs/guides/local-python-env.md",
         "scripts/tools/jq_automation/README.md",
         "scripts/tools/path_tools/README.md",
         "docs/guides/research-workflow.md"
       ],
-      "updated_at": "2026-05-20T11:48:29+00:00"
+      "updated_at": "2026-05-26T19:57:45+00:00"
     },
     {
       "path": "docs/rules/docs-and-pathref.md",
@@ -593,7 +596,7 @@
         "repo/AGENTS.md",
         "repo/CLAUDE.md"
       ],
-      "updated_at": "2026-05-25T03:31:23+00:00"
+      "updated_at": "2026-05-26T19:07:00+00:00"
     },
     {
       "path": "docs/rules/research-workflow.md",
@@ -624,7 +627,7 @@
         "docs/rules/code-style.md",
         "docs/rules/docs-and-pathref.md"
       ],
-      "updated_at": "2026-05-25T03:31:23+00:00"
+      "updated_at": "2026-05-26T19:06:53+00:00"
     },
     {
       "path": "docs/superpowers/plans/2026-05-20-backtest-data-redundancy-compaction.md",
@@ -684,7 +687,7 @@
         "strategies/etf_factor_rotation/tests/test_etf_factor_rotation.py",
         "scripts/tools/jq_automation/README.md"
       ],
-      "updated_at": "2026-05-26T15:01:25+00:00"
+      "updated_at": "2026-05-26T16:45:04+00:00"
     },
     {
       "path": "docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md",

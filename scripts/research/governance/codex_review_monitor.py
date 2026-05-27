@@ -13,10 +13,17 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from scripts.research.governance.codex_review_contract import (
+    is_codex_review_request,
+)
 from scripts.research.governance.pr_review_evidence import (
     BLOCKING_CODEX_FINDING_PATTERN,
+    CODEX_CONTEXT_INVALID_PATTERN,
+    CONTEXT_HOSTILE_TRIGGER_PATTERN,
     CODEX_REVIEW_AUTHORS,
     _fetch_pr_review_threads,
+    codex_context_invalid_review_count,
+    codex_completion_effective_time,
     has_codex_completion_reaction,
     head_updated_at_from_monitor_state,
     is_codex_completion_comment,
@@ -47,6 +54,8 @@ class MonitorReport:
     advisory_findings: int
     message: str
     head_updated_at: str | None = None
+    context_invalid_reviews: int = 0
+    trigger_invalid: bool = False
 
 
 def build_monitor_report(
@@ -63,9 +72,13 @@ def build_monitor_report(
     """Build a status summary for Codex reviews on the PR head."""
 
     head_sha = _head_sha(pr)
+    pr_url = str(pr.get("html_url", "")) or f"https://github.com/{repo}/pull/{pr_number}"
     skip_authorized = official_codex_review_skip_authorized(str(pr.get("body", "")))
     trigger_time = _required_trigger_time(
-        issue_comments, head_created_at=head_created_at
+        issue_comments,
+        head_created_at=head_created_at,
+        expected_pr_url=pr_url,
+        expected_head_sha=head_sha,
     )
     trigger_found = trigger_time is not None
     current_head_reviews = _current_head_codex_reviews(reviews, head_sha=head_sha)
@@ -79,20 +92,46 @@ def build_monitor_report(
         issue_comments,
         head_created_at=head_created_at,
         trigger_time=trigger_time,
+        expected_pr_url=pr_url,
+        expected_head_sha=head_sha,
     )
-    latest_review_url = (
-        _review_url(repo=repo, pr_number=pr_number, review=latest_review)
-        if latest_review
-        else None
+    completion_time = (
+        codex_completion_effective_time(
+            completion_comment,
+            expected_pr_url=pr_url,
+            expected_head_sha=head_sha,
+        )
+        if completion_comment
+        else ""
     )
-    latest_review_sha = (
-        str(latest_review.get("commit_id", "")) if latest_review else None
+    latest_review_time = _review_submitted_at(latest_review) if latest_review else ""
+    completion_is_latest = completion_comment is not None and (
+        latest_review is None or not latest_review_time or latest_review_time <= completion_time
     )
-    if latest_review_url is None and completion_comment is not None:
+    if completion_comment is not None and completion_is_latest:
         latest_review_url = _issue_comment_url(
             repo=repo, pr_number=pr_number, comment=completion_comment
         )
         latest_review_sha = head_sha
+        reviewed_until = completion_time
+        context_invalid_cutoff = completion_time
+    elif latest_review is not None:
+        latest_review_url = _review_url(
+            repo=repo, pr_number=pr_number, review=latest_review
+        )
+        latest_review_sha = str(latest_review.get("commit_id", ""))
+        reviewed_until = _review_submitted_at(latest_review)
+        context_invalid_cutoff = None
+    else:
+        latest_review_url = None
+        latest_review_sha = None
+        reviewed_until = None
+        context_invalid_cutoff = None
+    trigger_invalid = _has_context_hostile_trigger_comment(
+        issue_comments,
+        head_created_at=head_created_at,
+        before_or_at=reviewed_until,
+    )
     blocking_findings = _count_reviews_findings(
         current_head_reviews,
         review_comments=review_comments,
@@ -103,18 +142,37 @@ def build_monitor_report(
         if review_threads is not None
         else 0
     )
+    context_invalid_reviews = codex_context_invalid_review_count(
+        current_head_reviews,
+        review_comments=review_comments,
+        expected_head_sha=head_sha,
+        submitted_after=context_invalid_cutoff,
+    )
     advisory_findings = _count_reviews_findings(
         current_head_reviews,
         review_comments=review_comments,
         pattern=P2_FINDING_PATTERN,
     )
 
-    if blocking_findings:
+    if context_invalid_reviews:
+        status = "context_invalid"
+        message = (
+            "Codex review context invalid: review did not receive a reliable "
+            "current-head diff context. Treat this as a review workflow P1, not "
+            "as a passable code review finding."
+        )
+    elif blocking_findings:
         status = "blocked"
         message = "Codex review 含 P0/P1 阻断发现，不能填写通过结论。"
     elif skip_authorized:
         status = "skipped"
         message = "官方 Codex review 已由用户授权跳过。"
+    elif trigger_invalid:
+        status = "trigger_invalid"
+        message = (
+            "Codex review trigger context invalid: trigger comments must not "
+            "disable repository context or local command access."
+        )
     elif not trigger_found:
         status = "waiting_for_trigger"
         message = "未发现符合规则的 `@codex review` 触发评论。"
@@ -136,6 +194,8 @@ def build_monitor_report(
         advisory_findings=advisory_findings,
         message=message,
         head_updated_at=head_created_at,
+        context_invalid_reviews=context_invalid_reviews,
+        trigger_invalid=trigger_invalid,
     )
 
 
@@ -143,6 +203,8 @@ def render_monitor_comment(report: MonitorReport) -> str:
     status_label = {
         "waiting_for_trigger": "等待触发",
         "waiting_for_codex": "等待 Codex review",
+        "trigger_invalid": "trigger context invalid",
+        "context_invalid": "context invalid",
         "blocked": "阻断",
         "passed": "可更新通过证据",
         "skipped": "授权跳过",
@@ -165,6 +227,7 @@ def render_monitor_comment(report: MonitorReport) -> str:
             f"- 合规触发评论: {'已发现' if report.trigger_found else '未发现'}",
             f"- 最新当前 head Codex review: {latest_review}",
             f"- review commit: `{latest_sha}`",
+            f"- context invalid: `{report.context_invalid_reviews}`",
             f"- P0/P1: `{report.blocking_findings}`",
             f"- P2: `{report.advisory_findings}`",
             "",
@@ -203,6 +266,8 @@ def sync_commit_status(
     state = {
         "waiting_for_trigger": "failure",
         "waiting_for_codex": "pending",
+        "trigger_invalid": "failure",
+        "context_invalid": "failure",
         "blocked": "failure",
         "passed": "success",
         "skipped": "success",
@@ -215,6 +280,8 @@ def sync_commit_status(
     description = {
         "waiting_for_trigger": "Waiting for required @codex review trigger",
         "waiting_for_codex": "Waiting for Codex review on current head",
+        "trigger_invalid": "Codex review trigger disables required context",
+        "context_invalid": "Codex review context is invalid for current head",
         "blocked": "Codex review has P0/P1 findings",
         "passed": "Codex review has no P0/P1 findings",
         "skipped": "Official Codex review skipped by user authorization",
@@ -247,11 +314,16 @@ def _required_trigger_time(
     issue_comments: Sequence[Mapping[str, object]],
     *,
     head_created_at: str | None = None,
+    expected_pr_url: str | None = None,
+    expected_head_sha: str | None = None,
 ) -> str | None:
     matched_times = [
         _comment_effective_time(comment)
         for comment in _required_trigger_comments(
-            issue_comments, head_created_at=head_created_at
+            issue_comments,
+            head_created_at=head_created_at,
+            expected_pr_url=expected_pr_url,
+            expected_head_sha=expected_head_sha,
         )
     ]
     return max(matched_times) if matched_times else None
@@ -261,10 +333,32 @@ def _required_trigger_comments(
     issue_comments: Sequence[Mapping[str, object]],
     *,
     head_created_at: str | None = None,
+    expected_pr_url: str | None = None,
+    expected_head_sha: str | None = None,
+) -> tuple[Mapping[str, object], ...]:
+    matched: list[Mapping[str, object]] = []
+    for comment in _trigger_candidate_comments(
+        issue_comments, head_created_at=head_created_at
+    ):
+        if not _is_required_trigger_comment(
+            comment,
+            expected_pr_url=expected_pr_url,
+            expected_head_sha=expected_head_sha,
+        ):
+            continue
+        matched.append(comment)
+    return tuple(matched)
+
+
+def _trigger_candidate_comments(
+    issue_comments: Sequence[Mapping[str, object]],
+    *,
+    head_created_at: str | None = None,
+    before_or_at: str | None = None,
 ) -> tuple[Mapping[str, object], ...]:
     matched: list[Mapping[str, object]] = []
     for comment in issue_comments:
-        if not _is_required_trigger_comment(comment):
+        if not _is_trigger_candidate_comment(comment):
             continue
         effective_time = _comment_effective_time(comment)
         if not effective_time:
@@ -272,11 +366,43 @@ def _required_trigger_comments(
                 continue
         elif head_created_at and effective_time < head_created_at:
             continue
+        if before_or_at and effective_time and before_or_at < effective_time:
+            continue
         matched.append(comment)
     return tuple(matched)
 
 
-def _is_required_trigger_comment(comment: Mapping[str, object]) -> bool:
+def _has_context_hostile_trigger_comment(
+    issue_comments: Sequence[Mapping[str, object]],
+    *,
+    head_created_at: str | None = None,
+    before_or_at: str | None = None,
+) -> bool:
+    latest = _latest_trigger_candidate_comment(
+        issue_comments, head_created_at=head_created_at, before_or_at=before_or_at
+    )
+    return latest is not None and _is_context_hostile_trigger_comment(latest)
+
+
+def _latest_trigger_candidate_comment(
+    issue_comments: Sequence[Mapping[str, object]],
+    *,
+    head_created_at: str | None = None,
+    before_or_at: str | None = None,
+) -> Mapping[str, object] | None:
+    latest: Mapping[str, object] | None = None
+    latest_time = ""
+    for comment in _trigger_candidate_comments(
+        issue_comments, head_created_at=head_created_at, before_or_at=before_or_at
+    ):
+        effective_time = _comment_effective_time(comment)
+        if latest is None or not effective_time or not latest_time or latest_time <= effective_time:
+            latest = comment
+            latest_time = effective_time
+    return latest
+
+
+def _is_trigger_candidate_comment(comment: Mapping[str, object]) -> bool:
     user = comment.get("user")
     login = user.get("login") if isinstance(user, Mapping) else ""
     if str(login) in CODEX_REVIEW_AUTHORS:
@@ -285,11 +411,37 @@ def _is_required_trigger_comment(comment: Mapping[str, object]) -> bool:
     return all(token in body for token in REQUIRED_TRIGGER_TOKENS)
 
 
+def _is_context_hostile_trigger_comment(comment: Mapping[str, object]) -> bool:
+    if not _is_trigger_candidate_comment(comment):
+        return False
+    body = str(comment.get("body", ""))
+    return not is_codex_review_request(body) or bool(
+        CONTEXT_HOSTILE_TRIGGER_PATTERN.search(body)
+    )
+
+
+def _is_required_trigger_comment(
+    comment: Mapping[str, object],
+    *,
+    expected_pr_url: str | None = None,
+    expected_head_sha: str | None = None,
+) -> bool:
+    if not _is_trigger_candidate_comment(comment):
+        return False
+    return is_codex_review_request(
+        str(comment.get("body", "")),
+        expected_pr_url=expected_pr_url,
+        expected_head_sha=expected_head_sha,
+    )
+
+
 def _latest_codex_completion_comment(
     issue_comments: Sequence[Mapping[str, object]],
     *,
     head_created_at: str | None = None,
     trigger_time: str | None = None,
+    expected_pr_url: str | None = None,
+    expected_head_sha: str | None = None,
 ) -> Mapping[str, object] | None:
     matched: list[Mapping[str, object]] = []
     for comment in issue_comments:
@@ -298,16 +450,25 @@ def _latest_codex_completion_comment(
             continue
         if trigger_time and comment_time and comment_time < trigger_time:
             continue
-        if _is_required_trigger_comment(comment) and has_codex_completion_reaction(
-            comment
-        ):
+        if _is_required_trigger_comment(
+            comment,
+            expected_pr_url=expected_pr_url,
+            expected_head_sha=expected_head_sha,
+        ) and has_codex_completion_reaction(comment):
             matched.append(comment)
             continue
         if is_codex_completion_comment(comment):
             matched.append(comment)
     if not matched:
         return None
-    return sorted(matched, key=_comment_effective_time)[-1]
+    return sorted(
+        matched,
+        key=lambda comment: codex_completion_effective_time(
+            comment,
+            expected_pr_url=expected_pr_url,
+            expected_head_sha=expected_head_sha,
+        ),
+    )[-1]
 
 
 def _comment_effective_time(comment: Mapping[str, object]) -> str:
@@ -393,6 +554,10 @@ def _count_review_findings(
     for comment in review_comments:
         if str(comment.get("pull_request_review_id", "")) == review_id:
             texts.append(str(comment.get("body", "")))
+    if pattern is BLOCKING_CODEX_FINDING_PATTERN and any(
+        CODEX_CONTEXT_INVALID_PATTERN.search(text) for text in texts
+    ):
+        return 0
     return sum(1 for text in texts if pattern.search(text))
 
 

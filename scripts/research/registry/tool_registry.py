@@ -10,7 +10,11 @@ from typing import Any
 from .schemas import ToolDefinition
 
 
-VENV_PYTHON = r".\.venv\Scripts\python.exe"
+WINDOWS_PYTHON_CLI_WRAPPER = (
+    r"powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1"
+)
+POSIX_PYTHON_CLI_WRAPPER = ".githooks/run-python.sh"
+PYTHON_CLI_WRAPPER = WINDOWS_PYTHON_CLI_WRAPPER
 
 
 LAYER_ORDER = (
@@ -51,8 +55,29 @@ LAYER_FILENAMES = {
 
 
 def _cli(module: str, suffix: str = "") -> str:
-    command = f"{VENV_PYTHON} -m {module}"
+    command = f"{PYTHON_CLI_WRAPPER} -m {module}"
     return f"{command} {suffix}".strip()
+
+
+def _posix_cli(command: str | None) -> str:
+    if not command:
+        return ""
+    return command.replace(
+        WINDOWS_PYTHON_CLI_WRAPPER,
+        POSIX_PYTHON_CLI_WRAPPER,
+        1,
+    )
+
+
+def _tool_record(tool: ToolDefinition) -> dict[str, Any]:
+    record = dict(tool.__dict__)
+    if tool.kind == "cli":
+        record["cli_windows"] = tool.cli or ""
+        record["cli_posix"] = _posix_cli(tool.cli)
+    else:
+        record["cli_windows"] = ""
+        record["cli_posix"] = ""
+    return record
 
 
 def _markdown_values(values: tuple[str, ...]) -> str:
@@ -337,18 +362,18 @@ class ToolRegistry:
         self.tools = tools
 
     def list(self) -> list[dict[str, Any]]:
-        return [tool.__dict__ for tool in self.tools]
+        return [_tool_record(tool) for tool in self.tools]
 
     def by_library(self) -> dict[str, list[dict[str, Any]]]:
         grouped: dict[str, list[dict[str, Any]]] = {}
         for tool in self.tools:
-            grouped.setdefault(tool.library, []).append(tool.__dict__)
+            grouped.setdefault(tool.library, []).append(_tool_record(tool))
         return {library: grouped[library] for library in sorted(grouped)}
 
     def by_layer(self) -> dict[str, list[dict[str, Any]]]:
         grouped: dict[str, list[dict[str, Any]]] = {}
         for tool in self.tools:
-            grouped.setdefault(tool.layer, []).append(tool.__dict__)
+            grouped.setdefault(tool.layer, []).append(_tool_record(tool))
         ordered_layers = [layer for layer in LAYER_ORDER if layer in grouped]
         ordered_layers.extend(sorted(set(grouped) - set(ordered_layers)))
         return {
@@ -371,8 +396,17 @@ class ToolRegistry:
             if tool.tool_id in seen:
                 errors.append(f"duplicate tool_id: {tool.tool_id}")
             seen.add(tool.tool_id)
-            if tool.kind == "cli" and not (tool.cli or "").startswith(f"{VENV_PYTHON} -m "):
-                errors.append(f"{tool.tool_id}: cli must use {VENV_PYTHON}")
+            if tool.kind == "cli":
+                cli_windows = tool.cli or ""
+                cli_posix = _posix_cli(tool.cli)
+                if not cli_windows.startswith(f"{WINDOWS_PYTHON_CLI_WRAPPER} -m "):
+                    errors.append(
+                        f"{tool.tool_id}: cli_windows must use {WINDOWS_PYTHON_CLI_WRAPPER}"
+                    )
+                if not cli_posix.startswith(f"{POSIX_PYTHON_CLI_WRAPPER} -m "):
+                    errors.append(
+                        f"{tool.tool_id}: cli_posix must use {POSIX_PYTHON_CLI_WRAPPER}"
+                    )
             for label, rel_path in (("README", tool.readme_path), ("docs", tool.docs_path)):
                 if rel_path and not (root / rel_path).is_file():
                     errors.append(f"{tool.tool_id}: missing {label}: {rel_path}")
@@ -385,14 +419,15 @@ class ToolRegistry:
         lines = [
             "# Research Tool Registry",
             "",
-            "| library | tool_id | owner | lifecycle | layer | kind | cli | README | tests |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- | ---: |",
+            "| library | tool_id | owner | lifecycle | layer | kind | cli_windows | cli_posix | README | tests |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | ---: |",
         ]
-        for tool in sorted(self.tools, key=lambda item: (item.library, item.tool_id)):
+        for tool in sorted(self.list(), key=lambda item: (item["library"], item["tool_id"])):
             lines.append(
-                f"| `{tool.library}` | `{tool.tool_id}` | {tool.owner} | {tool.lifecycle} | "
-                f"{tool.layer} | {tool.kind} | "
-                f"`{tool.cli or ''}` | {tool.readme_path or ''} | {len(tool.tests)} |"
+                f"| `{tool['library']}` | `{tool['tool_id']}` | {tool['owner']} | "
+                f"{tool['lifecycle']} | {tool['layer']} | {tool['kind']} | "
+                f"`{tool['cli_windows']}` | `{tool['cli_posix']}` | "
+                f"{tool['readme_path'] or ''} | {len(tool['tests'])} |"
             )
         lines.append("")
         return "\n".join(lines)
@@ -420,7 +455,9 @@ class ToolRegistry:
             "",
             "本目录按平台5层核心整理工具视图，内容由工具注册表生成。",
             "",
-            f"生成命令：`{VENV_PYTHON} -m scripts.research.registry.tool_registry write-layers`",
+            "生成命令：",
+            f"- Windows：`{WINDOWS_PYTHON_CLI_WRAPPER} -m scripts.research.registry.tool_registry write-layers`",
+            f"- POSIX：`{POSIX_PYTHON_CLI_WRAPPER} -m scripts.research.registry.tool_registry write-layers`",
             "",
             "| 层 | 文件 | 职责 | 工具数 |",
             "| --- | --- | --- | ---: |",
@@ -450,8 +487,8 @@ class ToolRegistry:
             "",
             "本页由工具注册表生成，不手工维护。",
             "",
-            "| tool_id | owner | lifecycle | library | kind | entry_module | cli | README | tests | inputs | outputs |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+            "| tool_id | owner | lifecycle | library | kind | entry_module | cli_windows | cli_posix | README | tests | inputs | outputs |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
         ]
         for tool in tools:
             tests = _markdown_values(tuple(tool["tests"]))
@@ -460,7 +497,8 @@ class ToolRegistry:
             lines.append(
                 f"| `{tool['tool_id']}` | {tool['owner']} | {tool['lifecycle']} | "
                 f"`{tool['library']}` | `{tool['kind']}` | "
-                f"`{tool['entry_module']}` | `{tool['cli'] or ''}` | "
+                f"`{tool['entry_module']}` | `{tool['cli_windows']}` | "
+                f"`{tool['cli_posix']}` | "
                 f"`{tool['readme_path'] or ''}` | {tests} | {inputs} | {outputs} |"
             )
         lines.append("")

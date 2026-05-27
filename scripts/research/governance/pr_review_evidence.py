@@ -12,6 +12,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from scripts.research.governance.codex_review_contract import (
+    is_codex_review_request,
+)
+
 
 REQUIRED_REVIEWER = "Codex"
 SECTION_HEADER = "Codex Code Review 结论"
@@ -60,11 +64,50 @@ BLOCKING_CODEX_FINDING_PATTERN = re.compile(
     r"(?:P[01] Badge|badge/P[01]-|(?:^|\n)\s*(?:\*\*)?\[P[01]\]\s+)",
     re.IGNORECASE,
 )
+CODEX_CONTEXT_INVALID_PATTERN = re.compile(
+    r"(?:(?:cannot|can(?:'|\u2019)t|can\s*not|unable\s+to|could\s+not|couldn(?:'|\u2019)t)\s+"
+    r".*?(?:review|complete|read|access).*?(?:diff|code\s+diff|unified\s+diff)|"
+    r"(?:cannot|can(?:'|\u2019)t|can\s*not|unable\s+to|could\s+not|couldn(?:'|\u2019)t)\s+"
+    r"(?:see|view)\s+(?:the\s+)?(?:(?:current|PR|pull\s+request)\s+)?(?:diff|code\s+diff|unified\s+diff)|"
+    r"(?:don(?:'|\u2019)t|do\s+not)\s+have\s+access\s+to\s+(?:the\s+)?(?:PR\s+)?diff|"
+    r"(?:don(?:'|\u2019)t|do\s+not)\s+have\s+access\s+to\s+(?:the\s+)?"
+    r"(?:repository|repo|codebase)\s+or\s+(?:the\s+)?(?:PR\s+|unified\s+)?diff|"
+    r"conversation\s+did\s+not\s+include.*diff|"
+    r"cannot\s+complete.*static\s+review.*diff|"
+    r"could\s+not\s+read.*diff|"
+    r"(?:provide|paste)\s+(?:the\s+)?(?:unified\s+)?diff\s+"
+    r"(?:to|before|for|so\s+I\s+can)\s+(?:complete|perform|review)|"
+    r"(?:provide|paste)\s+(?:the\s+)?PR\s+diff\s+so\s+I\s+can\s+review|"
+    r"无法.*?(?:审查|完成|读取|获取|查看).*?(?:diff|差异|统一\s*diff)|"
+    r"(?:缺少|未包含).*?(?:diff|差异|统一\s*diff))",
+    re.IGNORECASE | re.DOTALL,
+)
 CODEX_NO_MAJOR_ISSUES_PATTERN = re.compile(
     r"Codex Review:\s*(?:Didn['’]t|Did not) find any major issues",
     re.IGNORECASE,
 )
+CONTEXT_HOSTILE_TRIGGER_PATTERN = re.compile(
+    r"(?:(?:do\s+not|don(?:'|\u2019)t)\s+(?:execute|run)\s+(?:any\s+)?(?:local\s+)?"
+    r"(?:commands?|checks?|tests?|wrapper)|"
+    r"(?:do\s+not|don(?:'|\u2019)t)\s+use\s+(?:tools?|wrapper)|"
+    r"(?:do\s+not|don(?:'|\u2019)t)\s+read\s+(?:the\s+)?(?:repository|repo|GitHub\s+diff|diff)|"
+    r"only\s+do\s+a\s+static\s+diff\s+review|"
+    r"(?:不要|不)(?:执行|运行)(?![^。；;\n]*(?:破坏性|危险)).*?(?:命令|本地命令|wrapper|检查|测试)|"
+    r"(?:不要|不)(?:使用|读取).*?(?:工具|仓库|代码库|GitHub\s*diff|diff|wrapper)|"
+    r"(?:只|仅)(?:做|看).*?(?:静态\s*)?diff\s*(?:review|评审)?|"
+    r"只做静态\s*diff\s*review)",
+    re.IGNORECASE,
+)
+CONTEXT_INVALID_REVIEW_ERROR = "Codex review context is invalid for the current head"
+CONTEXT_HOSTILE_TRIGGER_ERROR = (
+    "required @codex review trigger must not disable repository context"
+)
 REQUIRED_TRIGGER_TOKENS = ("@codex review",)
+REQUIRED_GOVERNANCE_GATE_COMMANDS = (
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate",
+    "sh .githooks/run-python.sh -m scripts.research.governance gate",
+    ".githooks/run-python.sh -m scripts.research.governance gate",
+)
 
 
 @dataclass(frozen=True)
@@ -123,6 +166,7 @@ def validate_pr_body(
         errors.append("结论 must be 通过")
     if _normalize_value(blockers) != "无":
         errors.append("阻断问题 must be 无")
+    reviewed_until: str | None = None
     if "关键证据" not in section:
         errors.append("review evidence must include 关键证据")
     elif not _has_nonempty_evidence(section):
@@ -136,26 +180,50 @@ def validate_pr_body(
                 "review evidence must include a real Codex review link for this PR"
             )
         elif reviews is not None:
+            reviewed_until = _codex_evidence_reviewed_until(
+                review_link, reviews=reviews, comments=comments
+            )
             errors.extend(
                 _codex_review_errors(
                     review_link,
                     reviews=reviews,
                     review_comments=review_comments,
+                    expected_pr_url=expected_pr_url,
                     expected_head_sha=expected_head_sha,
                     expected_head_created_at=expected_head_created_at,
                     comments=comments,
                 )
             )
-    if comments is not None and not _required_trigger_comments(comments):
-        errors.append("PR comments must include the required @codex review trigger")
-    if "scripts.research.governance gate" not in section:
-        errors.append("review evidence must include governance gate command")
+    if comments is not None:
+        if _has_context_hostile_trigger_comment(
+            comments,
+            expected_head_created_at=expected_head_created_at,
+            before_or_at=reviewed_until,
+        ):
+            errors.append(CONTEXT_HOSTILE_TRIGGER_ERROR)
+        if not _required_trigger_comments(
+            comments,
+            before_or_at=reviewed_until,
+            expected_pr_url=expected_pr_url,
+            expected_head_sha=expected_head_sha,
+        ):
+            errors.append("PR comments must include the required @codex review trigger")
+    if not _has_governance_gate_wrapper_command(section):
+        errors.append("review evidence must include governance gate wrapper command")
 
     return EvidenceReport(not errors, tuple(errors))
 
 
 def _extract_section(body: str) -> str | None:
     return _extract_named_section(body, SECTION_HEADER)
+
+
+def _has_governance_gate_wrapper_command(section: str) -> bool:
+    normalized_section = " ".join(section.replace("`", "").split()).casefold()
+    return any(
+        command.casefold() in normalized_section
+        for command in REQUIRED_GOVERNANCE_GATE_COMMANDS
+    )
 
 
 def _extract_named_section(body: str, header: str) -> str | None:
@@ -610,6 +678,7 @@ def _codex_review_errors(
     *,
     reviews: Sequence[Mapping[str, object]],
     review_comments: Sequence[Mapping[str, object]] | None,
+    expected_pr_url: str | None,
     expected_head_sha: str | None,
     expected_head_created_at: str | None,
     comments: Sequence[object] | None,
@@ -623,6 +692,7 @@ def _codex_review_errors(
                 comments=comments,
                 reviews=reviews,
                 review_comments=review_comments,
+                expected_pr_url=expected_pr_url,
                 expected_head_sha=expected_head_sha,
                 expected_head_created_at=expected_head_created_at,
             )
@@ -641,8 +711,20 @@ def _codex_review_errors(
     if matched_review is None:
         return ("Codex review link must match a Codex review on the current head",)
     errors: list[str] = []
+    if _review_has_context_invalid_findings(
+        matched_review,
+        review_id=review_id,
+        review_comments=review_comments,
+    ):
+        errors.append(CONTEXT_INVALID_REVIEW_ERROR)
     trigger_comments = (
-        _required_trigger_comments(comments) if comments is not None else None
+        _required_trigger_comments(
+            comments,
+            expected_pr_url=expected_pr_url,
+            expected_head_sha=expected_head_sha,
+        )
+        if comments is not None
+        else None
     )
     if trigger_comments is not None:
         if not _has_required_trigger_after_current_head(
@@ -659,7 +741,14 @@ def _codex_review_errors(
             errors.append(
                 "Codex review must be submitted after the required @codex review trigger"
             )
-    if _current_head_has_blocking_codex_review(
+    if codex_context_invalid_review_count(
+        reviews,
+        review_comments=review_comments,
+        expected_head_sha=expected_head_sha,
+    ):
+        if CONTEXT_INVALID_REVIEW_ERROR not in errors:
+            errors.append(CONTEXT_INVALID_REVIEW_ERROR)
+    elif _current_head_has_blocking_codex_review(
         reviews,
         review_comments=review_comments,
         expected_head_sha=expected_head_sha,
@@ -670,12 +759,36 @@ def _codex_review_errors(
     return tuple(errors)
 
 
+def _codex_evidence_reviewed_until(
+    review_link: str,
+    *,
+    reviews: Sequence[Mapping[str, object]],
+    comments: Sequence[object] | None,
+) -> str | None:
+    review_match = CODEX_REVIEW_URL_PATTERN.fullmatch(review_link)
+    if review_match is not None:
+        review_id = review_match.group("review_id")
+        for review in reviews:
+            if str(review.get("id", "")) == review_id:
+                return _review_submitted_time(review)
+        return None
+
+    comment_match = CODEX_COMPLETION_COMMENT_URL_PATTERN.fullmatch(review_link)
+    if comment_match is None or comments is None:
+        return None
+    comment = _find_comment_by_id(comments, comment_match.group("comment_id"))
+    if comment is None:
+        return None
+    return _comment_effective_time(comment)
+
+
 def _codex_completion_comment_errors(
     comment_id: str,
     *,
     comments: Sequence[object],
     reviews: Sequence[Mapping[str, object]],
     review_comments: Sequence[Mapping[str, object]] | None,
+    expected_pr_url: str | None,
     expected_head_sha: str | None,
     expected_head_created_at: str | None,
 ) -> tuple[str, ...]:
@@ -684,7 +797,11 @@ def _codex_completion_comment_errors(
         return ("Codex review link must match a Codex review on the current head",)
 
     errors: list[str] = []
-    trigger_comments = _required_trigger_comments(comments)
+    trigger_comments = _required_trigger_comments(
+        comments,
+        expected_pr_url=expected_pr_url,
+        expected_head_sha=expected_head_sha,
+    )
     if not _has_required_trigger_after_current_head(
         trigger_comments, expected_head_created_at
     ):
@@ -695,19 +812,34 @@ def _codex_completion_comment_errors(
         trigger_comments,
         expected_head_created_at=expected_head_created_at,
     )
-    comment_time = _comment_effective_time(comment)
+    comment_time = codex_completion_effective_time(
+        comment,
+        expected_pr_url=expected_pr_url,
+        expected_head_sha=expected_head_sha,
+    )
     if latest_trigger_time and comment_time and comment_time < latest_trigger_time:
         errors.append(
             "Codex completion comment must match the latest required @codex review trigger"
         )
-    if _is_required_trigger_comment(comment):
+    if _is_required_trigger_comment(
+        comment,
+        expected_pr_url=expected_pr_url,
+        expected_head_sha=expected_head_sha,
+    ):
         if not has_codex_completion_reaction(comment):
             errors.append(
                 "Codex completion comment must include a Codex thumbs-up reaction"
             )
     elif not is_codex_completion_comment(comment):
         return ("Codex review link must match a Codex review on the current head",)
-    if _current_head_has_blocking_codex_review(
+    if codex_context_invalid_review_count(
+        reviews,
+        review_comments=review_comments,
+        expected_head_sha=expected_head_sha,
+        submitted_after=comment_time,
+    ):
+        errors.append(CONTEXT_INVALID_REVIEW_ERROR)
+    elif _current_head_has_blocking_codex_review(
         reviews,
         review_comments=review_comments,
         expected_head_sha=expected_head_sha,
@@ -781,18 +913,112 @@ def _thread_comments(thread: Mapping[str, object]) -> tuple[Mapping[str, object]
     return ()
 
 
+def _review_texts(
+    review: Mapping[str, object],
+    *,
+    review_id: str,
+    review_comments: Sequence[Mapping[str, object]] | None,
+) -> tuple[str, ...]:
+    texts = [str(review.get("body", ""))]
+    if review_comments is not None:
+        for comment in review_comments:
+            if str(comment.get("pull_request_review_id", "")) == review_id:
+                texts.append(str(comment.get("body", "")))
+    return tuple(texts)
+
+
+def _review_has_context_invalid_findings(
+    review: Mapping[str, object],
+    *,
+    review_id: str,
+    review_comments: Sequence[Mapping[str, object]] | None,
+) -> bool:
+    return any(
+        CODEX_CONTEXT_INVALID_PATTERN.search(text)
+        for text in _review_texts(
+            review, review_id=review_id, review_comments=review_comments
+        )
+    )
+
+
+def codex_context_invalid_review_count(
+    reviews: Sequence[Mapping[str, object]],
+    *,
+    review_comments: Sequence[Mapping[str, object]] | None,
+    expected_head_sha: str | None,
+    submitted_after: str | None = None,
+) -> int:
+    latest_review = _latest_effective_codex_review(
+        reviews,
+        expected_head_sha=expected_head_sha,
+        submitted_after=submitted_after,
+    )
+    if latest_review is None:
+        return 0
+    return int(
+        _review_has_context_invalid_findings(
+            latest_review,
+            review_id=str(latest_review.get("id", "")),
+            review_comments=review_comments,
+        )
+    )
+
+
+def _latest_effective_codex_review(
+    reviews: Sequence[Mapping[str, object]],
+    *,
+    expected_head_sha: str | None,
+    submitted_after: str | None = None,
+) -> Mapping[str, object] | None:
+    matched = []
+    for review in reviews:
+        if not is_effective_codex_review(review):
+            continue
+        if expected_head_sha and str(review.get("commit_id", "")) != expected_head_sha:
+            continue
+        if not _review_is_after_time(review, submitted_after):
+            continue
+        matched.append(review)
+    if not matched:
+        return None
+    return sorted(matched, key=_review_sort_key)[-1]
+
+
+def _review_is_after_time(
+    review: Mapping[str, object], submitted_after: str | None
+) -> bool:
+    if not submitted_after:
+        return True
+    submitted_at = _review_submitted_time(review)
+    if not submitted_at:
+        return True
+    return submitted_after < submitted_at
+
+
+def _review_sort_key(review: Mapping[str, object]) -> str:
+    return _review_submitted_time(review) or str(review.get("id", ""))
+
+
+def _review_submitted_time(review: Mapping[str, object]) -> str:
+    return _first_value(review, "submitted_at", "created_at", "updated_at")
+
+
 def _review_has_blocking_findings(
     review: Mapping[str, object],
     *,
     review_id: str,
     review_comments: Sequence[Mapping[str, object]] | None,
 ) -> bool:
-    texts = [str(review.get("body", ""))]
-    if review_comments is not None:
-        for comment in review_comments:
-            if str(comment.get("pull_request_review_id", "")) == review_id:
-                texts.append(str(comment.get("body", "")))
-    return any(BLOCKING_CODEX_FINDING_PATTERN.search(text) for text in texts)
+    if _review_has_context_invalid_findings(
+        review, review_id=review_id, review_comments=review_comments
+    ):
+        return False
+    return any(
+        BLOCKING_CODEX_FINDING_PATTERN.search(text)
+        for text in _review_texts(
+            review, review_id=review_id, review_comments=review_comments
+        )
+    )
 
 
 def _current_head_has_blocking_codex_review(
@@ -800,11 +1026,14 @@ def _current_head_has_blocking_codex_review(
     *,
     review_comments: Sequence[Mapping[str, object]] | None,
     expected_head_sha: str | None,
+    submitted_after: str | None = None,
 ) -> bool:
     for review in reviews:
         if not is_effective_codex_review(review):
             continue
         if expected_head_sha and str(review.get("commit_id", "")) != expected_head_sha:
+            continue
+        if not _review_is_after_time(review, submitted_after):
             continue
         if _review_has_blocking_findings(
             review, review_id=str(review.get("id", "")), review_comments=review_comments
@@ -829,15 +1058,95 @@ def _review_state(review: Mapping[str, object]) -> str:
     return str(review.get("state", "") or "").upper()
 
 
-def _required_trigger_comments(comments: Sequence[object]) -> tuple[object, ...]:
+def _required_trigger_comments(
+    comments: Sequence[object],
+    *,
+    expected_head_created_at: str | None = None,
+    before_or_at: str | None = None,
+    expected_pr_url: str | None = None,
+    expected_head_sha: str | None = None,
+) -> tuple[object, ...]:
     matched: list[object] = []
-    for comment in comments:
-        if _is_required_trigger_comment(comment):
+    for comment in _trigger_candidate_comments(
+        comments,
+        expected_head_created_at=expected_head_created_at,
+        before_or_at=before_or_at,
+    ):
+        if _is_required_trigger_comment(
+            comment,
+            expected_pr_url=expected_pr_url,
+            expected_head_sha=expected_head_sha,
+        ):
             matched.append(comment)
     return tuple(matched)
 
 
-def _is_required_trigger_comment(comment: object) -> bool:
+def _trigger_candidate_comments(
+    comments: Sequence[object],
+    *,
+    expected_head_created_at: str | None = None,
+    before_or_at: str | None = None,
+) -> tuple[object, ...]:
+    matched: list[object] = []
+    for comment in comments:
+        if not _is_trigger_candidate_comment(comment):
+            continue
+        if isinstance(comment, Mapping):
+            comment_time = _comment_effective_time(comment)
+            if (
+                expected_head_created_at
+                and comment_time
+                and comment_time < expected_head_created_at
+            ):
+                continue
+            if before_or_at and comment_time and before_or_at < comment_time:
+                continue
+        matched.append(comment)
+    return tuple(matched)
+
+
+def _has_context_hostile_trigger_comment(
+    comments: Sequence[object],
+    *,
+    expected_head_created_at: str | None = None,
+    before_or_at: str | None = None,
+) -> bool:
+    latest = _latest_trigger_candidate_comment(
+        comments,
+        expected_head_created_at=expected_head_created_at,
+        before_or_at=before_or_at,
+    )
+    return latest is not None and _is_context_hostile_trigger_comment(latest)
+
+
+def _latest_trigger_candidate_comment(
+    comments: Sequence[object],
+    *,
+    expected_head_created_at: str | None = None,
+    before_or_at: str | None = None,
+) -> object | None:
+    latest: object | None = None
+    latest_time = ""
+    for comment in _trigger_candidate_comments(
+        comments,
+        expected_head_created_at=expected_head_created_at,
+        before_or_at=before_or_at,
+    ):
+        comment_time = (
+            _comment_effective_time(comment) if isinstance(comment, Mapping) else ""
+        )
+        if (
+            latest is None
+            or not comment_time
+            or not latest_time
+            or latest_time <= comment_time
+        ):
+            latest = comment
+            latest_time = comment_time
+    return latest
+
+
+def _is_trigger_candidate_comment(comment: object) -> bool:
     if isinstance(comment, Mapping):
         user = comment.get("user")
         login = user.get("login") if isinstance(user, Mapping) else ""
@@ -845,6 +1154,30 @@ def _is_required_trigger_comment(comment: object) -> bool:
             return False
     body = _comment_body(comment)
     return all(token in body for token in REQUIRED_TRIGGER_TOKENS)
+
+
+def _is_context_hostile_trigger_comment(comment: object) -> bool:
+    if not _is_trigger_candidate_comment(comment):
+        return False
+    body = _comment_body(comment)
+    return not is_codex_review_request(body) or bool(
+        CONTEXT_HOSTILE_TRIGGER_PATTERN.search(body)
+    )
+
+
+def _is_required_trigger_comment(
+    comment: object,
+    *,
+    expected_pr_url: str | None = None,
+    expected_head_sha: str | None = None,
+) -> bool:
+    if not _is_trigger_candidate_comment(comment):
+        return False
+    return is_codex_review_request(
+        _comment_body(comment),
+        expected_pr_url=expected_pr_url,
+        expected_head_sha=expected_head_sha,
+    )
 
 
 def _comment_body(comment: object) -> str:
@@ -867,7 +1200,29 @@ def _find_comment_by_id(
 
 
 def has_codex_completion_reaction(comment: Mapping[str, object]) -> bool:
+    return _codex_completion_reaction_time(comment) is not None
+
+
+def codex_completion_effective_time(
+    comment: Mapping[str, object],
+    *,
+    expected_pr_url: str | None = None,
+    expected_head_sha: str | None = None,
+) -> str:
+    if _is_required_trigger_comment(
+        comment,
+        expected_pr_url=expected_pr_url,
+        expected_head_sha=expected_head_sha,
+    ):
+        reaction_time = _codex_completion_reaction_time(comment)
+        if reaction_time:
+            return reaction_time
+    return _comment_effective_time(comment)
+
+
+def _codex_completion_reaction_time(comment: Mapping[str, object]) -> str | None:
     comment_time = _comment_effective_time(comment)
+    matched_times: list[str] = []
     for reaction in _comment_reaction_items(comment):
         if str(reaction.get("content", "")) != "+1":
             continue
@@ -878,8 +1233,10 @@ def has_codex_completion_reaction(comment: Mapping[str, object]) -> bool:
         reaction_time = _first_value(reaction, "created_at")
         if reaction_time and comment_time and reaction_time < comment_time:
             continue
-        return True
-    return False
+        matched_times.append(reaction_time or comment_time)
+    if not matched_times:
+        return None
+    return max(matched_times)
 
 
 def is_codex_completion_comment(comment: Mapping[str, object]) -> bool:
@@ -941,7 +1298,7 @@ def _review_is_after_required_trigger(
     *,
     expected_head_created_at: str | None,
 ) -> bool:
-    review_time = _first_value(review, "submitted_at", "created_at")
+    review_time = _review_submitted_time(review)
     trigger_time = _latest_required_trigger_time(
         trigger_comments,
         expected_head_created_at=expected_head_created_at,
@@ -1339,23 +1696,14 @@ def main(argv: list[str] | None = None) -> int:
     token = _read_env(args.github_token_env)
     if repo and pr_number and token:
         pr_metadata: Mapping[str, object] | None = None
-        if (
-            not body
-            or not expected_pr_url
-            or not expected_head_sha
-            or not expected_head_created_at
-        ):
-            pr_metadata = _fetch_pr_metadata(
-                repo=repo, pr_number=pr_number, token=token
-            )
-            if pr_metadata is not None:
-                if not body:
-                    body = str(pr_metadata.get("body", ""))
-                if not expected_pr_url:
-                    expected_pr_url = str(pr_metadata.get("html_url", ""))
-                head = pr_metadata.get("head")
-                if not expected_head_sha and isinstance(head, Mapping):
-                    expected_head_sha = str(head.get("sha", ""))
+        pr_metadata = _fetch_pr_metadata(repo=repo, pr_number=pr_number, token=token)
+        if pr_metadata is not None:
+            if args.body_file is None:
+                body = str(pr_metadata.get("body", ""))
+            expected_pr_url = str(pr_metadata.get("html_url", "")) or expected_pr_url
+            head = pr_metadata.get("head")
+            if isinstance(head, Mapping):
+                expected_head_sha = str(head.get("sha", "")) or expected_head_sha
         if comments is None:
             comments = _fetch_pr_comments(repo=repo, pr_number=pr_number, token=token)
         if not expected_head_created_at:

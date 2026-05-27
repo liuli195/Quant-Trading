@@ -13,8 +13,8 @@
 
 ## 已运行检查
 
-- [ ] `.\.venv\Scripts\python.exe -m scripts.research.governance gate --skip-cli-help`
-- [ ] `.\.venv\Scripts\python.exe -m scripts.tools.path_tools.refactor check`
+- [ ] `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance gate --skip-cli-help`
+- [ ] `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.tools.path_tools.refactor check`
 - [ ] 相关 pytest / py_compile
 
 ## AI Review 风险分级
@@ -39,11 +39,12 @@
 
 - Reviewer: `Codex`
 - 触发方式: `@codex review`
+- 标准触发评论: 按 `docs/rules/review-guidelines.md` 的固定模板填写当前 PR、当前 head SHA、Review Scope（可为空）和审查重点；不得写模板外文案。
 - 结论: 未要求 / 未执行 / 通过
 - 阻断问题: 无 / 未确认
 - 关键证据:
   - Codex review 链接：
-  - `.\.venv\Scripts\python.exe -m scripts.research.governance gate`
+  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance gate`
 
 ## waiver
 

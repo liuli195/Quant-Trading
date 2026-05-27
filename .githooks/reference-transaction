@@ -2,8 +2,18 @@
 set -eu
 
 STATE="${1:-}"
+INPUT=$(cat)
 
 if [ "$STATE" = "prepared" ]; then
-  sh .githooks/run-python.sh \
+  if [ ! -x .venv/bin/python ] && [ ! -x .venv/Scripts/python.exe ]; then
+    if printf '%s\n' "$INPUT" | grep -Eq ' refs/heads/main([[:space:]]|$)| refs/heads/master([[:space:]]|$)'; then
+      printf '%s\n' "Project virtualenv Python not found. Run setup before protected branch ref updates." >&2
+      printf '%s\n' "Expected: .venv/bin/python or .venv/Scripts/python.exe" >&2
+      exit 127
+    fi
+    exit 0
+  fi
+
+  printf '%s\n' "$INPUT" | sh .githooks/run-python.sh \
     -m scripts.research.governance.branch_protection reference-transaction
 fi

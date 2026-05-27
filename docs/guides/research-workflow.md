@@ -49,19 +49,19 @@
 ## 命令示例
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.cli init `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.cli init `
   --project-dir strategies\etf_factor_rotation\reports\research\demo_factor_scan `
   --strategy etf_factor_rotation `
   --project demo_factor_scan `
   --template factor_scan `
   --raw-data strategies\etf_factor_rotation\reports\research\window_heterogeneity\inputs\raw\etf_window_research_prices.json
 
-.\.venv\Scripts\python.exe -m scripts.research.cli run `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.cli run `
   --project-dir strategies\etf_factor_rotation\reports\research\demo_factor_scan `
   --run-id 2026-05-17-fast `
   --mode fast
 
-.\.venv\Scripts\python.exe -m scripts.research.cli promote `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.cli promote `
   --project-dir strategies\etf_factor_rotation\reports\research\demo_factor_scan `
   --fast-run-id 2026-05-17-fast `
   --full-run-id 2026-05-17-full `
@@ -88,7 +88,7 @@
 ## `robustness_check` 示例
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.cli init `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.cli init `
   --project-dir strategies\etf_factor_rotation\reports\research\demo_robustness `
   --strategy etf_factor_rotation `
   --project demo_robustness `

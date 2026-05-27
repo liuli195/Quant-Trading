@@ -1,6 +1,10 @@
 .PHONY: pre-pr ai-review risk-check
 
-PYTHON := ./.venv/Scripts/python.exe
+ifeq ($(OS),Windows_NT)
+PYTHON ?= powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./.githooks/run-python.ps1
+else
+PYTHON ?= sh .githooks/run-python.sh
+endif
 PRE_COMMIT := $(PYTHON) -m pre_commit
 AI_REVIEW_REPORT := .local/ai-review/latest.json
 PY_CHECK_PATHS := scripts/research/governance

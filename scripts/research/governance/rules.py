@@ -73,7 +73,7 @@ PR_TEMPLATE_TOKENS = (
     "不完全 Review 模式授权",
     "Codex Code Review 结论",
     "Codex",
-    "scripts.research.governance gate",
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate",
     "waiver",
     "证据",
 )
@@ -83,7 +83,7 @@ REQUIRED_REVIEW_GUIDELINES_TOKENS = (
     "AGENTS.md",
     "docs/rules/review-guidelines.md",
     "P0/P1",
-    "scripts.research.governance gate",
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate",
     "Codex Review Monitor",
     "至少两个独立 reviewer",
     "子 agent 交叉评审",
@@ -108,9 +108,15 @@ REQUIRED_COMMAND_RULE_TOKENS = (
     "scripts.research.governance",
     "scripts.research.registry",
     "scripts.tools.path_tools.refactor",
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File",
+    ".\\.githooks\\setup-python.ps1",
+    ".\\.githooks\\run-python.ps1",
+    ".githooks/setup-python.sh",
+    ".githooks/run-python.sh",
     ".\\.venv\\Scripts\\python.exe",
     ".venv/bin/python",
-    ".githooks/run-python.sh",
+    "PYTHONUTF8",
+    "PYTHONIOENCODING",
 )
 REQUIRED_AGENT_ENTRY_TOKENS = (
     "indexes.md",
@@ -297,6 +303,45 @@ def _audit_claude_and_skills(root: Path) -> list[AuditFinding]:
                     )
                 )
 
+    local_env = root / "docs" / "guides" / "local-python-env.md"
+    if not local_env.is_file():
+        findings.append(
+            AuditFinding(
+                "command_rules", "error", "docs/guides/local-python-env.md missing"
+            )
+        )
+    else:
+        text = local_env.read_text(encoding="utf-8", errors="ignore")
+        setup_doc_tokens = (
+            (
+                "git worktree add",
+                "local-python-env.md missing worktree setup example",
+            ),
+            (
+                ".\\.githooks\\setup-python.ps1",
+                "local-python-env.md missing Windows setup script",
+            ),
+            (
+                ".githooks/setup-python.sh",
+                "local-python-env.md missing POSIX setup script",
+            ),
+            (
+                "Codex Cloud Environment setup script",
+                "local-python-env.md missing Codex Cloud setup example",
+            ),
+            (
+                "Codex App Local Environment",
+                "local-python-env.md missing Codex App setup example",
+            ),
+            (
+                "requirements-dev.txt",
+                "local-python-env.md missing requirements-dev.txt",
+            ),
+        )
+        for token, message in setup_doc_tokens:
+            if token not in text:
+                findings.append(AuditFinding("command_rules", "error", message))
+
     skill = root / ".claude" / "skills" / "jq-research" / "SKILL.md"
     if not skill.is_file():
         findings.append(
@@ -379,6 +424,16 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                         "governance_gate", "error", f"run-python.sh missing {token}"
                     )
                 )
+        if not re.search(r"export\s+PYTHONUTF8=1", text) or not re.search(
+            r"export\s+PYTHONIOENCODING=utf-8", text
+        ):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "run-python.sh missing UTF-8 environment",
+                )
+            )
         if "uname" not in text or not any(
             token in text for token in ("MINGW", "MSYS", "CYGWIN")
         ):
@@ -405,6 +460,93 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         findings.append(
             AuditFinding("governance_gate", "error", ".githooks/run-python.ps1 missing")
         )
+    else:
+        text = hook_python.read_text(encoding="utf-8", errors="ignore")
+        if ".venv\\Scripts\\python.exe" not in text:
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "run-python.ps1 missing .venv\\Scripts\\python.exe",
+                )
+            )
+        utf8_tokens = (
+            "Console]::InputEncoding",
+            "Console]::OutputEncoding",
+            "$OutputEncoding",
+        )
+        if (
+            not re.search(r"\$env:PYTHONUTF8\s*=\s*['\"]1['\"]", text)
+            or not re.search(r"\$env:PYTHONIOENCODING\s*=\s*['\"]utf-8['\"]", text)
+            or not all(token in text for token in utf8_tokens)
+        ):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "run-python.ps1 missing UTF-8 environment",
+                )
+            )
+        if re.search(r"\$Python\s*=\s*['\"]python['\"]", text) or re.search(
+            r"&\s+python(\s|$)", text
+        ):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "run-python.ps1 must not fall back to system Python",
+                )
+            )
+
+    setup_python = root / ".githooks" / "setup-python.ps1"
+    if not setup_python.is_file():
+        findings.append(
+            AuditFinding(
+                "governance_gate", "error", ".githooks/setup-python.ps1 missing"
+            )
+        )
+    else:
+        text = setup_python.read_text(encoding="utf-8", errors="ignore")
+        for token in (
+            "requirements-dev.txt",
+            "git config core.hooksPath .githooks",
+            "PYTHONUTF8",
+            "PYTHONIOENCODING",
+            "3.12",
+        ):
+            if token not in text:
+                findings.append(
+                    AuditFinding(
+                        "governance_gate",
+                        "error",
+                        f"setup-python.ps1 missing {token}",
+                    )
+                )
+
+    setup_sh = root / ".githooks" / "setup-python.sh"
+    if not setup_sh.is_file():
+        findings.append(
+            AuditFinding(
+                "governance_gate", "error", ".githooks/setup-python.sh missing"
+            )
+        )
+    else:
+        text = setup_sh.read_text(encoding="utf-8", errors="ignore")
+        for token in (
+            "requirements-dev.txt",
+            "git config core.hooksPath .githooks",
+            "PYTHONUTF8",
+            "PYTHONIOENCODING",
+            "python3.12",
+        ):
+            if token not in text:
+                findings.append(
+                    AuditFinding(
+                        "governance_gate",
+                        "error",
+                        f"setup-python.sh missing {token}",
+                    )
+                )
 
     hook = root / ".githooks" / "pre-commit"
     if not hook.is_file():
@@ -496,6 +638,21 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "governance_gate",
                     "error",
                     "reference-transaction hook must use run-python.sh",
+                )
+            )
+        pre_setup_tokens = (
+            ".venv/bin/python",
+            ".venv/Scripts/python.exe",
+            "refs/heads/main",
+            "refs/heads/master",
+            "Project virtualenv Python not found",
+        )
+        if not all(token in text for token in pre_setup_tokens):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "reference-transaction hook missing pre-setup worktree guard",
                 )
             )
 
@@ -713,6 +870,17 @@ def _audit_local_review_entrypoints(root: Path) -> list[AuditFinding]:
             findings.append(
                 AuditFinding("local_review", "error", f"Makefile missing {token}")
             )
+    if "powershell.exe" in make_text and (
+        ".githooks/run-python.sh" not in make_text
+        or "ifeq ($(OS),Windows_NT)" not in make_text
+    ):
+        findings.append(
+            AuditFinding(
+                "local_review",
+                "error",
+                "Makefile must use run-python.sh on non-Windows",
+            )
+        )
 
     pre_commit = root / ".pre-commit-config.yaml"
     if not pre_commit.is_file():

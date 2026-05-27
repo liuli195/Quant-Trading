@@ -16,7 +16,7 @@
 | docs |  | 本地研究平台重构技术实施方案 | `docs/design/本地研究平台重构技术实施方案.md` | 6 |
 | docs |  | 长期项目防止开发规则漂移方案 | `docs/design/长期项目防止开发规则漂移方案.md` | 8 |
 | docs |  | 飞书交易通知工具使用说明 | `docs/guides/feishu-relay-tools.md` | 2 |
-| docs |  | 本地 Python 环境说明 | `docs/guides/local-python-env.md` | 1 |
+| docs |  | 本地 Python 环境说明 | `docs/guides/local-python-env.md` | 3 |
 | docs |  | 旧研究项目迁移指南 | `docs/guides/research-workflow-migration.md` | 0 |
 | docs |  | 本地优先研究流程 | `docs/guides/research-workflow.md` | 8 |
 | docs |  | 导入 Alpha101 库 | `docs/joinquant-data/JQ_Alpha101.md` | 0 |
@@ -37,7 +37,7 @@
 | docs |  | 定义一个全局变量, 保存要操作的股票 | `docs/reference/joinquant-api.md` | 28 |
 | docs |  | JoinQuant 参数分析框架分析报告 | `docs/reference/joinquant-parameter-analysis-framework.md` | 2 |
 | docs |  | 代码风格和策略实现规则 | `docs/rules/code-style.md` | 3 |
-| docs |  | 命令和本地环境规则 | `docs/rules/commands.md` | 4 |
+| docs |  | 命令和本地环境规则 | `docs/rules/commands.md` | 5 |
 | docs |  | 文档和 Pathref 规则 | `docs/rules/docs-and-pathref.md` | 0 |
 | docs |  | 本地与聚宽环境差异 | `docs/rules/environments.md` | 0 |
 | docs |  | 治理门禁规则 | `docs/rules/governance.md` | 2 |

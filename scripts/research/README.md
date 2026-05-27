@@ -9,13 +9,13 @@
 本地优先研究平台的命令行入口。管理研究项目的完整生命周期：创建项目骨架 → 本地 fast/full 运行 → 候选漏斗 → promote → 云端交接。
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.cli <子命令> ...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.cli <子命令> ...
 ```
 
 #### init — 创建研究项目
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.cli init `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.cli init `
   --project-dir <dir> --strategy <name> --project <name> `
   --template {factor_scan,parameter_followup,robustness_check,generic,portfolio_volatility} `
   [--plugin <name>] [--dataset-id <id> --snapshot-id <id>] [--raw-data <path>] `
@@ -39,7 +39,7 @@
 #### run — 执行研究运行
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.cli run `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.cli run `
   --project-dir <dir> --run-id <id> --mode {fast,full} `
   [--top-k <n>] [--cloud-top-k <n>]
 ```
@@ -56,7 +56,7 @@
 将 fast 运行的 shortlist 作为候选升级为 full 运行。
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.cli promote `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.cli promote `
   --project-dir <dir> --fast-run-id <id> --full-run-id <id> `
   [--top-k <n>] [--cloud-top-k <n>]
 ```
@@ -66,14 +66,14 @@
 为 full 运行生成云端交接材料（策略参数差异、执行指令）。
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.cli handoff-cloud `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.cli handoff-cloud `
   --project-dir <dir> --run-id <id>
 ```
 
 #### status — 查看运行状态
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.cli status --project-dir <dir>
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.cli status --project-dir <dir>
 ```
 
 输出所有 run 的 `status.json` 摘要。
@@ -81,7 +81,7 @@
 #### resume — 恢复中断的运行
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.cli resume `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.cli resume `
   --project-dir <dir> --run-id <id>
 ```
 
@@ -92,13 +92,13 @@
 仓库级不可变研究数据集管理。将 JoinQuant 导出的 JSON/JSONL 转为 Parquet 快照。
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.datasets <子命令> ...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.datasets <子命令> ...
 ```
 
 #### import-price-json — 导入价格数据
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.datasets import-price-json `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.datasets import-price-json `
   <source.json> --dataset-id <id> [--snapshot-id <id>]
 ```
 
@@ -112,7 +112,7 @@
 #### import-audit-log — 导入审计日志
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.datasets import-audit-log `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.datasets import-audit-log `
   <audit_log.jsonl> --dataset-id <id> [--snapshot-id <id>]
 ```
 
@@ -124,7 +124,7 @@
 #### import-backtest-run — 导入完整回测 run
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.datasets import-backtest-run `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.datasets import-backtest-run `
   strategies\etf_factor_rotation\backtest_runs\<run_id> `
   --dataset-id <id> [--snapshot-id <id>]
 ```
@@ -136,7 +136,7 @@
 #### inspect — 查看数据集元数据
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.datasets inspect `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.datasets inspect `
   <dataset_id> <snapshot_id>
 ```
 
@@ -147,7 +147,7 @@
 扫描仓库 Markdown 报告并生成总索引。
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.docs index
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.docs index
 ```
 
 输出 `docs/indexes/docs_catalog.json`、`reports_catalog.json`、`datasets_catalog.json`、`variants_catalog.json`，并保留 `reports.json`、`reports.md` 兼容旧入口。
@@ -155,17 +155,17 @@
 ### 策略变体（variants.py）
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.variants register `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.variants register `
   --strategy <strategy> `
   --variant-id <id> --variant-type parameter `
   --payload-json '{"param_overrides":{"MomentumTiltStrength":0.35}}'
 
-.\.venv\Scripts\python.exe -m scripts.research.variants materialize `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.variants materialize `
   --strategy <strategy> --variant-id <id>
 
-.\.venv\Scripts\python.exe -m scripts.research.variants branch-plan --variant-id <id>
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.variants branch-plan --variant-id <id>
 
-.\.venv\Scripts\python.exe -m scripts.research.variants merge-plan `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.variants merge-plan `
   --strategy <strategy> --variant-id <id>
 ```
 
@@ -177,22 +177,34 @@
 
 ### 中央工具注册（registry）
 
+Windows：
+
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.registry.tool_registry list
-.\.venv\Scripts\python.exe -m scripts.research.registry.tool_registry list --group-by-library
-.\.venv\Scripts\python.exe -m scripts.research.registry.tool_registry list --group-by-layer
-.\.venv\Scripts\python.exe -m scripts.research.registry.tool_registry validate
-.\.venv\Scripts\python.exe -m scripts.research.registry.tool_registry write-layers
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.registry.tool_registry list
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.registry.tool_registry list --group-by-library
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.registry.tool_registry list --group-by-layer
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.registry.tool_registry validate
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.registry.tool_registry write-layers
 ```
 
-登记工具 ID、所属层、入口模块、CLI、输入输出、README、文档和测试锚点。
+POSIX / Codex Cloud：
+
+```bash
+.githooks/run-python.sh -m scripts.research.registry.tool_registry list
+.githooks/run-python.sh -m scripts.research.registry.tool_registry list --group-by-library
+.githooks/run-python.sh -m scripts.research.registry.tool_registry list --group-by-layer
+.githooks/run-python.sh -m scripts.research.registry.tool_registry validate
+.githooks/run-python.sh -m scripts.research.registry.tool_registry write-layers
+```
+
+登记工具 ID、所属层、入口模块、Windows/POSIX CLI、输入输出、README、文档和测试锚点。
 `write-layers` 会从注册表生成 [layers](layers) <!-- pathref: scripts/research/layers --> 下的5层工具索引。
 
 ### 治理审计（governance）
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.governance audit
-.\.venv\Scripts\python.exe -m scripts.research.governance gate
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance audit
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance gate
 ```
 
 审计工具登记、README、CLI help、workflow template schema、`AGENTS.md`、`indexes.md`、`CLAUDE.md`、`jq-research`/`jq-ab-test` Skill、数据 catalog、报告 catalog 和 pathref。`gate` 是本地 hook 和 CI 的固定入口。
@@ -211,19 +223,19 @@
 
 ```
 # 1. 导入数据
-.\.venv\Scripts\python.exe -m scripts.research.datasets import-audit-log audit_log.jsonl --dataset-id my_audit
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.datasets import-audit-log audit_log.jsonl --dataset-id my_audit
 
 # 2. 创建研究项目
-.\.venv\Scripts\python.exe -m scripts.research.cli init --project-dir my_project --strategy etf_factor_rotation \
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.cli init --project-dir my_project --strategy etf_factor_rotation \
   --project my_study --template generic --dataset-id my_audit --snapshot-id <id>
 
 # 3. 快速筛选
-.\.venv\Scripts\python.exe -m scripts.research.cli run --project-dir my_project --run-id fast-01 --mode fast
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.cli run --project-dir my_project --run-id fast-01 --mode fast
 
 # 4. 升级到完整评估
-.\.venv\Scripts\python.exe -m scripts.research.cli promote --project-dir my_project \
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.cli promote --project-dir my_project \
   --fast-run-id fast-01 --full-run-id full-01
 
 # 5. 生成云端交接
-.\.venv\Scripts\python.exe -m scripts.research.cli handoff-cloud --project-dir my_project --run-id full-01
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.cli handoff-cloud --project-dir my_project --run-id full-01
 ```

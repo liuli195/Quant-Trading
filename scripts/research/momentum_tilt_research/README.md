@@ -12,7 +12,7 @@ A/B 实验计划和云端回测稳健性评估。
 将本地回放结果与已知云端回测对照，校准回放精度。
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.momentum_tilt_research replay-calibrate `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.momentum_tilt_research replay-calibrate `
   [--raw-data <path>] [--audit-log <path>] [--baseline-returns <path>] [--output <path>]
 ```
 
@@ -27,7 +27,7 @@ A/B 实验计划和云端回测稳健性评估。
 运行分阶段动量倾斜本地分析。
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.momentum_tilt_research analyze `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.momentum_tilt_research analyze `
   [--project-dir <dir>] --run-id <id> [--stage {phase0,phase1,phase2,all}] `
   [--raw-data <path>] [--audit-log <path>] [--baseline-returns <path>]
 ```
@@ -45,7 +45,7 @@ A/B 实验计划和云端回测稳健性评估。
 本地通过全部门禁后，生成云端批量 A/B 实验配置。
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.momentum_tilt_research ab-plan `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.momentum_tilt_research ab-plan `
   --local-decision <path> [--batch-id <id>] --output-dir <dir> [--created <datetime>]
 ```
 
@@ -60,7 +60,7 @@ A/B 实验计划和云端回测稳健性评估。
 为已完成的云端回测生成稳健性对比报告。
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.research.momentum_tilt_research cloud-robustness `
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.momentum_tilt_research cloud-robustness `
   --baseline-run <id> --variant-run <id> --label <name> [--raw-data <path>]
 ```
 
