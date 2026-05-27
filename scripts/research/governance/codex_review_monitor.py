@@ -85,24 +85,32 @@ def build_monitor_report(
         head_created_at=head_created_at,
         trigger_time=trigger_time,
     )
-    latest_review_url = (
-        _review_url(repo=repo, pr_number=pr_number, review=latest_review)
-        if latest_review
-        else None
+    completion_time = (
+        _comment_effective_time(completion_comment) if completion_comment else ""
     )
-    latest_review_sha = (
-        str(latest_review.get("commit_id", "")) if latest_review else None
+    latest_review_time = _review_submitted_at(latest_review) if latest_review else ""
+    completion_is_latest = completion_comment is not None and (
+        latest_review is None or not latest_review_time or latest_review_time <= completion_time
     )
-    if latest_review_url is None and completion_comment is not None:
+    if completion_comment is not None and completion_is_latest:
         latest_review_url = _issue_comment_url(
             repo=repo, pr_number=pr_number, comment=completion_comment
         )
         latest_review_sha = head_sha
-    reviewed_until = None
-    if latest_review is not None:
+        reviewed_until = completion_time
+        context_invalid_cutoff = completion_time
+    elif latest_review is not None:
+        latest_review_url = _review_url(
+            repo=repo, pr_number=pr_number, review=latest_review
+        )
+        latest_review_sha = str(latest_review.get("commit_id", ""))
         reviewed_until = _review_submitted_at(latest_review)
-    elif completion_comment is not None:
-        reviewed_until = _comment_effective_time(completion_comment)
+        context_invalid_cutoff = None
+    else:
+        latest_review_url = None
+        latest_review_sha = None
+        reviewed_until = None
+        context_invalid_cutoff = None
     trigger_invalid = _has_context_hostile_trigger_comment(
         issue_comments,
         head_created_at=head_created_at,
@@ -122,6 +130,7 @@ def build_monitor_report(
         current_head_reviews,
         review_comments=review_comments,
         expected_head_sha=head_sha,
+        submitted_after=context_invalid_cutoff,
     )
     advisory_findings = _count_reviews_findings(
         current_head_reviews,

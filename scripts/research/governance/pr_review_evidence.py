@@ -61,9 +61,9 @@ BLOCKING_CODEX_FINDING_PATTERN = re.compile(
     re.IGNORECASE,
 )
 CODEX_CONTEXT_INVALID_PATTERN = re.compile(
-    r"(?:(?:cannot|can't|can\s*not|unable\s+to|could\s+not)\s+"
+    r"(?:(?:cannot|can(?:'|\u2019)t|can\s*not|unable\s+to|could\s+not|couldn(?:'|\u2019)t)\s+"
     r".*?(?:review|complete|read|access|see|view).*?(?:diff|code\s+diff|unified\s+diff)|"
-    r"(?:don't|do\s+not)\s+have\s+access\s+to\s+(?:the\s+)?(?:PR\s+)?diff|"
+    r"(?:don(?:'|\u2019)t|do\s+not)\s+have\s+access\s+to\s+(?:the\s+)?(?:PR\s+)?diff|"
     r"conversation\s+did\s+not\s+include.*diff|"
     r"cannot\s+complete.*static\s+review.*diff|"
     r"could\s+not\s+read.*diff|"
@@ -85,6 +85,7 @@ CONTEXT_HOSTILE_TRIGGER_PATTERN = re.compile(
     r"(?:do\s+not|don(?:'|\u2019)t)\s+read\s+(?:the\s+)?(?:repository|repo|GitHub\s+diff|diff)|"
     r"only\s+do\s+a\s+static\s+diff\s+review|"
     r"(?:不要|不)(?:执行|运行|使用|读取).*?(?:命令|工具|本地命令|wrapper|检查|测试|仓库|代码库|GitHub\s*diff|diff)|"
+    r"只(?:做|看).*?(?:静态\s*)?diff\s*(?:review|评审)?|"
     r"只做静态\s*diff\s*review)",
     re.IGNORECASE,
 )
