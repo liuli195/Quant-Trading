@@ -11,6 +11,7 @@ from scripts.research.governance.codex_review_monitor import (
     build_monitor_report,
     render_monitor_comment,
 )
+import scripts.research.governance.pr_review_evidence as pr_review_evidence
 from scripts.research.governance.pr_review_evidence import (
     BLOCKING_CODEX_FINDING_PATTERN,
     head_updated_at_from_monitor_state,
@@ -2976,6 +2977,101 @@ def test_pr_review_evidence_accepts_codex_no_major_issues_comment() -> None:
         review_comments=[],
     )
     assert report.ok
+
+
+def test_pr_review_evidence_main_uses_current_pr_body_over_stale_event_env(
+    monkeypatch, capsys
+) -> None:
+    head_sha = "0" * 40
+    current_body = _valid_codex_review_body().replace(
+        "https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
+        "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484229220",
+    )
+    stale_body = current_body.replace(
+        "- \u7ed3\u8bba: \u901a\u8fc7", "- \u7ed3\u8bba: \u672a\u6267\u884c"
+    ).replace(
+        "- \u963b\u65ad\u95ee\u9898: \u65e0",
+        "- \u963b\u65ad\u95ee\u9898: \u672a\u786e\u8ba4",
+    )
+
+    monkeypatch.setenv("PR_BODY", stale_body)
+    monkeypatch.setenv("PR_URL", "https://github.com/liuli195/Quant-Trading/pull/5")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "liuli195/Quant-Trading")
+    monkeypatch.setenv("PR_NUMBER", "5")
+    monkeypatch.setenv("PR_HEAD_SHA", head_sha)
+    monkeypatch.setenv("GITHUB_TOKEN", "token")
+
+    monkeypatch.setattr(
+        pr_review_evidence,
+        "_fetch_pr_metadata",
+        lambda *, repo, pr_number, token: {
+            "body": current_body,
+            "html_url": "https://github.com/liuli195/Quant-Trading/pull/5",
+            "head": {"sha": head_sha},
+        },
+    )
+    monkeypatch.setattr(
+        pr_review_evidence,
+        "_fetch_pr_comments",
+        lambda *, repo, pr_number, token: [
+            {
+                "id": 4484212277,
+                "html_url": "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484212277",
+                "body": "@codex review",
+                "created_at": "2026-05-19T01:00:00Z",
+                "user": {"login": "liuli195"},
+            },
+            _codex_no_major_issues_comment(),
+        ],
+    )
+    monkeypatch.setattr(
+        pr_review_evidence,
+        "_fetch_pr_reviews",
+        lambda *, repo, pr_number, token: [],
+    )
+    monkeypatch.setattr(
+        pr_review_evidence,
+        "_fetch_pr_review_comments",
+        lambda *, repo, pr_number, token: [],
+    )
+    monkeypatch.setattr(
+        pr_review_evidence,
+        "_fetch_pr_review_threads",
+        lambda *, repo, pr_number, token: [],
+    )
+    monkeypatch.setattr(
+        pr_review_evidence,
+        "_fetch_pr_changed_files",
+        lambda *, repo, pr_number, token: (
+            "scripts/research/governance/pr_review_evidence.py",
+        ),
+    )
+    monkeypatch.setattr(
+        pr_review_evidence,
+        "_fetch_issue_metadata",
+        lambda *, repo, pr_number, token: {"labels": []},
+    )
+
+    assert (
+        pr_review_evidence.main(
+            [
+                "--body-env",
+                "PR_BODY",
+                "--pr-url-env",
+                "PR_URL",
+                "--repo-env",
+                "GITHUB_REPOSITORY",
+                "--pr-number-env",
+                "PR_NUMBER",
+                "--head-sha-env",
+                "PR_HEAD_SHA",
+                "--github-token-env",
+                "GITHUB_TOKEN",
+            ]
+        )
+        == 0
+    )
+    assert "PR review evidence ok" in capsys.readouterr().out
 
 
 def test_pr_review_evidence_ignores_codex_help_text_when_matching_trigger() -> None:

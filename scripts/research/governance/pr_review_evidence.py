@@ -1592,23 +1592,14 @@ def main(argv: list[str] | None = None) -> int:
     token = _read_env(args.github_token_env)
     if repo and pr_number and token:
         pr_metadata: Mapping[str, object] | None = None
-        if (
-            not body
-            or not expected_pr_url
-            or not expected_head_sha
-            or not expected_head_created_at
-        ):
-            pr_metadata = _fetch_pr_metadata(
-                repo=repo, pr_number=pr_number, token=token
-            )
-            if pr_metadata is not None:
-                if not body:
-                    body = str(pr_metadata.get("body", ""))
-                if not expected_pr_url:
-                    expected_pr_url = str(pr_metadata.get("html_url", ""))
-                head = pr_metadata.get("head")
-                if not expected_head_sha and isinstance(head, Mapping):
-                    expected_head_sha = str(head.get("sha", ""))
+        pr_metadata = _fetch_pr_metadata(repo=repo, pr_number=pr_number, token=token)
+        if pr_metadata is not None:
+            if args.body_file is None:
+                body = str(pr_metadata.get("body", ""))
+            expected_pr_url = str(pr_metadata.get("html_url", "")) or expected_pr_url
+            head = pr_metadata.get("head")
+            if isinstance(head, Mapping):
+                expected_head_sha = str(head.get("sha", "")) or expected_head_sha
         if comments is None:
             comments = _fetch_pr_comments(repo=repo, pr_number=pr_number, token=token)
         if not expected_head_created_at:
