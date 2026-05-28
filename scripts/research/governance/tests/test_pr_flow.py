@@ -713,6 +713,11 @@ def test_prepare_records_full_governance_gate_evidence(
         tmp_path,
         changed_files=["docs/guides/example.md"],
     )
+    monkeypatch.setattr(
+        pr_flow.sys,
+        "executable",
+        str(tmp_path / ".venv" / "Scripts" / "python.exe"),
+    )
     monkeypatch.setattr(pr_flow.ai_review_gate, "_discover_changed_files", lambda _root: [])
     runner = RecordingRunner()
 

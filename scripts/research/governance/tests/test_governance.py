@@ -2440,10 +2440,7 @@ def test_low_risk_pr_body_requires_local_governance_gate_command() -> None:
     report = validate_pr_body(body, comments=[])
 
     assert not report.ok
-    assert (
-        "local check evidence must include governance gate command"
-        in report.errors
-    )
+    assert "local check evidence must include governance gate command" in report.errors
 
 
 def test_low_risk_pr_body_accepts_chinese_p2_fields() -> None:
@@ -2721,6 +2718,30 @@ def _low_risk_no_official_review_body() -> str:
 
 - 无
 """
+
+
+def test_low_risk_pr_body_rejects_bare_governance_gate_module() -> None:
+    body = _low_risk_no_official_review_body().replace(
+        "`.venv/bin/python -m scripts.research.governance gate`",
+        "`scripts.research.governance gate`",
+    )
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "local check evidence must include governance gate command" in report.errors
+
+
+def test_codex_review_evidence_rejects_bare_governance_gate_module() -> None:
+    body = _valid_codex_review_body().replace(
+        "`.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
+        "`scripts.research.governance gate`",
+    )
+
+    report = validate_pr_body(body)
+
+    assert not report.ok
+    assert "review evidence must include governance gate command" in report.errors
 
 
 def test_high_risk_pr_body_can_skip_codex_review_with_user_authorization() -> None:

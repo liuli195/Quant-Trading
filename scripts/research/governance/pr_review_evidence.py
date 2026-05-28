@@ -106,7 +106,6 @@ REQUIRED_TRIGGER_TOKENS = ("@codex review",)
 REQUIRED_GOVERNANCE_GATE_COMMANDS = (
     ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate",
     ".venv/bin/python -m scripts.research.governance gate",
-    "scripts.research.governance gate",
 )
 
 
