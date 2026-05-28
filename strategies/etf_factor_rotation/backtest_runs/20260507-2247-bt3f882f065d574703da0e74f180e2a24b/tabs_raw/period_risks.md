@@ -79,4 +79,3 @@
 | index | one_month | three_month | six_month | twelve_month |
 | --- | --- | --- | --- | --- |
 | 2026-04 | 0.005537125919523156 | None | None | None |
-

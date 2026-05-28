@@ -2,7 +2,7 @@
 
 - 策略名称：etf_factor_rotation
 - 回测 ID：3f882f065d574703da0e74f180e2a24b
-- 区间： 至 
+- 区间： 至
 - 提取方式：聚宽研究环境 get_backtest()；详情页接口仅作补充。
 
 ## 核心指标

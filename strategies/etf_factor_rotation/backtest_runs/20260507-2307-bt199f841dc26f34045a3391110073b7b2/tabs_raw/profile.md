@@ -259,4 +259,3 @@ Total time: 2.30559 s
 File: /tmp/strategy/user_code.py
 Function: execute_rebalance at line 544
 ```
-
