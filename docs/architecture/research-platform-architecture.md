@@ -75,7 +75,7 @@ init -> run --mode fast -> promote -> full review -> handoff-cloud -> cloud conf
 报告仍贴近产物保存，但由 [docs_index.py](../../scripts/research/platform/docs_index.py) <!-- pathref: scripts/research/platform/docs_index.py --> 生成统一索引：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.docs index
+.\.venv\Scripts\python.exe -m scripts.research.docs index
 ```
 
 索引输出：
@@ -92,8 +92,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.p
 固定审计命令：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance audit
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance gate
+.\.venv\Scripts\python.exe -m scripts.research.governance audit
+.\.venv\Scripts\python.exe -m scripts.research.governance gate
 ```
 
 审计覆盖工具登记、README/文档/测试锚点、CLI help、workflow template schema、`AGENTS.md`、`indexes.md`、`CLAUDE.md`、`jq-research`/`jq-ab-test` Skill、数据 catalog、报告 catalog 和 pathref。`gate` 是本地 hook 和 CI 使用的门禁入口，会同时运行治理审计和 pathref 校验。
@@ -102,18 +102,18 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.p
 
 中央工具注册表按 `library` 管理正式工具。`scripts.research`、`scripts.research.research_core`、专题研究库、`scripts.tools.jq_automation` 和 `scripts.tools.path_tools` 都必须有明确登记项。
 
-登记项包含 `tool_id`、`library`、`layer`、`kind`、`entry_module`、`cli`、`cli_windows`、`cli_posix`、README、文档、测试锚点、输入和输出。CLI 元数据必须同时生成 Windows `run-python.ps1` 命令和 POSIX `run-python.sh` 命令。
+登记项包含 `tool_id`、`library`、`layer`、`kind`、`entry_module`、`cli`、`cli_windows`、`cli_posix`、README、文档、测试锚点、输入和输出。CLI 元数据必须同时生成 Windows `.venv\Scripts\python.exe` 命令和 POSIX `.venv/bin/python` 命令。
 
 [layers](../../scripts/research/layers) <!-- pathref: scripts/research/layers --> 是按5层生成的工具索引目录，来源仍是同一份 registry；源码继续按库维护，避免为了分层视图重复搬迁实现。
 
 刷新命令：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.registry.tool_registry write-layers
+.\.venv\Scripts\python.exe -m scripts.research.registry.tool_registry write-layers
 ```
 
 ```bash
-.githooks/run-python.sh -m scripts.research.registry.tool_registry write-layers
+.venv/bin/python -m scripts.research.registry.tool_registry write-layers
 ```
 
 治理审计会：
