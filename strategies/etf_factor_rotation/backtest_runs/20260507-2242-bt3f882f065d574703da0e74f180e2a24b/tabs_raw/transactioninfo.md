@@ -1,17 +1,11 @@
-# 交易详情
-
-- 总成交：3 笔（买 2 / 卖 1），涉及 1 个月
-
-## 月度汇总
-
-| 月份 | 笔数 | 买入 | 卖出 | 买入额 | 卖出额 | 净买入 |
-|------|------|------|------|--------|--------|--------|
-| 2026-04 | 3 | 2 | 1 | 34,387 | 6,015 | 28,372 |
-
-## 逐笔明细
-
-| 日期 | 标的 | 方向 | 数量 | 成交价 | 成交额 | 平仓盈亏 | 手续费 |
-|------|------|------|------|--------|--------|----------|--------|
-| 2026-04-01 | 人工智能ETF易方达(159819.XSHE) | 买 | 12600股 | 1.472 | 18547.2 | 0 | 1.85 |
-| 2026-04-13 | 人工智能ETF易方达(159819.XSHE) | 卖 | -3800股 | 1.583 | -6015.4 | 421.8 | 0.6 |
-| 2026-04-13 | 纳指ETF(513100.XSHG) | 买 | 8800股 | 1.8 | 15840 | 0 | 1.58 |
+{
+  "kind": "data_center_pointer",
+  "dataset_id": "etf_factor_rotation_backtest_runs",
+  "snapshot_id": "20260507-2242-bt3f882f065d574703da0e74f180e2a24b",
+  "dataset_snapshot": "research_datasets/etf_factor_rotation_backtest_runs/20260507-2242-bt3f882f065d574703da0e74f180e2a24b",
+  "dataset_file": "raw/transactioninfo.md.gz",
+  "original_path": "tabs_raw/transactioninfo.md",
+  "original_sha256": "d44972f79e42b7f121a965ce6afb566fcc9856a499848293a81677c7f2e81e45",
+  "compressed_sha256": "d770c3060d3032673faca686394e517698a67cb7b6d372e03a52680e652e246e",
+  "original_bytes": 750
+}

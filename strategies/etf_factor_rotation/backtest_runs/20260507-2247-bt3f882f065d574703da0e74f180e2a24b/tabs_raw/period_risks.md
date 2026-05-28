@@ -1,81 +1,11 @@
-# 分期风险指标
-
-## algorithm_return
-
-- 记录数：1
-
-| index | one_month | three_month | six_month | twelve_month |
-| --- | --- | --- | --- | --- |
-| 2026-04 | 0.04588959740000087 | None | None | None |
-
-## benchmark_return
-
-- 记录数：1
-
-| index | one_month | three_month | six_month | twelve_month |
-| --- | --- | --- | --- | --- |
-| 2026-04 | 0.08028171732839029 | None | None | None |
-
-## alpha
-
-- 记录数：1
-
-| index | one_month | three_month | six_month | twelve_month |
-| --- | --- | --- | --- | --- |
-| 2026-04 | 0.22425775523743652 | None | None | None |
-
-## beta
-
-- 记录数：1
-
-| index | one_month | three_month | six_month | twelve_month |
-| --- | --- | --- | --- | --- |
-| 2026-04 | 0.30099318481166304 | None | None | None |
-
-## sharpe
-
-- 记录数：1
-
-| index | one_month | three_month | six_month | twelve_month |
-| --- | --- | --- | --- | --- |
-| 2026-04 | 10.483438801094294 | None | None | None |
-
-## sortino
-
-- 记录数：1
-
-| index | one_month | three_month | six_month | twelve_month |
-| --- | --- | --- | --- | --- |
-| 2026-04 | 30.030299934304427 | None | None | None |
-
-## information
-
-- 记录数：1
-
-| index | one_month | three_month | six_month | twelve_month |
-| --- | --- | --- | --- | --- |
-| 2026-04 | -6.561154984124719 | None | None | None |
-
-## algorithm_volatility
-
-- 记录数：1
-
-| index | one_month | three_month | six_month | twelve_month |
-| --- | --- | --- | --- | --- |
-| 2026-04 | 0.06352701150740804 | None | None | None |
-
-## benchmark_volatility
-
-- 记录数：1
-
-| index | one_month | three_month | six_month | twelve_month |
-| --- | --- | --- | --- | --- |
-| 2026-04 | 0.1654088538571871 | None | None | None |
-
-## max_drawdown
-
-- 记录数：1
-
-| index | one_month | three_month | six_month | twelve_month |
-| --- | --- | --- | --- | --- |
-| 2026-04 | 0.005537125919523156 | None | None | None |
+{
+  "kind": "data_center_pointer",
+  "dataset_id": "etf_factor_rotation_backtest_runs",
+  "snapshot_id": "20260507-2247-bt3f882f065d574703da0e74f180e2a24b",
+  "dataset_snapshot": "research_datasets/etf_factor_rotation_backtest_runs/20260507-2247-bt3f882f065d574703da0e74f180e2a24b",
+  "dataset_file": "raw/period_risks.md.gz",
+  "original_path": "tabs_raw/period_risks.md",
+  "original_sha256": "08941513008b8c540ab356fdaad86522d37bda7538931ec76d6e9def4b56be27",
+  "compressed_sha256": "9954818c219326dd8c351ad88f1cb87788cff45dbc15018dce375a7a2ecde33a",
+  "original_bytes": 1946
+}
