@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "catalog_type": "documents",
-  "generated_at": "2026-05-28T08:26:04+00:00",
+  "generated_at": "2026-05-28T08:49:53+00:00",
   "count": 431,
   "reports": [
     {
@@ -4437,7 +4437,7 @@
         "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260507-hard-vs-soft-trend-gate-ab)/ab-hard-vs-soft-trend-gate-summary.json",
         "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260507-hard-vs-soft-trend-gate-ab)/ab-hard-vs-soft-trend-gate-comparison.md"
       ],
-      "updated_at": "2026-05-28T08:12:32+00:00"
+      "updated_at": "2026-05-28T08:47:54+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/test_batches/20260507-hard-vs-soft-trend-gate-ab/report/ab-hard-vs-soft-trend-gate-comparison.md",
@@ -4447,7 +4447,7 @@
       "date": "2026-05-07",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-28T08:12:32+00:00"
+      "updated_at": "2026-05-28T08:44:52+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/test_batches/20260507-hard-vs-soft-trend-gate-ab/report/ab-hard-vs-soft-trend-gate-plan.md",
@@ -4460,7 +4460,7 @@
         "strategies/etf_factor_rotation/test_batches/20260507-hard-vs-soft-trend-gate-ab/abtests/hard-vs-soft-trend-gate.json",
         "strategies/etf_factor_rotation/test_batches/20260507-hard-vs-soft-trend-gate-ab/manifest.json"
       ],
-      "updated_at": "2026-05-28T08:12:32+00:00"
+      "updated_at": "2026-05-28T08:45:19+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/test_batches/20260507-rsrsmaxmultiplier-scan/report/batch-comparison.md",

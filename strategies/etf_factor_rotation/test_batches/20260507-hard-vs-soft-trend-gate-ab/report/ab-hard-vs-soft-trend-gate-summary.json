@@ -1,8 +1,14 @@
 {
-  "status": "completed",
+  "status": "archived_partial",
   "baseline": "hard_gate_main",
   "controls": [
     "hard_gate_main"
+  ],
+  "governance_status": "archived_partial_not_promotion_evidence",
+  "governance_notes": [
+    "Historical A/B imported after data-center rules were introduced.",
+    "Both referenced data-center snapshots are partial and missing tabs_raw/audit_log.jsonl.",
+    "Do not use this batch as strategy promotion, merge, or parameter-scan evidence without a governed rerun."
   ],
   "generated_at": "2026-05-07T23:15:43",
   "variants": [
@@ -25,14 +31,18 @@
         "end_date": "2026-04-30",
         "capital": 100000,
         "params_snapshot": {},
-        "extraction_method": "joinquant_research_get_backtest"
+        "extraction_method": "joinquant_research_get_backtest",
+        "governance_status": "archived_partial_not_promotion_evidence"
       },
       "artifacts_present": {
         "has_backtest_report": true,
         "has_strategy_analysis": true,
         "has_performance_analysis": true
       },
-      "issues": []
+      "issues": [
+        "Historical partial data-center snapshot: missing tabs_raw/audit_log.jsonl; audit events unavailable.",
+        "Not promotion or merge evidence without a governed rerun."
+      ]
     },
     {
       "label": "soft_gate_workspace",
@@ -53,14 +63,20 @@
         "end_date": "2026-04-30",
         "capital": 100000,
         "params_snapshot": {},
-        "extraction_method": "joinquant_research_get_backtest"
+        "extraction_method": "joinquant_research_get_backtest",
+        "governance_status": "archived_partial_not_promotion_evidence",
+        "source_traceability": "local_only_commit_not_remote; uploaded_code_sha256 not reproducible from current committed source"
       },
       "artifacts_present": {
         "has_backtest_report": true,
         "has_strategy_analysis": true,
         "has_performance_analysis": true
       },
-      "issues": []
+      "issues": [
+        "Historical partial data-center snapshot: missing tabs_raw/audit_log.jsonl; audit events unavailable.",
+        "Soft-gate source commit is not reachable from origin refs and uploaded_code_sha256 is not reproducible from current committed source.",
+        "Not promotion or merge evidence without a governed rerun."
+      ]
     }
   ]
 }

@@ -2,6 +2,11 @@
   "experiment_id": "hard-vs-soft-trend-gate",
   "strategy": "etf_factor_rotation",
   "batch_id": "20260507-hard-vs-soft-trend-gate-ab",
+  "governance_status": "archived_partial_not_promotion_evidence",
+  "governance_notes": [
+    "Historical batch retained for context only.",
+    "Do not use for merge, promotion, or parameter scanning without a governed rerun with complete audit logs and reachable source."
+  ],
   "baseline": "hard_gate_main",
   "controls": [
     "hard_gate_main"

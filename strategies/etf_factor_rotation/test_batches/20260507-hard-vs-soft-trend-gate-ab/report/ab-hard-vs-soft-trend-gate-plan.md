@@ -4,6 +4,10 @@
 
 Compare whether the ETF factor rotation strategy benefits from replacing the main branch hard 120-day moving-average gate with the current workspace branch linear soft gate.
 
+## Governance Status
+
+This historical batch is archived as `archived_partial`, not as promotion evidence. The imported data-center snapshots are missing `tabs_raw/audit_log.jsonl`, and the soft-gate source commit is not reachable from origin refs. Treat this plan as historical context only; rerun the experiment under the current PR/data-center rules before using the result for merge, promotion, or parameter scanning.
+
 ## Artifacts
 
 - AB config: [hard-vs-soft-trend-gate.json](../abtests/hard-vs-soft-trend-gate.json) <!-- pathref: strategies/etf_factor_rotation/test_batches/20260507-hard-vs-soft-trend-gate-ab/abtests/hard-vs-soft-trend-gate.json -->

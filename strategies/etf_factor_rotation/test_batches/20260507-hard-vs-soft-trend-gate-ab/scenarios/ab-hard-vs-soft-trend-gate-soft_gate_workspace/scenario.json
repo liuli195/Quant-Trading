@@ -9,6 +9,10 @@
   "estimated_minutes": 8.0,
   "batch_id": "20260507-hard-vs-soft-trend-gate-ab",
   "strategy": "etf_factor_rotation",
+  "governance_status": "archived_partial_not_promotion_evidence",
+  "governance_notes": [
+    "Historical scenario retained for context only; soft-gate source commit is not reachable from origin refs and the data-center snapshot lacks audit_log."
+  ],
   "params_diff": {
     "TrendGateLower": -0.1,
     "TrendGateUpper": 0.0
