@@ -1,0 +1,76 @@
+{
+  "ab_experiments": {
+    "hard-vs-soft-trend-gate": {
+      "status": "completed",
+      "baseline": "hard_gate_main",
+      "controls": [
+        "hard_gate_main"
+      ],
+      "config_hash": "sha256:6dd02968e0e5cfede97e33a2186c76f9902f269b84f7602263f2dfbb924f25ac",
+      "variants": [
+        {
+          "label": "hard_gate_main",
+          "scenario_id": "ab-hard-vs-soft-trend-gate-hard_gate_main",
+          "run_label": "hard_gate_main",
+          "run_id": "20260507-2307-bt199f841dc26f34045a3391110073b7b2",
+          "role": "control",
+          "is_baseline": true,
+          "upload_index": 1,
+          "code_source": {
+            "type": "git",
+            "ref": "main",
+            "commit": "fb3a23e34b232b8fea285ba9661378c3eb9e3bb4",
+            "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+          },
+          "params_mode": "baked_in_git",
+          "params_diff": {
+            "MA_long": 120
+          },
+          "scan_source": null,
+          "uploaded_code_sha256": "sha256:95df78b060ab471549b0ce9e1646d0c9922bd0aaf44c343395b07d6e5969458f",
+          "backtest_id": "199f841dc26f34045a3391110073b7b2",
+          "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=199f841dc26f34045a3391110073b7b2",
+          "status": "completed"
+        },
+        {
+          "label": "soft_gate_workspace",
+          "scenario_id": "ab-hard-vs-soft-trend-gate-soft_gate_workspace",
+          "run_label": "soft_gate_workspace",
+          "run_id": "20260507-2310-btfe11e835821438464da31fd4f4d995e1",
+          "role": "variant",
+          "is_baseline": false,
+          "upload_index": 2,
+          "code_source": {
+            "type": "git",
+            "ref": "默认工作区",
+            "commit": "9665739346dcf5f799c9e134093fae5e31e49d8c",
+            "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+          },
+          "params_mode": "baked_in_git",
+          "params_diff": {
+            "TrendGateLower": -0.1,
+            "TrendGateUpper": 0.0
+          },
+          "scan_source": null,
+          "uploaded_code_sha256": "sha256:66fbeb71c74d71a9ac7c32660e6b1b8e3311dd5eb01de97eace048268028087b",
+          "backtest_id": "fe11e835821438464da31fd4f4d995e1",
+          "backtest_url": "https://www.joinquant.com/algorithm/backtest/detail?backtestId=fe11e835821438464da31fd4f4d995e1",
+          "status": "completed"
+        }
+      ],
+      "upload_session": {
+        "session_started_at": "2026-05-07T23:07:34",
+        "session_finished_at": "2026-05-07T23:12:14",
+        "strategy_name": "etf_factor_rotation",
+        "edit_url": null,
+        "candidate_order": [
+          "hard_gate_main",
+          "soft_gate_workspace"
+        ]
+      }
+    }
+  },
+  "batch_id": "20260507-hard-vs-soft-trend-gate-ab",
+  "strategy": "etf_factor_rotation",
+  "updated": "2026-05-07T23:12:14"
+}

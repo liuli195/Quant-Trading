@@ -1,0 +1,66 @@
+{
+  "status": "completed",
+  "baseline": "hard_gate_main",
+  "controls": [
+    "hard_gate_main"
+  ],
+  "generated_at": "2026-05-07T23:15:43",
+  "variants": [
+    {
+      "label": "hard_gate_main",
+      "role": "control",
+      "is_baseline": true,
+      "metrics": {
+        "max_drawdown": 0.0697,
+        "annual_return": 0.10859999999999999,
+        "excess_return": 0.8445,
+        "sharpe": 0.851,
+        "actual_minutes": 1.956
+      },
+      "metadata": {
+        "backtest_id": "199f841dc26f34045a3391110073b7b2",
+        "backtest_url": "",
+        "strategy_name": "etf_factor_rotation",
+        "start_date": "2021-01-01",
+        "end_date": "2026-04-30",
+        "capital": 100000,
+        "params_snapshot": {},
+        "extraction_method": "joinquant_research_get_backtest"
+      },
+      "artifacts_present": {
+        "has_backtest_report": true,
+        "has_strategy_analysis": true,
+        "has_performance_analysis": true
+      },
+      "issues": []
+    },
+    {
+      "label": "soft_gate_workspace",
+      "role": "variant",
+      "is_baseline": false,
+      "metrics": {
+        "max_drawdown": 0.08259999999999999,
+        "annual_return": 0.1197,
+        "excess_return": 0.9416,
+        "sharpe": 0.971,
+        "actual_minutes": 1.4308333333333332
+      },
+      "metadata": {
+        "backtest_id": "fe11e835821438464da31fd4f4d995e1",
+        "backtest_url": "",
+        "strategy_name": "etf_factor_rotation",
+        "start_date": "2021-01-01",
+        "end_date": "2026-04-30",
+        "capital": 100000,
+        "params_snapshot": {},
+        "extraction_method": "joinquant_research_get_backtest"
+      },
+      "artifacts_present": {
+        "has_backtest_report": true,
+        "has_strategy_analysis": true,
+        "has_performance_analysis": true
+      },
+      "issues": []
+    }
+  ]
+}

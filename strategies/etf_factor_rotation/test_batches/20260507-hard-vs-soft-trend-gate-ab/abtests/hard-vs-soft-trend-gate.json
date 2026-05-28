@@ -1,0 +1,84 @@
+{
+  "experiment_id": "hard-vs-soft-trend-gate",
+  "strategy": "etf_factor_rotation",
+  "batch_id": "20260507-hard-vs-soft-trend-gate-ab",
+  "baseline": "hard_gate_main",
+  "controls": [
+    "hard_gate_main"
+  ],
+  "base": {
+    "code_source": {
+      "type": "git",
+      "ref": "main",
+      "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+    },
+    "strategy_name": "etf_factor_rotation",
+    "start_date": "2021-01-01",
+    "end_date": "2026-04-30",
+    "capital": 100000,
+    "estimated_minutes": 8,
+    "frequency": "1d",
+    "py_version": "Python3",
+    "result_source": "research"
+  },
+  "variants": [
+    {
+      "label": "hard_gate_main",
+      "role": "control",
+      "params_mode": "baked_in_git",
+      "params_diff": {
+        "MA_long": 120
+      },
+      "note": "Baseline: main branch code, hard 120-day MA trend gate. Common baked-in params include TopK=3, TargetVol=0.08, use_real_price=False, fq_mode=None."
+    },
+    {
+      "label": "soft_gate_workspace",
+      "role": "variant",
+      "code_source": {
+        "type": "git",
+        "ref": "默认工作区",
+        "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+      },
+      "params_mode": "baked_in_git",
+      "params_diff": {
+        "TrendGateLower": -0.1,
+        "TrendGateUpper": 0.0
+      },
+      "note": "Variant: 默认工作区 branch code, linear soft trend gate from -10% below MA to 0% at/above MA. Other strategy params remain baked in."
+    }
+  ],
+  "metrics": [
+    {
+      "key": "annual_return",
+      "direction": "maximize"
+    },
+    {
+      "key": "excess_return",
+      "direction": "maximize"
+    },
+    {
+      "key": "max_drawdown",
+      "direction": "minimize"
+    },
+    {
+      "key": "sharpe",
+      "direction": "maximize"
+    },
+    {
+      "key": "volatility",
+      "direction": "minimize"
+    },
+    {
+      "key": "win_ratio",
+      "direction": "maximize"
+    },
+    {
+      "key": "profit_loss_ratio",
+      "direction": "maximize"
+    },
+    {
+      "key": "actual_minutes",
+      "direction": "minimize"
+    }
+  ]
+}
