@@ -521,7 +521,7 @@ def _replace_managed_block(existing_body: str, managed_body: str) -> str:
             rf"{re.escape(MANAGED_BLOCK_START)}.*?{re.escape(MANAGED_BLOCK_END)}",
             re.DOTALL,
         )
-        return pattern.sub(block, existing_body)
+        return pattern.sub(lambda _match: block, existing_body)
     if existing_body.strip():
         return f"{existing_body.rstrip()}\n\n{block}\n"
     return f"{block}\n"

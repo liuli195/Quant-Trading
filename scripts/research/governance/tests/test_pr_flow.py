@@ -402,6 +402,46 @@ def test_sync_updates_existing_pr_block_label_and_codex_comment(
     assert "scripts/research/governance/rules.py" in runner.comments[0]
 
 
+def test_sync_replaces_existing_pr_block_with_windows_path_evidence(
+    tmp_path: Path,
+) -> None:
+    _write_valid_report(
+        tmp_path,
+        risk_level="high",
+        requires_official=True,
+        changed_files=["scripts/research/governance/rules.py"],
+    )
+    report_path = tmp_path / ".local/ai-review/latest.json"
+    payload = json.loads(report_path.read_text(encoding="utf-8"))
+    payload["checks"]["governance gate"] = (
+        "powershell.exe -NoProfile -ExecutionPolicy Bypass -File "
+        ".\\.githooks\\run-python.ps1 -m scripts.research.governance gate; passed"
+    )
+    report_path.write_text(
+        json.dumps(payload, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    existing_body = "\n".join(
+        [
+            "Intro",
+            "",
+            "<!-- pr-flow:start -->",
+            "old managed content",
+            "<!-- pr-flow:end -->",
+            "",
+            "Tail",
+        ]
+    )
+    runner = FakeRunner(existing_pr=True, pr_body=existing_body)
+
+    code = pr_flow.sync(repo_root=tmp_path, title="PR 流程自动化", runner=runner)
+
+    assert code == 0
+    edited = runner.edited_bodies[0]
+    assert "old managed content" not in edited
+    assert ".\\.githooks\\run-python.ps1" in edited
+
+
 def test_sync_stops_when_existing_pr_body_cannot_be_read(
     tmp_path: Path,
 ) -> None:
