@@ -5,8 +5,8 @@
 ## 命令
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance audit
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance gate
+.\.venv\Scripts\python.exe -m scripts.research.governance audit
+.\.venv\Scripts\python.exe -m scripts.research.governance gate
 ```
 
 `gate` is the enforced entry for hooks and CI. It runs governance audit plus
@@ -35,7 +35,7 @@ make pr-ready TITLE="<PR标题>"
 `make pr-ready TITLE="<PR标题>"` 是本地 PR 自动化入口，等价于：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance.pr_flow ready --title "<PR标题>"
+.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow ready --title "<PR标题>"
 ```
 
 它会准备本地 review 证据、渲染 `.local/ai-review/pr-body.md`、同步 GitHub PR 的 `pr-flow` 托管区、按风险补 `ai-risk-review` label、触发必要的 `@codex review`，并等待 required checks。
@@ -45,17 +45,16 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.p
 `.githooks/pre-push` calls all required push gates before handing off to Git LFS:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance.branch_protection pre-push
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance gate
+.\.venv\Scripts\python.exe -m scripts.research.governance.branch_protection pre-push
+.\.venv\Scripts\python.exe -m scripts.research.governance gate
 git lfs pre-push
 ```
 
 It blocks direct pushes to `main` / `master` when remote rulesets are unavailable,
 reruns the full governance gate before push, and preserves the Git LFS hook.
-The shell hooks call `.githooks/run-python.sh`, which sets UTF-8 Python output
-and chooses `.venv/bin/python` on Codex Cloud/Linux or `.venv/Scripts/python.exe`
-on Windows. Use `.githooks/run-python.ps1` as the direct PowerShell helper for
-local Windows commands.
+The shell hooks call `.githooks/run-python.sh` only to choose the current
+worktree virtualenv on POSIX Git shell environments. Daily local commands should
+call `.venv` Python directly; UTF-8 output is handled by environment variables.
 
 `.githooks/reference-transaction` blocks local updates to `refs/heads/main` and
 `refs/heads/master`, including accidental local `git merge` or `git reset` into
@@ -141,7 +140,7 @@ Manual inspection is available through workflow dispatch, or locally with:
 $env:GITHUB_REPOSITORY="owner/repo"
 $env:PR_NUMBER="<number>"
 $env:GITHUB_TOKEN="<token>"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance.codex_review_monitor
+.\.venv\Scripts\python.exe -m scripts.research.governance.codex_review_monitor
 ```
 
 审计范围：
@@ -164,5 +163,5 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.p
 开发单测可用：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance audit --skip-cli-help --skip-pathrefs
+.\.venv\Scripts\python.exe -m scripts.research.governance audit --skip-cli-help --skip-pathrefs
 ```

@@ -16,8 +16,7 @@ from scripts.research.governance.pr_review_evidence import (
 )
 
 GOVERNANCE_GATE_COMMAND = (
-    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File "
-    ".\\.githooks\\run-python.ps1 -m scripts.research.governance gate"
+    ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate"
 )
 
 
@@ -370,7 +369,7 @@ def test_pr_body_renders_codex_section_only_when_evidence_is_present(
         "blocking_issues": "无",
         "evidence": [
             "Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-            "`powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate`",
+            "`.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
         ],
     }
     _write_report(report, payload)

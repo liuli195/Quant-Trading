@@ -88,12 +88,12 @@ CODEX_NO_MAJOR_ISSUES_PATTERN = re.compile(
 )
 CONTEXT_HOSTILE_TRIGGER_PATTERN = re.compile(
     r"(?:(?:do\s+not|don(?:'|\u2019)t)\s+(?:execute|run)\s+(?:any\s+)?(?:local\s+)?"
-    r"(?:commands?|checks?|tests?|wrapper)|"
-    r"(?:do\s+not|don(?:'|\u2019)t)\s+use\s+(?:tools?|wrapper)|"
+    r"(?:commands?|checks?|tests?)|"
+    r"(?:do\s+not|don(?:'|\u2019)t)\s+use\s+tools?|"
     r"(?:do\s+not|don(?:'|\u2019)t)\s+read\s+(?:the\s+)?(?:repository|repo|GitHub\s+diff|diff)|"
     r"only\s+do\s+a\s+static\s+diff\s+review|"
-    r"(?:不要|不)(?:执行|运行)(?![^。；;\n]*(?:破坏性|危险)).*?(?:命令|本地命令|wrapper|检查|测试)|"
-    r"(?:不要|不)(?:使用|读取).*?(?:工具|仓库|代码库|GitHub\s*diff|diff|wrapper)|"
+    r"(?:不要|不)(?:执行|运行)(?![^。；;\n]*(?:破坏性|危险)).*?(?:命令|本地命令|检查|测试)|"
+    r"(?:不要|不)(?:使用|读取).*?(?:工具|仓库|代码库|GitHub\s*diff|diff)|"
     r"(?:只|仅)(?:做|看).*?(?:静态\s*)?diff\s*(?:review|评审)?|"
     r"只做静态\s*diff\s*review)",
     re.IGNORECASE,
@@ -104,9 +104,9 @@ CONTEXT_HOSTILE_TRIGGER_ERROR = (
 )
 REQUIRED_TRIGGER_TOKENS = ("@codex review",)
 REQUIRED_GOVERNANCE_GATE_COMMANDS = (
-    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate",
-    "sh .githooks/run-python.sh -m scripts.research.governance gate",
-    ".githooks/run-python.sh -m scripts.research.governance gate",
+    ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate",
+    ".venv/bin/python -m scripts.research.governance gate",
+    "scripts.research.governance gate",
 )
 
 
@@ -208,8 +208,8 @@ def validate_pr_body(
             expected_head_sha=expected_head_sha,
         ):
             errors.append("PR comments must include the required @codex review trigger")
-    if not _has_governance_gate_wrapper_command(section):
-        errors.append("review evidence must include governance gate wrapper command")
+    if not _has_governance_gate_command(section):
+        errors.append("review evidence must include governance gate command")
 
     return EvidenceReport(not errors, tuple(errors))
 
@@ -218,7 +218,7 @@ def _extract_section(body: str) -> str | None:
     return _extract_named_section(body, SECTION_HEADER)
 
 
-def _has_governance_gate_wrapper_command(section: str) -> bool:
+def _has_governance_gate_command(section: str) -> bool:
     normalized_section = " ".join(section.replace("`", "").split()).casefold()
     return any(
         command.casefold() in normalized_section
@@ -281,10 +281,8 @@ def _official_codex_required(
         )
     )
     errors.extend(_p2_section_errors(body))
-    if not _has_governance_gate_wrapper_command(body):
-        errors.append(
-            "local check evidence must include governance gate wrapper command"
-        )
+    if not _has_governance_gate_command(body):
+        errors.append("local check evidence must include governance gate command")
     if blockers != "无":
         errors.append("P0/P1 未关闭项 must be 无")
     high_risk_files = _high_risk_changed_files(changed_files)

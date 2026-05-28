@@ -27,7 +27,7 @@ DISPATCH_REQUIRED_EXIT_CODE = 4
 REPLY_OR_FIX_REQUIRED_EXIT_CODE = 5
 EXCEPTION_REQUIRED_EXIT_CODE = 6
 PR_BODY_GOVERNANCE_GATE_COMMAND = (
-    ".githooks/run-python.sh -m scripts.research.governance gate"
+    ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate"
 )
 CODEX_REVIEW_AUTHORS = {"chatgpt-codex-connector", "chatgpt-codex-connector[bot]"}
 DISQUALIFIED_CODEX_REVIEW_STATES = {"DISMISSED", "PENDING"}
