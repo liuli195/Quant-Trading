@@ -11,6 +11,7 @@
 - `Research Governance / governance` 汇总静态扫描、类型检查、依赖漏洞扫描、测试、pathref 和 governance gate。
 - `pr-review-evidence` 校验 PR body 的 `AI Review 风险分级`、`review_mode=complete` / `partial` 授权、`security_review` / `本地安全 review`、`codex-security` / `security-guidance`、`官方 Codex Review 跳过授权`、P2 保留、Codex Review 证据和高风险 label。
 - `Codex Review Monitor` 监听当前 head 的 Codex Review 状态；低风险且无需官方 review 的 PR 可快速通过/空跑。
+- `Codex Review Monitor` success 可作为 `pr_flow` 自动采集官方 Codex 通过证据的信号之一，但不能替代 PR body 的 `Codex Code Review 结论`。
 - 未解决且未过期的 Codex P0/P1 thread 必须阻断，任何跳过授权不得绕过。
 - 本地仓库必须设置 `git config core.hooksPath .githooks`。
 - `.githooks/pre-commit`、`.githooks/pre-push`、`.githooks/reference-transaction` 必须通过 `.githooks/run-python.sh` 调用项目虚拟环境，不硬编码单一平台解释器。
