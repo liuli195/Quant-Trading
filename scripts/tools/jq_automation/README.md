@@ -6,9 +6,9 @@
 
 ```powershell
 # 最小完整流程
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.tools.jq_automation compile-check strategies\<s>\<s>.py --write-upload
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.tools.jq_automation upload strategies\<s>\<s>.py --strategy-name <s>
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.tools.jq_automation run <scenario.json> --yes --backtest-timeout 240
+.\.venv\Scripts\python.exe -m scripts.tools.jq_automation compile-check strategies\<s>\<s>.py --write-upload
+.\.venv\Scripts\python.exe -m scripts.tools.jq_automation upload strategies\<s>\<s>.py --strategy-name <s>
+.\.venv\Scripts\python.exe -m scripts.tools.jq_automation run <scenario.json> --yes --backtest-timeout 240
 ```
 
 策略仅在聚宽云端运行。本地仅做：语法检查、参数改写、浏览器自动化、产物归档、结果对比。
@@ -757,10 +757,10 @@ IF 页面读取失败 → 检查 docs/joinquant-data/quota_ledger/<YYYYMMDD>.jso
 
 ```powershell
 # Python 虚拟环境
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m playwright install chromium
+.\.venv\Scripts\python.exe -m playwright install chromium
 
 # 首次使用：非 headless 登录聚宽
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.tools.jq_automation upload <strategy_file> --strategy-name <name>
+.\.venv\Scripts\python.exe -m scripts.tools.jq_automation upload <strategy_file> --strategy-name <name>
 # → 在弹出的 Chrome 中手动登录聚宽，后续自动复用 .local/chrome-jq/ 的 cookies
 ```
 
@@ -771,9 +771,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.p
 改动工具代码后：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m py_compile scripts\jq-auto.py scripts\jq_automation\__init__.py scripts\jq_automation\__main__.py scripts\jq_automation\config.py scripts\jq_automation\local.py scripts\jq_automation\manifest.py scripts\jq_automation\artifacts.py scripts\jq_automation\quota.py scripts\jq_automation\paths.py scripts\jq_automation\browser.py scripts\jq_automation\cli.py scripts\jq_automation\abtest.py scripts\jq_automation\git_versioning.py scripts\jq_automation\metrics.py scripts\jq_automation\research.py
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m pytest scripts\jq_automation\tests -q
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.tools.path_tools.refactor check
+.\.venv\Scripts\python.exe -m py_compile scripts\jq-auto.py scripts\jq_automation\__init__.py scripts\jq_automation\__main__.py scripts\jq_automation\config.py scripts\jq_automation\local.py scripts\jq_automation\manifest.py scripts\jq_automation\artifacts.py scripts\jq_automation\quota.py scripts\jq_automation\paths.py scripts\jq_automation\browser.py scripts\jq_automation\cli.py scripts\jq_automation\abtest.py scripts\jq_automation\git_versioning.py scripts\jq_automation\metrics.py scripts\jq_automation\research.py
+.\.venv\Scripts\python.exe -m pytest scripts\jq_automation\tests -q
+.\.venv\Scripts\python.exe -m scripts.tools.path_tools.refactor check
 ```
 
 ## Module Index

@@ -24,5 +24,5 @@
 ## 维护约定
 
 - 新增说明型文档优先放入 `guides/`、`architecture/`、`design/` 或 `reference/`。
-- 新增或移动文档后运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.tools.path_tools.refactor check`。
-- 文档和报告索引用 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.docs index` 重新生成。
+- 新增或移动文档后运行 `.\.venv\Scripts\python.exe -m scripts.tools.path_tools.refactor check`。
+- 文档和报告索引用 `.\.venv\Scripts\python.exe -m scripts.research.docs index` 重新生成。

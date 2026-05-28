@@ -5,7 +5,7 @@
 ## 命令
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.execution_timing_research.cli analyze `
+.\.venv\Scripts\python.exe -m scripts.research.execution_timing_research.cli analyze `
   --run-id <run_id> `
   [--project-dir strategies\etf_factor_rotation\reports\research\execution_timing] `
   [--raw-price-path <price_bundle.json>] `
