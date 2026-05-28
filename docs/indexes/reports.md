@@ -51,6 +51,7 @@
 | docs |  | PR 风险分级评审流程 Implementation Plan | `docs/superpowers/plans/2026-05-20-pr-risk-tiered-review-workflow.md` | 1 |
 | docs |  | ETF Vol Relief A/B Test Implementation Plan | `docs/superpowers/plans/2026-05-26-etf-vol-relief-ab-test.md` | 3 |
 | docs |  | PR Flow Automation Implementation Plan | `docs/superpowers/plans/2026-05-28-pr-flow-automation.md` | 0 |
+| docs |  | PR Flow Handsfree Automation Implementation Plan | `docs/superpowers/plans/2026-05-28-pr-flow-handsfree-automation.md` | 0 |
 | docs |  | 飞书交易通知工具设计 | `docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md` | 2 |
 | backtest_run | etf_dynamic_rebalance | 回测归因分析 — ETF 动态调仓策略 | `strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/attribution-analysis.md` | 0 |
 | backtest_run | etf_dynamic_rebalance | 回测报告 — ETF 动态调仓策略 | `strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/backtest_report.md` | 3 |
@@ -179,6 +180,16 @@
 | backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260507-0621-bt56a49a22c9649620597d2b1c7223a8ee/report/backtest_report.md` | 0 |
 | backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260507-0623-bt0ca77eab09b91548696834a6618c2118/report/backtest_report.md` | 0 |
 | backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260507-0625-bt69dc0ff8b24797f86790f58edd568ace/report/backtest_report.md` | 0 |
+| backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260507-2242-bt3f882f065d574703da0e74f180e2a24b/report/backtest_report.md` | 0 |
+| backtest_run | etf_factor_rotation | 性能分析 | `strategies/etf_factor_rotation/backtest_runs/20260507-2242-bt3f882f065d574703da0e74f180e2a24b/report/performance-analysis.md` | 3 |
+| backtest_run | etf_factor_rotation | 策略分析 | `strategies/etf_factor_rotation/backtest_runs/20260507-2242-bt3f882f065d574703da0e74f180e2a24b/report/strategy-analysis.md` | 3 |
+| backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260507-2247-bt3f882f065d574703da0e74f180e2a24b/report/backtest_report.md` | 0 |
+| backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260507-2307-bt199f841dc26f34045a3391110073b7b2/report/backtest_report.md` | 0 |
+| backtest_run | etf_factor_rotation | 性能分析 | `strategies/etf_factor_rotation/backtest_runs/20260507-2307-bt199f841dc26f34045a3391110073b7b2/report/performance-analysis.md` | 3 |
+| backtest_run | etf_factor_rotation | 策略分析 | `strategies/etf_factor_rotation/backtest_runs/20260507-2307-bt199f841dc26f34045a3391110073b7b2/report/strategy-analysis.md` | 3 |
+| backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260507-2310-btfe11e835821438464da31fd4f4d995e1/report/backtest_report.md` | 0 |
+| backtest_run | etf_factor_rotation | 性能分析 | `strategies/etf_factor_rotation/backtest_runs/20260507-2310-btfe11e835821438464da31fd4f4d995e1/report/performance-analysis.md` | 3 |
+| backtest_run | etf_factor_rotation | 策略分析 | `strategies/etf_factor_rotation/backtest_runs/20260507-2310-btfe11e835821438464da31fd4f4d995e1/report/strategy-analysis.md` | 3 |
 | backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260507-cloud-acceptance-auto-fallback/report/backtest_report.md` | 0 |
 | backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260507-cloud-acceptance-auto-long/report/backtest_report.md` | 0 |
 | backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260507-cloud-acceptance-research-short/report/backtest_report.md` | 0 |
@@ -380,6 +391,9 @@
 | test_batch | etf_factor_rotation | Issue Log | `strategies/etf_factor_rotation/test_batches/20260505-0000-etf-factor-rotation-full-test/report/issue-log.md` | 0 |
 | test_batch | etf_factor_rotation | AB 对比报告: smoke-params-ab | `strategies/etf_factor_rotation/test_batches/20260506-smoke-ab/report/ab-smoke-params-ab-comparison.md` | 0 |
 | test_batch | etf_factor_rotation | RSRS NegativeFullCut 参数扫描对比分析 | `strategies/etf_factor_rotation/test_batches/20260507-0000-rsrs-negfullcut-scan/report/batch-comparison.md` | 0 |
+| test_batch | etf_factor_rotation | 硬门槛 vs 软门槛深度归因分析 | `strategies/etf_factor_rotation/test_batches/20260507-hard-vs-soft-trend-gate-ab/report/ab-hard-vs-soft-trend-gate-attribution.md` | 2 |
+| test_batch | etf_factor_rotation | AB 对比报告: hard-vs-soft-trend-gate | `strategies/etf_factor_rotation/test_batches/20260507-hard-vs-soft-trend-gate-ab/report/ab-hard-vs-soft-trend-gate-comparison.md` | 0 |
+| test_batch | etf_factor_rotation | Hard vs Soft Trend Gate AB Plan | `strategies/etf_factor_rotation/test_batches/20260507-hard-vs-soft-trend-gate-ab/report/ab-hard-vs-soft-trend-gate-plan.md` | 2 |
 | test_batch | etf_factor_rotation | RSRSMaxMultiplier 参数扫描对比报告 | `strategies/etf_factor_rotation/test_batches/20260507-rsrsmaxmultiplier-scan/report/batch-comparison.md` | 0 |
 | test_batch | etf_factor_rotation | TargetVol 参数扫描对比报告 | `strategies/etf_factor_rotation/test_batches/20260507-targetvol-scan/report/batch-comparison.md` | 0 |
 | test_batch | etf_factor_rotation | 批次对比报告 — TopK 参数扫描 | `strategies/etf_factor_rotation/test_batches/20260507-topk-scan/report/batch-comparison.md` | 0 |

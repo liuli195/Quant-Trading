@@ -7,19 +7,25 @@ import json
 import re
 import subprocess
 import sys
-from collections.abc import Sequence
+import time
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
-from . import ai_review_gate
+from . import ai_review_gate, pr_review_evidence
 from .codex_review_contract import render_codex_review_request
 
 
 MANAGED_BLOCK_START = "<!-- pr-flow:start -->"
 MANAGED_BLOCK_END = "<!-- pr-flow:end -->"
 AI_RISK_REVIEW_LABEL = "ai-risk-review"
+SUCCESS_EXIT_CODE = 0
+GENERAL_FAILURE_EXIT_CODE = 1
 CODEX_REVIEW_PENDING_EXIT_CODE = 3
+DISPATCH_REQUIRED_EXIT_CODE = 4
+REPLY_OR_FIX_REQUIRED_EXIT_CODE = 5
+EXCEPTION_REQUIRED_EXIT_CODE = 6
 PR_BODY_GOVERNANCE_GATE_COMMAND = (
     ".githooks/run-python.sh -m scripts.research.governance gate"
 )
@@ -36,6 +42,10 @@ CODEX_NO_MAJOR_ISSUES_PATTERN = re.compile(
     re.IGNORECASE,
 )
 BLOCKING_CODEX_FINDING_PATTERN = re.compile(r"\bP[01]\b|P[01]\s*Badge")
+ACTIONS_CHECK_URL_PATTERN = re.compile(r"/actions/runs/(?P<run_id>\d+)/job/(?P<job_id>\d+)")
+CHECKS_JSON_FIELDS = "name,state,bucket,link,workflow,startedAt,completedAt"
+CODEX_REVIEW_WAIT_TIMEOUT_SECONDS = 1800.0
+CODEX_REVIEW_WAIT_INTERVAL_SECONDS = 30.0
 
 
 @dataclass(frozen=True)
@@ -43,6 +53,19 @@ class CommandResult:
     returncode: int
     stdout: str
     stderr: str
+
+
+@dataclass(frozen=True)
+class CodexReviewWaitResult:
+    evidence: str | None
+    state: str
+    details: tuple[str, ...] = ()
+
+
+class GitHubDataUnavailable(RuntimeError):
+    def __init__(self, message: str, *, details: Sequence[str] = ()) -> None:
+        super().__init__(message)
+        self.details = tuple(detail for detail in details if detail)
 
 
 class CommandRunner:
@@ -275,16 +298,28 @@ def sync(
             _print_command_failure("gh pr edit --remove-label", remove)
             return remove.returncode
 
-    if (
-        result.requires_official_codex_review
-        and not _official_codex_review_evidence_valid_for_current_pr(
-            payload,
-            pr_url=pr_url,
-            head_sha=head_sha,
-            root=root,
-            runner=runner,
+    try:
+        needs_codex_review_request = (
+            result.requires_official_codex_review
+            and not _official_codex_review_evidence_valid_for_current_pr(
+                payload,
+                pr_url=pr_url,
+                head_sha=head_sha,
+                root=root,
+                runner=runner,
+            )
+            and not _current_head_codex_trigger_exists(
+                pr_url=pr_url,
+                head_sha=head_sha,
+                root=root,
+                runner=runner,
+            )
         )
-    ):
+    except GitHubDataUnavailable as exc:
+        _print_github_data_unavailable(exc)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+
+    if needs_codex_review_request:
         scope_path = local / "codex-review-scope.md"
         scope_text = result.review_scope
         scope_path.write_text(scope_text, encoding="utf-8")
@@ -326,12 +361,43 @@ def wait(
     if watched.returncode == 0:
         print(watched.stdout, end="")
         return 0
+    json_summary = runner.run(
+        ["gh", "pr", "checks", pr_ref, "--required", "--json", CHECKS_JSON_FIELDS],
+        cwd=root,
+    )
+    latest_results = _latest_required_check_results(json_summary.stdout)
+    if json_summary.returncode == 0 and latest_results is not None:
+        failing = _failing_json_check_names(latest_results)
+        pending = _pending_json_check_names(latest_results)
+        if failing:
+            _print_state("EXCEPTION_REQUIRED", "failing required checks", details=failing)
+            return EXCEPTION_REQUIRED_EXIT_CODE
+        if pending:
+            _print_state("EXCEPTION_REQUIRED", "pending required checks", details=pending)
+            return EXCEPTION_REQUIRED_EXIT_CODE
+        print("required checks passed")
+        return 0
     summary = runner.run(["gh", "pr", "checks", pr_ref, "--required"], cwd=root)
     failing = _failing_check_names(summary.stdout)
     if failing:
-        print("failing required checks:")
-        for name in failing:
-            print(f"- {name}")
+        _print_state("EXCEPTION_REQUIRED", "failing required checks", details=failing)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    if summary.returncode != 0:
+        details = [
+            detail
+            for detail in (
+                _single_line_text(watched.stderr),
+                _single_line_text(json_summary.stderr),
+                _single_line_text(summary.stderr),
+            )
+            if detail
+        ]
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "required checks unavailable",
+            details=details,
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
     else:
         print(summary.stdout, end="")
     return watched.returncode
@@ -342,37 +408,161 @@ def ready(
     repo_root: str | Path = ".",
     title: str | None = None,
     runner: Runner | None = None,
+    codex_review_timeout_seconds: float = CODEX_REVIEW_WAIT_TIMEOUT_SECONDS,
+    codex_review_poll_seconds: float = CODEX_REVIEW_WAIT_INTERVAL_SECONDS,
+    sleeper: Callable[[float], None] = time.sleep,
 ) -> int:
     runner = runner or CommandRunner()
     code = prepare(repo_root=repo_root, runner=runner)
     if code != 0:
-        return code
-    code = sync(repo_root=repo_root, title=title, runner=runner)
-    if code != 0:
-        return code
+        root = Path(repo_root).resolve()
+        latest = root / ".local" / "ai-review" / "latest.json"
+        if not latest.is_file():
+            _print_state(
+                "DISPATCH_REQUIRED",
+                "missing .local/ai-review/latest.json; local AI review must be produced by humans or agents",
+                details=[
+                    "run the required local AI review",
+                    "record two independent reviewers",
+                    "record security_review with codex-security evidence",
+                ],
+            )
+            return DISPATCH_REQUIRED_EXIT_CODE
+        payload = _read_json_object(latest)
+        result = ai_review_gate.validate_report_file(latest)
+        if payload is None or not result.ok:
+            _print_state(
+                "DISPATCH_REQUIRED",
+                "local AI review evidence is incomplete or invalid",
+                details=result.errors,
+            )
+            return DISPATCH_REQUIRED_EXIT_CODE
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "prepare failed",
+            details=[f"exit_code={code}"],
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
     root = Path(repo_root).resolve()
     latest = root / ".local" / "ai-review" / "latest.json"
     payload = _read_json_object(latest)
+    if payload is None:
+        _print_state(
+            "DISPATCH_REQUIRED",
+            "missing .local/ai-review/latest.json; local AI review must be produced by humans or agents",
+            details=[
+                "run the required local AI review",
+                "record two independent reviewers",
+                "record security_review with codex-security evidence",
+            ],
+        )
+        return DISPATCH_REQUIRED_EXIT_CODE
     result = ai_review_gate.validate_report_file(latest)
-    metadata = _current_pr_metadata(root, runner)
-    pr_url = str(metadata.get("url") or "")
-    head_sha = _command_stdout(runner.run(["git", "rev-parse", "HEAD"], cwd=root))
-    if (
-        payload is not None
-        and result.requires_official_codex_review
-        and not _official_codex_review_evidence_valid_for_current_pr(
-            payload,
+    if not result.ok:
+        _print_state(
+            "DISPATCH_REQUIRED",
+            "local AI review evidence is incomplete or invalid",
+            details=result.errors,
+        )
+        return DISPATCH_REQUIRED_EXIT_CODE
+    code = sync(repo_root=repo_root, title=title, runner=runner)
+    if code != 0:
+        if code == EXCEPTION_REQUIRED_EXIT_CODE:
+            return code
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "sync failed",
+            details=[f"exit_code={code}"],
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+
+    try:
+        metadata = _current_pr_metadata(root, runner, required=True)
+        pr_url = str(metadata.get("url") or "")
+        head_sha = _command_stdout(runner.run(["git", "rev-parse", "HEAD"], cwd=root))
+        blocking = _current_head_codex_blocking_findings(
             pr_url=pr_url,
             head_sha=head_sha,
             root=root,
             runner=runner,
         )
-    ):
-        print(
-            "official Codex review requested; add official_codex_review evidence and rerun ready",
-            file=sys.stderr,
-        )
-        return CODEX_REVIEW_PENDING_EXIT_CODE
+        if blocking:
+            _print_state(
+                "REPLY_OR_FIX_REQUIRED",
+                "Codex review reported blocking current-head findings",
+                details=blocking,
+            )
+            return REPLY_OR_FIX_REQUIRED_EXIT_CODE
+        if (
+            payload is not None
+            and result.requires_official_codex_review
+            and not _official_codex_review_evidence_valid_for_current_pr(
+                payload,
+                pr_url=pr_url,
+                head_sha=head_sha,
+                root=root,
+                runner=runner,
+            )
+        ):
+            print(
+                "official Codex review requested; waiting for current-head Codex review evidence",
+                file=sys.stderr,
+            )
+            wait_result = _wait_for_current_head_codex_review_evidence(
+                pr_url=pr_url,
+                head_sha=head_sha,
+                root=root,
+                runner=runner,
+                timeout_seconds=codex_review_timeout_seconds,
+                poll_seconds=codex_review_poll_seconds,
+                sleeper=sleeper,
+            )
+            if wait_result.state == "head_changed":
+                _print_state(
+                    "EXCEPTION_REQUIRED",
+                    "head changed during Codex review wait",
+                    details=wait_result.details,
+                )
+                return EXCEPTION_REQUIRED_EXIT_CODE
+            if wait_result.state == "blocked":
+                _print_state(
+                    "REPLY_OR_FIX_REQUIRED",
+                    "Codex review reported blocking current-head findings",
+                    details=wait_result.details,
+                )
+                return REPLY_OR_FIX_REQUIRED_EXIT_CODE
+            if not wait_result.evidence:
+                _print_state(
+                    "EXCEPTION_REQUIRED",
+                    "official Codex review still pending",
+                    details=[f"rerun: make pr-ready TITLE=\"{title or '<same title>'}\""],
+                )
+                return CODEX_REVIEW_PENDING_EXIT_CODE
+            latest.write_text(
+                json.dumps(
+                    _payload_with_official_codex_review_evidence(
+                        payload,
+                        evidence=wait_result.evidence,
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            code = sync(repo_root=repo_root, title=title, runner=runner)
+            if code != 0:
+                if code == EXCEPTION_REQUIRED_EXIT_CODE:
+                    return code
+                _print_state(
+                    "EXCEPTION_REQUIRED",
+                    "sync failed",
+                    details=[f"exit_code={code}"],
+                )
+                return EXCEPTION_REQUIRED_EXIT_CODE
+    except GitHubDataUnavailable as exc:
+        _print_github_data_unavailable(exc)
+        return EXCEPTION_REQUIRED_EXIT_CODE
     return wait(repo_root=repo_root, runner=runner)
 
 
@@ -521,16 +711,32 @@ def _replace_managed_block(existing_body: str, managed_body: str) -> str:
             rf"{re.escape(MANAGED_BLOCK_START)}.*?{re.escape(MANAGED_BLOCK_END)}",
             re.DOTALL,
         )
-        return pattern.sub(block, existing_body)
+        return pattern.sub(lambda _match: block, existing_body)
     if existing_body.strip():
         return f"{existing_body.rstrip()}\n\n{block}\n"
     return f"{block}\n"
 
 
-def _current_pr_metadata(root: Path, runner: Runner) -> dict[str, Any]:
+def _current_pr_metadata(
+    root: Path,
+    runner: Runner,
+    *,
+    required: bool = False,
+) -> dict[str, Any]:
     view = runner.run(["gh", "pr", "view", "--json", "number,url,state,isDraft"], cwd=root)
     if view.returncode != 0:
+        if required:
+            raise _github_data_unavailable(
+                "GitHub PR metadata unavailable",
+                "gh pr view --json number,url,state,isDraft",
+                view,
+            )
         return {}
+    if required:
+        return _json_object_from_result(
+            view,
+            "gh pr view --json number,url,state,isDraft",
+        )
     return _json_from_result(view)
 
 
@@ -569,6 +775,22 @@ def _json_from_result(result: CommandResult) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def _json_object_from_result(result: CommandResult, label: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(result.stdout or "{}")
+    except json.JSONDecodeError as exc:
+        raise GitHubDataUnavailable(
+            "GitHub command returned invalid JSON",
+            details=(label, str(exc)),
+        ) from exc
+    if not isinstance(payload, dict):
+        raise GitHubDataUnavailable(
+            "GitHub command returned unexpected payload",
+            details=(label,),
+        )
+    return payload
 
 
 def _read_json_object(path: Path) -> dict[str, Any] | None:
@@ -615,6 +837,7 @@ def _official_codex_review_evidence_valid_for_current_pr(
             pr_number=pr_number,
             review_id=item_id,
             head_sha=head_sha,
+            pr_url=pr_url,
             root=root,
             runner=runner,
         ):
@@ -630,6 +853,466 @@ def _official_codex_review_evidence_valid_for_current_pr(
         ):
             return True
     return False
+
+
+def _wait_for_current_head_codex_review_evidence(
+    *,
+    pr_url: str,
+    head_sha: str,
+    root: Path,
+    runner: Runner,
+    timeout_seconds: float,
+    poll_seconds: float,
+    sleeper: Callable[[float], None],
+) -> CodexReviewWaitResult:
+    timeout_seconds = max(0.0, timeout_seconds)
+    poll_seconds = max(0.0, poll_seconds)
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        current_head = _current_pr_head_sha(root, runner)
+        if current_head and current_head != head_sha:
+            return CodexReviewWaitResult(
+                evidence=None,
+                state="head_changed",
+                details=(f"expected={head_sha}", f"actual={current_head}"),
+            )
+        blocking = _current_head_codex_blocking_findings(
+            pr_url=pr_url,
+            head_sha=head_sha,
+            root=root,
+            runner=runner,
+        )
+        if blocking:
+            return CodexReviewWaitResult(
+                evidence=None,
+                state="blocked",
+                details=blocking,
+            )
+        evidence = _current_head_codex_review_evidence(
+            pr_url=pr_url,
+            head_sha=head_sha,
+            root=root,
+            runner=runner,
+        )
+        if evidence:
+            return CodexReviewWaitResult(evidence=evidence, state="completed")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return CodexReviewWaitResult(evidence=None, state="pending")
+        sleep_seconds = remaining if poll_seconds <= 0 else min(poll_seconds, remaining)
+        print(
+            f"waiting for Codex review on current head; retrying in {sleep_seconds:.0f}s",
+            file=sys.stderr,
+        )
+        sleeper(sleep_seconds)
+
+
+def _current_pr_head_sha(root: Path, runner: Runner) -> str:
+    view = runner.run(["gh", "pr", "view", "--json", "headRefOid"], cwd=root)
+    if view.returncode != 0:
+        raise _github_data_unavailable(
+            "GitHub PR head unavailable",
+            "gh pr view --json headRefOid",
+            view,
+        )
+    return _single_line_text(
+        _json_object_from_result(view, "gh pr view --json headRefOid").get("headRefOid")
+    )
+
+
+def _current_head_codex_review_evidence(
+    *,
+    pr_url: str,
+    head_sha: str,
+    root: Path,
+    runner: Runner,
+) -> str | None:
+    pr_info = _github_pr_info_from_url(pr_url)
+    if pr_info is None:
+        return None
+    repo, pr_number = pr_info
+    issue_comments = _gh_api_list(
+        root,
+        runner,
+        f"repos/{repo}/issues/{pr_number}/comments?per_page=100",
+    )
+    trigger_time = _latest_codex_trigger_time(
+        issue_comments,
+        pr_url=pr_url,
+        head_sha=head_sha,
+    )
+    if not trigger_time:
+        return None
+    reviews = _gh_api_list(
+        root,
+        runner,
+        f"repos/{repo}/pulls/{pr_number}/reviews?per_page=100",
+    )
+    for review in reversed(reviews):
+        review_id = str(review.get("id", ""))
+        if review_id and _codex_review_is_passing_current_head(
+            review,
+            head_sha=head_sha,
+            trigger_time=trigger_time,
+        ):
+            return (
+                f"https://github.com/{repo}/pull/{pr_number}"
+                f"#pullrequestreview-{review_id}"
+            )
+
+    for comment in reversed(issue_comments):
+        comment_id = str(comment.get("id", ""))
+        if (
+            comment_id
+            and _is_codex_completion_comment(comment)
+            and _codex_completion_comment_matches_current_head(
+                repo=repo,
+                pr_number=pr_number,
+                comment_id=comment_id,
+                head_sha=head_sha,
+                pr_url=pr_url,
+                root=root,
+                runner=runner,
+            )
+        ):
+            return _issue_comment_link(
+                repo=repo,
+                pr_number=pr_number,
+                comment=comment,
+            )
+    return None
+
+
+def _current_head_codex_trigger_exists(
+    *,
+    pr_url: str,
+    head_sha: str,
+    root: Path,
+    runner: Runner,
+) -> bool:
+    pr_info = _github_pr_info_from_url(pr_url)
+    if pr_info is None:
+        return False
+    repo, pr_number = pr_info
+    issue_comments = _gh_api_list(
+        root,
+        runner,
+        f"repos/{repo}/issues/{pr_number}/comments?per_page=100",
+    )
+    return bool(
+        _latest_codex_trigger_time(
+            issue_comments,
+            pr_url=pr_url,
+            head_sha=head_sha,
+        )
+    )
+
+
+def _current_head_codex_blocking_findings(
+    *,
+    pr_url: str,
+    head_sha: str,
+    root: Path,
+    runner: Runner,
+) -> tuple[str, ...]:
+    pr_info = _github_pr_info_from_url(pr_url)
+    if pr_info is None:
+        return ()
+    repo, pr_number = pr_info
+    issue_comments = _gh_api_list(
+        root,
+        runner,
+        f"repos/{repo}/issues/{pr_number}/comments?per_page=100",
+    )
+    trigger_time = _latest_codex_trigger_time(
+        issue_comments,
+        pr_url=pr_url,
+        head_sha=head_sha,
+    )
+    completion_cutoff = _latest_codex_completion_comment_time(
+        issue_comments,
+        trigger_time=trigger_time,
+    )
+    reviews = _gh_api_list(
+        root,
+        runner,
+        f"repos/{repo}/pulls/{pr_number}/reviews?per_page=100",
+    )
+    findings: list[str] = []
+    for item in [*issue_comments, *reviews]:
+        if not _is_current_head_codex_item(
+            item,
+            head_sha=head_sha,
+            trigger_time=trigger_time,
+        ):
+            continue
+        body = str(item.get("body") or "")
+        if pr_review_evidence.CODEX_CONTEXT_INVALID_PATTERN.search(body):
+            if completion_cutoff and _codex_item_time(item) < completion_cutoff:
+                continue
+            findings.append(
+                f"{_item_link(repo, pr_number, item)} context invalid {_single_line_text(body)}"
+            )
+            continue
+        if BLOCKING_CODEX_FINDING_PATTERN.search(body):
+            findings.append(f"{_item_link(repo, pr_number, item)} {_single_line_text(body)}")
+    findings.extend(
+        _unresolved_blocking_codex_thread_findings(
+            _current_pr_review_threads(
+                root=root,
+                runner=runner,
+                repo=repo,
+                pr_number=pr_number,
+            )
+        )
+    )
+    return tuple(findings)
+
+
+def _current_pr_review_threads(
+    *,
+    root: Path,
+    runner: Runner,
+    repo: str,
+    pr_number: str,
+) -> list[dict[str, Any]]:
+    owner, name = repo.split("/", 1)
+    query = """
+    query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+      repository(owner: $owner, name: $name) {
+        pullRequest(number: $number) {
+          reviewThreads(first: 100, after: $cursor) {
+            nodes {
+              isResolved
+              isOutdated
+              comments(first: 50) {
+                nodes {
+                  body
+                  author {
+                    login
+                  }
+                }
+              }
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+          }
+        }
+      }
+    }
+    """
+    threads: list[dict[str, Any]] = []
+    cursor = ""
+    while True:
+        command = [
+            "gh",
+            "api",
+            "graphql",
+            "-f",
+            f"query={query}",
+            "-F",
+            f"owner={owner}",
+            "-F",
+            f"name={name}",
+            "-F",
+            f"number={pr_number}",
+        ]
+        if cursor:
+            command.extend(["-F", f"cursor={cursor}"])
+        result = runner.run(command, cwd=root)
+        if result.returncode != 0:
+            raise _github_data_unavailable(
+                "GitHub review threads unavailable",
+                "gh api graphql reviewThreads",
+                result,
+            )
+        try:
+            payload = json.loads(result.stdout or "{}")
+        except json.JSONDecodeError as exc:
+            raise GitHubDataUnavailable(
+                "GitHub review threads returned invalid JSON",
+                details=("gh api graphql reviewThreads", str(exc)),
+            ) from exc
+        if payload.get("errors"):
+            raise GitHubDataUnavailable(
+                "GitHub review threads returned GraphQL errors",
+                details=(
+                    "gh api graphql reviewThreads",
+                    _single_line_text(payload.get("errors")),
+                ),
+            )
+        connection = _graphql_review_threads_connection(payload)
+        if not connection:
+            raise GitHubDataUnavailable(
+                "GitHub review threads response missing reviewThreads",
+                details=("gh api graphql reviewThreads",),
+            )
+        nodes = connection.get("nodes")
+        if isinstance(nodes, list):
+            threads.extend(node for node in nodes if isinstance(node, dict))
+        else:
+            raise GitHubDataUnavailable(
+                "GitHub review threads response missing nodes",
+                details=("gh api graphql reviewThreads",),
+            )
+        page_info = connection.get("pageInfo")
+        if not isinstance(page_info, dict) or not bool(page_info.get("hasNextPage")):
+            return threads
+        cursor = _single_line_text(page_info.get("endCursor"))
+        if not cursor:
+            raise GitHubDataUnavailable(
+                "GitHub review threads pagination cursor missing",
+                details=("gh api graphql reviewThreads",),
+            )
+
+
+def _graphql_review_thread_nodes(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    connection = _graphql_review_threads_connection(payload)
+    nodes = connection.get("nodes")
+    if not isinstance(nodes, list):
+        return []
+    return [node for node in nodes if isinstance(node, dict)]
+
+
+def _graphql_review_threads_connection(payload: dict[str, Any]) -> dict[str, Any]:
+    data = payload.get("data")
+    repository = data.get("repository") if isinstance(data, dict) else None
+    pull_request = repository.get("pullRequest") if isinstance(repository, dict) else None
+    review_threads = (
+        pull_request.get("reviewThreads") if isinstance(pull_request, dict) else None
+    )
+    return review_threads if isinstance(review_threads, dict) else {}
+
+
+def _unresolved_blocking_codex_thread_findings(
+    threads: Sequence[dict[str, Any]],
+) -> tuple[str, ...]:
+    findings: list[str] = []
+    for thread in threads:
+        if _thread_is_resolved(thread) or _thread_is_outdated(thread):
+            continue
+        for comment in _thread_comments(thread):
+            author = comment.get("author")
+            if not isinstance(author, dict):
+                author = comment.get("user")
+            login = str(author.get("login", "")) if isinstance(author, dict) else ""
+            body = str(comment.get("body") or "")
+            if login in CODEX_REVIEW_AUTHORS and BLOCKING_CODEX_FINDING_PATTERN.search(body):
+                findings.append(f"unresolved review thread {_single_line_text(body)}")
+            elif login in CODEX_REVIEW_AUTHORS and pr_review_evidence.CODEX_CONTEXT_INVALID_PATTERN.search(body):
+                findings.append(f"unresolved review thread context invalid {_single_line_text(body)}")
+    return tuple(findings)
+
+
+def _thread_is_resolved(thread: dict[str, Any]) -> bool:
+    return bool(thread.get("isResolved") or thread.get("is_resolved"))
+
+
+def _thread_is_outdated(thread: dict[str, Any]) -> bool:
+    return bool(thread.get("isOutdated") or thread.get("is_outdated"))
+
+
+def _thread_comments(thread: dict[str, Any]) -> tuple[dict[str, Any], ...]:
+    comments = thread.get("comments")
+    if isinstance(comments, list):
+        return tuple(item for item in comments if isinstance(item, dict))
+    if isinstance(comments, dict):
+        nodes = comments.get("nodes")
+        if isinstance(nodes, list):
+            return tuple(item for item in nodes if isinstance(item, dict))
+    return ()
+
+
+def _is_current_head_codex_item(
+    item: dict[str, Any],
+    *,
+    head_sha: str,
+    trigger_time: str,
+) -> bool:
+    user = item.get("user")
+    login = str(user.get("login", "")) if isinstance(user, dict) else ""
+    if login not in CODEX_REVIEW_AUTHORS:
+        return False
+    item_head = _single_line_text(item.get("commit_id") or item.get("original_commit_id"))
+    if item_head and item_head != head_sha:
+        return False
+    if item_head:
+        return True
+    body = str(item.get("body") or "")
+    if head_sha in body:
+        return True
+    if trigger_time:
+        return _codex_item_time(item) >= trigger_time
+    return False
+
+
+def _item_link(repo: str, pr_number: str, item: dict[str, Any]) -> str:
+    html_url = _single_line_text(item.get("html_url"))
+    if html_url:
+        return html_url
+    item_id = _single_line_text(item.get("id")) or "unknown"
+    return f"https://github.com/{repo}/pull/{pr_number}#issuecomment-{item_id}"
+
+
+def _codex_review_is_passing_current_head(
+    review: dict[str, Any],
+    *,
+    head_sha: str,
+    trigger_time: str,
+) -> bool:
+    user = review.get("user")
+    login = str(user.get("login", "")) if isinstance(user, dict) else ""
+    state = str(review.get("state", "")).upper()
+    if login not in CODEX_REVIEW_AUTHORS:
+        return False
+    if state in DISQUALIFIED_CODEX_REVIEW_STATES:
+        return False
+    if str(review.get("commit_id", "")) != head_sha:
+        return False
+    review_time = _single_line_text(review.get("submitted_at"))
+    if trigger_time and (not review_time or review_time < trigger_time):
+        return False
+    if pr_review_evidence.CODEX_CONTEXT_INVALID_PATTERN.search(str(review.get("body", ""))):
+        return False
+    if BLOCKING_CODEX_FINDING_PATTERN.search(str(review.get("body", ""))):
+        return False
+    return True
+
+
+def _issue_comment_link(
+    *,
+    repo: str,
+    pr_number: str,
+    comment: dict[str, Any],
+) -> str:
+    html_url = _single_line_text(comment.get("html_url"))
+    if html_url:
+        return html_url
+    return (
+        f"https://github.com/{repo}/pull/{pr_number}"
+        f"#issuecomment-{comment.get('id')}"
+    )
+
+
+def _payload_with_official_codex_review_evidence(
+    payload: dict[str, Any],
+    *,
+    evidence: str,
+) -> dict[str, Any]:
+    updated = dict(payload)
+    updated["official_codex_review"] = {
+        "reviewer": "Codex",
+        "trigger": "@codex review",
+        "conclusion": "通过",
+        "blocking_issues": "无",
+        "evidence": [
+            evidence,
+            PR_BODY_GOVERNANCE_GATE_COMMAND,
+        ],
+    }
+    return updated
 
 
 def _official_codex_review_fields_are_passing(value: dict[str, Any]) -> bool:
@@ -650,11 +1333,10 @@ def _official_codex_review_links(
     *,
     pr_url: str,
 ) -> tuple[tuple[str, str, str, str], ...]:
-    match = re.match(r"https://github\.com/(?P<repo>[^/\s]+/[^/\s]+)/pull/(?P<number>\d+)", pr_url)
-    if not match:
+    pr_info = _github_pr_info_from_url(pr_url)
+    if pr_info is None:
         return ()
-    expected_repo = match.group("repo")
-    expected_number = match.group("number")
+    expected_repo, expected_number = pr_info
     links: list[tuple[str, str, str, str]] = []
     for item in _string_or_list(value.get("evidence")):
         text = item.strip("`")
@@ -690,6 +1372,16 @@ def _official_codex_review_links(
     return tuple(links)
 
 
+def _github_pr_info_from_url(pr_url: str) -> tuple[str, str] | None:
+    match = re.match(
+        r"https://github\.com/(?P<repo>[^/\s]+/[^/\s]+)/pull/(?P<number>\d+)",
+        pr_url,
+    )
+    if not match:
+        return None
+    return match.group("repo"), match.group("number")
+
+
 def _github_link_matches_pr(
     match: re.Match[str],
     *,
@@ -708,6 +1400,7 @@ def _codex_review_link_matches_current_head(
     pr_number: str,
     review_id: str,
     head_sha: str,
+    pr_url: str,
     root: Path,
     runner: Runner,
 ) -> bool:
@@ -728,11 +1421,18 @@ def _codex_review_link_matches_current_head(
         return False
     if str(matched_review.get("commit_id", "")) != head_sha:
         return False
-    review_comments = _gh_api_list(root, runner, f"repos/{repo}/pulls/{pr_number}/comments?per_page=100")
-    return not any(
-        str(comment.get("pull_request_review_id", "")) == review_id
-        and BLOCKING_CODEX_FINDING_PATTERN.search(str(comment.get("body", "")))
-        for comment in review_comments
+    issue_comments = _gh_api_list(root, runner, f"repos/{repo}/issues/{pr_number}/comments?per_page=100")
+    trigger_time = _latest_codex_trigger_time(
+        issue_comments,
+        pr_url=pr_url,
+        head_sha=head_sha,
+    )
+    if not trigger_time:
+        return False
+    return _codex_review_is_passing_current_head(
+        matched_review,
+        head_sha=head_sha,
+        trigger_time=trigger_time,
     )
 
 
@@ -760,6 +1460,7 @@ def _codex_completion_comment_matches_current_head(
         if not _codex_trigger_has_completion_reaction(
             repo=repo,
             comment_id=comment_id,
+            comment_time=_comment_time(matched_comment),
             root=root,
             runner=runner,
         ):
@@ -770,15 +1471,26 @@ def _codex_completion_comment_matches_current_head(
 
 
 def _gh_api_list(root: Path, runner: Runner, path: str) -> list[dict[str, Any]]:
-    result = runner.run(["gh", "api", path], cwd=root)
+    result = runner.run(["gh", "api", "--paginate", "--slurp", path], cwd=root)
     if result.returncode != 0:
-        return []
+        raise _github_data_unavailable("GitHub API list unavailable", f"gh api {path}", result)
     try:
         payload = json.loads(result.stdout or "[]")
-    except json.JSONDecodeError:
-        return []
+    except json.JSONDecodeError as exc:
+        raise GitHubDataUnavailable(
+            "GitHub API list returned invalid JSON",
+            details=(f"gh api {path}", str(exc)),
+        ) from exc
     if not isinstance(payload, list):
-        return []
+        raise GitHubDataUnavailable(
+            "GitHub API list returned unexpected payload",
+            details=(f"gh api {path}",),
+        )
+    if all(isinstance(item, list) for item in payload):
+        flattened: list[dict[str, Any]] = []
+        for page in payload:
+            flattened.extend(item for item in page if isinstance(item, dict))
+        return flattened
     return [item for item in payload if isinstance(item, dict)]
 
 
@@ -792,6 +1504,20 @@ def _latest_codex_trigger_time(
         _comment_time(comment)
         for comment in comments
         if _is_codex_trigger_comment(comment, pr_url=pr_url, head_sha=head_sha)
+    ]
+    return max(times) if times else ""
+
+
+def _latest_codex_completion_comment_time(
+    comments: Sequence[dict[str, Any]],
+    *,
+    trigger_time: str,
+) -> str:
+    times = [
+        _comment_time(comment)
+        for comment in comments
+        if _is_codex_completion_comment(comment)
+        and (not trigger_time or _comment_time(comment) >= trigger_time)
     ]
     return max(times) if times else ""
 
@@ -813,6 +1539,7 @@ def _is_codex_completion_comment(comment: dict[str, Any]) -> bool:
     return (
         login in CODEX_REVIEW_AUTHORS
         and CODEX_NO_MAJOR_ISSUES_PATTERN.search(body) is not None
+        and pr_review_evidence.CODEX_CONTEXT_INVALID_PATTERN.search(body) is None
         and BLOCKING_CODEX_FINDING_PATTERN.search(body) is None
     )
 
@@ -821,6 +1548,7 @@ def _codex_trigger_has_completion_reaction(
     *,
     repo: str,
     comment_id: str,
+    comment_time: str,
     root: Path,
     runner: Runner,
 ) -> bool:
@@ -828,7 +1556,13 @@ def _codex_trigger_has_completion_reaction(
     for reaction in reactions:
         user = reaction.get("user")
         login = str(user.get("login", "")) if isinstance(user, dict) else ""
-        if str(reaction.get("content", "")) == "+1" and login in CODEX_REVIEW_AUTHORS:
+        reaction_time = _single_line_text(reaction.get("created_at"))
+        if (
+            str(reaction.get("content", "")) == "+1"
+            and login in CODEX_REVIEW_AUTHORS
+            and reaction_time
+            and (not comment_time or reaction_time >= comment_time)
+        ):
             return True
     return False
 
@@ -839,6 +1573,10 @@ def _comment_time(comment: dict[str, Any]) -> str:
     if created and updated:
         return max(created, updated)
     return updated or created
+
+
+def _codex_item_time(item: dict[str, Any]) -> str:
+    return _single_line_text(item.get("submitted_at")) or _comment_time(item)
 
 
 def _string_or_list(value: Any) -> list[str]:
@@ -862,6 +1600,102 @@ def _failing_check_names(output: str) -> list[str]:
     return failing
 
 
+def _latest_required_check_results(output: str) -> list[dict[str, Any]] | None:
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, list):
+        return None
+    latest: dict[
+        tuple[str, str],
+        tuple[tuple[int, str, int, int, int], dict[str, Any]],
+    ] = {}
+    order: list[tuple[str, str]] = []
+    for index, check in enumerate(payload):
+        if not isinstance(check, dict):
+            continue
+        name = _single_line_text(check.get("name"))
+        if not name:
+            continue
+        workflow = _single_line_text(check.get("workflow"))
+        key = (workflow, name)
+        rank = _required_check_rank(check, index)
+        current = latest.get(key)
+        if current is None:
+            order.append(key)
+            latest[key] = (rank, check)
+        elif rank > current[0]:
+            latest[key] = (rank, check)
+    return [latest[key][1] for key in order]
+
+
+def _required_check_rank(check: dict[str, Any], index: int) -> tuple[int, str, int, int, int]:
+    timestamp = _single_line_text(check.get("completedAt")) or _single_line_text(
+        check.get("startedAt")
+    )
+    link = str(check.get("link") or "")
+    match = ACTIONS_CHECK_URL_PATTERN.search(link)
+    if match:
+        return (
+            2,
+            timestamp,
+            int(match.group("run_id")),
+            int(match.group("job_id")),
+            index,
+        )
+    if timestamp:
+        return (1, timestamp, 0, 0, index)
+    return (0, "", 0, 0, index)
+
+
+def _failing_json_check_names(checks: Sequence[dict[str, Any]]) -> list[str]:
+    return [
+        _json_check_failure_detail(check)
+        for check in checks
+        if _json_check_failed(check)
+    ]
+
+
+def _pending_json_check_names(checks: Sequence[dict[str, Any]]) -> list[str]:
+    return [
+        _json_check_display_name(check)
+        for check in checks
+        if not _json_check_passed(check) and not _json_check_failed(check)
+    ]
+
+
+def _json_check_display_name(check: dict[str, Any]) -> str:
+    name = _single_line_text(check.get("name"))
+    workflow = _single_line_text(check.get("workflow"))
+    return f"{workflow} / {name}" if workflow else name
+
+
+def _json_check_failure_detail(check: dict[str, Any]) -> str:
+    display = _json_check_display_name(check)
+    link = _single_line_text(check.get("link"))
+    return f"{display} {link}" if link else display
+
+
+def _json_check_failed(check: dict[str, Any]) -> bool:
+    bucket = _single_line_text(check.get("bucket")).casefold()
+    state = _single_line_text(check.get("state")).casefold()
+    return bucket == "fail" or state in {
+        "action_required",
+        "cancelled",
+        "error",
+        "failure",
+        "startup_failure",
+        "timed_out",
+    }
+
+
+def _json_check_passed(check: dict[str, Any]) -> bool:
+    bucket = _single_line_text(check.get("bucket")).casefold()
+    state = _single_line_text(check.get("state")).casefold()
+    return bucket in {"pass", "skipping"} or state in {"neutral", "skipped", "success"}
+
+
 def _command_stdout(result: CommandResult) -> str:
     return result.stdout.strip()
 
@@ -875,6 +1709,33 @@ def _print_command_failure(label: str, result: CommandResult) -> None:
     print(f"error: {label} failed with exit code {result.returncode}", file=sys.stderr)
     if result.stderr.strip():
         print(result.stderr.strip(), file=sys.stderr)
+
+
+def _github_data_unavailable(
+    message: str,
+    label: str,
+    result: CommandResult,
+) -> GitHubDataUnavailable:
+    details = [label, f"exit_code={result.returncode}"]
+    if result.stderr.strip():
+        details.append(_single_line_text(result.stderr))
+    if result.stdout.strip():
+        details.append(_single_line_text(result.stdout))
+    return GitHubDataUnavailable(message, details=details)
+
+
+def _print_github_data_unavailable(exc: GitHubDataUnavailable) -> None:
+    _print_state(
+        "EXCEPTION_REQUIRED",
+        str(exc),
+        details=exc.details,
+    )
+
+
+def _print_state(state: str, message: str, *, details: Sequence[str] = ()) -> None:
+    print(f"{state}: {message}", file=sys.stderr)
+    for detail in details:
+        print(f"- {detail}", file=sys.stderr)
 
 
 def _append_unique(values: list[str], value: str) -> None:
@@ -900,6 +1761,16 @@ def build_parser() -> argparse.ArgumentParser:
     wait_parser.add_argument("--pr")
     ready_parser = subparsers.add_parser("ready")
     ready_parser.add_argument("--title")
+    ready_parser.add_argument(
+        "--codex-review-timeout-seconds",
+        type=float,
+        default=CODEX_REVIEW_WAIT_TIMEOUT_SECONDS,
+    )
+    ready_parser.add_argument(
+        "--codex-review-poll-seconds",
+        type=float,
+        default=CODEX_REVIEW_WAIT_INTERVAL_SECONDS,
+    )
     return parser
 
 
@@ -912,7 +1783,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "wait":
         return wait(repo_root=args.repo_root, pr=args.pr)
     if args.command == "ready":
-        return ready(repo_root=args.repo_root, title=args.title)
+        return ready(
+            repo_root=args.repo_root,
+            title=args.title,
+            codex_review_timeout_seconds=args.codex_review_timeout_seconds,
+            codex_review_poll_seconds=args.codex_review_poll_seconds,
+        )
     return 2
 
 

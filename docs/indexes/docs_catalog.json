@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "catalog_type": "docs",
-  "generated_at": "2026-05-27T20:44:41+00:00",
-  "count": 50,
+  "generated_at": "2026-05-28T12:04:54+00:00",
+  "count": 51,
   "reports": [
     {
       "path": "docs/README.md",
@@ -32,7 +32,7 @@
         "docs/indexes/docs_catalog.json",
         "docs/guides/feishu-relay-tools.md"
       ],
-      "updated_at": "2026-05-27T13:21:46+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/adr/0001-rule-source-and-governance-model.md",
@@ -49,7 +49,7 @@
         "docs/rules",
         "docs/adr"
       ],
-      "updated_at": "2026-05-19T15:28:55+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md",
@@ -59,7 +59,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-19T05:16:21+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/adr/0003-governance-gate-and-main-branch-protection.md",
@@ -69,7 +69,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-19T05:16:21+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/adr/0004-codex-code-review-governance.md",
@@ -87,7 +87,7 @@
         "repo/CLAUDE.md",
         "docs/adr/0005-ai-entry-progressive-disclosure.md"
       ],
-      "updated_at": "2026-05-20T11:48:29+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/adr/0005-ai-entry-progressive-disclosure.md",
@@ -107,7 +107,7 @@
         "repo/AGENTS.md",
         "docs/rules/index.md"
       ],
-      "updated_at": "2026-05-19T15:28:55+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/adr/0006-risk-tiered-pr-review.md",
@@ -117,7 +117,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-27T17:11:21+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/architecture/research-platform-architecture.md",
@@ -147,7 +147,7 @@
         "docs/indexes/reports.md",
         "scripts/research/layers"
       ],
-      "updated_at": "2026-05-27T13:21:46+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/design/cc-switch-cli.md",
@@ -157,7 +157,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-25T19:18:34+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/design/cross-ai-skill-management.md",
@@ -188,7 +188,7 @@
         "repo/AGENTS.md",
         "repo/CLAUDE.md"
       ],
-      "updated_at": "2026-05-25T19:18:34+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/design/本地研究平台重构.md",
@@ -198,7 +198,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-18T21:37:05+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/design/本地研究平台重构技术实施方案.md",
@@ -215,7 +215,7 @@
         "docs/guides/research-workflow-migration.md",
         "repo/CLAUDE.md"
       ],
-      "updated_at": "2026-05-18T21:37:05+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/design/长期项目防止开发规则漂移方案.md",
@@ -234,7 +234,7 @@
         "docs/exceptions/active-waivers.yaml",
         "scripts/research/governance"
       ],
-      "updated_at": "2026-05-18T21:37:05+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/guides/feishu-relay-tools.md",
@@ -247,7 +247,7 @@
         "scripts/joinquant_tools/FeishuRelayTools.py",
         "docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md"
       ],
-      "updated_at": "2026-05-24T17:55:26+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/guides/local-python-env.md",
@@ -261,7 +261,7 @@
         "repo/requirements-dev.txt",
         "repo/requirements.txt"
       ],
-      "updated_at": "2026-05-27T13:21:46+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/guides/research-workflow-migration.md",
@@ -271,7 +271,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-18T21:37:05+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/guides/research-workflow.md",
@@ -290,7 +290,7 @@
         "scripts/research/platform",
         "docs/architecture/research-platform-architecture.md"
       ],
-      "updated_at": "2026-05-27T13:21:46+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/joinquant-data/JQ_Alpha101.md",
@@ -360,7 +360,7 @@
       "date": "2019-12-01",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-18T15:47:53+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/joinquant-data/JQ_技术分析指标.md",
@@ -479,7 +479,7 @@
         "docs_images/1e7d7bab_1e7d7bab.png",
         "docs_images/img_2901ea6b.png"
       ],
-      "updated_at": "2026-05-18T21:37:05+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/reference/joinquant-parameter-analysis-framework.md",
@@ -492,7 +492,7 @@
         "docs/guides/research-workflow.md",
         "docs/guides/research-workflow-migration.md"
       ],
-      "updated_at": "2026-05-18T21:37:05+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/rules/code-style.md",
@@ -505,7 +505,7 @@
         "docs/rules/environments.md",
         "docs/rules/commands.md"
       ],
-      "updated_at": "2026-05-27T17:11:21+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/rules/collaboration.md",
@@ -515,7 +515,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-27T20:43:15+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/rules/commands.md",
@@ -530,7 +530,7 @@
         "scripts/tools/jq_automation/README.md",
         "scripts/tools/path_tools/README.md"
       ],
-      "updated_at": "2026-05-27T19:34:57+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/rules/docs-and-pathref.md",
@@ -540,7 +540,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-27T17:11:21+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/rules/environments.md",
@@ -550,7 +550,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-27T17:11:21+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/rules/governance.md",
@@ -560,7 +560,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-27T19:53:14+00:00"
+      "updated_at": "2026-05-28T10:05:40+00:00"
     },
     {
       "path": "docs/rules/index.md",
@@ -585,7 +585,7 @@
         "docs/rules/governance.md",
         "docs/adr"
       ],
-      "updated_at": "2026-05-27T20:43:15+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/rules/pr-workflow.md",
@@ -599,7 +599,7 @@
         "docs/rules/governance.md",
         "docs/rules/review-guidelines.md"
       ],
-      "updated_at": "2026-05-27T20:43:15+00:00"
+      "updated_at": "2026-05-28T10:05:40+00:00"
     },
     {
       "path": "docs/rules/research-workflow.md",
@@ -609,7 +609,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-27T17:11:21+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/rules/review-guidelines.md",
@@ -631,7 +631,7 @@
         "docs/rules/governance.md",
         "docs/rules/review-guidelines.md"
       ],
-      "updated_at": "2026-05-27T18:22:41+00:00"
+      "updated_at": "2026-05-28T10:05:40+00:00"
     },
     {
       "path": "docs/superpowers/plans/2026-05-20-backtest-data-redundancy-compaction.md",
@@ -649,7 +649,7 @@
         "scripts/tools/jq_automation/tests/test_core.py",
         "repo/.gitignore"
       ],
-      "updated_at": "2026-05-20T11:48:29+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/superpowers/plans/2026-05-20-feishu-relay-tools-implementation.md",
@@ -665,7 +665,7 @@
         "docs/rules/code-style.md",
         "repo/.gitignore"
       ],
-      "updated_at": "2026-05-24T17:55:26+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/superpowers/plans/2026-05-20-pr-risk-tiered-review-workflow.md",
@@ -677,7 +677,7 @@
       "pathrefs": [
         "docs/rules/review-guidelines.md"
       ],
-      "updated_at": "2026-05-20T11:48:29+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/superpowers/plans/2026-05-26-etf-vol-relief-ab-test.md",
@@ -691,7 +691,7 @@
         "strategies/etf_factor_rotation/tests/test_etf_factor_rotation.py",
         "scripts/tools/jq_automation/README.md"
       ],
-      "updated_at": "2026-05-26T16:45:04+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/superpowers/plans/2026-05-28-pr-flow-automation.md",
@@ -701,7 +701,17 @@
       "date": "2026-05-28",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-27T19:02:32+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-05-28-pr-flow-handsfree-automation.md",
+      "title": "PR Flow Handsfree Automation Implementation Plan",
+      "category": "docs",
+      "strategy": null,
+      "date": "2026-05-28",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-28T12:01:14+00:00"
     },
     {
       "path": "docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md",
@@ -714,7 +724,7 @@
         "repo/scripts/archive/RelayTools.py",
         "docs/rules/review-guidelines.md"
       ],
-      "updated_at": "2026-05-24T17:55:26+00:00"
+      "updated_at": "2026-05-28T07:57:23+00:00"
     }
   ]
 }

@@ -16,6 +16,8 @@
 - 高风险或 unknown PR 必须加 `ai-risk-review` label，并触发官方 Codex Code Review；用户显式授权跳过时，PR body 必须记录 `官方 Codex Review 跳过授权`。
 - 官方 Codex Review 触发评论必须包含 `@codex review`、当前 PR、当前 head SHA、Review Scope（可为空）和审查重点；禁止模板外文案，禁止写“不要执行命令”“只做静态 diff review”等切断仓库、diff 或命令上下文的指令。
 - 官方 Codex Review 按 Review Scope 聚焦 P0/P1 合并阻断风险；无法生成明确 scope 的大型 PR 应拆分，否则按全量高风险 PR 处理。
+- 官方 Codex Review 无 P0/P1 且匹配当前 head 时，`pr_flow` 可以自动把真实 review/comment 链接写入 PR body evidence。
+- 自动写入不等于跳过 review；证据必须来自当前 PR、当前 head、当前 trigger 之后的 Codex 结果。
 - `pr-review-evidence` 和 `Codex Review Monitor` 必须读取 review thread 状态；未解决且未过期的 Codex P0/P1 thread 永远阻断，跳过授权不得绕过。
 - `Codex Review Monitor` 是 GitHub `main` 全局 required status check；低风险且无需官方 Codex Review 的 PR 允许快速通过/空跑，但不替代 PR body 证据。
 - 如果 Codex review 无法读取当前 PR diff、要求额外提供 unified diff、引用不存在或非当前 head，按 review 上下文失效阻断。

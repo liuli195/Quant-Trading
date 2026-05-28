@@ -318,8 +318,8 @@ def render_pr_body(payload: dict[str, Any]) -> str:
     lines.extend(
         [
             "",
-        f"## {P2_SECTION_HEADER}",
-        "",
+            f"## {P2_SECTION_HEADER}",
+            "",
         ]
     )
     p2_lines = _render_p2_body_lines(findings)
@@ -727,7 +727,9 @@ def _render_official_codex_review_lines(payload: dict[str, Any]) -> list[str]:
         f"- 阻断问题: {_single_line_text(value.get('blocking_issues'))}",
         "- 关键证据:",
     ]
-    lines.extend(f"  - {_format_official_codex_review_evidence(item)}" for item in evidence)
+    lines.extend(
+        f"  - {_format_official_codex_review_evidence(item)}" for item in evidence
+    )
     return lines
 
 

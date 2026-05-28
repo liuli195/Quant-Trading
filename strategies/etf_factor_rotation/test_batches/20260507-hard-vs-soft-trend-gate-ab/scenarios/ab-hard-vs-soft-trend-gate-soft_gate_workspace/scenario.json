@@ -1,0 +1,23 @@
+{
+  "strategy_file": "D:\\My Project\\Quant Trading\\.local\\jq-automation\\ab\\hard-vs-soft-trend-gate\\soft_gate_workspace_source.py",
+  "scenario_id": "ab-hard-vs-soft-trend-gate-soft_gate_workspace",
+  "start_date": "2021-01-01",
+  "end_date": "2026-04-30",
+  "capital": 100000,
+  "frequency": "1d",
+  "py_version": "Python3",
+  "estimated_minutes": 8.0,
+  "batch_id": "20260507-hard-vs-soft-trend-gate-ab",
+  "strategy": "etf_factor_rotation",
+  "governance_status": "archived_partial_not_promotion_evidence",
+  "governance_notes": [
+    "Historical scenario retained for context only; soft-gate source commit is not reachable from origin refs and the data-center snapshot lacks audit_log."
+  ],
+  "params_diff": {
+    "TrendGateLower": -0.1,
+    "TrendGateUpper": 0.0
+  },
+  "_params_mode": "baked_in_git",
+  "_scan_source": null,
+  "_experiment_id": "hard-vs-soft-trend-gate"
+}
