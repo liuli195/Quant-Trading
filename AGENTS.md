@@ -12,7 +12,7 @@ Claude Code 专属补充见 [CLAUDE.md](CLAUDE.md) <!-- pathref: repo/CLAUDE.md 
 
 - **输出**：简体中文，简洁直白。
 - **运行边界**：策略代码仅运行于聚宽云端；本地负责编写、测试、文档、回测分析。环境差异及库白名单见 [environments.md](docs/rules/environments.md) <!-- pathref: docs/rules/environments.md -->。
-- **Python 环境**：项目 `.venv` 默认提权执行，否则无法读取base Python路径。命令参考 [commands.md](docs/rules/commands.md) <!-- pathref: docs/rules/commands.md -->。
+- **Python 环境**：默认使用项目 `.venv`，不改用系统 Python。命令参考 [commands.md](docs/rules/commands.md) <!-- pathref: docs/rules/commands.md -->。
 - **GitHub CLI**：`gh` CLI 默认提权执行，否则无法获取沙箱外的登录状态。
 - **先调查**：不推测未读代码；不确定时说明并提出验证方法。
 - **请求范围**：只做要求的事，不明确时默认研究建议。不擅自重构或过度抽象。

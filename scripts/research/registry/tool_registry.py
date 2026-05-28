@@ -10,11 +10,9 @@ from typing import Any
 from .schemas import ToolDefinition
 
 
-WINDOWS_PYTHON_CLI_WRAPPER = (
-    r"powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1"
-)
-POSIX_PYTHON_CLI_WRAPPER = ".githooks/run-python.sh"
-PYTHON_CLI_WRAPPER = WINDOWS_PYTHON_CLI_WRAPPER
+WINDOWS_PYTHON_CLI = r".\.venv\Scripts\python.exe"
+POSIX_PYTHON_CLI = ".venv/bin/python"
+PYTHON_CLI = WINDOWS_PYTHON_CLI
 
 
 LAYER_ORDER = (
@@ -55,7 +53,7 @@ LAYER_FILENAMES = {
 
 
 def _cli(module: str, suffix: str = "") -> str:
-    command = f"{PYTHON_CLI_WRAPPER} -m {module}"
+    command = f"{PYTHON_CLI} -m {module}"
     return f"{command} {suffix}".strip()
 
 
@@ -63,8 +61,8 @@ def _posix_cli(command: str | None) -> str:
     if not command:
         return ""
     return command.replace(
-        WINDOWS_PYTHON_CLI_WRAPPER,
-        POSIX_PYTHON_CLI_WRAPPER,
+        WINDOWS_PYTHON_CLI,
+        POSIX_PYTHON_CLI,
         1,
     )
 
@@ -413,13 +411,13 @@ class ToolRegistry:
             if tool.kind == "cli":
                 cli_windows = tool.cli or ""
                 cli_posix = _posix_cli(tool.cli)
-                if not cli_windows.startswith(f"{WINDOWS_PYTHON_CLI_WRAPPER} -m "):
+                if not cli_windows.startswith(f"{WINDOWS_PYTHON_CLI} -m "):
                     errors.append(
-                        f"{tool.tool_id}: cli_windows must use {WINDOWS_PYTHON_CLI_WRAPPER}"
+                        f"{tool.tool_id}: cli_windows must use {WINDOWS_PYTHON_CLI}"
                     )
-                if not cli_posix.startswith(f"{POSIX_PYTHON_CLI_WRAPPER} -m "):
+                if not cli_posix.startswith(f"{POSIX_PYTHON_CLI} -m "):
                     errors.append(
-                        f"{tool.tool_id}: cli_posix must use {POSIX_PYTHON_CLI_WRAPPER}"
+                        f"{tool.tool_id}: cli_posix must use {POSIX_PYTHON_CLI}"
                     )
             for label, rel_path in (("README", tool.readme_path), ("docs", tool.docs_path)):
                 if rel_path and not (root / rel_path).is_file():
@@ -470,8 +468,8 @@ class ToolRegistry:
             "本目录按平台5层核心整理工具视图，内容由工具注册表生成。",
             "",
             "生成命令：",
-            f"- Windows：`{WINDOWS_PYTHON_CLI_WRAPPER} -m scripts.research.registry.tool_registry write-layers`",
-            f"- POSIX：`{POSIX_PYTHON_CLI_WRAPPER} -m scripts.research.registry.tool_registry write-layers`",
+            f"- Windows：`{WINDOWS_PYTHON_CLI} -m scripts.research.registry.tool_registry write-layers`",
+            f"- POSIX：`{POSIX_PYTHON_CLI} -m scripts.research.registry.tool_registry write-layers`",
             "",
             "| 层 | 文件 | 职责 | 工具数 |",
             "| --- | --- | --- | ---: |",

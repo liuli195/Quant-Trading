@@ -22,7 +22,7 @@ Accepted
 
 - 删除重复入口表述：`CLAUDE.md 是权威规则源`、`AGENTS.md 只保留 review 指向`。
 - 合并重复 Python 环境规则到 [commands.md](../rules/commands.md) <!-- pathref: docs/rules/commands.md -->，根入口不重复命令细节。
-- 将“Codex 本地环境中须提权执行”改为“遇到沙箱/权限阻断时申请提权”，并暂时放入 [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->。
+- 将 Python 环境规则收敛为默认使用项目 `.venv`，不改用系统 Python。
 - 删除“CLAUDE.md 包含全部目录结构、工具入口、代码规范、提交清单”的根文件承诺，改由 [docs/rules/index.md](../rules/index.md) <!-- pathref: docs/rules/index.md --> 分组披露。
 
 ## 影响

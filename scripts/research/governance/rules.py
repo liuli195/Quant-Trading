@@ -98,7 +98,7 @@ _OLD_PR_TEMPLATE_TOKENS = (
     "Codex Code Review 结论",
     "Codex",
     "pr-flow:start",
-    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate",
+    ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate",
     "waiver",
     "证据",
 )
@@ -119,7 +119,7 @@ REQUIRED_REVIEW_GUIDELINES_TOKENS = (
     "AGENTS.md",
     "docs/rules/review-guidelines.md",
     "P0/P1",
-    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate",
+    ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate",
     "Codex Review Monitor",
     "至少两个独立 reviewer",
     "子 agent 交叉评审",
@@ -144,13 +144,11 @@ REQUIRED_COMMAND_RULE_TOKENS = (
     "scripts.research.governance",
     "scripts.research.registry",
     "scripts.tools.path_tools.refactor",
-    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File",
     ".\\.githooks\\setup-python.ps1",
-    ".\\.githooks\\run-python.ps1",
     ".githooks/setup-python.sh",
-    ".githooks/run-python.sh",
     ".\\.venv\\Scripts\\python.exe",
     ".venv/bin/python",
+    "Python 命令默认走项目 `.venv`，不改用系统 Python",
     "PYTHONUTF8",
     "PYTHONIOENCODING",
     "gh pr checks",
@@ -161,7 +159,7 @@ REQUIRED_AGENT_ENTRY_TOKENS = (
     "docs/rules/review-guidelines.md",
     "简体中文，简洁直白",
     "聚宽云端",
-    "项目 `.venv` 默认提权执行，否则无法读取base Python路径",
+    "默认使用项目 `.venv`，不改用系统 Python",
     "docs/rules/commands.md",
     "`gh` CLI 默认提权执行",
     "进入主干须通过 PR",
@@ -499,16 +497,6 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                         "governance_gate", "error", f"run-python.sh missing {token}"
                     )
                 )
-        if not re.search(r"export\s+PYTHONUTF8=1", text) or not re.search(
-            r"export\s+PYTHONIOENCODING=utf-8", text
-        ):
-            findings.append(
-                AuditFinding(
-                    "governance_gate",
-                    "error",
-                    "run-python.sh missing UTF-8 environment",
-                )
-            )
         if "uname" not in text or not any(
             token in text for token in ("MINGW", "MSYS", "CYGWIN")
         ):
@@ -543,23 +531,6 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "governance_gate",
                     "error",
                     "run-python.ps1 missing .venv\\Scripts\\python.exe",
-                )
-            )
-        utf8_tokens = (
-            "Console]::InputEncoding",
-            "Console]::OutputEncoding",
-            "$OutputEncoding",
-        )
-        if (
-            not re.search(r"\$env:PYTHONUTF8\s*=\s*['\"]1['\"]", text)
-            or not re.search(r"\$env:PYTHONIOENCODING\s*=\s*['\"]utf-8['\"]", text)
-            or not all(token in text for token in utf8_tokens)
-        ):
-            findings.append(
-                AuditFinding(
-                    "governance_gate",
-                    "error",
-                    "run-python.ps1 missing UTF-8 environment",
                 )
             )
         if re.search(r"\$Python\s*=\s*['\"]python['\"]", text) or re.search(
@@ -982,17 +953,19 @@ def _audit_local_review_entrypoints(root: Path) -> list[AuditFinding]:
             findings.append(
                 AuditFinding("local_review", "error", f"Makefile missing {token}")
             )
-    if "powershell.exe" in make_text and (
-        ".githooks/run-python.sh" not in make_text
-        or "ifeq ($(OS),Windows_NT)" not in make_text
-    ):
+    if "powershell.exe" in make_text or "run-python" in make_text:
         findings.append(
             AuditFinding(
                 "local_review",
                 "error",
-                "Makefile must use run-python.sh on non-Windows",
+                "Makefile must use direct project .venv Python",
             )
         )
+    for token in (".venv/Scripts/python.exe", ".venv/bin/python"):
+        if token not in make_text:
+            findings.append(
+                AuditFinding("local_review", "error", f"Makefile missing {token}")
+            )
 
     pre_commit = root / ".pre-commit-config.yaml"
     if not pre_commit.is_file():

@@ -5,15 +5,15 @@
 ## 两阶段模型
 
 - setup script：创建或修复当前 checkout 的 `.venv`，安装 [requirements-dev.txt](../../requirements-dev.txt) <!-- pathref: repo/requirements-dev.txt -->，并配置 `git config core.hooksPath .githooks`。
-- run-python wrapper：只负责设置 UTF-8 并调用当前 checkout 的 `.venv`。wrapper 找不到 `.venv` 时必须失败，不回退系统 Python。
+- run 阶段：日常命令直接调用当前 checkout 的 `.venv`；UTF-8 由用户级或机器级环境变量处理，不再由 run-python wrapper 注入。
 
 推荐入口：
 
 - Windows setup：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\setup-python.ps1`
-- Windows run：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1`
+- Windows run：`.\.venv\Scripts\python.exe`
 - Codex Cloud / Linux setup：`bash .githooks/setup-python.sh`
-- Codex Cloud / Linux run：`.githooks/run-python.sh`
-- Git hook / 自动化入口：`.githooks/run-python.sh`
+- Codex Cloud / Linux run：`.venv/bin/python`
+- Git hook 内部入口：`.githooks/run-python.sh`
 
 不建议直接使用系统 `python` 执行业务命令。系统 Python 只允许 setup script 用来 bootstrap `.venv`。
 
@@ -31,7 +31,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\setup-python
 git worktree add ..\Quant-Trading-<name> -b <branch> <base-branch-or-commit>
 Set-Location ..\Quant-Trading-<name>
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\setup-python.ps1
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -c "import sys; print(sys.executable); print('中文')"
+.\.venv\Scripts\python.exe -c "import sys; print(sys.executable); print('中文')"
 ```
 
 Codex App 创建的 Windows worktree 中，也使用同一条初始化命令：
@@ -48,7 +48,7 @@ Codex Cloud 环境设置页中可粘贴：
 set -eu
 
 bash .githooks/setup-python.sh
-.githooks/run-python.sh -c "import sys; print(sys.executable); print('中文')"
+.venv/bin/python -c "import sys; print(sys.executable); print('中文')"
 ```
 
 官方依据：Codex Cloud 会先 checkout repo，再运行 setup script；setup 阶段可联网安装依赖，agent 阶段再执行命令。参考 <https://developers.openai.com/codex/cloud/environments>。
@@ -61,14 +61,14 @@ Codex App Local Environment 的 Linux/macOS setup script 示例：
 set -eu
 
 bash .githooks/setup-python.sh
-.githooks/run-python.sh -m scripts.research.governance gate
+.venv/bin/python -m scripts.research.governance gate
 ```
 
 Windows Local Environment 示例：
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\setup-python.ps1
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance gate
+.\.venv\Scripts\python.exe -m scripts.research.governance gate
 ```
 
 官方依据：Codex Local Environments 可为 worktree 配置 setup script，配置可由 Codex App 生成到仓库根目录 `.codex`。参考 <https://developers.openai.com/codex/app/local-environments>。
@@ -80,21 +80,21 @@ Codex worktree 是独立 checkout，每个 worktree 都应该运行 setup script
 语法检查：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m py_compile strategies\etf_dynamic_rebalance\etf_dynamic_rebalance.py
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m py_compile strategies\etf_factor_rotation\etf_factor_rotation.py
+.\.venv\Scripts\python.exe -m py_compile strategies\etf_dynamic_rebalance\etf_dynamic_rebalance.py
+.\.venv\Scripts\python.exe -m py_compile strategies\etf_factor_rotation\etf_factor_rotation.py
 ```
 
 运行单元测试：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m pytest strategies\etf_dynamic_rebalance\tests -q
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m pytest strategies\etf_factor_rotation\tests -q
+.\.venv\Scripts\python.exe -m pytest strategies\etf_dynamic_rebalance\tests -q
+.\.venv\Scripts\python.exe -m pytest strategies\etf_factor_rotation\tests -q
 ```
 
 路径引用检查：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.tools.path_tools.refactor check
+.\.venv\Scripts\python.exe -m scripts.tools.path_tools.refactor check
 ```
 
 ## 依赖说明

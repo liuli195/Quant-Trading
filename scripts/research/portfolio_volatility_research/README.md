@@ -5,13 +5,13 @@
 ## 命令示例
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.cli init `
+.\.venv\Scripts\python.exe -m scripts.research.cli init `
   --project-dir strategies\etf_factor_rotation\reports\research\cash_utilization `
   --project portfolio_volatility_study `
   --strategy etf_factor_rotation `
   --template portfolio_volatility
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.cli run `
+.\.venv\Scripts\python.exe -m scripts.research.cli run `
   --project-dir strategies\etf_factor_rotation\reports\research\cash_utilization `
   --run-id <run_id> `
   --mode fast

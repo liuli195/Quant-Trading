@@ -1,9 +1,6 @@
 #!/bin/sh
 set -eu
 
-export PYTHONUTF8=1
-export PYTHONIOENCODING=utf-8
-
 REPO_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 OS_NAME=$(uname -s 2>/dev/null || printf '%s' unknown)
 

@@ -63,7 +63,7 @@ def _write_valid_report(
             "blocking_issues": "无",
             "evidence": [
                 "https://github.com/liuli195/Quant-Trading/pull/7#pullrequestreview-1",
-                "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate",
+                ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate",
             ],
         }
     (local / "latest.json").write_text(
@@ -713,6 +713,11 @@ def test_prepare_records_full_governance_gate_evidence(
         tmp_path,
         changed_files=["docs/guides/example.md"],
     )
+    monkeypatch.setattr(
+        pr_flow.sys,
+        "executable",
+        str(tmp_path / ".venv" / "Scripts" / "python.exe"),
+    )
     monkeypatch.setattr(pr_flow.ai_review_gate, "_discover_changed_files", lambda _root: [])
     runner = RecordingRunner()
 
@@ -723,7 +728,7 @@ def test_prepare_records_full_governance_gate_evidence(
         (tmp_path / ".local/ai-review/latest.json").read_text(encoding="utf-8")
     )
     gate_evidence = payload["checks"]["governance gate"]
-    assert ".githooks/run-python.sh -m scripts.research.governance gate" in gate_evidence
+    assert ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate" in gate_evidence
     body = (tmp_path / ".local/ai-review/pr-body.md").read_text(encoding="utf-8")
     assert gate_evidence in body
 
@@ -809,8 +814,7 @@ def test_sync_replaces_existing_pr_block_with_windows_path_evidence(
     report_path = tmp_path / ".local/ai-review/latest.json"
     payload = json.loads(report_path.read_text(encoding="utf-8"))
     payload["checks"]["governance gate"] = (
-        "powershell.exe -NoProfile -ExecutionPolicy Bypass -File "
-        ".\\.githooks\\run-python.ps1 -m scripts.research.governance gate; passed"
+        ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate; passed"
     )
     report_path.write_text(
         json.dumps(payload, ensure_ascii=False),
@@ -834,7 +838,7 @@ def test_sync_replaces_existing_pr_block_with_windows_path_evidence(
     assert code == 0
     edited = runner.edited_bodies[0]
     assert "old managed content" not in edited
-    assert ".\\.githooks\\run-python.ps1" in edited
+    assert ".\\.venv\\Scripts\\python.exe" in edited
 
 
 def test_sync_stops_when_existing_pr_body_cannot_be_read(

@@ -5,7 +5,7 @@
 ## 命令示例
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance audit
+.\.venv\Scripts\python.exe -m scripts.research.governance audit
 ```
 
 治理审计会校验模板 schema，并检查 engine 支持的正式模板是否都有声明文件。

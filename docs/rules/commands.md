@@ -4,12 +4,12 @@
 
 ## MUST
 
-- Python 命令默认走项目 `.venv`，在本地/Codex 需要权限时按提权执行，不改用系统 Python。
-- setup script 只负责 bootstrap `.venv`；run-python wrapper 找不到 `.venv` 必须失败。
-- Windows 本地默认 wrapper：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1`。
-- Codex Cloud/Linux/POSIX 默认 wrapper：`.githooks/run-python.sh`。
-- Git hooks 通过 `.githooks/run-python.sh` 选择当前平台虚拟环境；Windows 交互命令可直接用 `run-python.ps1`。
-- 临时排障可直用 `.\.venv\Scripts\python.exe -m ...` 或 `.venv/bin/python -m ...`；中文输出需设置 `PYTHONUTF8=1` 和 `PYTHONIOENCODING=utf-8`。
+- Python 命令默认走项目 `.venv`，不改用系统 Python。
+- setup script 只负责 bootstrap `.venv` 并配置 hooks。
+- Windows 本地默认入口：`.\.venv\Scripts\python.exe`。
+- Codex Cloud/Linux/POSIX 默认入口：`.venv/bin/python`。
+- Git hooks 内部仍通过 `.githooks/run-python.sh` 选择当前平台虚拟环境；日常命令不走该脚本。
+- 中文输出由环境变量层处理：`PYTHONUTF8=1` 和 `PYTHONIOENCODING=utf-8`。
 - `gh` CLI 默认提权执行，否则无法获取沙箱外的登录状态。
 
 ## 初始化
@@ -21,7 +21,7 @@ git config core.hooksPath .githooks
 
 ```bash
 bash .githooks/setup-python.sh
-.githooks/run-python.sh -c "import sys; print(sys.executable); print('中文')"
+.venv/bin/python -c "import sys; print(sys.executable); print('中文')"
 ```
 
 ## 常用命令
@@ -29,13 +29,13 @@ bash .githooks/setup-python.sh
 Windows 示例：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m py_compile strategies\<strategy>\<strategy>.py
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m pytest strategies\<strategy>\tests -q
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.tools.jq_automation compile-check strategies\<strategy>\<strategy>.py
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.tools.path_tools.refactor check
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.docs index
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance gate
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance.pr_flow ready --title "<PR标题>"
+.\.venv\Scripts\python.exe -m py_compile strategies\<strategy>\<strategy>.py
+.\.venv\Scripts\python.exe -m pytest strategies\<strategy>\tests -q
+.\.venv\Scripts\python.exe -m scripts.tools.jq_automation compile-check strategies\<strategy>\<strategy>.py
+.\.venv\Scripts\python.exe -m scripts.tools.path_tools.refactor check
+.\.venv\Scripts\python.exe -m scripts.research.docs index
+.\.venv\Scripts\python.exe -m scripts.research.governance gate
+.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow ready --title "<PR标题>"
 gh pr checks <PR号或URL> --required --watch --interval 10
 gh pr checks <PR号或URL> --required
 ```
@@ -52,7 +52,7 @@ gh pr checks <PR号或URL> --required
 | `scripts.research.governance` | `audit`、`gate` |
 | `scripts.research.governance.pr_flow` | `prepare`、`sync`、`wait`、`ready` |
 
-POSIX 示例把 Windows wrapper 替换为 `.githooks/run-python.sh`。
+POSIX 示例把 Windows Python 路径替换为 `.venv/bin/python`。
 
 ## 参考
 

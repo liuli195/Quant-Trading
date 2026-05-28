@@ -26,8 +26,11 @@ CODEX_REVIEW_PENDING_EXIT_CODE = 3
 DISPATCH_REQUIRED_EXIT_CODE = 4
 REPLY_OR_FIX_REQUIRED_EXIT_CODE = 5
 EXCEPTION_REQUIRED_EXIT_CODE = 6
-PR_BODY_GOVERNANCE_GATE_COMMAND = (
-    ".githooks/run-python.sh -m scripts.research.governance gate"
+WINDOWS_PR_BODY_GOVERNANCE_GATE_COMMAND = (
+    ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate"
+)
+POSIX_PR_BODY_GOVERNANCE_GATE_COMMAND = (
+    ".venv/bin/python -m scripts.research.governance gate"
 )
 CODEX_REVIEW_AUTHORS = {"chatgpt-codex-connector", "chatgpt-codex-connector[bot]"}
 DISQUALIFIED_CODEX_REVIEW_STATES = {"DISMISSED", "PENDING"}
@@ -180,6 +183,7 @@ def prepare(
         return 1
     payload = _payload_with_prepare_evidence(
         payload,
+        root=root,
         changed_files=check_files,
         passed_checks=passed_checks,
     )
@@ -542,6 +546,7 @@ def ready(
                 json.dumps(
                     _payload_with_official_codex_review_evidence(
                         payload,
+                        root=root,
                         evidence=wait_result.evidence,
                     ),
                     ensure_ascii=False,
@@ -656,6 +661,7 @@ def _strategy_test_dirs(root: Path, changed_files: Sequence[str]) -> set[str]:
 def _payload_with_prepare_evidence(
     payload: dict[str, Any],
     *,
+    root: Path,
     changed_files: Sequence[str],
     passed_checks: Sequence[str],
 ) -> dict[str, Any]:
@@ -667,7 +673,7 @@ def _payload_with_prepare_evidence(
     for check in passed_checks:
         if check == "governance-full":
             merged_checks["governance gate"] = (
-                f"{PR_BODY_GOVERNANCE_GATE_COMMAND}; passed"
+                f"{_governance_gate_evidence_command(root)}; passed"
             )
         elif check == "governance-fast":
             merged_checks["governance fast gate"] = "passed"
@@ -690,6 +696,24 @@ def _payload_with_prepare_evidence(
     if merged_checks:
         updated["checks"] = merged_checks
     return updated
+
+
+def _governance_gate_evidence_command(root: Path) -> str:
+    executable = Path(sys.executable).resolve()
+    candidates = (
+        (
+            (root / ".venv" / "Scripts" / "python.exe").resolve(),
+            WINDOWS_PR_BODY_GOVERNANCE_GATE_COMMAND,
+        ),
+        (
+            (root / ".venv" / "bin" / "python").resolve(),
+            POSIX_PR_BODY_GOVERNANCE_GATE_COMMAND,
+        ),
+    )
+    for candidate, command in candidates:
+        if executable == candidate:
+            return command
+    return f"{sys.executable} -m scripts.research.governance gate"
 
 
 def _write_managed_body_file(
@@ -1299,6 +1323,7 @@ def _issue_comment_link(
 def _payload_with_official_codex_review_evidence(
     payload: dict[str, Any],
     *,
+    root: Path,
     evidence: str,
 ) -> dict[str, Any]:
     updated = dict(payload)
@@ -1309,7 +1334,7 @@ def _payload_with_official_codex_review_evidence(
         "blocking_issues": "无",
         "evidence": [
             evidence,
-            PR_BODY_GOVERNANCE_GATE_COMMAND,
+            _governance_gate_evidence_command(root),
         ],
     }
     return updated

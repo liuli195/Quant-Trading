@@ -191,7 +191,7 @@ def _write_minimal_repo(root: Path) -> None:
         "本仓库是基于 Python 的 A 股/场内基金量化策略仓库。\n\n"
         "规则索引见 indexes.md。所有回答和输出使用简体中文，简洁直白。"
         "策略代码仅在聚宽云端运行。"
-        "项目 `.venv` 默认提权执行，否则无法读取base Python路径。"
+        "默认使用项目 `.venv`，不改用系统 Python。"
         "命令参考 docs/rules/commands.md。"
         "`gh` CLI 默认提权执行。"
         "进入主干须通过 PR；如用户显式授权，可以按直写主干链路直接提交和推送主干；"
@@ -217,9 +217,9 @@ def _write_minimal_repo(root: Path) -> None:
         "scripts.research.cli scripts.research.datasets scripts.research.variants "
         "scripts.research.governance scripts.research.governance gate scripts.research.registry "
         "scripts.tools.path_tools.refactor .\\.githooks\\setup-python.ps1 "
-        ".\\.githooks\\run-python.ps1 .githooks/setup-python.sh .githooks/run-python.sh "
+        ".githooks/setup-python.sh "
         ".\\.venv\\Scripts\\python.exe .venv/bin/python PYTHONUTF8 PYTHONIOENCODING "
-        "powershell.exe -NoProfile -ExecutionPolicy Bypass -File "
+        "Python 命令默认走项目 `.venv`，不改用系统 Python "
         "gh pr checks `gh` CLI 默认提权执行",
         encoding="utf-8",
     )
@@ -236,9 +236,9 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / "Makefile").write_text(
         "ifeq ($(OS),Windows_NT)\n"
-        "PYTHON ?= powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./.githooks/run-python.ps1\n"
+        "PYTHON ?= ./.venv/Scripts/python.exe\n"
         "else\n"
-        "PYTHON ?= sh .githooks/run-python.sh\n"
+        "PYTHON ?= .venv/bin/python\n"
         "endif\n"
         "pre-pr:\n\t$(PYTHON) -m pre_commit run --all-files\n"
         "ai-review:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate validate --report .local/ai-review/latest.json\n"
@@ -258,12 +258,11 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     (root / ".githooks/run-python.sh").write_text(
-        'export PYTHONUTF8=1\nexport PYTHONIOENCODING=utf-8\nuname MINGW MSYS CYGWIN .venv/bin/python .venv/Scripts/python.exe "$@"\n',
+        'uname MINGW MSYS CYGWIN .venv/bin/python .venv/Scripts/python.exe "$@"\n',
         encoding="utf-8",
     )
     (root / ".githooks/run-python.ps1").write_text(
-        '$env:PYTHONUTF8 = "1"\n$env:PYTHONIOENCODING = "utf-8"\n'
-        "Console]::InputEncoding Console]::OutputEncoding $OutputEncoding & .venv\\Scripts\\python.exe @args\n",
+        "& .venv\\Scripts\\python.exe @args\n",
         encoding="utf-8",
     )
     (root / ".githooks/setup-python.ps1").write_text(
@@ -385,7 +384,7 @@ def _write_minimal_repo(root: Path) -> None:
         "本地安全 review\ncodex-security\nsecurity-guidance\n"
         "Codex\n"
         "<!-- pr-flow:start -->\n<!-- pr-flow:end -->\n"
-        "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate\n"
+        ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate\n"
         "waiver\n证据\n",
         encoding="utf-8",
     )
@@ -411,7 +410,7 @@ def _write_minimal_repo(root: Path) -> None:
                 "AGENTS.md",
                 "docs/rules/review-guidelines.md",
                 "P0/P1",
-                "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate",
+                ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate",
                 "Codex Review Monitor",
                 "至少两个独立 reviewer",
                 "子 agent 交叉评审",
@@ -619,7 +618,7 @@ def test_governance_audit_flags_pre_commit_without_fast_gate(
     _write_minimal_repo(tmp_path)
     (tmp_path / ".githooks/pre-commit").write_text(
         "pre-commit run --hook-stage pre-commit\n"
-        "sh .githooks/run-python.sh -m scripts.research.governance gate\n",
+        ".venv/bin/python -m scripts.research.governance gate\n",
         encoding="utf-8",
     )
 
@@ -640,8 +639,8 @@ def test_governance_audit_flags_pre_push_with_fast_gate(
     (tmp_path / ".githooks/pre-push").write_text(
         "\n".join(
             [
-                "sh .githooks/run-python.sh -m scripts.research.governance.branch_protection pre-push",
-                "sh .githooks/run-python.sh -m scripts.research.governance gate --fast",
+                ".venv/bin/python -m scripts.research.governance.branch_protection pre-push",
+                ".venv/bin/python -m scripts.research.governance gate --fast",
                 "git lfs pre-push",
             ]
         ),
@@ -662,9 +661,9 @@ def test_local_review_entrypoints_are_tracked(tmp_path: Path) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / "Makefile").write_text(
         "ifeq ($(OS),Windows_NT)\n"
-        "PYTHON ?= powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./.githooks/run-python.ps1\n"
+        "PYTHON ?= ./.venv/Scripts/python.exe\n"
         "else\n"
-        "PYTHON ?= sh .githooks/run-python.sh\n"
+        "PYTHON ?= .venv/bin/python\n"
         "endif\n"
         "pre-pr:\n\t$(PYTHON) -m pre_commit run --all-files\n"
         "ai-review:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate validate --report .local/ai-review/latest.json\n"
@@ -722,7 +721,7 @@ def test_tool_registry_registers_pr_flow_cli() -> None:
     assert "ready" in (tool.cli or "")
 
 
-def test_local_review_entrypoints_require_posix_make_wrapper(
+def test_local_review_entrypoints_reject_wrapper_make_python(
     tmp_path: Path,
 ) -> None:
     _write_minimal_repo(tmp_path)
@@ -739,7 +738,7 @@ def test_local_review_entrypoints_require_posix_make_wrapper(
     assert not report.ok
     assert any(
         finding.rule_id == "local_review"
-        and finding.message == "Makefile must use run-python.sh on non-Windows"
+        and finding.message == "Makefile must use direct project .venv Python"
         for finding in report.findings
     )
 
@@ -1219,7 +1218,7 @@ def test_governance_audit_flags_python_env_docs_without_setup_examples(
         "scripts.research.cli scripts.research.datasets scripts.research.variants "
         "scripts.research.governance scripts.research.registry "
         "scripts.tools.path_tools.refactor .\\.githooks\\run-python.ps1 "
-        ".githooks/run-python.sh .\\.venv\\Scripts\\python.exe .venv/bin/python "
+        ".venv/bin/python .\\.venv\\Scripts\\python.exe .venv/bin/python "
         "PYTHONUTF8 PYTHONIOENCODING powershell.exe -NoProfile "
         "-ExecutionPolicy Bypass -File",
         encoding="utf-8",
@@ -1302,40 +1301,6 @@ def test_governance_audit_flags_hook_python_wrapper_system_python_fallback(
     assert any(
         finding.rule_id == "governance_gate"
         and "run-python.sh must not fall back to system Python" in finding.message
-        for finding in report.findings
-    )
-
-
-def test_governance_audit_flags_posix_hook_python_wrapper_without_utf8_env(
-    tmp_path,
-) -> None:
-    _write_minimal_repo(tmp_path)
-    (tmp_path / ".githooks/run-python.sh").write_text(
-        'uname MINGW MSYS CYGWIN .venv/bin/python .venv/Scripts/python.exe "$@"\n',
-        encoding="utf-8",
-    )
-    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
-    assert not report.ok
-    assert any(
-        finding.rule_id == "governance_gate"
-        and "run-python.sh missing UTF-8 environment" in finding.message
-        for finding in report.findings
-    )
-
-
-def test_governance_audit_flags_powershell_hook_python_wrapper_without_utf8_env(
-    tmp_path,
-) -> None:
-    _write_minimal_repo(tmp_path)
-    (tmp_path / ".githooks/run-python.ps1").write_text(
-        "& .venv\\Scripts\\python.exe @args\n",
-        encoding="utf-8",
-    )
-    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
-    assert not report.ok
-    assert any(
-        finding.rule_id == "governance_gate"
-        and "run-python.ps1 missing UTF-8 environment" in finding.message
         for finding in report.findings
     )
 
@@ -1443,7 +1408,7 @@ def test_governance_audit_flags_reference_transaction_without_pre_setup_guard(
                 "set -eu",
                 'STATE="${1:-}"',
                 'if [ "$STATE" = "prepared" ]; then',
-                "  sh .githooks/run-python.sh -m scripts.research.governance.branch_protection reference-transaction",
+                "  .venv/bin/python -m scripts.research.governance.branch_protection reference-transaction",
                 "fi",
             ]
         ),
@@ -1478,7 +1443,7 @@ def test_governance_audit_flags_agents_with_detailed_rule_duplication(tmp_path) 
     )
 
 
-def test_governance_audit_flags_agents_without_sandbox_escalation_rule(
+def test_governance_audit_flags_agents_without_python_venv_rule(
     tmp_path,
 ) -> None:
     _write_minimal_repo(tmp_path)
@@ -1494,7 +1459,7 @@ def test_governance_audit_flags_agents_without_sandbox_escalation_rule(
     assert not report.ok
     assert any(
         finding.rule_id == "agent_entry_sync"
-        and "项目 `.venv` 默认提权执行，否则无法读取base Python路径" in finding.message
+        and "默认使用项目 `.venv`，不改用系统 Python" in finding.message
         for finding in report.findings
     )
 
@@ -1810,7 +1775,7 @@ def _valid_codex_review_body(review_id: int = 4314779358) -> str:
             "- \u963b\u65ad\u95ee\u9898: \u65e0",
             "- \u5173\u952e\u8bc1\u636e:",
             f"  - Codex review \u94fe\u63a5\uff1ahttps://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-{review_id}",
-            "  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate`",
+            "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
         ]
     )
 
@@ -1829,7 +1794,7 @@ def test_low_risk_pr_body_does_not_require_codex_review() -> None:
 
 ## 已运行检查
 
-- governance gate: `.githooks/run-python.sh -m scripts.research.governance gate`
+- governance gate: `.venv/bin/python -m scripts.research.governance gate`
 
 ## P2 保留项
 
@@ -1841,7 +1806,7 @@ def test_low_risk_pr_body_does_not_require_codex_review() -> None:
     assert report.ok, report.errors
 
 
-def test_pr_review_evidence_requires_governance_gate_wrapper_command() -> None:
+def test_pr_review_evidence_requires_governance_gate_command() -> None:
     body = """
 ## AI Review 风险分级
 
@@ -1865,15 +1830,12 @@ def test_pr_review_evidence_requires_governance_gate_wrapper_command() -> None:
 - 阻断问题: 无
 - 关键证据:
   - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358
-  - `scripts.research.governance gate`
 """
 
     report = validate_pr_body(body)
 
     assert not report.ok
-    assert (
-        "review evidence must include governance gate wrapper command" in report.errors
-    )
+    assert "review evidence must include governance gate command" in report.errors
 
 
 def test_low_risk_pr_body_requires_cross_review_and_dispatch_evidence() -> None:
@@ -2139,7 +2101,7 @@ def test_low_risk_pr_body_accepts_reviewer_names_without_fixed_phrase() -> None:
 
 ## 已运行检查
 
-- governance gate: `.githooks/run-python.sh -m scripts.research.governance gate`
+- governance gate: `.venv/bin/python -m scripts.research.governance gate`
 
 ## P2 保留项
 
@@ -2248,7 +2210,7 @@ def test_pr_body_partial_ai_review_mode_accepts_user_authorization() -> None:
 
 ## 已运行检查
 
-- governance gate: `.githooks/run-python.sh -m scripts.research.governance gate`
+- governance gate: `.venv/bin/python -m scripts.research.governance gate`
 
 ## P2 保留项
 
@@ -2478,10 +2440,7 @@ def test_low_risk_pr_body_requires_local_governance_gate_command() -> None:
     report = validate_pr_body(body, comments=[])
 
     assert not report.ok
-    assert (
-        "local check evidence must include governance gate wrapper command"
-        in report.errors
-    )
+    assert "local check evidence must include governance gate command" in report.errors
 
 
 def test_low_risk_pr_body_accepts_chinese_p2_fields() -> None:
@@ -2498,7 +2457,7 @@ def test_low_risk_pr_body_accepts_chinese_p2_fields() -> None:
 
 ## 已运行检查
 
-- governance gate: `.githooks/run-python.sh -m scripts.research.governance gate`
+- governance gate: `.venv/bin/python -m scripts.research.governance gate`
 
 ## P2 保留项
 
@@ -2577,7 +2536,7 @@ def test_low_risk_pr_body_accepts_dispatched_detail_with_no_undispatched_items()
 
 ## 已运行检查
 
-- governance gate: `.githooks/run-python.sh -m scripts.research.governance gate`
+- governance gate: `.venv/bin/python -m scripts.research.governance gate`
 
 ## P2 保留项
 
@@ -2696,7 +2655,7 @@ def test_high_risk_pr_body_requires_codex_review() -> None:
 - 阻断问题: 未确认
 - 关键证据:
   - Codex review 链接：https://github.com/example/repo/pull/1#pullrequestreview-1
-  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate`
+  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`
 """
 
     report = validate_pr_body(body, comments=[])
@@ -2728,7 +2687,7 @@ def _official_codex_skip_body(*, authorization: str | None = None) -> str:
 
 ## 已运行检查
 
-- governance gate: `.githooks/run-python.sh -m scripts.research.governance gate`
+- governance gate: `.venv/bin/python -m scripts.research.governance gate`
 
 ## P2 保留项
 
@@ -2753,12 +2712,36 @@ def _low_risk_no_official_review_body() -> str:
 
 ## 已运行检查
 
-- governance gate: `.githooks/run-python.sh -m scripts.research.governance gate`
+- governance gate: `.venv/bin/python -m scripts.research.governance gate`
 
 ## P2 保留项
 
 - 无
 """
+
+
+def test_low_risk_pr_body_rejects_bare_governance_gate_module() -> None:
+    body = _low_risk_no_official_review_body().replace(
+        "`.venv/bin/python -m scripts.research.governance gate`",
+        "`scripts.research.governance gate`",
+    )
+
+    report = validate_pr_body(body, comments=[])
+
+    assert not report.ok
+    assert "local check evidence must include governance gate command" in report.errors
+
+
+def test_codex_review_evidence_rejects_bare_governance_gate_module() -> None:
+    body = _valid_codex_review_body().replace(
+        "`.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
+        "`scripts.research.governance gate`",
+    )
+
+    report = validate_pr_body(body)
+
+    assert not report.ok
+    assert "review evidence must include governance gate command" in report.errors
 
 
 def test_high_risk_pr_body_can_skip_codex_review_with_user_authorization() -> None:
@@ -3376,7 +3359,7 @@ def test_pr_review_evidence_rejects_unexecuted_codex_conclusion() -> None:
                 "- 阻断问题: 未确认",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-                "  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
             ]
         )
     )
@@ -3396,7 +3379,7 @@ def test_pr_review_evidence_rejects_placeholder_codex_review_link() -> None:
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：",
-                "  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
             ]
         )
     )
@@ -3419,7 +3402,7 @@ def test_pr_review_evidence_rejects_other_pr_review_link() -> None:
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/4#pullrequestreview-4314779358",
-                "  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
@@ -3443,7 +3426,7 @@ def test_pr_review_evidence_rejects_discussion_link_as_review() -> None:
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#discussion_r3262925410",
-                "  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
@@ -3467,7 +3450,7 @@ def test_pr_review_evidence_rejects_missing_required_trigger_comment() -> None:
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-                "  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
@@ -3561,7 +3544,7 @@ def test_pr_review_evidence_rejects_review_from_old_head() -> None:
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-                "  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
@@ -4105,7 +4088,7 @@ def test_pr_review_evidence_rejects_codex_review_with_blocking_body_finding() ->
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-                "  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
@@ -4140,7 +4123,7 @@ def test_pr_review_evidence_rejects_codex_review_with_blocking_inline_finding() 
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-                "  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
@@ -4180,7 +4163,7 @@ def test_pr_review_evidence_rejects_review_before_required_trigger_comment() -> 
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-                "  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
@@ -4257,7 +4240,7 @@ def test_pr_review_evidence_rejects_trigger_before_current_head() -> None:
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-                "  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
@@ -4300,7 +4283,7 @@ def test_pr_review_evidence_uses_comment_updated_at_for_trigger_time() -> None:
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-                "  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
@@ -4344,7 +4327,7 @@ def test_pr_review_evidence_rejects_any_current_head_blocking_codex_review() -> 
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-                "  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\run-python.ps1 -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
