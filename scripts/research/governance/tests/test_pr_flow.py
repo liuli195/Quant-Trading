@@ -223,6 +223,110 @@ class RecordingRunner:
         return pr_flow.CommandResult(0, "", "")
 
 
+class DuplicateRequiredChecksRunner:
+    def __init__(self, checks: list[dict[str, str]] | None = None) -> None:
+        self.calls: list[list[str]] = []
+        self.checks = checks or [
+            {
+                "name": "pr-review-evidence",
+                "state": "SUCCESS",
+                "bucket": "pass",
+                "workflow": "Research Governance",
+                "link": "https://github.com/o/r/actions/runs/20/job/200",
+            },
+            {
+                "name": "pr-review-evidence",
+                "state": "FAILURE",
+                "bucket": "fail",
+                "workflow": "Research Governance",
+                "link": "https://github.com/o/r/actions/runs/10/job/100",
+            },
+            {
+                "name": "Codex Review Monitor",
+                "state": "SUCCESS",
+                "bucket": "pass",
+                "workflow": "",
+                "link": "https://github.com/o/r/pull/7#issuecomment-1",
+            },
+        ]
+
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        self.calls.append(command)
+        if command == [
+            "gh",
+            "pr",
+            "checks",
+            "7",
+            "--required",
+            "--watch",
+            "--interval",
+            "10",
+        ]:
+            return pr_flow.CommandResult(1, "", "")
+        if command == [
+            "gh",
+            "pr",
+            "checks",
+            "7",
+            "--required",
+            "--json",
+            "name,state,bucket,link,workflow",
+        ]:
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(self.checks),
+                "",
+            )
+        raise AssertionError(f"unexpected command: {command}")
+
+
+def test_wait_uses_latest_duplicate_required_check_result(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = DuplicateRequiredChecksRunner()
+
+    code = pr_flow.wait(repo_root=tmp_path, pr="7", runner=runner)
+
+    assert code == 0
+    assert "required checks passed" in capsys.readouterr().out
+
+
+def test_wait_blocks_latest_duplicate_required_check_failure(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = DuplicateRequiredChecksRunner(
+        [
+            {
+                "name": "pr-review-evidence",
+                "state": "FAILURE",
+                "bucket": "fail",
+                "workflow": "Research Governance",
+                "link": "https://github.com/o/r/actions/runs/20/job/200",
+            },
+            {
+                "name": "pr-review-evidence",
+                "state": "SUCCESS",
+                "bucket": "pass",
+                "workflow": "Research Governance",
+                "link": "https://github.com/o/r/actions/runs/10/job/100",
+            },
+        ]
+    )
+
+    code = pr_flow.wait(repo_root=tmp_path, pr="7", runner=runner)
+
+    assert code == 1
+    assert "Research Governance / pr-review-evidence" in capsys.readouterr().out
+
+
 def test_select_local_checks_for_changed_files() -> None:
     cases = [
         (["docs/guides/a.md"], ["governance-full"]),

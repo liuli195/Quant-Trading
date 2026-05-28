@@ -36,6 +36,8 @@ CODEX_NO_MAJOR_ISSUES_PATTERN = re.compile(
     re.IGNORECASE,
 )
 BLOCKING_CODEX_FINDING_PATTERN = re.compile(r"\bP[01]\b|P[01]\s*Badge")
+ACTIONS_CHECK_URL_PATTERN = re.compile(r"/actions/runs/(?P<run_id>\d+)/job/(?P<job_id>\d+)")
+CHECKS_JSON_FIELDS = "name,state,bucket,link,workflow"
 
 
 @dataclass(frozen=True)
@@ -325,6 +327,26 @@ def wait(
     )
     if watched.returncode == 0:
         print(watched.stdout, end="")
+        return 0
+    json_summary = runner.run(
+        ["gh", "pr", "checks", pr_ref, "--required", "--json", CHECKS_JSON_FIELDS],
+        cwd=root,
+    )
+    latest_results = _latest_required_check_results(json_summary.stdout)
+    if json_summary.returncode == 0 and latest_results is not None:
+        failing = _failing_json_check_names(latest_results)
+        pending = _pending_json_check_names(latest_results)
+        if failing:
+            print("failing required checks:")
+            for name in failing:
+                print(f"- {name}")
+            return watched.returncode
+        if pending:
+            print("pending required checks:")
+            for name in pending:
+                print(f"- {name}")
+            return watched.returncode
+        print("required checks passed")
         return 0
     summary = runner.run(["gh", "pr", "checks", pr_ref, "--required"], cwd=root)
     failing = _failing_check_names(summary.stdout)
@@ -860,6 +882,82 @@ def _failing_check_names(output: str) -> list[str]:
             name = line.split("\t", 1)[0].strip()
             failing.append(name or line.strip())
     return failing
+
+
+def _latest_required_check_results(output: str) -> list[dict[str, Any]] | None:
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, list):
+        return None
+    latest: dict[tuple[str, str], tuple[tuple[int, int, int, int], dict[str, Any]]] = {}
+    order: list[tuple[str, str]] = []
+    for index, check in enumerate(payload):
+        if not isinstance(check, dict):
+            continue
+        name = _single_line_text(check.get("name"))
+        if not name:
+            continue
+        workflow = _single_line_text(check.get("workflow"))
+        key = (workflow, name)
+        rank = _required_check_rank(check, index)
+        current = latest.get(key)
+        if current is None:
+            order.append(key)
+            latest[key] = (rank, check)
+        elif rank > current[0]:
+            latest[key] = (rank, check)
+    return [latest[key][1] for key in order]
+
+
+def _required_check_rank(check: dict[str, Any], index: int) -> tuple[int, int, int, int]:
+    link = str(check.get("link") or "")
+    match = ACTIONS_CHECK_URL_PATTERN.search(link)
+    if match:
+        return (1, int(match.group("run_id")), int(match.group("job_id")), -index)
+    return (0, 0, 0, -index)
+
+
+def _failing_json_check_names(checks: Sequence[dict[str, Any]]) -> list[str]:
+    return [
+        _json_check_display_name(check)
+        for check in checks
+        if _json_check_failed(check)
+    ]
+
+
+def _pending_json_check_names(checks: Sequence[dict[str, Any]]) -> list[str]:
+    return [
+        _json_check_display_name(check)
+        for check in checks
+        if not _json_check_passed(check) and not _json_check_failed(check)
+    ]
+
+
+def _json_check_display_name(check: dict[str, Any]) -> str:
+    name = _single_line_text(check.get("name"))
+    workflow = _single_line_text(check.get("workflow"))
+    return f"{workflow} / {name}" if workflow else name
+
+
+def _json_check_failed(check: dict[str, Any]) -> bool:
+    bucket = _single_line_text(check.get("bucket")).casefold()
+    state = _single_line_text(check.get("state")).casefold()
+    return bucket == "fail" or state in {
+        "action_required",
+        "cancelled",
+        "error",
+        "failure",
+        "startup_failure",
+        "timed_out",
+    }
+
+
+def _json_check_passed(check: dict[str, Any]) -> bool:
+    bucket = _single_line_text(check.get("bucket")).casefold()
+    state = _single_line_text(check.get("state")).casefold()
+    return bucket in {"pass", "skipping"} or state in {"neutral", "skipped", "success"}
 
 
 def _command_stdout(result: CommandResult) -> str:
