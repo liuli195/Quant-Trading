@@ -94,7 +94,7 @@ EXCEPTION_REQUIRED      # auth、网络、CI 失败、head 变化、超时等异
 - Modify: `scripts/research/governance/pr_flow.py`
 - Test: `scripts/research/governance/tests/test_pr_flow.py`
 
-- [ ] **Step 1: 写失败测试：缺本地 review evidence 时停止为任务分发**
+- [x] **Step 1: 写失败测试：缺本地 review evidence 时停止为任务分发**
 
 新增测试：
 
@@ -127,7 +127,7 @@ def test_ready_stops_with_dispatch_required_when_review_evidence_missing(
 
 预期：失败，因为当前没有 `DISPATCH_REQUIRED_EXIT_CODE` 和显式状态输出。
 
-- [ ] **Step 2: 实现状态常量**
+- [x] **Step 2: 实现状态常量**
 
 在 `pr_flow.py` 顶部常量区加入：
 
@@ -149,7 +149,7 @@ def _print_state(state: str, message: str, *, details: Sequence[str] = ()) -> No
         print(f"- {detail}", file=sys.stderr)
 ```
 
-- [ ] **Step 3: 缺 evidence 时不进入 sync / wait**
+- [x] **Step 3: 缺 evidence 时不进入 sync / wait**
 
 在 `ready()` 读取 `.local/ai-review/latest.json` 后增加：
 
@@ -169,7 +169,7 @@ if payload is None:
 
 规则理由：仓库要求本地 AI review 和两个独立 reviewer，`pr_flow` 不能伪造。
 
-- [ ] **Step 4: 跑测试**
+- [x] **Step 4: 跑测试**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest scripts\research\governance\tests\test_pr_flow.py::test_ready_stops_with_dispatch_required_when_review_evidence_missing -q
@@ -183,7 +183,7 @@ if payload is None:
 - Modify: `scripts/research/governance/pr_flow.py`
 - Test: `scripts/research/governance/tests/test_pr_flow.py`
 
-- [ ] **Step 1: 写失败测试：触发 Codex 后自动写入当前 head 通过证据**
+- [x] **Step 1: 写失败测试：触发 Codex 后自动写入当前 head 通过证据**
 
 新增测试：
 
@@ -227,7 +227,7 @@ def test_ready_auto_records_current_head_codex_completion_comment(
 
 预期：失败，直到 `ready()` 能自动写证据并重新同步 PR body。
 
-- [ ] **Step 2: 实现 current-head Codex evidence 查找**
+- [x] **Step 2: 实现 current-head Codex evidence 查找**
 
 在 `pr_flow.py` 保留当前 head 校验，逻辑必须同时满足：
 - comment/review 来自 `chatgpt-codex-connector` 或 bot。
@@ -262,7 +262,7 @@ def _current_head_codex_review_evidence(
     )
 ```
 
-- [ ] **Step 3: 自动写入 evidence**
+- [x] **Step 3: 自动写入 evidence**
 
 实现：
 
@@ -288,7 +288,7 @@ def _payload_with_official_codex_review_evidence(
 
 注意：这里记录真实 evidence，不替代本地 AI review。
 
-- [ ] **Step 4: 自动重渲染 PR body**
+- [x] **Step 4: 自动重渲染 PR body**
 
 在写入 `.local/ai-review/latest.json` 后调用现有 `sync()`：
 
@@ -304,7 +304,7 @@ if code != 0:
 - `ai_review_gate pr-body`
 - `gh pr edit --body-file`
 
-- [ ] **Step 5: 跑测试**
+- [x] **Step 5: 跑测试**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest scripts\research\governance\tests\test_pr_flow.py::test_ready_auto_records_current_head_codex_completion_comment -q
@@ -318,7 +318,7 @@ if code != 0:
 - Modify: `scripts/research/governance/pr_flow.py`
 - Test: `scripts/research/governance/tests/test_pr_flow.py`
 
-- [ ] **Step 1: 写失败测试：Codex P1 不自动推进**
+- [x] **Step 1: 写失败测试：Codex P1 不自动推进**
 
 新增测试：
 
@@ -359,7 +359,7 @@ def test_ready_stops_when_codex_reports_blocking_finding(
     assert "REPLY_OR_FIX_REQUIRED" in capsys.readouterr().err
 ```
 
-- [ ] **Step 2: 实现阻断分类**
+- [x] **Step 2: 实现阻断分类**
 
 新增：
 
@@ -397,7 +397,7 @@ def _current_head_codex_blocking_findings(
 https://github.com/liuli195/Quant-Trading/pull/19#issuecomment-100 P1 Badge: required check can be bypassed.
 ```
 
-- [ ] **Step 3: `ready()` 在发现阻断项时停止**
+- [x] **Step 3: `ready()` 在发现阻断项时停止**
 
 在等待 Codex 通过证据前先检查阻断项：
 
@@ -417,7 +417,7 @@ if blocking:
     return REPLY_OR_FIX_REQUIRED_EXIT_CODE
 ```
 
-- [ ] **Step 4: 跑测试**
+- [x] **Step 4: 跑测试**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest scripts\research\governance\tests\test_pr_flow.py::test_ready_stops_when_codex_reports_blocking_finding -q
@@ -431,7 +431,7 @@ if blocking:
 - Modify: `scripts/research/governance/pr_flow.py`
 - Test: `scripts/research/governance/tests/test_pr_flow.py`
 
-- [ ] **Step 1: 写测试：同名旧失败、新成功时通过**
+- [x] **Step 1: 写测试：同名旧失败、新成功时通过**
 
 ```python
 def test_wait_uses_latest_duplicate_required_check_result(
@@ -446,7 +446,7 @@ def test_wait_uses_latest_duplicate_required_check_result(
     assert "required checks passed" in capsys.readouterr().out
 ```
 
-- [ ] **Step 2: 写测试：同名旧成功、新失败时阻断**
+- [x] **Step 2: 写测试：同名旧成功、新失败时阻断**
 
 ```python
 def test_wait_blocks_latest_duplicate_required_check_failure(
@@ -478,7 +478,7 @@ def test_wait_blocks_latest_duplicate_required_check_failure(
     assert "Research Governance / pr-review-evidence" in capsys.readouterr().err
 ```
 
-- [ ] **Step 3: 实现 JSON 去重**
+- [x] **Step 3: 实现 JSON 去重**
 
 使用：
 
@@ -489,7 +489,7 @@ ACTIONS_CHECK_URL_PATTERN = re.compile(r"/actions/runs/(?P<run_id>\d+)/job/(?P<j
 
 按 `(workflow, name)` 分组，优先取最大 `run_id/job_id`。非 Actions check 使用返回顺序作为低优先级。
 
-- [ ] **Step 4: 失败时输出异常状态**
+- [x] **Step 4: 失败时输出异常状态**
 
 将纯文本：
 
@@ -510,7 +510,7 @@ EXCEPTION_REQUIRED: failing required checks
 required checks passed
 ```
 
-- [ ] **Step 5: 跑测试**
+- [x] **Step 5: 跑测试**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest scripts\research\governance\tests\test_pr_flow.py -q
@@ -524,7 +524,7 @@ required checks passed
 - Modify: `scripts/research/governance/pr_flow.py`
 - Test: `scripts/research/governance/tests/test_pr_flow.py`
 
-- [ ] **Step 1: 写失败测试：等待期间 PR head 变化**
+- [x] **Step 1: 写失败测试：等待期间 PR head 变化**
 
 ```python
 def test_ready_stops_when_pr_head_changes_during_codex_wait(
@@ -554,7 +554,7 @@ def test_ready_stops_when_pr_head_changes_during_codex_wait(
     assert "head changed" in capsys.readouterr().err
 ```
 
-- [ ] **Step 2: 每轮轮询校验 head**
+- [x] **Step 2: 每轮轮询校验 head**
 
 在 `_wait_for_current_head_codex_review_evidence()` 每轮读取 PR metadata：
 
@@ -570,7 +570,7 @@ if current_head and current_head != head_sha:
     return None
 ```
 
-- [ ] **Step 3: 超时保持可续跑**
+- [x] **Step 3: 超时保持可续跑**
 
 超时返回：
 
@@ -581,7 +581,7 @@ EXCEPTION_REQUIRED: official Codex review still pending
 
 退出码使用 `CODEX_REVIEW_PENDING_EXIT_CODE` 或 `EXCEPTION_REQUIRED_EXIT_CODE` 二选一。推荐保留 `CODEX_REVIEW_PENDING_EXIT_CODE` 兼容现有流程，但输出状态名。
 
-- [ ] **Step 4: 跑测试**
+- [x] **Step 4: 跑测试**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest scripts\research\governance\tests\test_pr_flow.py -q
@@ -596,7 +596,7 @@ EXCEPTION_REQUIRED: official Codex review still pending
 - Modify: `docs/rules/review-guidelines.md`
 - Modify: `docs/rules/governance.md`
 
-- [ ] **Step 1: 更新 `docs/rules/pr-workflow.md`**
+- [x] **Step 1: 更新 `docs/rules/pr-workflow.md`**
 
 加入精简描述：
 
@@ -606,7 +606,7 @@ EXCEPTION_REQUIRED: official Codex review still pending
 - 只有异常处理、任务分发、问题回复三类情况需要人工或 agents 介入。
 ```
 
-- [ ] **Step 2: 更新 `docs/rules/review-guidelines.md`**
+- [x] **Step 2: 更新 `docs/rules/review-guidelines.md`**
 
 加入：
 
@@ -615,7 +615,7 @@ EXCEPTION_REQUIRED: official Codex review still pending
 - 自动写入不等于跳过 review；证据必须来自当前 PR、当前 head、当前 trigger 之后的 Codex 结果。
 ```
 
-- [ ] **Step 3: 更新 `docs/rules/governance.md`**
+- [x] **Step 3: 更新 `docs/rules/governance.md`**
 
 加入：
 
@@ -623,7 +623,7 @@ EXCEPTION_REQUIRED: official Codex review still pending
 - `Codex Review Monitor` success 可作为 `pr_flow` 自动采集官方 Codex 通过证据的信号之一，但不能替代 PR body 的 `Codex Code Review 结论`。
 ```
 
-- [ ] **Step 4: 跑 pathref / governance**
+- [x] **Step 4: 跑 pathref / governance**
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance gate
@@ -642,7 +642,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.p
 **Files:**
 - Modify: none
 
-- [ ] **Step 1: 跑治理测试**
+- [x] **Step 1: 跑治理测试**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest scripts\research\governance\tests\test_pr_flow.py scripts\research\governance\tests\test_ai_review_gate.py -q
@@ -650,7 +650,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.p
 
 预期：全部通过。
 
-- [ ] **Step 2: 跑静态检查**
+- [x] **Step 2: 跑静态检查**
 
 ```powershell
 .\.venv\Scripts\python.exe -m py_compile scripts\research\governance\pr_flow.py
@@ -665,7 +665,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.p
 - `mypy` 输出 `Success: no issues found`。
 - `bandit` 退出 0。
 
-- [ ] **Step 3: 跑完整治理门禁**
+- [x] **Step 3: 跑完整治理门禁**
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.ps1 -m scripts.research.governance gate
@@ -679,7 +679,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\run-python.p
 }
 ```
 
-- [ ] **Step 4: 真实 PR dry run**
+- [x] **Step 4: 真实 PR dry run**
 
 在一个已有 PR 分支上运行：
 

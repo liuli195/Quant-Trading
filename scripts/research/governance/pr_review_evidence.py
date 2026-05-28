@@ -282,7 +282,9 @@ def _official_codex_required(
     )
     errors.extend(_p2_section_errors(body))
     if not _has_governance_gate_wrapper_command(body):
-        errors.append("local check evidence must include governance gate wrapper command")
+        errors.append(
+            "local check evidence must include governance gate wrapper command"
+        )
     if blockers != "无":
         errors.append("P0/P1 未关闭项 must be 无")
     high_risk_files = _high_risk_changed_files(changed_files)

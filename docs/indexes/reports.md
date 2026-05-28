@@ -51,6 +51,7 @@
 | docs |  | PR 风险分级评审流程 Implementation Plan | `docs/superpowers/plans/2026-05-20-pr-risk-tiered-review-workflow.md` | 1 |
 | docs |  | ETF Vol Relief A/B Test Implementation Plan | `docs/superpowers/plans/2026-05-26-etf-vol-relief-ab-test.md` | 3 |
 | docs |  | PR Flow Automation Implementation Plan | `docs/superpowers/plans/2026-05-28-pr-flow-automation.md` | 0 |
+| docs |  | PR Flow Handsfree Automation Implementation Plan | `docs/superpowers/plans/2026-05-28-pr-flow-handsfree-automation.md` | 0 |
 | docs |  | 飞书交易通知工具设计 | `docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md` | 2 |
 | backtest_run | etf_dynamic_rebalance | 回测归因分析 — ETF 动态调仓策略 | `strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/attribution-analysis.md` | 0 |
 | backtest_run | etf_dynamic_rebalance | 回测报告 — ETF 动态调仓策略 | `strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/backtest_report.md` | 3 |
