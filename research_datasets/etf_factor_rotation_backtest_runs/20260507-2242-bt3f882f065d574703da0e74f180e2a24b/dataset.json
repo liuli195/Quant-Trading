@@ -6,7 +6,7 @@
   "created_at": "2026-05-28T08:05:31+00:00",
   "owner": "research-platform",
   "created_by": "research-platform",
-  "lifecycle": "active",
+  "lifecycle": "archived",
   "source": {
     "kind": "joinquant_backtest_run",
     "path": "strategies/etf_factor_rotation/backtest_runs/20260507-2242-bt3f882f065d574703da0e74f180e2a24b"
@@ -25,6 +25,9 @@
   "partial": true,
   "missing_required_files": [
     "tabs_raw/audit_log.jsonl"
+  ],
+  "quality_notes": [
+    "Historical partial snapshot: source run did not contain tabs_raw/audit_log.jsonl; audit events are unavailable."
   ],
   "summary_metrics": {
     "策略收益": "4.59%",
@@ -69,7 +72,7 @@
     "research_export_path": "",
     "research_downloaded": false,
     "research_fetch_failed": true,
-    "research_fetch_error": "JoinQuant research script execution failed: No Jupyter API base found. /: not a Jupyter kernelspecs response: {\"code\":4,\"msg\":\"缺失必要的通用参数\"}; /hub/user/59895147282/: Unexpected token '<', \"\n\n\n<!DOCTYPE \"... is not valid JSON",
+    "research_fetch_error": "JoinQuant research script execution failed: No Jupyter API base found. /: not a Jupyter kernelspecs response: {\"code\":4,\"msg\":\"缺失必要的通用参数\"}; /hub/user/<redacted>/: Unexpected token '<', \"\n\n\n<!DOCTYPE \"... is not valid JSON",
     "detail_api_used": true,
     "id_mismatch": true
   },

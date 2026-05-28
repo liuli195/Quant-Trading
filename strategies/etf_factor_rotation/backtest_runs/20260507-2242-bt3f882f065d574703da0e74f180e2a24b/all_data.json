@@ -22,7 +22,7 @@
   "fallback_extraction_method": "joinquant_detail_readonly_api",
   "research_downloaded": false,
   "research_fetch_failed": true,
-  "research_fetch_error": "JoinQuant research script execution failed: No Jupyter API base found. /: not a Jupyter kernelspecs response: {\"code\":4,\"msg\":\"缺失必要的通用参数\"}; /hub/user/59895147282/: Unexpected token '<', \"\n\n\n<!DOCTYPE \"... is not valid JSON",
+  "research_fetch_error": "JoinQuant research script execution failed: No Jupyter API base found. /: not a Jupyter kernelspecs response: {\"code\":4,\"msg\":\"缺失必要的通用参数\"}; /hub/user/<redacted>/: Unexpected token '<', \"\n\n\n<!DOCTYPE \"... is not valid JSON",
   "detail_api_used": true,
   "tabs": {
     "transactioninfo": {

@@ -6,7 +6,7 @@
   "created_at": "2026-05-28T08:05:33+00:00",
   "owner": "research-platform",
   "created_by": "research-platform",
-  "lifecycle": "active",
+  "lifecycle": "archived",
   "source": {
     "kind": "joinquant_backtest_run",
     "path": "strategies/etf_factor_rotation/backtest_runs/20260507-2307-bt199f841dc26f34045a3391110073b7b2"
@@ -25,6 +25,9 @@
   "partial": true,
   "missing_required_files": [
     "tabs_raw/audit_log.jsonl"
+  ],
+  "quality_notes": [
+    "Historical partial snapshot: source run did not contain tabs_raw/audit_log.jsonl; audit events are unavailable."
   ],
   "summary_metrics": {
     "策略收益": "70.15%",

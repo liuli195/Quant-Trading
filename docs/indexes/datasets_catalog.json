@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-28T08:06:06+00:00",
+  "generated_at": "2026-05-28T08:26:04+00:00",
   "count": 104,
   "datasets": [
     {
@@ -690,7 +690,7 @@
       ],
       "source_kind": "joinquant_backtest_run",
       "owner": "research-platform",
-      "lifecycle": "active"
+      "lifecycle": "archived"
     },
     {
       "dataset_id": "etf_factor_rotation_backtest_runs",
@@ -703,7 +703,7 @@
       ],
       "source_kind": "joinquant_backtest_run",
       "owner": "research-platform",
-      "lifecycle": "active"
+      "lifecycle": "archived"
     },
     {
       "dataset_id": "etf_factor_rotation_backtest_runs",
@@ -716,7 +716,7 @@
       ],
       "source_kind": "joinquant_backtest_run",
       "owner": "research-platform",
-      "lifecycle": "active"
+      "lifecycle": "archived"
     },
     {
       "dataset_id": "etf_factor_rotation_backtest_runs",
@@ -729,7 +729,7 @@
       ],
       "source_kind": "joinquant_backtest_run",
       "owner": "research-platform",
-      "lifecycle": "active"
+      "lifecycle": "archived"
     },
     {
       "dataset_id": "etf_factor_rotation_backtest_runs",

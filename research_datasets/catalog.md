@@ -54,10 +54,10 @@
 | etf_factor_rotation_backtest_runs | 20260507-0621-bt56a49a22c9649620597d2b1c7223a8ee | joinquant_backtest_run | research-platform | active | 1485 | 2021-01-04 ~ 2026-04-30 |
 | etf_factor_rotation_backtest_runs | 20260507-0623-bt0ca77eab09b91548696834a6618c2118 | joinquant_backtest_run | research-platform | active | 1485 | 2021-01-04 ~ 2026-04-30 |
 | etf_factor_rotation_backtest_runs | 20260507-0625-bt69dc0ff8b24797f86790f58edd568ace | joinquant_backtest_run | research-platform | active | 1485 | 2021-01-04 ~ 2026-04-30 |
-| etf_factor_rotation_backtest_runs | 20260507-2242-bt3f882f065d574703da0e74f180e2a24b | joinquant_backtest_run | research-platform | active | 21 | 2026-04-01 ~ 2026-04-30 |
-| etf_factor_rotation_backtest_runs | 20260507-2247-bt3f882f065d574703da0e74f180e2a24b | joinquant_backtest_run | research-platform | active | 21 | 2026-04-01 ~ 2026-04-30 |
-| etf_factor_rotation_backtest_runs | 20260507-2307-bt199f841dc26f34045a3391110073b7b2 | joinquant_backtest_run | research-platform | active | 1289 | 2021-01-04 ~ 2026-04-30 |
-| etf_factor_rotation_backtest_runs | 20260507-2310-btfe11e835821438464da31fd4f4d995e1 | joinquant_backtest_run | research-platform | active | 1289 | 2021-01-04 ~ 2026-04-30 |
+| etf_factor_rotation_backtest_runs | 20260507-2242-bt3f882f065d574703da0e74f180e2a24b | joinquant_backtest_run | research-platform | archived | 21 | 2026-04-01 ~ 2026-04-30 |
+| etf_factor_rotation_backtest_runs | 20260507-2247-bt3f882f065d574703da0e74f180e2a24b | joinquant_backtest_run | research-platform | archived | 21 | 2026-04-01 ~ 2026-04-30 |
+| etf_factor_rotation_backtest_runs | 20260507-2307-bt199f841dc26f34045a3391110073b7b2 | joinquant_backtest_run | research-platform | archived | 1289 | 2021-01-04 ~ 2026-04-30 |
+| etf_factor_rotation_backtest_runs | 20260507-2310-btfe11e835821438464da31fd4f4d995e1 | joinquant_backtest_run | research-platform | archived | 1289 | 2021-01-04 ~ 2026-04-30 |
 | etf_factor_rotation_backtest_runs | 20260507-cloud-acceptance-auto-fallback | joinquant_backtest_run | research-platform | active | 22 | 2026-03-02 ~ 2026-03-31 |
 | etf_factor_rotation_backtest_runs | 20260507-cloud-acceptance-auto-long | joinquant_backtest_run | research-platform | active | 1289 | 2021-01-04 ~ 2026-04-30 |
 | etf_factor_rotation_backtest_runs | 20260507-cloud-acceptance-research-short | joinquant_backtest_run | research-platform | active | 22 | 2026-03-02 ~ 2026-03-31 |
