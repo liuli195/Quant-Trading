@@ -16,11 +16,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", default=".")
     parser.add_argument("--skip-cli-help", action="store_true")
-    parser.add_argument(
-        "--fast",
-        action="store_true",
-        help="run governance audit only; skip CLI help and pathref checks",
-    )
     return parser
 
 
@@ -77,8 +72,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     report = run_gate(
         args.repo_root,
-        check_cli_help=not (args.skip_cli_help or args.fast),
-        check_pathrefs=not args.fast,
+        check_cli_help=not args.skip_cli_help,
     )
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0 if report["ok"] else 1

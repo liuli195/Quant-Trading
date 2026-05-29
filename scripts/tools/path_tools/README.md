@@ -39,7 +39,11 @@ Check pathrefs:
 
 ```bash
 python -m scripts.tools.path_tools.refactor check
+python -m scripts.tools.path_tools.refactor check --files docs/rules/commands.md
 ```
+
+Use `check --files <paths...>` for daily incremental Markdown checks. Full
+repository pathref validation remains the no-argument `check` command.
 
 Rewrite Markdown links from pathrefs:
 

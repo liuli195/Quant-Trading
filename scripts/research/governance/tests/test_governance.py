@@ -4,6 +4,7 @@ from collections.abc import Mapping, Sequence
 import json
 from pathlib import Path
 
+import pytest
 import yaml
 
 from scripts.research.governance.branch_protection import (
@@ -31,6 +32,7 @@ from scripts.research.governance.pr_review_evidence import (
 )
 from scripts.research.governance.rules import run_audit
 from scripts.research.registry import default_tool_registry
+from scripts.tools.path_tools import refactor as path_refactor
 from scripts.tools.path_tools.refactor import should_skip
 
 
@@ -53,6 +55,62 @@ SKILL_DISCOVERY_CASES = (
 
 def test_pathref_scanner_skips_local_workspace_artifacts() -> None:
     assert should_skip(Path(".local/pytest-governance-tmp/example.md"))
+
+
+def test_pathref_scoped_check_only_scans_requested_markdown_files(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "path_aliases.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "owner": "test",
+                "lifecycle": "active",
+                "roots": {"repo": "."},
+                "aliases": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "target.md").write_text("# Target\n", encoding="utf-8")
+    (docs / "included.md").write_text(
+        "[Target](target.md) <!-- pathref: repo/docs/target.md -->\n",
+        encoding="utf-8",
+    )
+    (docs / "unscanned.md").write_text(
+        "[Missing](missing.md) <!-- pathref: repo/docs/missing.md -->\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert path_refactor.check_markdown_pathrefs(files=[docs / "included.md"]) == 0
+    assert path_refactor.check_markdown_pathrefs(files=[docs / "unscanned.md"]) == 1
+
+
+def test_pathref_scoped_check_rejects_non_markdown_files(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "path_aliases.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "owner": "test",
+                "lifecycle": "active",
+                "roots": {"repo": "."},
+                "aliases": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    text_file = tmp_path / "notes.txt"
+    text_file.write_text("plain text\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    assert path_refactor.check_markdown_pathrefs(files=[text_file]) == 2
 
 
 SKILL_FIXTURES = (
@@ -128,6 +186,8 @@ SKILL_FIXTURES = (
         ],
         "owned_commands": [
             "make pre-pr",
+            "make verify-fast",
+            "make verify-full",
             "make pr-ready",
             "make ai-review",
             "make risk-check",
@@ -1147,6 +1207,7 @@ def _write_minimal_repo(root: Path) -> None:
         "scripts/research/registry/tests/test_registry.py",
         "scripts/research/governance/tests/test_governance.py",
         "scripts/research/governance/tests/test_pr_flow.py",
+        "scripts/research/governance/tests/test_verify.py",
         "scripts/research/research_core/tests/test_research_core.py",
         "scripts/research/etf_window_research/tests/test_analysis.py",
         "scripts/research/momentum_tilt_research/tests/test_analysis.py",
@@ -1168,7 +1229,7 @@ def _write_minimal_repo(root: Path) -> None:
         "本仓库是基于 Python 的 A 股/场内基金量化策略仓库。\n\n"
         "规则索引见 indexes.md。所有回答和输出使用简体中文，简洁直白。"
         "策略代码仅在聚宽云端运行。"
-        "默认使用项目 `.venv`，不改用系统 Python。"
+        "默认必须提权使用项目 `.venv`，不改用系统 Python。"
         "命令参考 docs/rules/commands.md。"
         "`gh` CLI 默认提权执行。"
         "进入主干须通过 PR；如用户显式授权，可以按直写主干链路直接提交和推送主干；"
@@ -1195,11 +1256,13 @@ def _write_minimal_repo(root: Path) -> None:
         "# 命令和本地环境规则\n\n"
         "## Python Env\n\n"
         "scripts.research.cli scripts.research.datasets scripts.research.variants "
-        "scripts.research.governance scripts.research.governance gate scripts.research.registry "
+        "scripts.research.governance scripts.research.governance gate "
+        "scripts.research.governance verify fast scripts.research.governance verify full "
+        "scripts.research.registry "
         "scripts.tools.path_tools.refactor .\\.githooks\\setup-python.ps1 "
         ".githooks/setup-python.sh "
         ".\\.venv\\Scripts\\python.exe .venv/bin/python PYTHONUTF8 PYTHONIOENCODING "
-        "Python 命令默认走项目 `.venv`，不改用系统 Python "
+        "Python 命令默认必须提权使用项目 `.venv`，不改用系统 Python "
         "gh pr checks `gh` CLI 默认提权执行",
         encoding="utf-8",
     )
@@ -1261,7 +1324,7 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / ".githooks/pre-commit").write_text(
         "pre-commit run --hook-stage pre-commit\n"
-        "sh .githooks/run-python.sh -m scripts.research.governance gate --fast\n",
+        "sh .githooks/run-python.sh -m scripts.research.governance verify fast --staged\n",
         encoding="utf-8",
     )
     (root / "Makefile").write_text(
@@ -1270,7 +1333,9 @@ def _write_minimal_repo(root: Path) -> None:
         "else\n"
         "PYTHON ?= .venv/bin/python\n"
         "endif\n"
-        "pre-pr:\n\t$(PYTHON) -m pre_commit run --all-files\n"
+        "verify-fast:\n\t$(PYTHON) -m scripts.research.governance verify fast --staged\n"
+        "verify-full:\n\t$(PYTHON) -m scripts.research.governance verify full\n"
+        "pre-pr:\n\t$(PYTHON) -m pre_commit run --all-files\n\t$(MAKE) verify-full\n"
         "ai-review:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate validate --report .local/ai-review/latest.json\n"
         "risk-check:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate risk --report .local/ai-review/latest.json\n"
         'pr-ready:\n\t$(PYTHON) -m scripts.research.governance.pr_flow ready --title "$(TITLE)"\n',
@@ -1309,7 +1374,7 @@ def _write_minimal_repo(root: Path) -> None:
         "\n".join(
             [
                 "sh .githooks/run-python.sh -m scripts.research.governance.branch_protection pre-push",
-                "sh .githooks/run-python.sh -m scripts.research.governance gate",
+                "sh .githooks/run-python.sh -m scripts.research.governance verify full",
                 "git lfs pre-push",
             ]
         ),
@@ -1338,12 +1403,7 @@ def _write_minimal_repo(root: Path) -> None:
         "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
         "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
         "steps:\n"
-        "  - run: python -m ruff check scripts strategies\n"
-        "  - run: python -m bandit -q -r scripts strategies\n"
-        "  - run: python -m mypy scripts strategies\n"
-        "  - run: python -m pip_audit\n"
-        "  - run: python -m pytest\n"
-        "  - run: python -m scripts.research.governance gate\n"
+        "  - run: python -m scripts.research.governance verify full\n"
         "  - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
         encoding="utf-8",
     )
@@ -1440,7 +1500,7 @@ def _write_minimal_repo(root: Path) -> None:
                 "AGENTS.md",
                 "docs/rules/review-guidelines.md",
                 "P0/P1",
-                ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate",
+                ".\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full",
                 "Codex Review Monitor",
                 "至少两个独立 reviewer",
                 "子 agent 交叉评审",
@@ -1563,58 +1623,20 @@ def test_governance_audit_passes_minimal_repo_without_expensive_checks(
     assert report.findings == ()
 
 
-def test_governance_main_forwards_fast_gate(monkeypatch, tmp_path: Path) -> None:
-    captured: list[str] = []
+def test_governance_main_rejects_legacy_fast_gate(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit) as exc:
+        governance_main.main(["gate", "--repo-root", str(tmp_path), "--fast"])
 
-    def fake_gate_main(argv: list[str]) -> int:
-        captured.extend(argv)
-        return 0
-
-    monkeypatch.setattr(governance_main, "gate_main", fake_gate_main)
-
-    code = governance_main.main(["gate", "--repo-root", str(tmp_path), "--fast"])
-
-    assert code == 0
-    assert captured == ["--repo-root", str(tmp_path), "--fast"]
+    assert exc.value.code == 2
 
 
-def test_governance_gate_fast_skips_slow_checks_and_fails_on_audit_errors(
-    monkeypatch,
+def test_governance_gate_rejects_legacy_fast_flag(
     tmp_path: Path,
 ) -> None:
-    captured: dict[str, object] = {}
+    with pytest.raises(SystemExit) as exc:
+        governance_gate.main(["--repo-root", str(tmp_path), "--fast"])
 
-    class StubAudit:
-        ok = False
-
-        def to_dict(self) -> dict[str, object]:
-            return {"ok": False, "findings": ["audit error"]}
-
-    def fake_run_audit(
-        root: Path,
-        *,
-        check_cli_help: bool,
-        check_pathrefs: bool,
-    ) -> StubAudit:
-        captured["root"] = root
-        captured["check_cli_help"] = check_cli_help
-        captured["check_pathrefs"] = check_pathrefs
-        return StubAudit()
-
-    def fail_pathref(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("fast gate must not run pathref")
-
-    monkeypatch.setattr(governance_gate, "run_audit", fake_run_audit)
-    monkeypatch.setattr(governance_gate.subprocess, "run", fail_pathref)
-
-    code = governance_gate.main(["--repo-root", str(tmp_path), "--fast"])
-
-    assert code == 1
-    assert captured == {
-        "root": tmp_path.resolve(),
-        "check_cli_help": False,
-        "check_pathrefs": False,
-    }
+    assert exc.value.code == 2
 
 
 def test_governance_audit_flags_pre_commit_without_fast_gate(
@@ -1632,7 +1654,7 @@ def test_governance_audit_flags_pre_commit_without_fast_gate(
     assert not report.ok
     assert any(
         finding.rule_id == "governance_gate"
-        and "pre-commit hook must use fast governance gate" in finding.message
+        and "pre-commit hook must use verify fast --staged" in finding.message
         for finding in report.findings
     )
 
@@ -1657,7 +1679,7 @@ def test_governance_audit_flags_pre_push_with_fast_gate(
     assert not report.ok
     assert any(
         finding.rule_id == "governance_gate"
-        and "pre-push hook must use full governance gate" in finding.message
+        and "pre-push hook must use verify full" in finding.message
         for finding in report.findings
     )
 
@@ -1670,7 +1692,9 @@ def test_local_review_entrypoints_are_tracked(tmp_path: Path) -> None:
         "else\n"
         "PYTHON ?= .venv/bin/python\n"
         "endif\n"
-        "pre-pr:\n\t$(PYTHON) -m pre_commit run --all-files\n"
+        "verify-fast:\n\t$(PYTHON) -m scripts.research.governance verify fast --staged\n"
+        "verify-full:\n\t$(PYTHON) -m scripts.research.governance verify full\n"
+        "pre-pr:\n\t$(PYTHON) -m pre_commit run --all-files\n\t$(MAKE) verify-full\n"
         "ai-review:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate validate --report .local/ai-review/latest.json\n"
         "risk-check:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate risk --report .local/ai-review/latest.json\n"
         'pr-ready:\n\t$(PYTHON) -m scripts.research.governance.pr_flow ready --title "$(TITLE)"\n',
@@ -1689,7 +1713,7 @@ def test_local_review_entrypoints_are_tracked(tmp_path: Path) -> None:
     )
     (tmp_path / ".githooks/pre-commit").write_text(
         "pre-commit run --hook-stage pre-commit\n"
-        "sh .githooks/run-python.sh -m scripts.research.governance gate --fast\n",
+        "sh .githooks/run-python.sh -m scripts.research.governance verify fast --staged\n",
         encoding="utf-8",
     )
 
@@ -1719,11 +1743,36 @@ def test_local_review_entrypoints_require_pr_ready(tmp_path: Path) -> None:
     )
 
 
+def test_local_review_entrypoints_require_verify_targets(tmp_path: Path) -> None:
+    _write_minimal_repo(tmp_path)
+    makefile = tmp_path / "Makefile"
+    makefile.write_text(
+        makefile.read_text(encoding="utf-8").replace("verify-fast", "verify-quick"),
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "local_review"
+        and "Makefile missing verify-fast" in finding.message
+        for finding in report.findings
+    )
+
+
 def test_tool_registry_registers_pr_flow_cli() -> None:
     tool = default_tool_registry().get("research.pr_flow")
 
     assert tool.entry_module == "scripts.research.governance.pr_flow"
     assert "ready" in (tool.cli or "")
+
+
+def test_tool_registry_registers_governance_verify_cli() -> None:
+    tool = default_tool_registry().get("research.governance_verify")
+
+    assert tool.entry_module == "scripts.research.governance"
+    assert "verify" in (tool.cli or "")
 
 
 def test_local_review_entrypoints_reject_wrapper_make_python(
@@ -1987,7 +2036,7 @@ def test_governance_audit_flags_review_evidence_without_label_events(
     )
 
 
-def test_governance_workflow_contains_pr_review_evidence_gate(tmp_path: Path) -> None:
+def test_governance_workflow_uses_single_verify_full_entrypoint(tmp_path: Path) -> None:
     _write_minimal_repo(tmp_path)
     workflow = tmp_path / ".github/workflows/research-governance.yml"
     workflow.write_text(
@@ -2000,12 +2049,7 @@ def test_governance_workflow_contains_pr_review_evidence_gate(tmp_path: Path) ->
         "jobs:\n"
         "  governance:\n"
         "    steps:\n"
-        "      - run: python -m ruff check scripts strategies\n"
-        "      - run: python -m bandit -q -r scripts strategies\n"
-        "      - run: python -m mypy scripts strategies\n"
-        "      - run: python -m pip_audit\n"
-        "      - run: python -m pytest\n"
-        "      - run: python -m scripts.research.governance gate\n"
+        "      - run: python -m scripts.research.governance verify full\n"
         "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
         encoding="utf-8",
     )
@@ -2354,7 +2398,7 @@ def test_governance_audit_flags_pre_push_without_gate(tmp_path) -> None:
     assert not report.ok
     assert any(
         finding.rule_id == "governance_gate"
-        and "pre-push hook missing governance gate" in finding.message
+        and "pre-push hook missing full governance verification" in finding.message
         for finding in report.findings
     )
 
@@ -2464,7 +2508,8 @@ def test_governance_audit_flags_agents_without_python_venv_rule(
     assert not report.ok
     assert any(
         finding.rule_id == "agent_entry_sync"
-        and "默认使用项目 `.venv`，不改用系统 Python" in finding.message
+        and "默认必须提权使用项目 `.venv`，不改用系统 Python"
+        in finding.message
         for finding in report.findings
     )
 

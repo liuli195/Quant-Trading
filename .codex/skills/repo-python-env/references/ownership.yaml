@@ -17,6 +17,7 @@ adapters:
 trigger_phrases:
   - 本地 Python 应该怎么跑
   - 不能用系统 Python
+  - 必须提权使用项目 .venv
   - 项目 .venv
   - PYTHONUTF8
 read_rules:

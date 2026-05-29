@@ -14,7 +14,7 @@ description: 处理本仓库 Python 环境、项目 .venv、PYTHONUTF8、UTF-8�
 
 ## 执行规则
 
-- 默认使用项目 `.venv`，不改用系统 Python。
+- 默认必须提权使用项目 `.venv`，不改用系统 Python。
 - 策略代码只在 JoinQuant 云端运行；本地只做编写、测试、文档和回测分析。
 - 声明环境已配置前，先运行实际命令验证。
 

@@ -1,4 +1,4 @@
-.PHONY: pre-pr ai-review risk-check pr-ready
+.PHONY: verify-fast verify-full pre-pr ai-review risk-check pr-ready
 
 ifeq ($(OS),Windows_NT)
 PYTHON ?= ./.venv/Scripts/python.exe
@@ -12,15 +12,15 @@ PYTEST_PATHS := scripts/research/governance/tests
 BANDIT_SKIP := B310,B404,B603,B607
 MYPY_FLAGS := --explicit-package-bases --follow-imports=skip --ignore-missing-imports
 
+verify-fast:
+	$(PYTHON) -m scripts.research.governance verify fast --staged
+
+verify-full:
+	$(PYTHON) -m scripts.research.governance verify full
+
 pre-pr:
 	$(PRE_COMMIT) run --all-files
-	$(PYTHON) -m ruff check $(PY_CHECK_PATHS)
-	$(PYTHON) -m bandit -q -r $(PY_CHECK_PATHS) -x $(PY_CHECK_PATHS)/tests -s $(BANDIT_SKIP)
-	$(PYTHON) -m mypy $(MYPY_FLAGS) $(PY_CHECK_PATHS)
-	$(PYTHON) -m pip_audit
-	$(PYTHON) -m pytest $(PYTEST_PATHS)
-	$(PYTHON) -m scripts.tools.path_tools.refactor check
-	$(PYTHON) -m scripts.research.governance gate
+	$(MAKE) verify-full
 
 ai-review:
 	$(PYTHON) -m scripts.research.governance.ai_review_gate validate --report $(AI_REVIEW_REPORT)

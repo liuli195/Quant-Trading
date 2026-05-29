@@ -10,6 +10,7 @@
 - Skill 正文只写触发语义、必读规则、推荐命令和验证提醒，不复制 `docs/rules/**` 正文。
 - 同一条规则、命令或脚本只能有一个 owner；跨流程依赖使用 `uses` 表达。
 - 修改 owner Skill 时同步 Claude adapter、`ownership.yaml`、测试和文档索引。
+- Skill 小改的日常检查入口是 `scripts.research.governance verify fast --files <Skill文件>`；它只代表可继续开发，PR 前仍跑完整门禁。
 
 ## 发现
 
@@ -38,6 +39,8 @@
 
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.research.governance.skill_ownership check
+.\.venv\Scripts\python.exe -m scripts.research.governance verify explain --files .codex\skills\repo-python-env\SKILL.md
+.\.venv\Scripts\python.exe -m scripts.research.governance verify full
 .\.venv\Scripts\python.exe -m scripts.research.governance gate
 .\.venv\Scripts\python.exe -m scripts.research.docs index
 ```

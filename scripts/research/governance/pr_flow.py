@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from .affected import plan_checks
 from . import ai_review_gate, pr_review_evidence
 from .codex_review_contract import is_codex_review_request, render_codex_review_request
 
@@ -104,40 +105,25 @@ class Runner(Protocol):
 
 
 def select_local_checks(changed_files: Sequence[str]) -> list[str]:
-    normalized = [_normalize_path(path) for path in changed_files]
+    affected = plan_checks(changed_files)
     selected: list[str] = []
-    needs_full_governance = False
-
-    if any(path in {"requirements.txt", "requirements-dev.txt"} for path in normalized):
-        _append_unique(selected, "pip-audit")
-        needs_full_governance = True
-
-    if any(path.startswith("scripts/research/governance/") for path in normalized):
-        for check in (
-            "ruff-governance",
-            "bandit-governance",
-            "mypy-governance",
-            "pytest-governance",
-            "governance-full",
-        ):
-            _append_unique(selected, check)
-        needs_full_governance = True
-
-    if any(path.startswith("strategies/") for path in normalized):
-        for check in (
-            "py-compile-strategy",
-            "pytest-strategy-if-present",
-            "governance-full",
-        ):
-            _append_unique(selected, check)
-        needs_full_governance = True
-
-    if needs_full_governance:
-        _append_unique(selected, "governance-full")
-        return selected
-
+    for check in affected.checked:
+        for local_check in _local_checks_for_check_id(check.check_id):
+            _append_unique(selected, local_check)
     _append_unique(selected, "governance-full")
     return selected
+
+
+def _local_checks_for_check_id(check_id: str) -> tuple[str, ...]:
+    return {
+        "ruff.governance": ("ruff-governance",),
+        "bandit.governance": ("bandit-governance",),
+        "mypy.governance": ("mypy-governance",),
+        "pytest.governance": ("pytest-governance",),
+        "py_compile.strategy": ("py-compile-strategy",),
+        "pytest.strategy": ("pytest-strategy-if-present",),
+        "pip-audit.dependencies": ("pip-audit",),
+    }.get(check_id, ())
 
 
 def prepare(
@@ -578,11 +564,6 @@ def _run_local_check(
     runner: Runner,
     changed_files: Sequence[str],
 ) -> CommandResult:
-    if check == "governance-fast":
-        return runner.run(
-            [sys.executable, "-m", "scripts.research.governance", "gate", "--fast"],
-            cwd=root,
-        )
     if check == "pathref":
         return runner.run(
             [sys.executable, "-m", "scripts.tools.path_tools.refactor", "check"],
@@ -675,8 +656,6 @@ def _payload_with_prepare_evidence(
             merged_checks["governance gate"] = (
                 f"{_governance_gate_evidence_command(root)}; passed"
             )
-        elif check == "governance-fast":
-            merged_checks["governance fast gate"] = "passed"
         elif check == "pathref":
             merged_checks["pathref"] = "passed"
         elif check == "ruff-governance":
