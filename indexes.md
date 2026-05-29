@@ -24,3 +24,7 @@
 ## 决策记录
 
 - [docs/adr](docs/adr) <!-- pathref: docs/adr --> — 架构决策记录，重大规则来源与取舍依据
+
+## 流程问题记录
+
+- [2026-05-29-pr21-flow-retrospective.md](docs/problems/2026-05-29-pr21-flow-retrospective.md) <!-- pathref: docs/problems/2026-05-29-pr21-flow-retrospective.md --> — PR #21 流程阻断、效率问题和规则冲突复盘
