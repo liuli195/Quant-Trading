@@ -13,6 +13,6 @@
 | 第三层：流程编排层 | [workflow_orchestration.md](workflow_orchestration.md) <!-- pathref: scripts/research/layers/workflow_orchestration.md --> | 研究项目生命周期、流程模板、插件调度和聚宽自动化。 | 4 |
 | 第四层：研究工具库 | [research_toolkit.md](research_toolkit.md) <!-- pathref: scripts/research/layers/research_toolkit.md --> | 可复用研究计算库和专题研究工具。 | 9 |
 | 第五层：文档报告库 | [docs_reports.md](docs_reports.md) <!-- pathref: scripts/research/layers/docs_reports.md --> | 报告、索引、证据链接和文档产出。 | 1 |
-| 横向治理：注册与审计 | [governance.md](governance.md) <!-- pathref: scripts/research/layers/governance.md --> | 跨层注册、审计、路径引用和提交门禁。 | 5 |
+| 横向治理：注册与审计 | [governance.md](governance.md) <!-- pathref: scripts/research/layers/governance.md --> | 跨层注册、审计、路径引用和提交门禁。 | 6 |
 
 源码仍按库维护，分层目录只提供结构化索引，避免同一工具在物理目录和库目录之间重复实现。

@@ -16,7 +16,7 @@ from scripts.research.governance.pr_review_evidence import (
 )
 
 GOVERNANCE_GATE_COMMAND = (
-    ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate"
+    ".\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full"
 )
 
 
@@ -98,7 +98,7 @@ def _valid_complete_payload(
         ),
         "changed_files": changed_files or ["docs/guides/example.md"],
         "findings": [],
-        "checks": {"governance gate": GOVERNANCE_GATE_COMMAND, "pytest": "pass"},
+        "checks": {"verify full": GOVERNANCE_GATE_COMMAND, "pytest": "pass"},
     }
 
 
@@ -117,17 +117,17 @@ def test_discover_changed_files_merges_cached_and_worktree(
     def fake_run(command: list[str], **kwargs: object) -> FakeResult:
         commands.append(tuple(command))
         assert kwargs["cwd"] == tmp_path
-        if command == ["git", "diff", "--name-only", "--cached"]:
+        if command == ["git", "-c", "core.quotePath=false", "diff", "--name-only", "--cached"]:
             return FakeResult("scripts\\research\\governance\\ai_review_gate.py\n")
-        if command == ["git", "diff", "--name-only"]:
+        if command == ["git", "-c", "core.quotePath=false", "diff", "--name-only"]:
             return FakeResult(
                 "docs/guides/example.md\nscripts/research/governance/ai_review_gate.py\n"
             )
         if command == ["git", "merge-base", "--fork-point", "origin/main", "HEAD"]:
             return FakeResult("abc123\n")
-        if command == ["git", "diff", "--name-only", "abc123...HEAD"]:
+        if command == ["git", "-c", "core.quotePath=false", "diff", "--name-only", "abc123...HEAD"]:
             return FakeResult("scripts/research/governance/pr_flow.py\n")
-        if command == ["git", "ls-files", "--others", "--exclude-standard"]:
+        if command == ["git", "-c", "core.quotePath=false", "ls-files", "--others", "--exclude-standard"]:
             return FakeResult("docs/superpowers/plans/new-plan.md\n")
         raise AssertionError(f"unexpected command: {command}")
 
@@ -136,11 +136,11 @@ def test_discover_changed_files_merges_cached_and_worktree(
     changed_files = ai_review_gate._discover_changed_files(tmp_path)
 
     assert commands == [
-        ("git", "diff", "--name-only", "--cached"),
-        ("git", "diff", "--name-only"),
+        ("git", "-c", "core.quotePath=false", "diff", "--name-only", "--cached"),
+        ("git", "-c", "core.quotePath=false", "diff", "--name-only"),
         ("git", "merge-base", "--fork-point", "origin/main", "HEAD"),
-        ("git", "diff", "--name-only", "abc123...HEAD"),
-        ("git", "ls-files", "--others", "--exclude-standard"),
+        ("git", "-c", "core.quotePath=false", "diff", "--name-only", "abc123...HEAD"),
+        ("git", "-c", "core.quotePath=false", "ls-files", "--others", "--exclude-standard"),
     ]
     assert changed_files == [
         "docs/guides/example.md",
@@ -163,16 +163,16 @@ def test_discover_changed_files_uses_merge_base_fallback(
     def fake_run(command: list[str], **kwargs: object) -> FakeResult:
         assert kwargs["cwd"] == tmp_path
         if command in (
-            ["git", "diff", "--name-only", "--cached"],
-            ["git", "diff", "--name-only"],
-            ["git", "ls-files", "--others", "--exclude-standard"],
+            ["git", "-c", "core.quotePath=false", "diff", "--name-only", "--cached"],
+            ["git", "-c", "core.quotePath=false", "diff", "--name-only"],
+            ["git", "-c", "core.quotePath=false", "ls-files", "--others", "--exclude-standard"],
         ):
             return FakeResult("")
         if command == ["git", "merge-base", "--fork-point", "origin/main", "HEAD"]:
             return FakeResult(returncode=1)
         if command == ["git", "merge-base", "origin/main", "HEAD"]:
             return FakeResult("base456\n")
-        if command == ["git", "diff", "--name-only", "base456...HEAD"]:
+        if command == ["git", "-c", "core.quotePath=false", "diff", "--name-only", "base456...HEAD"]:
             return FakeResult("docs/rules/pr-workflow.md\n")
         raise AssertionError(f"unexpected command: {command}")
 
@@ -196,9 +196,9 @@ def test_discover_changed_files_returns_none_for_clean_branch_without_base(
     def fake_run(command: list[str], **kwargs: object) -> FakeResult:
         assert kwargs["cwd"] == tmp_path
         if command in (
-            ["git", "diff", "--name-only", "--cached"],
-            ["git", "diff", "--name-only"],
-            ["git", "ls-files", "--others", "--exclude-standard"],
+            ["git", "-c", "core.quotePath=false", "diff", "--name-only", "--cached"],
+            ["git", "-c", "core.quotePath=false", "diff", "--name-only"],
+            ["git", "-c", "core.quotePath=false", "ls-files", "--others", "--exclude-standard"],
         ):
             return FakeResult("")
         if command[:2] == ["git", "merge-base"]:
@@ -369,7 +369,7 @@ def test_pr_body_renders_codex_section_only_when_evidence_is_present(
         "blocking_issues": "无",
         "evidence": [
             "Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-            "`.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
+            "`.\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full`",
         ],
     }
     _write_report(report, payload)

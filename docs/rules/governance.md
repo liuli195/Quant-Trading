@@ -2,20 +2,22 @@
 
 ## MUST
 
-- `scripts.research.governance gate` 是本地 hook 和 CI 的强门禁入口。
-- `.githooks/pre-commit` 使用 `scripts.research.governance gate --fast`，只跑快速治理审计，跳过 CLI help 和 pathref gate。
-- `.githooks/pre-push` 和 CI 必须使用完整 `scripts.research.governance gate`，覆盖完整治理审计和 pathref gate。
+- `scripts.research.governance gate` 保留强门禁语义；`scripts.research.governance verify` 负责编排 affected fast、explain 和 full。
+- 日常小改默认使用 `scripts.research.governance verify fast`，只表示可继续开发，不作为 PR 或合并证据。
+- PR 准备、push 前、CI 和最终交付证据必须使用 `scripts.research.governance verify full`。
+- `.githooks/pre-commit` 使用 `scripts.research.governance verify fast --staged`。
+- `.githooks/pre-push` 和 CI 必须覆盖完整治理审计和 pathref gate，不得使用 fast。
 - `scripts.research.governance.pr_flow` 是本地 PR 自动化入口；`make pr-ready TITLE="<PR标题>"` 负责准备 PR evidence、同步 GitHub draft PR、触发必要的 Codex review 并等待 required checks。
 - GitHub `main` 必须启用 branch protection 或 ruleset：Require pull request、Require status checks、Require review from Code Owners、Block force pushes。
 - required checks 必须包括 `Research Governance / governance`、`Research Governance / pr-review-evidence`、`Codex Review Monitor`。
-- `Research Governance / governance` 汇总静态扫描、类型检查、依赖漏洞扫描、测试、pathref 和 governance gate。
+- `Research Governance / governance` 通过 `verify full` 汇总静态扫描、类型检查、依赖漏洞扫描、测试、pathref 和 governance gate。
 - `pr-review-evidence` 校验 PR body 的 `AI Review 风险分级`、`review_mode=complete` / `partial` 授权、`security_review` / `本地安全 review`、`codex-security` / `security-guidance`、`官方 Codex Review 跳过授权`、P2 保留、Codex Review 证据和高风险 label。
 - `Codex Review Monitor` 监听当前 head 的 Codex Review 状态；低风险且无需官方 review 的 PR 可快速通过/空跑。
 - `Codex Review Monitor` success 可作为 `pr_flow` 自动采集官方 Codex 通过证据的信号之一，但不能替代 PR body 的 `Codex Code Review 结论`。
 - 未解决且未过期的 Codex P0/P1 thread 必须阻断，任何跳过授权不得绕过。
 - 本地仓库必须设置 `git config core.hooksPath .githooks`。
 - `.githooks/pre-commit`、`.githooks/pre-push`、`.githooks/reference-transaction` 必须通过 `.githooks/run-python.sh` 选择项目虚拟环境，不硬编码单一平台解释器。
-- `.githooks/pre-push` 必须调用 `scripts.research.governance.branch_protection pre-push` 和 `scripts.research.governance gate`，并保留 Git LFS pre-push 转交。
+- `.githooks/pre-push` 必须调用 `scripts.research.governance.branch_protection pre-push` 和 `scripts.research.governance verify full`，并保留 Git LFS pre-push 转交。
 - `.githooks/pre-push` 必须阻断推送到 `main` / `master`；直写主干只在用户当前对话授权时允许，并要求 `ALLOW_DIRECT_MAIN_WRITE=1` 和 `DIRECT_MAIN_WRITE_REASON=<reason>`。
 - `.githooks/reference-transaction` 必须阻断本地 `refs/heads/main` / `refs/heads/master` 被 merge、reset、delete 或 force rewrite；授权直写也只允许 fast-forward。
 - PR 云端合并后，本地同步 `main` 必须设置 `ALLOW_MAIN_REF_UPDATE=1` 和 `MAIN_REF_UPDATE_REASON=<reason>`，并只允许 fast-forward 到 `origin/main`。

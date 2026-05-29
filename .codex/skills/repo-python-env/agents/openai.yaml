@@ -1,4 +1,4 @@
 interface:
   display_name: "仓库 Python 环境"
-  short_description: "使用项目 .venv 和本地/云端环境边界。"
+  short_description: "提权使用项目 .venv 和本地/云端环境边界。"
   default_prompt: "使用 $repo-python-env 检查 Quant Trading 的 Python 环境。"

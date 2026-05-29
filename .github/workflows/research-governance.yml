@@ -27,31 +27,35 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: python -m pip install -r requirements-dev.txt
-      - name: Ruff
-        run: python -m ruff check scripts/research/governance
-      - name: Bandit
-        run: python -m bandit -q -r scripts/research/governance -x scripts/research/governance/tests -s B310,B404,B603,B607
-      - name: Mypy
-        run: python -m mypy --explicit-package-bases --follow-imports=skip --ignore-missing-imports scripts/research/governance
-      - name: Pip audit
-        run: python -m pip_audit
-      - name: Tests
-        run: python -m pytest scripts/research/governance/tests
-      - name: Run governance gate
-        run: python -m scripts.research.governance gate
+      - name: Verify full
+        run: python -m scripts.research.governance verify full
 
   pr-review-evidence:
-    if: >-
-      github.event_name == 'pull_request' ||
-      github.event_name == 'pull_request_review' ||
-      github.event_name == 'pull_request_review_comment'
     runs-on: windows-latest
     steps:
+      - name: Skip outside PR review evidence context
+        if: >-
+          github.event_name != 'pull_request' &&
+          github.event_name != 'pull_request_review' &&
+          github.event_name != 'pull_request_review_comment'
+        run: echo "No PR review evidence context; required check passes as no-op."
       - uses: actions/checkout@v4
+        if: >-
+          github.event_name == 'pull_request' ||
+          github.event_name == 'pull_request_review' ||
+          github.event_name == 'pull_request_review_comment'
       - uses: actions/setup-python@v5
+        if: >-
+          github.event_name == 'pull_request' ||
+          github.event_name == 'pull_request_review' ||
+          github.event_name == 'pull_request_review_comment'
         with:
           python-version: "3.12"
       - name: Validate PR review evidence
+        if: >-
+          github.event_name == 'pull_request' ||
+          github.event_name == 'pull_request_review' ||
+          github.event_name == 'pull_request_review_comment'
         env:
           PR_BODY: ${{ github.event.pull_request.body || github.event.issue.body }}
           PR_URL: ${{ github.event.pull_request.html_url || format('https://github.com/{0}/pull/{1}', github.repository, github.event.issue.number) }}

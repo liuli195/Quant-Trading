@@ -7,6 +7,8 @@ owned_rules:
   - docs/rules/collaboration.md
 owned_commands:
   - make pre-pr
+  - make verify-fast
+  - make verify-full
   - make pr-ready
   - make ai-review
   - make risk-check
@@ -31,6 +33,7 @@ read_rules:
   - docs/rules/review-guidelines.md
   - docs/rules/governance.md
 recommended_commands:
+  - make verify-full
   - make pr-ready TITLE="<PR标题>"
   - make ai-review
   - make risk-check

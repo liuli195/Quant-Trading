@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from .affected import plan_checks
 from . import ai_review_gate, pr_review_evidence
 from .codex_review_contract import is_codex_review_request, render_codex_review_request
 
@@ -26,11 +27,11 @@ CODEX_REVIEW_PENDING_EXIT_CODE = 3
 DISPATCH_REQUIRED_EXIT_CODE = 4
 REPLY_OR_FIX_REQUIRED_EXIT_CODE = 5
 EXCEPTION_REQUIRED_EXIT_CODE = 6
-WINDOWS_PR_BODY_GOVERNANCE_GATE_COMMAND = (
-    ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate"
+WINDOWS_PR_BODY_VERIFY_FULL_COMMAND = (
+    ".\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full"
 )
-POSIX_PR_BODY_GOVERNANCE_GATE_COMMAND = (
-    ".venv/bin/python -m scripts.research.governance gate"
+POSIX_PR_BODY_VERIFY_FULL_COMMAND = (
+    ".venv/bin/python -m scripts.research.governance verify full"
 )
 CODEX_REVIEW_AUTHORS = {"chatgpt-codex-connector", "chatgpt-codex-connector[bot]"}
 DISQUALIFIED_CODEX_REVIEW_STATES = {"DISMISSED", "PENDING"}
@@ -103,41 +104,26 @@ class Runner(Protocol):
         ...
 
 
-def select_local_checks(changed_files: Sequence[str]) -> list[str]:
-    normalized = [_normalize_path(path) for path in changed_files]
+def select_local_checks(changed_files: Sequence[str], *, repo_root: str | Path = ".") -> list[str]:
+    affected = plan_checks(changed_files, repo_root=repo_root)
     selected: list[str] = []
-    needs_full_governance = False
-
-    if any(path in {"requirements.txt", "requirements-dev.txt"} for path in normalized):
-        _append_unique(selected, "pip-audit")
-        needs_full_governance = True
-
-    if any(path.startswith("scripts/research/governance/") for path in normalized):
-        for check in (
-            "ruff-governance",
-            "bandit-governance",
-            "mypy-governance",
-            "pytest-governance",
-            "governance-full",
-        ):
-            _append_unique(selected, check)
-        needs_full_governance = True
-
-    if any(path.startswith("strategies/") for path in normalized):
-        for check in (
-            "py-compile-strategy",
-            "pytest-strategy-if-present",
-            "governance-full",
-        ):
-            _append_unique(selected, check)
-        needs_full_governance = True
-
-    if needs_full_governance:
-        _append_unique(selected, "governance-full")
-        return selected
-
+    for check in affected.checked:
+        for local_check in _local_checks_for_check_id(check.check_id):
+            _append_unique(selected, local_check)
     _append_unique(selected, "governance-full")
     return selected
+
+
+def _local_checks_for_check_id(check_id: str) -> tuple[str, ...]:
+    return {
+        "ruff.governance": ("ruff-governance",),
+        "bandit.governance": ("bandit-governance",),
+        "mypy.governance": ("mypy-governance",),
+        "pytest.governance": ("pytest-governance",),
+        "py_compile.strategy": ("py-compile-strategy",),
+        "pytest.strategy": ("pytest-strategy-if-present",),
+        "pip-audit.dependencies": ("pip-audit",),
+    }.get(check_id, ())
 
 
 def prepare(
@@ -158,7 +144,7 @@ def prepare(
     )
     check_files = sorted({*(changed_files or []), *report_files})
     passed_checks: list[str] = []
-    for check in select_local_checks(check_files):
+    for check in select_local_checks(check_files, repo_root=root):
         check_result = _run_local_check(check, root=root, runner=runner, changed_files=check_files)
         if check_result.returncode != 0:
             _print_command_failure(check, check_result)
@@ -578,11 +564,6 @@ def _run_local_check(
     runner: Runner,
     changed_files: Sequence[str],
 ) -> CommandResult:
-    if check == "governance-fast":
-        return runner.run(
-            [sys.executable, "-m", "scripts.research.governance", "gate", "--fast"],
-            cwd=root,
-        )
     if check == "pathref":
         return runner.run(
             [sys.executable, "-m", "scripts.tools.path_tools.refactor", "check"],
@@ -629,7 +610,7 @@ def _run_local_check(
         )
     if check == "governance-full":
         return runner.run(
-            [sys.executable, "-m", "scripts.research.governance", "gate"],
+            [sys.executable, "-m", "scripts.research.governance", "verify", "full"],
             cwd=root,
         )
     if check == "pip-audit":
@@ -672,11 +653,9 @@ def _payload_with_prepare_evidence(
     merged_checks = dict(checks) if isinstance(checks, dict) else {}
     for check in passed_checks:
         if check == "governance-full":
-            merged_checks["governance gate"] = (
-                f"{_governance_gate_evidence_command(root)}; passed"
+            merged_checks["verify full"] = (
+                f"{_verify_full_evidence_command(root)}; passed"
             )
-        elif check == "governance-fast":
-            merged_checks["governance fast gate"] = "passed"
         elif check == "pathref":
             merged_checks["pathref"] = "passed"
         elif check == "ruff-governance":
@@ -698,22 +677,22 @@ def _payload_with_prepare_evidence(
     return updated
 
 
-def _governance_gate_evidence_command(root: Path) -> str:
+def _verify_full_evidence_command(root: Path) -> str:
     executable = Path(sys.executable).resolve()
     candidates = (
         (
             (root / ".venv" / "Scripts" / "python.exe").resolve(),
-            WINDOWS_PR_BODY_GOVERNANCE_GATE_COMMAND,
+            WINDOWS_PR_BODY_VERIFY_FULL_COMMAND,
         ),
         (
             (root / ".venv" / "bin" / "python").resolve(),
-            POSIX_PR_BODY_GOVERNANCE_GATE_COMMAND,
+            POSIX_PR_BODY_VERIFY_FULL_COMMAND,
         ),
     )
     for candidate, command in candidates:
         if executable == candidate:
             return command
-    return f"{sys.executable} -m scripts.research.governance gate"
+    return f"{sys.executable} -m scripts.research.governance verify full"
 
 
 def _write_managed_body_file(
@@ -1334,7 +1313,7 @@ def _payload_with_official_codex_review_evidence(
         "blocking_issues": "无",
         "evidence": [
             evidence,
-            _governance_gate_evidence_command(root),
+            _verify_full_evidence_command(root),
         ],
     }
     return updated

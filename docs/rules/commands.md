@@ -8,7 +8,7 @@
 
 ### Python 环境
 
-- Python 命令默认走项目 `.venv`，不改用系统 Python。
+- Python 命令默认必须提权使用项目 `.venv`，不改用系统 Python。
 - setup script 只负责 bootstrap `.venv` 并配置 hooks。
 - Windows 本地默认入口：`.\.venv\Scripts\python.exe`。
 - Codex Cloud/Linux/POSIX 默认入口：`.venv/bin/python`。
@@ -38,11 +38,15 @@ Windows 示例：
 .\.venv\Scripts\python.exe -m scripts.tools.jq_automation compile-check strategies\<strategy>\<strategy>.py
 .\.venv\Scripts\python.exe -m scripts.tools.path_tools.refactor check
 .\.venv\Scripts\python.exe -m scripts.research.docs index
-.\.venv\Scripts\python.exe -m scripts.research.governance gate
+.\.venv\Scripts\python.exe -m scripts.research.governance verify explain --files docs\rules\commands.md
+.\.venv\Scripts\python.exe -m scripts.research.governance verify fast --files docs\rules\commands.md
+.\.venv\Scripts\python.exe -m scripts.research.governance verify full
 .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow ready --title "<PR标题>"
 gh pr checks <PR号或URL> --required --watch --interval 10
 gh pr checks <PR号或URL> --required
 ```
+
+`verify explain` 只说明会命中哪些检查，不执行命令。`verify fast` 是日常小改入口，只表示当前改动可继续开发；PR 准备、push 前、CI 和最终交付证据必须使用 `verify full`。
 
 可用 CLI：
 
@@ -53,7 +57,7 @@ gh pr checks <PR号或URL> --required
 | `scripts.research.datasets` | `import-price-json`、`import-audit-log`、`import-backtest-run`、`migrate-backtest-runs`、`inspect` |
 | `scripts.research.variants` | `list`、`register`、`materialize`、`branch-plan`、`branch-create`、`merge-plan`、`merge-apply` |
 | `scripts.research.registry.tool_registry` | `list`、`validate` |
-| `scripts.research.governance` | `audit`、`gate` |
+| `scripts.research.governance` | `audit`、`gate`、`verify explain/fast/full` |
 | `scripts.research.governance.pr_flow` | `prepare`、`sync`、`wait`、`ready` |
 
 POSIX 示例把 Windows Python 路径替换为 `.venv/bin/python`。

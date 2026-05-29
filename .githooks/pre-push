@@ -6,7 +6,7 @@ PRE_PUSH_INPUT="$(cat)"
 printf '%s\n' "$PRE_PUSH_INPUT" | sh .githooks/run-python.sh \
   -m scripts.research.governance.branch_protection pre-push
 sh .githooks/run-python.sh \
-  -m scripts.research.governance gate
+  -m scripts.research.governance verify full
 
 if [ "${SKIP_GIT_LFS_PRE_PUSH:-}" != "1" ]; then
   command -v git-lfs >/dev/null 2>&1 || {

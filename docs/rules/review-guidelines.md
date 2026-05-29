@@ -21,7 +21,7 @@
 - `pr-review-evidence` 和 `Codex Review Monitor` 必须读取 review thread 状态；未解决且未过期的 Codex P0/P1 thread 永远阻断，跳过授权不得绕过。
 - `Codex Review Monitor` 是 GitHub `main` 全局 required status check；低风险且无需官方 Codex Review 的 PR 允许快速通过/空跑，但不替代 PR body 证据。
 - 如果 Codex review 无法读取当前 PR diff、要求额外提供 unified diff、引用不存在或非当前 head，按 review 上下文失效阻断。
-- 必须保留本地检查证据，至少包括 `.\.venv\Scripts\python.exe -m scripts.research.governance gate`。
+- 必须保留本地检查证据，至少包括 `.\.venv\Scripts\python.exe -m scripts.research.governance verify full`；`verify fast` 不能作为 PR 证据。
 
 ## 评级
 
@@ -93,5 +93,5 @@ Review Scope：
 - 阻断问题: 无
 - 关键证据:
   - Codex review 链接：https://github.com/<owner>/<repo>/pull/<number>#pullrequestreview-<id>
-  - `.\.venv\Scripts\python.exe -m scripts.research.governance gate`
+  - `.\.venv\Scripts\python.exe -m scripts.research.governance verify full`
 ```

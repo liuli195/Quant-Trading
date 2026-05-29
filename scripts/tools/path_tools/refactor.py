@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -260,15 +261,44 @@ def apply_reference_rewrite(
     return 0 if not warnings else 1
 
 
-def check_markdown_pathrefs(strict: bool = False) -> int:
+def _select_markdown_files(root: Path, files: Sequence[Path] | None) -> tuple[list[Path], list[str]]:
+    if files is None:
+        return [
+            path for path in iter_text_files(root)
+            if path.suffix.lower() == ".md"
+        ], []
+
+    selected: list[Path] = []
+    errors: list[str] = []
+    for item in files:
+        path = (root / item).resolve() if not item.is_absolute() else item.resolve()
+        try:
+            rel_path = repo_relative(path, root)
+        except PathAliasError as exc:
+            errors.append(str(exc))
+            continue
+        if not path.is_file():
+            errors.append(f"{rel_path}: file does not exist")
+            continue
+        if path.suffix.lower() != ".md":
+            errors.append(f"{rel_path}: --files only accepts Markdown files")
+            continue
+        selected.append(path)
+    return selected, errors
+
+
+def check_markdown_pathrefs(
+    strict: bool = False,
+    files: Sequence[Path] | None = None,
+) -> int:
     root = find_repo_root()
     errors: list[str] = []
     warnings: list[str] = []
     checked = 0
+    markdown_files, selection_errors = _select_markdown_files(root, files)
+    errors.extend(selection_errors)
 
-    for path in iter_text_files(root):
-        if path.suffix.lower() != ".md":
-            continue
+    for path in markdown_files:
         text = read_text(path)
         if text is None:
             continue
@@ -309,7 +339,10 @@ def check_markdown_pathrefs(strict: bool = False) -> int:
         print(f"error: {item}", file=sys.stderr)
     for item in warnings:
         print(f"warning: {item}", file=sys.stderr)
+    print(f"Checked {len(markdown_files)} Markdown file(s).")
     print(f"Checked {checked} pathref link(s).")
+    if selection_errors:
+        return 2
     return 1 if errors or (strict and warnings) else 0
 
 
@@ -396,7 +429,8 @@ def load_moves_from_map(path: str) -> list[Move]:
 
 
 def _cmd_check(args: argparse.Namespace) -> int:
-    return check_markdown_pathrefs(strict=args.strict)
+    files = [Path(item) for item in args.files] if args.files else None
+    return check_markdown_pathrefs(strict=args.strict, files=files)
 
 
 def _cmd_rewrite_md(args: argparse.Namespace) -> int:
@@ -425,6 +459,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     check_parser = subparsers.add_parser("check", help="check Markdown pathref links")
     check_parser.add_argument("--strict", action="store_true", help="also fail on unmanaged internal links")
+    check_parser.add_argument(
+        "--files",
+        nargs="+",
+        default=None,
+        help="check only the given Markdown files",
+    )
     check_parser.set_defaults(func=_cmd_check)
 
     rewrite_md_parser = subparsers.add_parser("rewrite-md", help="rewrite Markdown links from pathref comments")

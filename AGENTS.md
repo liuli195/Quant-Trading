@@ -12,11 +12,12 @@ Claude Code 专属补充见 [CLAUDE.md](CLAUDE.md) <!-- pathref: repo/CLAUDE.md 
 
 - **输出**：简体中文，简洁直白。
 - **运行边界**：策略代码仅运行于聚宽云端；本地负责编写、测试、文档、回测分析。环境差异及库白名单见 [environments.md](docs/rules/environments.md) <!-- pathref: docs/rules/environments.md -->。
-- **Python 环境**：默认使用项目 `.venv`，不改用系统 Python。命令参考 [commands.md](docs/rules/commands.md) <!-- pathref: docs/rules/commands.md -->。
+- **Python 环境**：默认必须提权使用项目 `.venv`，不改用系统 Python。命令参考 [commands.md](docs/rules/commands.md) <!-- pathref: docs/rules/commands.md -->。
 - **GitHub CLI**：`gh` CLI 默认提权执行，否则无法获取沙箱外的登录状态。
 - **先调查**：不推测未读代码；不确定时说明并提出验证方法。
 - **请求范围**：只做要求的事，不明确时默认研究建议。不擅自重构或过度抽象。
 - **完成前验证**：逐项复核要求，跑测试与检查，说明已验证和无法验证的部分。
+- **增量验证**：日常小改可先跑 `verify fast`；PR 准备、push 前、CI 和最终交付证据必须跑 `verify full`。
 - **PR 纪律**：进入主干须通过 PR；用户显式授权可直写主干。禁止把功能分支本地合入 `main`。细则见 [pr-workflow.md](docs/rules/pr-workflow.md) <!-- pathref: docs/rules/pr-workflow.md -->。
 - **Git**：分支名使用 ASCII 模板，提交说明使用简体中文。
 - **文件规范**：优先编辑现有文件，非必要不新建。任务后清理临时产物。

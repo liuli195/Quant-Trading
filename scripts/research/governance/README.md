@@ -7,10 +7,19 @@
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.research.governance audit
 .\.venv\Scripts\python.exe -m scripts.research.governance gate
+.\.venv\Scripts\python.exe -m scripts.research.governance verify explain --files docs\rules\commands.md
+.\.venv\Scripts\python.exe -m scripts.research.governance verify fast --files docs\rules\commands.md
+.\.venv\Scripts\python.exe -m scripts.research.governance verify full
 ```
 
-`gate` is the enforced entry for hooks and CI. It runs governance audit plus
-the pathref checker. The tracked hooks are `.githooks/pre-commit`,
+`verify explain` 只解释本次改动命中的 scoped checks，不执行命令。
+`verify fast` 执行 affected scoped checks，输出 checked/skipped/full-not-run，
+只代表可以继续开发。PR、push 和 CI 以 `verify full` 为统一入口。
+`verify full` 运行 ruff、bandit、mypy、pip-audit、governance tests、pathref 和
+完整 `gate`，可作为 PR/push/CI/最终交付证据。
+
+`gate` runs governance audit plus the pathref checker. It remains the low-level
+full gate that `verify full` invokes. The tracked hooks are `.githooks/pre-commit`,
 `.githooks/pre-push`, and `.githooks/reference-transaction`. They are not active
 just because the files exist; enable them in each local checkout with:
 
@@ -46,12 +55,12 @@ make pr-ready TITLE="<PR标题>"
 
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.research.governance.branch_protection pre-push
-.\.venv\Scripts\python.exe -m scripts.research.governance gate
+.\.venv\Scripts\python.exe -m scripts.research.governance verify full
 git lfs pre-push
 ```
 
 It blocks direct pushes to `main` / `master` when remote rulesets are unavailable,
-reruns the full governance gate before push, and preserves the Git LFS hook.
+reruns full governance verification before push, and preserves the Git LFS hook.
 The shell hooks call `.githooks/run-python.sh` only to choose the current
 worktree virtualenv on POSIX Git shell environments. Daily local commands should
 call `.venv` Python directly; UTF-8 output is handled by environment variables.
@@ -146,7 +155,7 @@ $env:GITHUB_TOKEN="<token>"
 审计范围：
 
 - 仓库级规则文档 [docs/rules/index.md](../../../docs/rules/index.md) <!-- pathref: docs/rules/index.md --> 是否存在，ADR 目录 [docs/adr](../../../docs/adr) <!-- pathref: docs/adr --> 是否连续编号。
-- `.githooks/pre-push` 是否仍调用代码化主干保护门禁、完整 gate 和 Git LFS 转交。
+- `.githooks/pre-push` 是否仍调用代码化主干保护门禁、完整 `verify full` 和 Git LFS 转交。
 - Codex Code Review 规则 [review-guidelines.md](../../../docs/rules/review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md --> 是否存在，PR 模板是否要求 Codex 评审结论。
 - Codex Review Monitor workflow 是否监听 PR head 更新、`@codex review`、Codex review 和 inline review comment。
 - `CODEOWNERS` 是否覆盖关键治理路径，`.github/pull_request_template.md` 是否包含规则同步、检查、waiver 和证据项。

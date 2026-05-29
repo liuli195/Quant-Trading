@@ -56,12 +56,12 @@ make pr-ready TITLE="<PR标题>"
 
 - [ ] **Step 1: Add a failing test for fast gate CLI forwarding**
 
-Add a test proving `python -m scripts.research.governance gate --fast` is accepted and forwards a mode that skips slow checks.
+Add a test proving the legacy fast-gate command is accepted and forwards a mode that skips slow checks.
 
 Expected behavior:
 
 ```text
-gate --fast:
+legacy fast-gate:
 - runs governance audit
 - skips CLI help
 - skips pathref gate
@@ -73,7 +73,7 @@ gate --fast:
 Update governance tests so `.githooks/pre-commit` may call:
 
 ```sh
-sh .githooks/run-python.sh -m scripts.research.governance gate --fast
+sh .githooks/run-python.sh -m scripts.research.governance <legacy-fast-gate>
 ```
 
 while `.githooks/pre-push` must still call full:
@@ -82,9 +82,9 @@ while `.githooks/pre-push` must still call full:
 sh .githooks/run-python.sh -m scripts.research.governance gate
 ```
 
-- [ ] **Step 3: Implement `--fast` in gate parser**
+- [ ] **Step 3: Implement legacy fast mode in gate parser**
 
-Add `--fast` to `gate.py` and `__main__.py`.
+Add the legacy fast mode to `gate.py` and `__main__.py`.
 
 Fast mode must call the same audit surface but skip:
 
@@ -99,7 +99,7 @@ Change `.githooks/pre-commit` to run:
 
 ```sh
 sh .githooks/run-python.sh \
-  -m scripts.research.governance gate --fast
+  -m scripts.research.governance <legacy-fast-gate>
 ```
 
 Do not change `pre-push` behavior.

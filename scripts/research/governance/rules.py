@@ -60,6 +60,12 @@ REQUIRED_CODEOWNER_PATTERNS = (
     "path_aliases.json",
     "strategies/**",
 )
+LEGACY_FAST_GATE_SURFACES = (
+    "Makefile",
+    ".githooks/pre-commit",
+    ".githooks/pre-push",
+    ".github/workflows/research-governance.yml",
+)
 _OLD_PR_TEMPLATE_TOKENS = (
     "改动目标",
     "影响范围",
@@ -80,7 +86,7 @@ _OLD_PR_TEMPLATE_TOKENS = (
     "Codex Code Review 结论",
     "Codex",
     "pr-flow:start",
-    ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate",
+    ".\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full",
     "waiver",
     "证据",
 )
@@ -101,7 +107,7 @@ REQUIRED_REVIEW_GUIDELINES_TOKENS = (
     "AGENTS.md",
     "docs/rules/review-guidelines.md",
     "P0/P1",
-    ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate",
+    ".\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full",
     "Codex Review Monitor",
     "至少两个独立 reviewer",
     "子 agent 交叉评审",
@@ -130,7 +136,7 @@ REQUIRED_COMMAND_RULE_TOKENS = (
     ".githooks/setup-python.sh",
     ".\\.venv\\Scripts\\python.exe",
     ".venv/bin/python",
-    "Python 命令默认走项目 `.venv`，不改用系统 Python",
+    "Python 命令默认必须提权使用项目 `.venv`，不改用系统 Python",
     "PYTHONUTF8",
     "PYTHONIOENCODING",
     "gh pr checks",
@@ -141,7 +147,7 @@ REQUIRED_AGENT_ENTRY_TOKENS = (
     "docs/rules/review-guidelines.md",
     "简体中文，简洁直白",
     "聚宽云端",
-    "默认使用项目 `.venv`，不改用系统 Python",
+    "默认必须提权使用项目 `.venv`，不改用系统 Python",
     "docs/rules/commands.md",
     "`gh` CLI 默认提权执行",
     "进入主干须通过 PR",
@@ -214,6 +220,7 @@ def run_audit(
     findings.extend(_audit_review_guidelines(root))
     findings.extend(_audit_governance_gate(root))
     findings.extend(_audit_local_review_entrypoints(root))
+    findings.extend(_audit_legacy_fast_gate_references(root))
     findings.extend(_audit_rule_sources(root))
     findings.extend(_audit_codeowners(root))
     findings.extend(_audit_pr_template(root))
@@ -531,12 +538,12 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         )
     else:
         text = hook.read_text(encoding="utf-8", errors="ignore")
-        if "scripts.research.governance gate" not in text:
+        if "scripts.research.governance verify fast --staged" not in text:
             findings.append(
                 AuditFinding(
                     "governance_gate",
                     "error",
-                    "pre-commit hook missing governance gate",
+                    "pre-commit hook must use verify fast --staged",
                 )
             )
         if "powershell.exe" in text or ".githooks/run-python.sh" not in text:
@@ -545,12 +552,12 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "governance_gate", "error", "pre-commit hook must use run-python.sh"
                 )
             )
-        if "scripts.research.governance gate --fast" not in text:
+        if "scripts.research.governance gate --fast" in text:
             findings.append(
                 AuditFinding(
                     "governance_gate",
                     "error",
-                    "pre-commit hook must use fast governance gate",
+                    "pre-commit hook must use verify fast --staged",
                 )
             )
 
@@ -569,18 +576,20 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "pre-push hook missing branch protection gate",
                 )
             )
-        if "scripts.research.governance gate" not in text:
+        if "scripts.research.governance verify full" not in text:
             findings.append(
                 AuditFinding(
-                    "governance_gate", "error", "pre-push hook missing governance gate"
+                    "governance_gate", "error", "pre-push hook missing full governance verification"
                 )
             )
-        if "scripts.research.governance gate --fast" in text:
+        if "scripts.research.governance gate" in text or (
+            "scripts.research.governance verify fast" in text
+        ):
             findings.append(
                 AuditFinding(
                     "governance_gate",
                     "error",
-                    "pre-push hook must use full governance gate",
+                    "pre-push hook must use verify full",
                 )
             )
         if "git lfs pre-push" not in text:
@@ -659,10 +668,24 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         )
     else:
         text = workflow.read_text(encoding="utf-8", errors="ignore")
-        if "scripts.research.governance gate" not in text:
+        if "scripts.research.governance verify full" not in text:
             findings.append(
                 AuditFinding(
-                    "governance_gate", "error", "CI workflow missing governance gate"
+                    "governance_gate", "error", "CI workflow missing verify full entrypoint"
+                )
+            )
+        if "scripts.research.governance verify fast" in text:
+            findings.append(
+                AuditFinding(
+                    "governance_gate", "error", "CI workflow must not use verify fast"
+                )
+            )
+        if "scripts.research.governance gate" in text:
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "CI workflow must use verify full as the single governance entrypoint",
                 )
             )
         if "scripts.research.governance.pr_review_evidence" not in text:
@@ -673,18 +696,27 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "CI workflow missing PR review evidence gate",
                 )
             )
+        if re.search(r"pr-review-evidence:\s*\n\s*if:", text):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "required PR review evidence job must not use job-level if",
+                )
+            )
         for token in (
-            "scripts.research.governance gate",
-            "ruff",
-            "bandit",
-            "mypy",
-            "pip_audit",
-            "pytest",
+            "python -m ruff check",
+            "python -m bandit",
+            "python -m mypy",
+            "python -m pip_audit",
+            "python -m pytest",
         ):
-            if token not in text:
+            if token in text:
                 findings.append(
                     AuditFinding(
-                        "governance_gate", "error", f"CI workflow missing {token}"
+                        "governance_gate",
+                        "error",
+                        f"CI workflow must use verify full instead of split command {token}",
                     )
                 )
         if "schedule:" not in text:
@@ -873,9 +905,13 @@ def _audit_local_review_entrypoints(root: Path) -> list[AuditFinding]:
     make_text = makefile.read_text(encoding="utf-8", errors="ignore")
     for token in (
         "pre-pr",
+        "verify-fast",
+        "verify-full",
         "ai-review",
         "risk-check",
         "pr-ready",
+        "scripts.research.governance verify fast --staged",
+        "scripts.research.governance verify full",
         "scripts.research.governance.ai_review_gate",
         "scripts.research.governance.pr_flow",
     ):
@@ -937,6 +973,32 @@ def _audit_local_review_entrypoints(root: Path) -> list[AuditFinding]:
                 )
             )
 
+    return findings
+
+
+def _audit_legacy_fast_gate_references(root: Path) -> list[AuditFinding]:
+    findings: list[AuditFinding] = []
+    candidates = [root / rel_path for rel_path in LEGACY_FAST_GATE_SURFACES]
+    docs_root = root / "docs"
+    if docs_root.is_dir():
+        candidates.extend(sorted(docs_root.rglob("*.md")))
+
+    seen: set[Path] = set()
+    for path in candidates:
+        if path in seen or not path.is_file():
+            continue
+        seen.add(path)
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        if "gate --fast" not in text:
+            continue
+        rel = path.relative_to(root).as_posix()
+        findings.append(
+            AuditFinding(
+                "legacy_fast_gate",
+                "error",
+                f"{rel} references removed gate --fast entrypoint",
+            )
+        )
     return findings
 
 
