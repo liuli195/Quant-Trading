@@ -19,6 +19,8 @@ CONFIG_INPUTS = (
     "requirements.txt",
     "requirements-dev.txt",
     "Makefile",
+    "scripts/research/governance",
+    "scripts/tools/path_tools",
 )
 
 

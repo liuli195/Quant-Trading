@@ -71,7 +71,7 @@ def _write_valid_report(
             "blocking_issues": "无",
             "evidence": [
                 "https://github.com/liuli195/Quant-Trading/pull/7#pullrequestreview-1",
-                ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate",
+                ".\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full",
             ],
         }
     (local / "latest.json").write_text(
@@ -713,7 +713,7 @@ def test_prepare_selects_checks_from_latest_report_when_diff_is_empty(
     )
 
 
-def test_prepare_records_full_governance_gate_evidence(
+def test_prepare_records_verify_full_evidence(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -735,8 +735,8 @@ def test_prepare_records_full_governance_gate_evidence(
     payload = json.loads(
         (tmp_path / ".local/ai-review/latest.json").read_text(encoding="utf-8")
     )
-    gate_evidence = payload["checks"]["governance gate"]
-    assert ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate" in gate_evidence
+    gate_evidence = payload["checks"]["verify full"]
+    assert ".\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full" in gate_evidence
     body = (tmp_path / ".local/ai-review/pr-body.md").read_text(encoding="utf-8")
     assert gate_evidence in body
 
@@ -821,8 +821,8 @@ def test_sync_replaces_existing_pr_block_with_windows_path_evidence(
     )
     report_path = tmp_path / ".local/ai-review/latest.json"
     payload = json.loads(report_path.read_text(encoding="utf-8"))
-    payload["checks"]["governance gate"] = (
-        ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate; passed"
+    payload["checks"]["verify full"] = (
+        ".\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full; passed"
     )
     report_path.write_text(
         json.dumps(payload, ensure_ascii=False),

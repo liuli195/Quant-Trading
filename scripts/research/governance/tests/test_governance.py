@@ -2793,7 +2793,7 @@ def _valid_codex_review_body(review_id: int = 4314779358) -> str:
             "- \u963b\u65ad\u95ee\u9898: \u65e0",
             "- \u5173\u952e\u8bc1\u636e:",
             f"  - Codex review \u94fe\u63a5\uff1ahttps://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-{review_id}",
-            "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
+            "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full`",
         ]
     )
 
@@ -2812,7 +2812,7 @@ def test_low_risk_pr_body_does_not_require_codex_review() -> None:
 
 ## 已运行检查
 
-- governance gate: `.venv/bin/python -m scripts.research.governance gate`
+- verify full: `.venv/bin/python -m scripts.research.governance verify full`
 
 ## P2 保留项
 
@@ -2824,7 +2824,7 @@ def test_low_risk_pr_body_does_not_require_codex_review() -> None:
     assert report.ok, report.errors
 
 
-def test_pr_review_evidence_requires_governance_gate_command() -> None:
+def test_pr_review_evidence_requires_verify_full_command() -> None:
     body = """
 ## AI Review 风险分级
 
@@ -2853,7 +2853,7 @@ def test_pr_review_evidence_requires_governance_gate_command() -> None:
     report = validate_pr_body(body)
 
     assert not report.ok
-    assert "review evidence must include governance gate command" in report.errors
+    assert "review evidence must include verify full command" in report.errors
 
 
 def test_low_risk_pr_body_requires_cross_review_and_dispatch_evidence() -> None:
@@ -3119,7 +3119,7 @@ def test_low_risk_pr_body_accepts_reviewer_names_without_fixed_phrase() -> None:
 
 ## 已运行检查
 
-- governance gate: `.venv/bin/python -m scripts.research.governance gate`
+- verify full: `.venv/bin/python -m scripts.research.governance verify full`
 
 ## P2 保留项
 
@@ -3228,7 +3228,7 @@ def test_pr_body_partial_ai_review_mode_accepts_user_authorization() -> None:
 
 ## 已运行检查
 
-- governance gate: `.venv/bin/python -m scripts.research.governance gate`
+- verify full: `.venv/bin/python -m scripts.research.governance verify full`
 
 ## P2 保留项
 
@@ -3425,7 +3425,7 @@ def test_pr_body_accepts_p2_none_before_managed_block_end() -> None:
 
 ## 已运行检查
 
-- governance gate: `{pr_review_evidence.REQUIRED_GOVERNANCE_GATE_COMMANDS[0]}`
+- verify full: `{pr_review_evidence.REQUIRED_VERIFY_FULL_COMMANDS[0]}`
 
 ## {pr_review_evidence.P2_SECTION_HEADER}
 
@@ -3438,7 +3438,7 @@ def test_pr_body_accepts_p2_none_before_managed_block_end() -> None:
     assert report.ok, report.errors
 
 
-def test_low_risk_pr_body_requires_local_governance_gate_command() -> None:
+def test_low_risk_pr_body_requires_local_verify_full_command() -> None:
     body = f"""
 ## {pr_review_evidence.AI_REVIEW_SECTION_HEADER}
 
@@ -3458,7 +3458,7 @@ def test_low_risk_pr_body_requires_local_governance_gate_command() -> None:
     report = validate_pr_body(body, comments=[])
 
     assert not report.ok
-    assert "local check evidence must include governance gate command" in report.errors
+    assert "local check evidence must include verify full command" in report.errors
 
 
 def test_low_risk_pr_body_accepts_chinese_p2_fields() -> None:
@@ -3475,7 +3475,7 @@ def test_low_risk_pr_body_accepts_chinese_p2_fields() -> None:
 
 ## 已运行检查
 
-- governance gate: `.venv/bin/python -m scripts.research.governance gate`
+- verify full: `.venv/bin/python -m scripts.research.governance verify full`
 
 ## P2 保留项
 
@@ -3554,7 +3554,7 @@ def test_low_risk_pr_body_accepts_dispatched_detail_with_no_undispatched_items()
 
 ## 已运行检查
 
-- governance gate: `.venv/bin/python -m scripts.research.governance gate`
+- verify full: `.venv/bin/python -m scripts.research.governance verify full`
 
 ## P2 保留项
 
@@ -3673,7 +3673,7 @@ def test_high_risk_pr_body_requires_codex_review() -> None:
 - 阻断问题: 未确认
 - 关键证据:
   - Codex review 链接：https://github.com/example/repo/pull/1#pullrequestreview-1
-  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`
+  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full`
 """
 
     report = validate_pr_body(body, comments=[])
@@ -3705,7 +3705,7 @@ def _official_codex_skip_body(*, authorization: str | None = None) -> str:
 
 ## 已运行检查
 
-- governance gate: `.venv/bin/python -m scripts.research.governance gate`
+- verify full: `.venv/bin/python -m scripts.research.governance verify full`
 
 ## P2 保留项
 
@@ -3730,7 +3730,7 @@ def _low_risk_no_official_review_body() -> str:
 
 ## 已运行检查
 
-- governance gate: `.venv/bin/python -m scripts.research.governance gate`
+- verify full: `.venv/bin/python -m scripts.research.governance verify full`
 
 ## P2 保留项
 
@@ -3738,28 +3738,28 @@ def _low_risk_no_official_review_body() -> str:
 """
 
 
-def test_low_risk_pr_body_rejects_bare_governance_gate_module() -> None:
+def test_low_risk_pr_body_rejects_bare_verify_full_module() -> None:
     body = _low_risk_no_official_review_body().replace(
-        "`.venv/bin/python -m scripts.research.governance gate`",
-        "`scripts.research.governance gate`",
+        "`.venv/bin/python -m scripts.research.governance verify full`",
+        "`scripts.research.governance verify full`",
     )
 
     report = validate_pr_body(body, comments=[])
 
     assert not report.ok
-    assert "local check evidence must include governance gate command" in report.errors
+    assert "local check evidence must include verify full command" in report.errors
 
 
-def test_codex_review_evidence_rejects_bare_governance_gate_module() -> None:
+def test_codex_review_evidence_rejects_bare_verify_full_module() -> None:
     body = _valid_codex_review_body().replace(
-        "`.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
-        "`scripts.research.governance gate`",
+        "`.\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full`",
+        "`scripts.research.governance verify full`",
     )
 
     report = validate_pr_body(body)
 
     assert not report.ok
-    assert "review evidence must include governance gate command" in report.errors
+    assert "review evidence must include verify full command" in report.errors
 
 
 def test_high_risk_pr_body_can_skip_codex_review_with_user_authorization() -> None:
@@ -4377,7 +4377,7 @@ def test_pr_review_evidence_rejects_unexecuted_codex_conclusion() -> None:
                 "- 阻断问题: 未确认",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full`",
             ]
         )
     )
@@ -4397,7 +4397,7 @@ def test_pr_review_evidence_rejects_placeholder_codex_review_link() -> None:
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：",
-                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full`",
             ]
         )
     )
@@ -4420,7 +4420,7 @@ def test_pr_review_evidence_rejects_other_pr_review_link() -> None:
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/4#pullrequestreview-4314779358",
-                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full`",
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
@@ -4444,7 +4444,7 @@ def test_pr_review_evidence_rejects_discussion_link_as_review() -> None:
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#discussion_r3262925410",
-                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full`",
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
@@ -4468,7 +4468,7 @@ def test_pr_review_evidence_rejects_missing_required_trigger_comment() -> None:
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full`",
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
@@ -4562,7 +4562,7 @@ def test_pr_review_evidence_rejects_review_from_old_head() -> None:
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full`",
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
@@ -5106,7 +5106,7 @@ def test_pr_review_evidence_rejects_codex_review_with_blocking_body_finding() ->
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full`",
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
@@ -5141,7 +5141,7 @@ def test_pr_review_evidence_rejects_codex_review_with_blocking_inline_finding() 
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full`",
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
@@ -5181,7 +5181,7 @@ def test_pr_review_evidence_rejects_review_before_required_trigger_comment() -> 
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full`",
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
@@ -5258,7 +5258,7 @@ def test_pr_review_evidence_rejects_trigger_before_current_head() -> None:
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full`",
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
@@ -5301,7 +5301,7 @@ def test_pr_review_evidence_uses_comment_updated_at_for_trigger_time() -> None:
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full`",
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",
@@ -5345,7 +5345,7 @@ def test_pr_review_evidence_rejects_any_current_head_blocking_codex_review() -> 
                 "- 阻断问题: 无",
                 "- 关键证据:",
                 "  - Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
+                "  - `.\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full`",
             ]
         ),
         expected_pr_url="https://github.com/liuli195/Quant-Trading/pull/5",

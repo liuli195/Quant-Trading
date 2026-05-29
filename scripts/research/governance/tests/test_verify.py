@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 from scripts.research.governance import __main__ as governance_main
-from scripts.research.governance import affected, verify
+from scripts.research.governance import affected, verify, verify_cache
 from scripts.research.governance.affected import plan_checks
 
 
@@ -17,6 +17,16 @@ def test_docs_files_map_to_pathref_changed_files() -> None:
     assert plan.full_not_run is True
 
 
+def test_root_markdown_files_map_to_pathref_changed_files() -> None:
+    plan = plan_checks(["AGENTS.md", "indexes.md"])
+
+    assert [check.check_id for check in plan.checked] == [
+        "pathref.changed-files",
+        "governance.full",
+    ]
+    assert plan.checked[0].inputs == ("AGENTS.md", "indexes.md")
+
+
 def test_skill_files_map_to_skill_ownership_scoped() -> None:
     plan = plan_checks(
         [
@@ -25,8 +35,11 @@ def test_skill_files_map_to_skill_ownership_scoped() -> None:
         ]
     )
 
-    assert [check.check_id for check in plan.checked] == ["skill-ownership.scoped"]
-    assert plan.checked[0].subjects == ("repo-python-env",)
+    assert [check.check_id for check in plan.checked] == [
+        "pathref.changed-files",
+        "skill-ownership.scoped",
+    ]
+    assert plan.checked[1].subjects == ("repo-python-env",)
     assert plan.full_not_run is True
 
 
@@ -76,7 +89,84 @@ def test_collect_changed_files_staged_does_not_include_worktree(
     source = affected.collect_changed_files(tmp_path, staged=True)
 
     assert source.files == ("docs/staged.md",)
-    assert calls == [("--cached",)]
+    assert calls == [("--cached",), ()]
+
+
+def test_collect_changed_files_fails_when_git_diff_fails(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 128, "", "bad revision")
+
+    monkeypatch.setattr(affected.subprocess, "run", fake_run)
+
+    try:
+        affected.collect_changed_files(tmp_path, base="missing-ref")
+    except affected.ChangedFileCollectionError as exc:
+        assert "bad revision" in str(exc)
+    else:
+        raise AssertionError("collect_changed_files should fail closed on git errors")
+
+
+def test_verify_fast_fails_when_staged_file_has_unstaged_changes(
+    monkeypatch,
+    capsys,
+    tmp_path: Path,
+) -> None:
+    def fake_git_changed_files(_root: Path, args: list[str]) -> list[str]:
+        if args == ["--cached"]:
+            return ["docs/rules/commands.md"]
+        return ["docs/rules/commands.md"]
+
+    monkeypatch.setattr(affected, "_git_changed_files", fake_git_changed_files)
+
+    code = verify.main(["fast", "--staged", "--format", "json", "--repo-root", str(tmp_path)])
+
+    assert code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert "unstaged changes" in payload["error"]
+
+
+def test_governance_related_paths_trigger_full_governance_checks() -> None:
+    plan = plan_checks(
+        [
+            ".githooks/pre-commit",
+            ".github/workflows/research-governance.yml",
+            "Makefile",
+            "scripts/tools/path_tools/refactor.py",
+            "scripts/research/registry/tool_registry.py",
+        ]
+    )
+
+    checked = [check.check_id for check in plan.checked]
+    assert "pathref.full" in checked
+    assert "governance.full" in checked
+    assert "pathref.changed-files" not in checked
+
+
+def test_governance_cache_key_includes_actual_scan_root(tmp_path: Path) -> None:
+    governance_dir = tmp_path / "scripts/research/governance"
+    governance_dir.mkdir(parents=True)
+    (governance_dir / "verify.py").write_text("print('verify')\n", encoding="utf-8")
+    helper = governance_dir / "helper.py"
+    helper.write_text("VALUE = 1\n", encoding="utf-8")
+    check = plan_checks(["scripts/research/governance/verify.py"]).checked[0]
+
+    first_key, _ = verify_cache.cache_key(
+        tmp_path,
+        check,
+        ("python", "-m", "ruff", "check", "scripts/research/governance"),
+    )
+    helper.write_text("VALUE = 2\n", encoding="utf-8")
+    second_key, _ = verify_cache.cache_key(
+        tmp_path,
+        check,
+        ("python", "-m", "ruff", "check", "scripts/research/governance"),
+    )
+
+    assert first_key != second_key
 
 
 def test_verify_explain_outputs_json_without_running_checks(
@@ -189,8 +279,11 @@ def test_skill_fast_runs_skill_ownership_without_full_gate(
 
     assert code == 0
     payload = json.loads(capsys.readouterr().out)
-    assert payload["checked"][0]["check_id"] == "skill-ownership.scoped"
-    assert payload["checked"][0]["subjects"] == ["repo-python-env"]
+    assert [item["check_id"] for item in payload["checked"]] == [
+        "pathref.changed-files",
+        "skill-ownership.scoped",
+    ]
+    assert payload["checked"][1]["subjects"] == ["repo-python-env"]
     assert any("scripts.research.governance.skill_ownership" in call for call in calls)
     assert not any(call == ["scripts.research.governance", "gate"] for call in calls)
 
@@ -234,7 +327,11 @@ def test_governance_fast_runs_scoped_static_checks_without_full_gate(
     assert any("ruff" in call for call in calls)
     assert any("bandit" in call for call in calls)
     assert any("mypy" in call for call in calls)
-    assert any("pytest" in call for call in calls)
+    pytest_call = next(call for call in calls if "pytest" in call)
+    assert "scripts/research/governance/tests" in pytest_call
+    assert ".local/pytest-tmp/governance-fast" in pytest_call
+    assert "-p" in pytest_call
+    assert "no:cacheprovider" in pytest_call
     assert not any("scripts.research.governance" in call and "gate" in call for call in calls)
 
 
@@ -302,7 +399,8 @@ def test_strategy_fast_runs_pytest_when_tests_dir_exists(
     assert code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["checked"][1]["skipped"] is False
-    assert any("pytest" in call and "strategies/demo/tests" in call for call in calls)
+    pytest_call = next(call for call in calls if "pytest" in call and "strategies/demo/tests" in call)
+    assert ".local/pytest-tmp/strategy-demo-fast" in pytest_call
 
 
 def test_dependency_fast_runs_pip_audit(
@@ -439,6 +537,10 @@ def test_verify_full_runs_complete_command_chain(
         "scripts.research.governance",
     ]
     assert calls[-1][-1] == "gate"
+    pytest_call = next(call for call in calls if "pytest" in call)
+    assert ".local/pytest-tmp/verify-full" in pytest_call
+    assert "-p" in pytest_call
+    assert "no:cacheprovider" in pytest_call
 
 
 def test_governance_main_forwards_verify_command(monkeypatch) -> None:

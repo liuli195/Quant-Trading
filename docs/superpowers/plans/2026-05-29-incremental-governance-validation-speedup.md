@@ -34,16 +34,16 @@ AFK 表示实现和合并不需要新的人工判断；HITL 表示需要先确�
 
 ## Slice Tracker
 
-- [ ] S01 [AFK] Pathref scoped check：给 Markdown 小改第一条快路径。
-- [ ] S02 [AFK] Affected explain：只解释命中的检查，不执行命令。
-- [ ] S03 [AFK] Docs fast path：`verify fast` 能验证普通文档改动并声明 full 未运行。
-- [ ] S04 [AFK] Skill fast path：Skill 改动只触发 owner/adapter scoped 检查。
-- [ ] S05 [AFK] Governance fast path：治理代码改动触发静态扫描和治理单测。
-- [ ] S06 [AFK] Strategy/dependency fast path：策略与依赖改动触发对应局部检查。
-- [ ] S07 [AFK] Passing-result cache：只缓存通过结果，并在 explain/fast 中展示命中。
-- [ ] S08 [AFK] Full contract and entrypoints：`verify full`、Makefile、hooks、CI parity 全部接入。
-- [ ] S09 [AFK] Rules and registry sync：规则、README、工具注册表、层索引同步。
-- [ ] S10 [HITL] Legacy and CI shape decision：人工确认旧入口删除窗口和 CI 是否收敛为单命令。
+- [x] S01 [AFK] Pathref scoped check：给 Markdown 小改第一条快路径。
+- [x] S02 [AFK] Affected explain：只解释命中的检查，不执行命令。
+- [x] S03 [AFK] Docs fast path：`verify fast` 能验证普通文档改动并声明 full 未运行。
+- [x] S04 [AFK] Skill fast path：Skill 改动触发 owner/adapter scoped 检查。
+- [x] S05 [AFK] Governance fast path：治理代码改动触发静态扫描和治理单测。
+- [x] S06 [AFK] Strategy/dependency fast path：策略与依赖改动触发对应局部检查。
+- [x] S07 [AFK] Passing-result cache：只缓存通过结果，并在 explain/fast 中展示命中。
+- [x] S08 [AFK] Full contract and entrypoints：`verify full`、Makefile、hooks、CI parity 全部接入。
+- [x] S09 [AFK] Rules and registry sync：规则、README、工具注册表、层索引同步。
+- [x] S10 [HITL] Legacy and CI shape decision：人工已确认 CI 收敛为单命令。
 
 ## File Structure
 

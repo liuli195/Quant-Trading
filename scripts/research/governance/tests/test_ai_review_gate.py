@@ -16,7 +16,7 @@ from scripts.research.governance.pr_review_evidence import (
 )
 
 GOVERNANCE_GATE_COMMAND = (
-    ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate"
+    ".\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full"
 )
 
 
@@ -98,7 +98,7 @@ def _valid_complete_payload(
         ),
         "changed_files": changed_files or ["docs/guides/example.md"],
         "findings": [],
-        "checks": {"governance gate": GOVERNANCE_GATE_COMMAND, "pytest": "pass"},
+        "checks": {"verify full": GOVERNANCE_GATE_COMMAND, "pytest": "pass"},
     }
 
 
@@ -369,7 +369,7 @@ def test_pr_body_renders_codex_section_only_when_evidence_is_present(
         "blocking_issues": "无",
         "evidence": [
             "Codex review 链接：https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779358",
-            "`.\\.venv\\Scripts\\python.exe -m scripts.research.governance gate`",
+            "`.\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full`",
         ],
     }
     _write_report(report, payload)

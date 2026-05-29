@@ -10,7 +10,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .affected import AffectedPlan, CheckSpec, collect_changed_files, plan_checks
+from .affected import (
+    AffectedPlan,
+    ChangedFileCollectionError,
+    ChangedFileSource,
+    CheckSpec,
+    collect_changed_files,
+    plan_checks,
+)
 from . import verify_cache
 
 
@@ -106,13 +113,10 @@ def _add_affected_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def _cmd_explain(args: argparse.Namespace) -> int:
-    source = collect_changed_files(
-        args.repo_root,
-        staged=args.staged,
-        base=args.base,
-        files=args.files,
-        ai_review_report=args.ai_review_report,
-    )
+    try:
+        source = _collect_source(args)
+    except ChangedFileCollectionError as exc:
+        return _render_collection_error(args, str(exc))
     plan = plan_checks(source.files)
     if args.format == "json":
         print(json.dumps(_explain_payload(plan, Path(args.repo_root)), ensure_ascii=False, indent=2))
@@ -122,13 +126,10 @@ def _cmd_explain(args: argparse.Namespace) -> int:
 
 
 def _cmd_fast(args: argparse.Namespace) -> int:
-    source = collect_changed_files(
-        args.repo_root,
-        staged=args.staged,
-        base=args.base,
-        files=args.files,
-        ai_review_report=args.ai_review_report,
-    )
+    try:
+        source = _collect_source(args)
+    except ChangedFileCollectionError as exc:
+        return _render_collection_error(args, str(exc))
     plan = plan_checks(source.files)
     results = [_run_check(check, repo_root=Path(args.repo_root)) for check in plan.checked]
     ok = all(result.ok for result in results)
@@ -143,6 +144,33 @@ def _cmd_fast(args: argparse.Namespace) -> int:
     else:
         print(render_fast_text(payload))
     return 0 if ok else 1
+
+
+def _collect_source(args: argparse.Namespace) -> ChangedFileSource:
+    return collect_changed_files(
+        args.repo_root,
+        staged=args.staged,
+        base=args.base,
+        files=args.files,
+        ai_review_report=args.ai_review_report,
+    )
+
+
+def _render_collection_error(args: argparse.Namespace, message: str) -> int:
+    payload = {
+        "ok": False,
+        "error": message,
+        "changed_files": [],
+        "checked": [],
+        "skipped": [],
+        "full_required": False,
+        "full_not_run": True,
+    }
+    if args.format == "json":
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(f"error: {message}", file=sys.stderr)
+    return 1
 
 
 def _cmd_full(args: argparse.Namespace) -> int:
@@ -201,7 +229,17 @@ def _full_commands() -> tuple[CheckSpec, ...]:
         CheckSpec("pip-audit.dependencies", ("python", "-m", "pip_audit"), scope="full"),
         CheckSpec(
             "pytest.governance",
-            ("python", "-m", "pytest", "scripts/research/governance/tests", "-q"),
+            (
+                "python",
+                "-m",
+                "pytest",
+                "scripts/research/governance/tests",
+                "-q",
+                "--basetemp",
+                ".local/pytest-tmp/verify-full",
+                "-p",
+                "no:cacheprovider",
+            ),
             scope="full",
         ),
         CheckSpec(
@@ -264,6 +302,19 @@ def _run_check(check: CheckSpec, *, repo_root: Path) -> CheckResult:
         if check_result.ok:
             verify_cache.store(root, key, check_result.to_dict())
         return check_result
+    if check.check_id in {"pathref.full", "governance.full"}:
+        command = _python_command(check.command)
+        result = _run_command(command, root)
+        return CheckResult(
+            check_id=check.check_id,
+            command=command,
+            ok=result.returncode == 0,
+            returncode=result.returncode,
+            subjects=check.subjects,
+            scope=check.scope,
+            stdout=result.stdout.strip(),
+            stderr=result.stderr.strip(),
+        )
     if check.check_id == "pytest.strategy":
         test_dir = root / check.inputs[0] if check.inputs else root / "__missing__"
         command = _python_command(check.command)

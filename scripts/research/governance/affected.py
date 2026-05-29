@@ -4,19 +4,21 @@ from __future__ import annotations
 
 import json
 import subprocess
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from collections.abc import Sequence
 
 
 ALL_CHECK_IDS = (
     "pathref.changed-files",
+    "pathref.full",
     "skill-ownership.scoped",
     "ruff.governance",
     "bandit.governance",
     "mypy.governance",
     "pytest.governance",
+    "governance.full",
     "py_compile.strategy",
     "pytest.strategy",
     "pip-audit.dependencies",
@@ -67,6 +69,10 @@ class AffectedPlan:
         }
 
 
+class ChangedFileCollectionError(RuntimeError):
+    """Raised when changed-file discovery cannot safely determine scope."""
+
+
 def collect_changed_files(
     repo_root: str | Path,
     *,
@@ -88,7 +94,15 @@ def collect_changed_files(
         source_parts.append(f"base:{base}")
 
     if staged:
-        changed.extend(_git_changed_files(root, ["--cached"]))
+        staged_files = _git_changed_files(root, ["--cached"])
+        worktree_files = _git_changed_files(root, [])
+        overlap = tuple(sorted(set(staged_files).intersection(worktree_files)))
+        if overlap:
+            raise ChangedFileCollectionError(
+                "staged files also have unstaged changes; commit or stash them before "
+                f"running staged fast verification: {', '.join(overlap)}"
+            )
+        changed.extend(staged_files)
         source_parts.append("staged")
 
     if not files and not base and not staged:
@@ -110,13 +124,24 @@ def plan_checks(changed_files: Sequence[str | Path]) -> AffectedPlan:
     normalized = tuple(sorted(dict.fromkeys(_normalize_path(path) for path in changed_files)))
     checked: list[CheckSpec] = []
 
-    docs = tuple(path for path in normalized if path.startswith("docs/") and path.endswith(".md"))
-    if docs:
+    markdown = tuple(path for path in normalized if path.endswith(".md"))
+    if markdown:
         checked.append(
             CheckSpec(
                 "pathref.changed-files",
-                ("python", "-m", "scripts.tools.path_tools.refactor", "check", "--files", *docs),
-                inputs=docs,
+                ("python", "-m", "scripts.tools.path_tools.refactor", "check", "--files", *markdown),
+                inputs=markdown,
+            )
+        )
+
+    if _requires_full_pathref(normalized):
+        checked.append(
+            CheckSpec(
+                "pathref.full",
+                ("python", "-m", "scripts.tools.path_tools.refactor", "check"),
+                inputs=("scripts/tools/path_tools", "path_aliases.json"),
+                scope="full",
+                full_required=True,
             )
         )
 
@@ -130,7 +155,7 @@ def plan_checks(changed_files: Sequence[str | Path]) -> AffectedPlan:
             CheckSpec(
                 "skill-ownership.scoped",
                 ("python", "-m", "scripts.research.governance.skill_ownership", "check"),
-                inputs=skills,
+                inputs=(".codex/skills", ".claude/skills", "docs/rules/skills.md"),
                 subjects=_skill_names(skills),
             )
         )
@@ -156,7 +181,7 @@ def plan_checks(changed_files: Sequence[str | Path]) -> AffectedPlan:
                 CheckSpec(
                     "ruff.governance",
                     ("python", "-m", "ruff", "check", "scripts/research/governance"),
-                    inputs=governance,
+                    inputs=("scripts/research/governance",),
                 ),
                 CheckSpec(
                     "bandit.governance",
@@ -172,7 +197,7 @@ def plan_checks(changed_files: Sequence[str | Path]) -> AffectedPlan:
                         "-s",
                         "B310,B404,B603,B607",
                     ),
-                    inputs=governance,
+                    inputs=("scripts/research/governance",),
                 ),
                 CheckSpec(
                     "mypy.governance",
@@ -185,13 +210,34 @@ def plan_checks(changed_files: Sequence[str | Path]) -> AffectedPlan:
                         "--ignore-missing-imports",
                         "scripts/research/governance",
                     ),
-                    inputs=governance,
+                    inputs=("scripts/research/governance",),
                 ),
                 CheckSpec(
                     "pytest.governance",
-                    ("python", "-m", "pytest", "scripts/research/governance/tests", "-q"),
-                    inputs=governance,
+                    (
+                        "python",
+                        "-m",
+                        "pytest",
+                        "scripts/research/governance/tests",
+                        "-q",
+                        "--basetemp",
+                        ".local/pytest-tmp/governance-fast",
+                        "-p",
+                        "no:cacheprovider",
+                    ),
+                    inputs=("scripts/research/governance",),
                 ),
+            )
+        )
+
+    if _requires_full_governance(normalized):
+        checked.append(
+            CheckSpec(
+                "governance.full",
+                ("python", "-m", "scripts.research.governance", "gate"),
+                inputs=_full_governance_inputs(),
+                scope="full",
+                full_required=True,
             )
         )
 
@@ -208,18 +254,29 @@ def plan_checks(changed_files: Sequence[str | Path]) -> AffectedPlan:
         checked.append(
             CheckSpec(
                 "pytest.strategy",
-                ("python", "-m", "pytest", f"strategies/{strategy}/tests", "-q"),
+                (
+                    "python",
+                    "-m",
+                    "pytest",
+                    f"strategies/{strategy}/tests",
+                    "-q",
+                    "--basetemp",
+                    f".local/pytest-tmp/strategy-{strategy}-fast",
+                    "-p",
+                    "no:cacheprovider",
+                ),
                 inputs=(f"strategies/{strategy}/tests",),
             )
         )
 
+    checked = _dedupe_checks(checked)
     checked_ids = {check.check_id for check in checked}
     skipped = tuple(_empty_check(check_id) for check_id in ALL_CHECK_IDS if check_id not in checked_ids)
     return AffectedPlan(
         changed_files=normalized,
         checked=tuple(checked),
         skipped=skipped,
-        full_required=False,
+        full_required=any(check.full_required for check in checked),
         full_not_run=True,
     )
 
@@ -236,7 +293,7 @@ def _normalize_path(path: str | Path) -> str:
 
 
 def _git_changed_files(root: Path, args: Sequence[str]) -> list[str]:
-    command = ["git", "diff", "--name-only", *args]
+    command = ["git", "-c", "core.quotePath=false", "diff", "--name-only", *args]
     result = subprocess.run(
         command,
         cwd=root,
@@ -247,7 +304,8 @@ def _git_changed_files(root: Path, args: Sequence[str]) -> list[str]:
         check=False,
     )
     if result.returncode != 0:
-        return []
+        detail = (result.stderr or result.stdout or f"exit {result.returncode}").strip()
+        raise ChangedFileCollectionError(f"git diff failed: {detail}")
     return [_normalize_path(line) for line in result.stdout.splitlines() if line.strip()]
 
 
@@ -278,3 +336,54 @@ def _skill_names(paths: Sequence[str]) -> tuple[str, ...]:
         if len(parts) >= 3 and parts[0] in {".codex", ".claude"} and parts[1] == "skills":
             names.append(parts[2])
     return tuple(sorted(dict.fromkeys(names)))
+
+
+def _requires_full_pathref(paths: Sequence[str]) -> bool:
+    return any(
+        path.startswith("scripts/tools/path_tools/")
+        or path == "path_aliases.json"
+        for path in paths
+    )
+
+
+def _requires_full_governance(paths: Sequence[str]) -> bool:
+    exact = {"AGENTS.md", "CLAUDE.md", "indexes.md", "Makefile", "path_aliases.json"}
+    prefixes = (
+        ".githooks/",
+        ".github/workflows/",
+        "scripts/research/registry/",
+        "scripts/research/layers/",
+        "scripts/tools/path_tools/",
+    )
+    return any(path in exact or path.startswith(prefixes) for path in paths)
+
+
+def _full_governance_inputs() -> tuple[str, ...]:
+    return (
+        "AGENTS.md",
+        "CLAUDE.md",
+        "indexes.md",
+        "docs/rules",
+        "docs/adr",
+        ".codex/skills",
+        ".claude/skills",
+        ".githooks",
+        ".github/workflows",
+        "scripts/research/governance",
+        "scripts/research/registry",
+        "scripts/research/layers",
+        "scripts/tools/path_tools",
+        "path_aliases.json",
+        "Makefile",
+    )
+
+
+def _dedupe_checks(checks: Sequence[CheckSpec]) -> list[CheckSpec]:
+    deduped: list[CheckSpec] = []
+    seen: set[str] = set()
+    for check in checks:
+        if check.check_id in seen:
+            continue
+        deduped.append(check)
+        seen.add(check.check_id)
+    return deduped
