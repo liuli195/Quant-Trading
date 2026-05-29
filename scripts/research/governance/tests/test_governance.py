@@ -2087,6 +2087,39 @@ def test_governance_audit_flags_workflow_without_pr_review_evidence_gate(
     )
 
 
+def test_governance_audit_flags_pr_review_evidence_job_level_if(
+    tmp_path: Path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    workflow = tmp_path / ".github/workflows/research-governance.yml"
+    workflow.write_text(
+        "name: Research Governance\n"
+        "on:\n"
+        "  push:\n"
+        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
+        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
+        "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
+        "  schedule:\n    - cron: '0 2 * * 1'\n"
+        "jobs:\n"
+        "  governance:\n"
+        "    steps:\n"
+        "      - run: python -m scripts.research.governance verify full\n"
+        "  pr-review-evidence:\n"
+        "    if: github.event_name == 'pull_request'\n"
+        "    steps:\n"
+        "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        "required PR review evidence job must not use job-level if" in finding.message
+        for finding in report.findings
+    )
+
+
 def test_governance_audit_flags_missing_codex_review_monitor(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / ".github/workflows/codex-review-monitor.yml").unlink()

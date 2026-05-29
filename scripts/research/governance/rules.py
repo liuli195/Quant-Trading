@@ -696,6 +696,14 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "CI workflow missing PR review evidence gate",
                 )
             )
+        if re.search(r"pr-review-evidence:\s*\n\s*if:", text):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "required PR review evidence job must not use job-level if",
+                )
+            )
         for token in (
             "python -m ruff check",
             "python -m bandit",
