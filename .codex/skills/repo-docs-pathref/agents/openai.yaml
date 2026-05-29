@@ -1,0 +1,4 @@
+interface:
+  display_name: "文档和 pathref"
+  short_description: "检查 Markdown 链接、pathref 和文档索引。"
+  default_prompt: "使用 $repo-docs-pathref 检查 Quant Trading 文档链接和索引。"

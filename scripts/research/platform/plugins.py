@@ -185,7 +185,7 @@ class FactorScanPlugin:
             "candidate_ids": cloud_candidates["candidate_id"].tolist(),
             "commands": [
                 "根据 cloud_candidates.csv 生成模块级 A/B 配置",
-                "通过 jq-ab-test 设计并校验云端确认实验",
+                "通过 strategy-experiment owner Skill 设计并校验云端确认实验",
             ],
         }
 

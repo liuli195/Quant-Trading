@@ -1,0 +1,4 @@
+interface:
+  display_name: "研究报告分析"
+  short_description: "补齐报告并对比多个 run 的收益和回撤。"
+  default_prompt: "使用 $research-report-analysis 分析 Quant Trading 的回测报告。"

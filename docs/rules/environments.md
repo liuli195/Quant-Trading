@@ -2,7 +2,9 @@
 
 策略代码只在聚宽回测/模拟运行；本地负责开发、测试、文档和分析。
 
-## 环境
+<a id="local-cloud-boundary"></a>
+
+## 本地/云端边界
 
 | 项 | 本地 `.venv` | 回测/模拟 | 聚宽研究 |
 | --- | --- | --- | --- |
@@ -13,7 +15,9 @@
 | 本地依赖保证 | `requirements.txt` | 不适用 | 不适用 |
 | 可选分析库 | `scipy`、`statsmodels`、`scikit-learn`、`matplotlib`、`seaborn`、`cvxpy` 仅在已安装时可用 | 不保证 | 可手动安装，文件数不得超 10000 |
 
-## 策略代码
+<a id="joinquant-compat"></a>
+
+## 聚宽兼容
 
 - 必须兼容聚宽 Python 3.6 和旧版 `numpy/pandas`。
 - 禁用 `f"{x=}"`、`X | Y`、`match/case`、`list[float]`。
@@ -22,7 +26,9 @@
 - 本地测试需 mock `get_price`、`order_target_value` 等聚宽 API。
 - 上传前用 `scripts.tools.jq_automation compile-check` 做兼容检查。
 
-## 分工
+<a id="joinquant-cloud-run"></a>
+
+## 聚宽云端运行
 
 - 重型计算、回归、优化、画图放本地或聚宽研究。
 - 研究结果可落文件；策略用聚宽支持的读文件方式消费。

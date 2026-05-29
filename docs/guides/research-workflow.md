@@ -4,7 +4,7 @@
 
 ## 标准生命周期
 
-1. 用 `jq-research` 或 `scripts.research.cli init` 创建研究项目。
+1. 用 `research-local-first` Skill 或 `scripts.research.cli init` 创建研究项目。
 2. 绑定不可变数据快照，或在过渡期绑定已有原始数据。
 3. 运行 `fast mode` 做大规模本地粗筛。
 4. 用 `promote` 将 shortlist 升级到 `full mode` 做留出集、分段、bootstrap 等精筛。

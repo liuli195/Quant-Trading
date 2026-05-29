@@ -11,6 +11,7 @@
 
 - [index.md](docs/rules/index.md) <!-- pathref: docs/rules/index.md --> — 规则总索引和分级
 - [commands.md](docs/rules/commands.md) <!-- pathref: docs/rules/commands.md --> — `.venv`、常用命令
+- [skills.md](docs/rules/skills.md) <!-- pathref: docs/rules/skills.md --> — Skill owner、adapter 和自然语言发现规则
 - [environments.md](docs/rules/environments.md) <!-- pathref: docs/rules/environments.md --> — 本地与聚宽环境边界
 - [code-style.md](docs/rules/code-style.md) <!-- pathref: docs/rules/code-style.md --> — 策略代码和兼容写法
 - [research-workflow.md](docs/rules/research-workflow.md) <!-- pathref: docs/rules/research-workflow.md --> — 研究、数据和报告流程

@@ -1,0 +1,31 @@
+skill: joinquant-cloud-run
+group: JoinQuant Automation
+owned_rules:
+  - docs/rules/environments.md#joinquant-cloud-run
+  - docs/rules/research-workflow.md#cloud-handoff
+owned_commands:
+  - .\.venv\Scripts\python.exe -m scripts.tools.jq_automation upload
+  - .\.venv\Scripts\python.exe -m scripts.tools.jq_automation run
+  - .\.venv\Scripts\python.exe -m scripts.tools.jq_automation fetch
+  - .\.venv\Scripts\python.exe -m scripts.tools.jq_automation batch
+owned_scripts:
+  - scripts/tools/jq_automation/cli.py#cloud-run
+  - scripts/tools/jq_automation/dataset_registration.py
+uses:
+  - joinquant-strategy-fix
+  - research-data-center
+  - research-report-analysis
+adapters:
+  - .claude/skills/joinquant-cloud-run/SKILL.md
+trigger_phrases:
+  - 上传策略到 JoinQuant
+  - 跑云端回测
+  - 抓取云端结果
+  - 注意配额
+read_rules:
+  - docs/rules/environments.md
+  - docs/rules/research-workflow.md
+recommended_commands:
+  - .\.venv\Scripts\python.exe -m scripts.tools.jq_automation run <场景配置.json> --yes
+  - .\.venv\Scripts\python.exe -m scripts.tools.jq_automation fetch <回测URL或ID> --strategy <策略名>
+status: active

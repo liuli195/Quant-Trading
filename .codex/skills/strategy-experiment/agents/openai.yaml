@@ -1,0 +1,4 @@
+interface:
+  display_name: "策略实验"
+  short_description: "参数扫描、A/B 实验和 variant registry。"
+  default_prompt: "使用 $strategy-experiment 规划 Quant Trading 的策略实验。"

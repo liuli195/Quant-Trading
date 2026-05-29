@@ -2,6 +2,8 @@
 
 ## MUST
 
+### Pathref
+
 - Markdown 内部文件引用使用“可点击链接 + `pathref` 注释”。
 - 新增、移动、重命名文档后运行 `scripts.tools.path_tools.refactor check`。
 - 新报告默认进入文档报告索引。

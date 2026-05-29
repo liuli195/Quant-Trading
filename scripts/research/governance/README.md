@@ -154,7 +154,7 @@ $env:GITHUB_TOKEN="<token>"
 - 工具是否登记在中央 registry。
 - README、文档入口、测试文件是否存在。
 - 主要 CLI 的 `--help` 是否可运行。
-- `AGENTS.md`、`indexes.md`、`CLAUDE.md` 与 `jq-research` Skill 是否同步到新入口。
+- `AGENTS.md`、`indexes.md`、`CLAUDE.md` 与 owner Skill / Claude adapter 是否同步到新入口。
 - `research_datasets/catalog.json` 是否和目录一致。
 - `docs/indexes/docs_catalog.json`、`reports_catalog.json`、`datasets_catalog.json`、`variants_catalog.json` 是否存在，并和实际报告文件一致。
 - `scripts/research/workflows/templates/*.json` 是否符合模板 schema。

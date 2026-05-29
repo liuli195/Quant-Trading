@@ -96,7 +96,6 @@
       "PowerShell(& \".\\\\.venv\\\\Scripts\\\\python.exe\" -m scripts.tools.jq_automation batch \"strategies/etf_factor_rotation/test_batches/20260507-targetvol-scan/manifest.json\" --scenario \"s03-targetvol-scan-ultralow\" --yes)",
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.tools.jq_automation fetch 9185c8dff5682cc51043774c05817179 --strategy etf_dynamic_rebalance)",
       "Bash(git show *)",
-      "Bash(mkdir -p .claude/skills/jq-param-scan/references .claude/skills/jq-param-scan/templates .claude/skills/jq-param-scan/agents .claude/skills/jq-ab-test/references .claude/skills/jq-ab-test/agents)",
       "Bash(python -m scripts.tools.path_tools.refactor check)",
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.tools.jq_automation --help 2>&1)",
       "Bash(ls -d \"d:\\\\My Project\\\\Quant Trading\"\\\\strategies\\\\*/)",
@@ -157,8 +156,8 @@
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest strategies\\\\etf_factor_rotation\\\\tests\\\\test_etf_factor_rotation.py -q --tb=short 2>&1)",
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -c \"import json; [print\\(f'{json.load\\(open\\(p, encoding=\\\\\"utf-8\\\\\"\\)\\)[\\\\\"experiment_id\\\\\"]}: OK'\\) for p in ['strategies/etf_factor_rotation/test_batches/20260515-gold-crowd-ab/abtests/gold-crowd-ab.json', 'strategies/etf_factor_rotation/test_batches/20260515-ai-crowd-ab/abtests/ai-crowd-ab.json']]; print\\('Config validation: PASS'\\)\")",
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe strategies\\\\etf_factor_rotation\\\\_validate_configs.py)",
-      "Skill(jq-ab-test)",
-      "Skill(jq-ab-test:*)",
+      "Skill(strategy-experiment)",
+      "Skill(strategy-experiment:*)",
       "Bash(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.tools.jq_automation ab expand \"strategies/etf_factor_rotation/test_batches/20260515-gold-crowd-ab/abtests/gold-crowd-ab.json\")",
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.tools.jq_automation ab expand \"strategies/etf_factor_rotation/test_batches/20260515-gold-crowd-ab/abtests/gold-crowd-ab.json\")",
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.tools.jq_automation ab run \"strategies/etf_factor_rotation/test_batches/20260515-gold-crowd-ab/abtests/gold-crowd-ab.json\")",
@@ -256,7 +255,6 @@
       "PowerShell(\"E3: Archived 3 scripts\")",
       "PowerShell(\"E4 untracked: moved manually + git add\")",
       "PowerShell(\"E5 done: scripts/ -> utils/\")",
-      "PowerShell(\\(Get-Content \".claude/skills/jq-param-scan/references/workflow.md\"\\) -replace 'scripts\\\\.jq_automation','scripts.tools.jq_automation' -replace 'scripts/jq_automation','scripts/tools/jq_automation' | Set-Content \".claude/skills/jq-param-scan/references/workflow.md\" -Encoding UTF8; \"Updated workflow.md\")",
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m py_compile scripts/tools/jq_automation/local.py 2>&1)",
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m py_compile scripts/tools/jq_automation/artifacts.py 2>&1)",
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m py_compile scripts/tools/jq_automation/cli.py 2>&1)",
@@ -307,13 +305,13 @@
       "PowerShell(\\(Get-Content \"d:\\\\My Project\\\\Quant Trading\\\\CLAUDE.md\" | Measure-Object -Line\\).Lines)",
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m py_compile strategies\\\\etf_factor_rotation\\\\etf_factor_rotation.py)",
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest strategies\\\\etf_factor_rotation\\\\tests -q)",
-      "Skill(jq-run)",
-      "Skill(jq-run:*)",
+      "Skill(joinquant-cloud-run)",
+      "Skill(joinquant-cloud-run:*)",
       "PowerShell(Get-ChildItem \"d:\\\\My Project\\\\Quant Trading\\\\strategies\\\\etf_factor_rotation\\\\backtest_runs\" -Directory | Sort-Object Name -Descending | Select-Object -First 3 | ForEach-Object { $_.Name })",
       "Bash(./.venv/Scripts/python.exe -m scripts.tools.jq_automation compile-check \"strategies/etf_factor_rotation/etf_factor_rotation.py\")",
       "Bash(./.venv/Scripts/python.exe -m scripts.tools.jq_automation run \"strategies/etf_factor_rotation/scenario_default_run.json\" --yes --backtest-timeout 600)",
-      "Skill(jq-analyze)",
-      "Skill(jq-analyze:*)",
+      "Skill(research-report-analysis)",
+      "Skill(research-report-analysis:*)",
       "Bash(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest strategies\\\\etf_factor_rotation\\\\tests -q)",
       "Bash(Select-Object FullName, Length, LastWriteTime)",
       "Bash(.\\\\.venv\\\\Scripts\\\\python.exe -m scripts.tools.jq_automation compile-check \"strategies/etf_factor_rotation/etf_factor_rotation.py\" --write-upload)",
@@ -337,7 +335,7 @@
       "Bash(ALLOW_DIRECT_MAIN_WRITE=1 DIRECT_MAIN_WRITE_REASON='推送跨AI工具技能管理文档更新到远端主干' git push origin main)"
     ],
     "additionalDirectories": [
-      "d:\\My Project\\Quant Trading\\.claude\\skills\\jq-param-scan"
+      "d:\\My Project\\Quant Trading\\.claude\\skills\\strategy-experiment"
     ]
   },
   "outputStyle": "Explanatory"

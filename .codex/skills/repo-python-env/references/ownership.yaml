@@ -1,0 +1,28 @@
+skill: repo-python-env
+group: Repo Governance
+owned_rules:
+  - docs/rules/commands.md#python-env
+  - docs/rules/environments.md#local-cloud-boundary
+owned_commands:
+  - .\.venv\Scripts\python.exe
+  - .venv/bin/python
+  - .\.githooks\setup-python.ps1
+  - .githooks/setup-python.sh
+owned_scripts:
+  - .githooks/setup-python.ps1
+  - .githooks/setup-python.sh
+uses: []
+adapters:
+  - .claude/skills/repo-python-env/SKILL.md
+trigger_phrases:
+  - 本地 Python 应该怎么跑
+  - 不能用系统 Python
+  - 项目 .venv
+  - PYTHONUTF8
+read_rules:
+  - docs/rules/commands.md
+  - docs/rules/environments.md
+recommended_commands:
+  - .\.venv\Scripts\python.exe -m pytest
+  - .\.venv\Scripts\python.exe -m scripts.research.governance gate
+status: active

@@ -15,7 +15,7 @@ from pathlib import Path
 try:
     from .aliases import PathAliasError, find_repo_root, repo_relative, resolve_path
 except ImportError:  # pragma: no cover - supports direct script execution.
-    from aliases import PathAliasError, find_repo_root, repo_relative, resolve_path
+    from aliases import PathAliasError, find_repo_root, repo_relative, resolve_path  # type: ignore[no-redef]
 
 
 TEXT_SUFFIXES = {
@@ -29,6 +29,7 @@ TEXT_SUFFIXES = {
 }
 EXCLUDED_DIR_NAMES = {
     ".git",
+    ".local",
     "__pycache__",
     ".pytest_cache",
     ".mypy_cache",
