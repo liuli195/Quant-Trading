@@ -368,6 +368,7 @@ def _python_command(command: tuple[str, ...]) -> tuple[str, ...]:
 
 
 def _run_command(command: tuple[str, ...], root: Path) -> subprocess.CompletedProcess[str]:
+    _prepare_command_paths(command, root)
     return subprocess.run(
         list(command),
         cwd=root,
@@ -377,6 +378,12 @@ def _run_command(command: tuple[str, ...], root: Path) -> subprocess.CompletedPr
         errors="replace",
         check=False,
     )
+
+
+def _prepare_command_paths(command: tuple[str, ...], root: Path) -> None:
+    for index, item in enumerate(command):
+        if item == "--basetemp" and index + 1 < len(command):
+            (root / command[index + 1]).parent.mkdir(parents=True, exist_ok=True)
 
 
 def render_text(plan: AffectedPlan) -> str:

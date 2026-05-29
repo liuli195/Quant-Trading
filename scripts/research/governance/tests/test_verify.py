@@ -654,6 +654,7 @@ def test_verify_full_runs_complete_command_chain(
     assert ".local/pytest-tmp/verify-full" in pytest_call
     assert "-p" in pytest_call
     assert "no:cacheprovider" in pytest_call
+    assert (tmp_path / ".local/pytest-tmp").is_dir()
 
 
 def test_governance_main_forwards_verify_command(monkeypatch) -> None:
