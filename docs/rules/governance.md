@@ -8,7 +8,7 @@
 - PR 准备、push 前、CI 和最终交付证据必须使用 `scripts.research.governance verify full`。
 - `.githooks/pre-commit` 使用 `scripts.research.governance verify fast --staged`。
 - `.githooks/pre-push` 和 CI 必须覆盖完整治理审计和 pathref gate，不得使用 fast。
-- `scripts.research.governance.pr_flow` 是本地 PR 自动化入口；`make pr-ready TITLE="<PR标题>"` 负责准备 PR evidence、同步 GitHub draft PR、触发必要的 Codex review 并等待 required checks。
+- `scripts.research.governance.pr_flow` 是本地 PR 自动化入口；`make pr-ready TITLE="<PR标题>"` 负责准备 PR evidence、同步 GitHub draft PR、触发必要的 Codex review 并等待 required checks；`make pr-complete TITLE="<PR标题>"` 负责在无阻断路径上继续 ready-for-review、head-locked merge 和合并后 cleanup。
 - GitHub `main` 必须启用 branch protection 或 ruleset：Require pull request、Require status checks、Require review from Code Owners、Block force pushes。
 - required checks 必须包括 `Research Governance / governance`、`Research Governance / pr-review-evidence`、`Codex Review Monitor`。
 - `Research Governance / governance` 通过 `verify full` 汇总静态扫描、类型检查、依赖漏洞扫描、测试、pathref 和 governance gate。
@@ -23,6 +23,7 @@
 - `.githooks/reference-transaction` 必须阻断本地 `refs/heads/main` / `refs/heads/master` 被 merge、reset、delete 或 force rewrite；授权直写也只允许 fast-forward。
 - PR 云端合并后，本地同步 `main` 必须设置 `ALLOW_MAIN_REF_UPDATE=1` 和 `MAIN_REF_UPDATE_REASON=<reason>`，并只允许 fast-forward 到 `origin/main`。
 - PR 合并收尾必须删除已合并提交分支的本地和远端引用；不得 force delete 掩盖未合并分支。
+- `pr_flow merge` 必须使用当前 head SHA 的 `--match-head-commit` 合并；`pr_flow cleanup` 必须先 fetch，再走受控 fast-forward，同步后再删除本地和远端已合并分支并验证远端引用消失。
 - CODEOWNERS 必须覆盖关键路径。
 - waiver 必须登记 `id`、`rule_id`、`path`、`reason`、`owner`、`approved_by`、`expires_at`、`migration_plan`；过期或字段不全必须阻断。
 - 规则入口、Skill、README、workflow、registry、catalog、pathref 不能漂移。

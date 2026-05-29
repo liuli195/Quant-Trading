@@ -1,4 +1,4 @@
-.PHONY: verify-fast verify-full pre-pr ai-review risk-check pr-ready pr-diagnose
+.PHONY: verify-fast verify-full pre-pr ai-review risk-check pr-ready pr-diagnose pr-ready-for-review pr-merge pr-cleanup pr-complete
 
 ifeq ($(OS),Windows_NT)
 PYTHON ?= ./.venv/Scripts/python.exe
@@ -35,3 +35,15 @@ pr-ready:
 
 pr-diagnose:
 	$(PYTHON) -m scripts.research.governance.pr_flow diagnose $(if $(PR),--pr "$(PR)",)
+
+pr-ready-for-review:
+	$(PYTHON) -m scripts.research.governance.pr_flow ready-for-review $(if $(PR),--pr "$(PR)",)
+
+pr-merge:
+	$(PYTHON) -m scripts.research.governance.pr_flow merge $(if $(PR),--pr "$(PR)",)
+
+pr-cleanup:
+	$(PYTHON) -m scripts.research.governance.pr_flow cleanup $(if $(PR),--pr "$(PR)",)
+
+pr-complete:
+	$(PYTHON) -m scripts.research.governance.pr_flow complete --title "$(TITLE)" $(if $(PR),--pr "$(PR)",)

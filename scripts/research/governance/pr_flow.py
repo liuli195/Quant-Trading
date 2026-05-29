@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -247,6 +248,27 @@ def sync(
         if not title:
             print("error: --title is required when no PR exists", file=sys.stderr)
             return 1
+        remote_head = runner.run(
+            ["git", "ls-remote", "--heads", "origin", branch],
+            cwd=root,
+        )
+        if remote_head.returncode != 0:
+            _print_state(
+                "EXCEPTION_REQUIRED",
+                "remote branch status unavailable",
+                details=[
+                    _single_line_text(remote_head.stderr),
+                    _single_line_text(remote_head.stdout),
+                ],
+            )
+            return EXCEPTION_REQUIRED_EXIT_CODE
+        if not _command_stdout(remote_head):
+            _print_state(
+                "PUSH_REQUIRED",
+                "remote branch missing for PR creation",
+                details=[f"git push -u origin {branch}"],
+            )
+            return EXCEPTION_REQUIRED_EXIT_CODE
         body_file = _write_managed_body_file(local, _pr_template_body(root), pr_body)
         create = runner.run(
             [
@@ -687,6 +709,195 @@ def ready(
         _print_github_data_unavailable(exc)
         return EXCEPTION_REQUIRED_EXIT_CODE
     return wait(repo_root=repo_root, runner=runner)
+
+
+def ready_for_review(
+    *,
+    repo_root: str | Path = ".",
+    pr: str | None = None,
+    runner: Runner | None = None,
+) -> int:
+    root = Path(repo_root).resolve()
+    runner = runner or CommandRunner()
+    pr_ref = pr or _current_pr_number(root, runner)
+    if not pr_ref:
+        print("error: PR not found for current branch", file=sys.stderr)
+        return 1
+    mark_ready = runner.run(["gh", "pr", "ready", pr_ref], cwd=root)
+    if mark_ready.returncode != 0:
+        _print_command_failure("gh pr ready", mark_ready)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    return wait(repo_root=root, pr=pr_ref, runner=runner)
+
+
+def merge_pr(
+    *,
+    repo_root: str | Path = ".",
+    pr: str | None = None,
+    runner: Runner | None = None,
+) -> int:
+    root = Path(repo_root).resolve()
+    runner = runner or CommandRunner()
+    code = diagnose(repo_root=root, pr=pr, runner=runner)
+    if code != SUCCESS_EXIT_CODE:
+        return code
+    try:
+        metadata = _diagnose_pr_metadata(root, runner, pr=pr)
+    except GitHubDataUnavailable as exc:
+        _print_github_data_unavailable(exc)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    pr_ref = str(metadata.get("number") or pr or "")
+    head_sha = _single_line_text(metadata.get("headRefOid"))
+    if not pr_ref or not head_sha:
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "PR head metadata unavailable for merge",
+            details=("gh pr view --json " + PR_DIAGNOSE_JSON_FIELDS,),
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    merged = runner.run(
+        ["gh", "pr", "merge", pr_ref, "--merge", "--match-head-commit", head_sha],
+        cwd=root,
+    )
+    if merged.returncode != 0:
+        _print_command_failure("gh pr merge", merged)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    return SUCCESS_EXIT_CODE
+
+
+def cleanup_pr(
+    *,
+    repo_root: str | Path = ".",
+    pr: str | None = None,
+    runner: Runner | None = None,
+) -> int:
+    root = Path(repo_root).resolve()
+    runner = runner or CommandRunner()
+    pr_ref = pr or _current_pr_number(root, runner)
+    if not pr_ref:
+        print("error: PR not found for current branch", file=sys.stderr)
+        return 1
+    view = runner.run(
+        [
+            "gh",
+            "pr",
+            "view",
+            pr_ref,
+            "--json",
+            "number,state,mergedAt,headRefName,baseRefName",
+        ],
+        cwd=root,
+    )
+    if view.returncode != 0:
+        _print_command_failure("gh pr view --json merge cleanup fields", view)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    metadata = _json_object_from_result(
+        view,
+        "gh pr view --json number,state,mergedAt,headRefName,baseRefName",
+    )
+    state = _single_line_text(metadata.get("state")).upper()
+    merged_at = _single_line_text(metadata.get("mergedAt"))
+    head_branch = _single_line_text(metadata.get("headRefName"))
+    base_branch = _single_line_text(metadata.get("baseRefName")) or "main"
+    if state != "MERGED" or not merged_at:
+        _print_state("EXCEPTION_REQUIRED", "PR is not merged")
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    if not head_branch:
+        _print_state("EXCEPTION_REQUIRED", "merged PR head branch unavailable")
+        return EXCEPTION_REQUIRED_EXIT_CODE
+
+    for label, command in (
+        ("git fetch --prune origin", ["git", "fetch", "--prune", "origin"]),
+        ("git switch base branch", ["git", "switch", base_branch]),
+    ):
+        result = runner.run(command, cwd=root)
+        if result.returncode != 0:
+            _print_command_failure(label, result)
+            return EXCEPTION_REQUIRED_EXIT_CODE
+
+    with _temporary_env(
+        {
+            "ALLOW_MAIN_REF_UPDATE": "1",
+            "MAIN_REF_UPDATE_REASON": f"sync local {base_branch} after PR #{pr_ref} merge",
+        }
+    ):
+        synced = runner.run(
+            ["git", "merge", "--ff-only", f"origin/{base_branch}"],
+            cwd=root,
+        )
+    if synced.returncode != 0:
+        _print_command_failure("git merge --ff-only origin base", synced)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+
+    local_delete = runner.run(["git", "branch", "-d", head_branch], cwd=root)
+    if local_delete.returncode != 0:
+        _print_command_failure("git branch -d", local_delete)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+
+    remote_delete = runner.run(
+        ["git", "push", "origin", "--delete", head_branch],
+        cwd=root,
+    )
+    if remote_delete.returncode != 0:
+        _print_command_failure("git push origin --delete", remote_delete)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+
+    remote_ref = runner.run(
+        ["git", "ls-remote", "--heads", "origin", head_branch],
+        cwd=root,
+    )
+    if remote_ref.returncode != 0:
+        _print_command_failure("git ls-remote --heads", remote_ref)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    if _command_stdout(remote_ref):
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "remote branch still exists after cleanup",
+            details=[head_branch],
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+
+    synced_state = runner.run(
+        ["git", "rev-list", "--left-right", "--count", f"{base_branch}...origin/{base_branch}"],
+        cwd=root,
+    )
+    if synced_state.returncode != 0:
+        _print_command_failure("git rev-list main...origin/main", synced_state)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    if _command_stdout(synced_state) != "0\t0":
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "local base branch is not synced to origin",
+            details=[_command_stdout(synced_state)],
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    return SUCCESS_EXIT_CODE
+
+
+def complete_pr(
+    *,
+    repo_root: str | Path = ".",
+    title: str | None = None,
+    pr: str | None = None,
+    runner: Runner | None = None,
+    codex_review_timeout_seconds: float = CODEX_REVIEW_WAIT_TIMEOUT_SECONDS,
+    codex_review_poll_seconds: float = CODEX_REVIEW_WAIT_INTERVAL_SECONDS,
+) -> int:
+    runner = runner or CommandRunner()
+    code = ready(
+        repo_root=repo_root,
+        title=title,
+        runner=runner,
+        codex_review_timeout_seconds=codex_review_timeout_seconds,
+        codex_review_poll_seconds=codex_review_poll_seconds,
+    )
+    if code != SUCCESS_EXIT_CODE:
+        return code
+    for step in (ready_for_review, merge_pr, cleanup_pr):
+        code = step(repo_root=repo_root, pr=pr, runner=runner)
+        if code != SUCCESS_EXIT_CODE:
+            return code
+    return SUCCESS_EXIT_CODE
 
 
 def _run_local_check(
@@ -1918,6 +2129,24 @@ def _merge_state_requires_attention(merge_state: str) -> bool:
     return bool(normalized and normalized not in {"CLEAN", "HAS_HOOKS"})
 
 
+class _temporary_env:
+    def __init__(self, updates: dict[str, str]) -> None:
+        self.updates = updates
+        self.originals: dict[str, str | None] = {}
+
+    def __enter__(self) -> None:
+        for key, value in self.updates.items():
+            self.originals[key] = os.environ.get(key)
+            os.environ[key] = value
+
+    def __exit__(self, *_exc: object) -> None:
+        for key, value in self.originals.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
 def _command_stdout(result: CommandResult) -> str:
     return result.stdout.strip()
 
@@ -1987,6 +2216,12 @@ def build_parser() -> argparse.ArgumentParser:
     wait_parser.add_argument("--pr")
     diagnose_parser = subparsers.add_parser("diagnose")
     diagnose_parser.add_argument("--pr")
+    ready_for_review_parser = subparsers.add_parser("ready-for-review")
+    ready_for_review_parser.add_argument("--pr")
+    merge_parser = subparsers.add_parser("merge")
+    merge_parser.add_argument("--pr")
+    cleanup_parser = subparsers.add_parser("cleanup")
+    cleanup_parser.add_argument("--pr")
     ready_parser = subparsers.add_parser("ready")
     ready_parser.add_argument("--title")
     ready_parser.add_argument(
@@ -1995,6 +2230,19 @@ def build_parser() -> argparse.ArgumentParser:
         default=CODEX_REVIEW_WAIT_TIMEOUT_SECONDS,
     )
     ready_parser.add_argument(
+        "--codex-review-poll-seconds",
+        type=float,
+        default=CODEX_REVIEW_WAIT_INTERVAL_SECONDS,
+    )
+    complete_parser = subparsers.add_parser("complete")
+    complete_parser.add_argument("--title")
+    complete_parser.add_argument("--pr")
+    complete_parser.add_argument(
+        "--codex-review-timeout-seconds",
+        type=float,
+        default=CODEX_REVIEW_WAIT_TIMEOUT_SECONDS,
+    )
+    complete_parser.add_argument(
         "--codex-review-poll-seconds",
         type=float,
         default=CODEX_REVIEW_WAIT_INTERVAL_SECONDS,
@@ -2012,10 +2260,24 @@ def main(argv: list[str] | None = None) -> int:
         return wait(repo_root=args.repo_root, pr=args.pr)
     if args.command == "diagnose":
         return diagnose(repo_root=args.repo_root, pr=args.pr)
+    if args.command == "ready-for-review":
+        return ready_for_review(repo_root=args.repo_root, pr=args.pr)
+    if args.command == "merge":
+        return merge_pr(repo_root=args.repo_root, pr=args.pr)
+    if args.command == "cleanup":
+        return cleanup_pr(repo_root=args.repo_root, pr=args.pr)
     if args.command == "ready":
         return ready(
             repo_root=args.repo_root,
             title=args.title,
+            codex_review_timeout_seconds=args.codex_review_timeout_seconds,
+            codex_review_poll_seconds=args.codex_review_poll_seconds,
+        )
+    if args.command == "complete":
+        return complete_pr(
+            repo_root=args.repo_root,
+            title=args.title,
+            pr=args.pr,
             codex_review_timeout_seconds=args.codex_review_timeout_seconds,
             codex_review_poll_seconds=args.codex_review_poll_seconds,
         )

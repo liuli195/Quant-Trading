@@ -37,6 +37,7 @@ make pre-pr
 make ai-review
 make risk-check
 make pr-ready TITLE="<PR标题>"
+make pr-complete TITLE="<PR标题>"
 ```
 
 `make ai-review` 校验 `.local/ai-review/latest.json`，并生成 `.local/ai-review/latest.md` 和 `.local/ai-review/codex-review-scope.md`。`.local/` 不入库；CI 通过 PR body 的 `AI Review 风险分级` 和 `pr-review-evidence` job 复验风险证据。
@@ -48,6 +49,16 @@ make pr-ready TITLE="<PR标题>"
 ```
 
 它会准备本地 review 证据、渲染 `.local/ai-review/pr-body.md`、同步 GitHub PR 的 `pr-flow` 托管区、按风险补 `ai-risk-review` label、触发必要的 `@codex review`，并等待 required checks。
+
+`make pr-complete TITLE="<PR标题>"` 会在 `pr-ready` 通过后继续把 draft PR 标记为 ready、等待新一轮 required checks、用当前 head SHA 锁定合并，并按受控 fast-forward 规则同步本地 `main`、删除已合并的本地和远端分支。已有 PR 可传 `PR=<PR号>`：
+
+```powershell
+make pr-complete TITLE="<PR标题>" PR=<PR号>
+make pr-merge PR=<PR号>
+make pr-cleanup PR=<PR号>
+```
+
+`pr_flow sync` 创建 PR 前会检查当前分支是否已推送到 `origin`；缺远端 head 时输出 `PUSH_REQUIRED` 和对应 `git push -u origin <branch>`。
 
 排障时先使用 `diagnose` 汇总当前 PR 状态：
 
