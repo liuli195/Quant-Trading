@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import os
 import re
@@ -50,7 +51,7 @@ BLOCKING_CODEX_FINDING_PATTERN = re.compile(r"\bP[01]\b|P[01]\s*Badge")
 ACTIONS_CHECK_URL_PATTERN = re.compile(r"/actions/runs/(?P<run_id>\d+)/job/(?P<job_id>\d+)")
 CHECKS_JSON_FIELDS = "name,state,bucket,link,workflow,startedAt,completedAt"
 PR_DIAGNOSE_JSON_FIELDS = (
-    "number,url,state,isDraft,headRefOid,mergeStateStatus,reviewDecision,body"
+    "number,url,state,isDraft,headRefOid,baseRefName,mergeStateStatus,reviewDecision,body"
 )
 CODEX_REVIEW_WAIT_TIMEOUT_SECONDS = 1800.0
 CODEX_REVIEW_WAIT_INTERVAL_SECONDS = 30.0
@@ -68,6 +69,12 @@ class CodexReviewWaitResult:
     evidence: str | None
     state: str
     details: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class PullRequestReviewRequirement:
+    approval_required: bool
+    source: str
 
 
 class GitHubDataUnavailable(RuntimeError):
@@ -481,6 +488,7 @@ def diagnose(
         pr_number = str(metadata.get("number") or pr or "")
         pr_url = _single_line_text(metadata.get("url"))
         head_sha = _single_line_text(metadata.get("headRefOid"))
+        base_ref = _single_line_text(metadata.get("baseRefName"))
         state = _single_line_text(metadata.get("state")) or "UNKNOWN"
         is_draft = bool(metadata.get("isDraft"))
         merge_state = _single_line_text(metadata.get("mergeStateStatus")) or "UNKNOWN"
@@ -517,6 +525,12 @@ def diagnose(
                 "GitHub PR URL unsupported",
                 details=(pr_url,),
             )
+        review_requirement = _remote_pr_review_requirement(
+            root=root,
+            runner=runner,
+            repo=pr_info[0],
+            base_ref=base_ref,
+        )
         if head_sha:
             repo, parsed_number = pr_info
             issue_comments = _gh_api_list(
@@ -565,6 +579,11 @@ def diagnose(
         print(f"review threads: unresolved={len(unresolved_threads)}")
         for detail in unresolved_threads:
             print(f"- {detail}")
+        print(
+            "approval requirement: "
+            + ("required" if review_requirement.approval_required else "not required")
+            + f" ({review_requirement.source})"
+        )
 
         if state.upper() != "OPEN":
             print("next: reopen the PR before merge")
@@ -587,8 +606,11 @@ def diagnose(
         if check_state == "pending":
             print("next: wait for pending required checks")
             return EXCEPTION_REQUIRED_EXIT_CODE
-        if not _review_decision_allows_merge(review_decision):
-            print("next: wait for approved code owner review")
+        if not _review_decision_allows_merge(
+            review_decision,
+            review_requirement=review_requirement,
+        ):
+            print("next: wait for approved review required by remote rules")
             return EXCEPTION_REQUIRED_EXIT_CODE
         if _merge_state_requires_attention(merge_state):
             print("next: inspect branch protection or ruleset blockers")
@@ -811,13 +833,33 @@ def merge_pr(
         return EXCEPTION_REQUIRED_EXIT_CODE
     pr_ref = str(metadata.get("number") or pr or "")
     head_sha = _single_line_text(metadata.get("headRefOid"))
+    pr_url = _single_line_text(metadata.get("url"))
+    base_ref = _single_line_text(metadata.get("baseRefName"))
     review_decision = _single_line_text(metadata.get("reviewDecision"))
-    if not pr_ref or not head_sha:
+    if not pr_ref or not head_sha or not pr_url:
         _print_state(
             "EXCEPTION_REQUIRED",
             "PR head metadata unavailable for merge",
             details=("gh pr view --json " + PR_DIAGNOSE_JSON_FIELDS,),
         )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    pr_info = _github_pr_info_from_url(pr_url)
+    if pr_info is None:
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "GitHub PR URL unsupported",
+            details=[pr_url],
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    try:
+        review_requirement = _remote_pr_review_requirement(
+            root=root,
+            runner=runner,
+            repo=pr_info[0],
+            base_ref=base_ref,
+        )
+    except GitHubDataUnavailable as exc:
+        _print_github_data_unavailable(exc)
         return EXCEPTION_REQUIRED_EXIT_CODE
     local_head = runner.run(["git", "rev-parse", "HEAD"], cwd=root)
     if local_head.returncode != 0:
@@ -831,11 +873,17 @@ def merge_pr(
             details=[f"local={local_head_sha}", f"pr={head_sha}"],
         )
         return EXCEPTION_REQUIRED_EXIT_CODE
-    if not _review_decision_allows_merge(review_decision):
+    if not _review_decision_allows_merge(
+        review_decision,
+        review_requirement=review_requirement,
+    ):
         _print_state(
             "EXCEPTION_REQUIRED",
             "approved review is required before merge",
-            details=[f"reviewDecision={review_decision or 'UNKNOWN'}"],
+            details=[
+                f"reviewDecision={review_decision or 'UNKNOWN'}",
+                f"source={review_requirement.source}",
+            ],
         )
         return EXCEPTION_REQUIRED_EXIT_CODE
     merged = runner.run(
@@ -1880,6 +1928,147 @@ def _github_pr_info_from_url(pr_url: str) -> tuple[str, str] | None:
     return match.group("repo"), match.group("number")
 
 
+def _remote_pr_review_requirement(
+    *,
+    root: Path,
+    runner: Runner,
+    repo: str,
+    base_ref: str,
+) -> PullRequestReviewRequirement:
+    branch = base_ref or "main"
+    rulesets = _gh_api_list(
+        root,
+        runner,
+        f"repos/{repo}/rulesets?includes_parents=true",
+    )
+    saw_pull_request_rule = False
+    for summary in rulesets:
+        ruleset = _ruleset_detail(root=root, runner=runner, repo=repo, summary=summary)
+        if not _ruleset_applies_to_branch(ruleset, branch):
+            continue
+        pull_request_parameters = _pull_request_rule_parameters(ruleset)
+        if pull_request_parameters is None:
+            continue
+        saw_pull_request_rule = True
+        if _pull_request_rule_requires_approval(pull_request_parameters):
+            return PullRequestReviewRequirement(
+                approval_required=True,
+                source=f"ruleset:{_single_line_text(ruleset.get('name')) or 'unnamed'}",
+            )
+    if saw_pull_request_rule:
+        return PullRequestReviewRequirement(
+            approval_required=False,
+            source="rulesets",
+        )
+    return _legacy_branch_protection_review_requirement(
+        root=root,
+        runner=runner,
+        repo=repo,
+        branch=branch,
+    )
+
+
+def _ruleset_detail(
+    *,
+    root: Path,
+    runner: Runner,
+    repo: str,
+    summary: dict[str, Any],
+) -> dict[str, Any]:
+    if isinstance(summary.get("rules"), list):
+        return summary
+    ruleset_id = summary.get("id")
+    if not ruleset_id:
+        raise GitHubDataUnavailable(
+            "GitHub ruleset metadata incomplete",
+            details=(f"repos/{repo}/rulesets?includes_parents=true",),
+        )
+    return _gh_api_object(root, runner, f"repos/{repo}/rulesets/{ruleset_id}")
+
+
+def _ruleset_applies_to_branch(ruleset: dict[str, Any], branch: str) -> bool:
+    if _single_line_text(ruleset.get("target")) != "branch":
+        return False
+    if _single_line_text(ruleset.get("enforcement")) != "active":
+        return False
+    conditions = ruleset.get("conditions")
+    if not isinstance(conditions, dict):
+        return True
+    ref_name = conditions.get("ref_name")
+    if not isinstance(ref_name, dict):
+        return True
+    includes = _string_or_list(ref_name.get("include"))
+    excludes = _string_or_list(ref_name.get("exclude"))
+    if any(_ref_pattern_matches(pattern, branch) for pattern in excludes):
+        return False
+    if not includes:
+        return True
+    return any(_ref_pattern_matches(pattern, branch) for pattern in includes)
+
+
+def _ref_pattern_matches(pattern: str, branch: str) -> bool:
+    ref = f"refs/heads/{branch}"
+    return (
+        pattern == "~DEFAULT_BRANCH"
+        or fnmatch.fnmatchcase(ref, pattern)
+        or fnmatch.fnmatchcase(branch, pattern)
+    )
+
+
+def _pull_request_rule_parameters(ruleset: dict[str, Any]) -> dict[str, Any] | None:
+    rules = ruleset.get("rules")
+    if not isinstance(rules, list):
+        return None
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        if _single_line_text(rule.get("type")) != "pull_request":
+            continue
+        parameters = rule.get("parameters")
+        return parameters if isinstance(parameters, dict) else {}
+    return None
+
+
+def _pull_request_rule_requires_approval(parameters: dict[str, Any]) -> bool:
+    return (
+        _int_value(parameters.get("required_approving_review_count")) > 0
+        or bool(parameters.get("require_code_owner_review"))
+        or bool(parameters.get("require_last_push_approval"))
+    )
+
+
+def _legacy_branch_protection_review_requirement(
+    *,
+    root: Path,
+    runner: Runner,
+    repo: str,
+    branch: str,
+) -> PullRequestReviewRequirement:
+    path = f"repos/{repo}/branches/{branch}/protection/required_pull_request_reviews"
+    result = runner.run(["gh", "api", path], cwd=root)
+    if result.returncode != 0:
+        text = f"{result.stdout}\n{result.stderr}"
+        if "404" in text or "Not Found" in text:
+            return PullRequestReviewRequirement(
+                approval_required=False,
+                source="branch-protection:none",
+            )
+        raise _github_data_unavailable(
+            "GitHub branch protection review rule unavailable",
+            f"gh api {path}",
+            result,
+        )
+    payload = _json_object_from_result(result, f"gh api {path}")
+    return PullRequestReviewRequirement(
+        approval_required=(
+            _int_value(payload.get("required_approving_review_count")) > 0
+            or bool(payload.get("require_code_owner_reviews"))
+            or bool(payload.get("require_last_push_approval"))
+        ),
+        source="branch-protection",
+    )
+
+
 def _github_link_matches_pr(
     match: re.Match[str],
     *,
@@ -1992,6 +2181,17 @@ def _gh_api_list(root: Path, runner: Runner, path: str) -> list[dict[str, Any]]:
     return [item for item in payload if isinstance(item, dict)]
 
 
+def _gh_api_object(root: Path, runner: Runner, path: str) -> dict[str, Any]:
+    result = runner.run(["gh", "api", path], cwd=root)
+    if result.returncode != 0:
+        raise _github_data_unavailable(
+            "GitHub API object unavailable",
+            f"gh api {path}",
+            result,
+        )
+    return _json_object_from_result(result, f"gh api {path}")
+
+
 def _latest_codex_trigger_time(
     comments: Sequence[dict[str, Any]],
     *,
@@ -2090,6 +2290,13 @@ def _string_or_list(value: Any) -> list[str]:
 
 def _single_line_text(value: Any) -> str:
     return " ".join(str(value or "").split())
+
+
+def _int_value(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _failing_check_names(output: str) -> list[str]:
@@ -2235,7 +2442,13 @@ def _merge_state_requires_attention(merge_state: str) -> bool:
     return bool(normalized and normalized not in {"CLEAN", "HAS_HOOKS"})
 
 
-def _review_decision_allows_merge(review_decision: str) -> bool:
+def _review_decision_allows_merge(
+    review_decision: str,
+    *,
+    review_requirement: PullRequestReviewRequirement,
+) -> bool:
+    if not review_requirement.approval_required:
+        return True
     return review_decision.upper() == "APPROVED"
 
 

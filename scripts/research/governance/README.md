@@ -149,7 +149,9 @@ ruleset:
 - require status check `Research Governance / governance`;
 - require status check `Research Governance / pr-review-evidence`;
 - require status check `Codex Review Monitor`;
-- require review from Code Owners;
+- require conversation resolution before merging;
+- enforce approval / Code Owner review only when the remote ruleset or branch
+  protection actually requires it;
 - block force pushes.
 
 ## Codex review monitor

@@ -440,6 +440,9 @@ class DiagnoseRunner:
         check_bucket: str = "fail",
         check_state: str = "FAILURE",
         review_decision: str = "REVIEW_REQUIRED",
+        required_approving_review_count: int = 0,
+        require_code_owner_review: bool = False,
+        require_last_push_approval: bool = False,
         local_head: str | None = None,
         issue_comments: list[dict[str, object]] | None = None,
         reviews: list[dict[str, object]] | None = None,
@@ -450,6 +453,9 @@ class DiagnoseRunner:
         self.check_bucket = check_bucket
         self.check_state = check_state
         self.review_decision = review_decision
+        self.required_approving_review_count = required_approving_review_count
+        self.require_code_owner_review = require_code_owner_review
+        self.require_last_push_approval = require_last_push_approval
         self.local_head = local_head or "1" * 40
         self.issue_comments = issue_comments
         self.reviews = reviews
@@ -469,7 +475,7 @@ class DiagnoseRunner:
             "view",
             "7",
             "--json",
-            "number,url,state,isDraft,headRefOid,mergeStateStatus,reviewDecision,body",
+            pr_flow.PR_DIAGNOSE_JSON_FIELDS,
         ]:
             return pr_flow.CommandResult(
                 0,
@@ -480,6 +486,7 @@ class DiagnoseRunner:
                         "state": "OPEN",
                         "isDraft": False,
                         "headRefOid": "1" * 40,
+                        "baseRefName": "main",
                         "mergeStateStatus": self.merge_state,
                         "reviewDecision": self.review_decision,
                         "body": (
@@ -487,6 +494,59 @@ class DiagnoseRunner:
                             "## AI Review 风险分级\n"
                             f"{pr_flow.MANAGED_BLOCK_END}\n"
                         ),
+                    }
+                ),
+                "",
+            )
+        if _gh_api_path(command) == "repos/liuli195/Quant-Trading/rulesets?includes_parents=true":
+            return pr_flow.CommandResult(
+                0,
+                _gh_api_json(
+                    command,
+                    [
+                        {
+                            "id": 11,
+                            "name": "main rules",
+                            "target": "branch",
+                            "enforcement": "active",
+                            "conditions": {
+                                "ref_name": {
+                                    "include": ["refs/heads/main"],
+                                    "exclude": [],
+                                }
+                            },
+                            "rules": None,
+                        }
+                    ],
+                ),
+                "",
+            )
+        if _gh_api_path(command) == "repos/liuli195/Quant-Trading/rulesets/11":
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "id": 11,
+                        "name": "main rules",
+                        "target": "branch",
+                        "enforcement": "active",
+                        "conditions": {
+                            "ref_name": {
+                                "include": ["refs/heads/main"],
+                                "exclude": [],
+                            }
+                        },
+                        "rules": [
+                            {
+                                "type": "pull_request",
+                                "parameters": {
+                                    "required_approving_review_count": self.required_approving_review_count,
+                                    "require_code_owner_review": self.require_code_owner_review,
+                                    "require_last_push_approval": self.require_last_push_approval,
+                                    "required_review_thread_resolution": True,
+                                },
+                            }
+                        ],
                     }
                 ),
                 "",
@@ -1078,6 +1138,7 @@ def test_diagnose_blocks_merge_ready_without_approved_review(
         check_bucket="pass",
         check_state="SUCCESS",
         review_decision="REVIEW_REQUIRED",
+        required_approving_review_count=1,
         issue_comments=[
             {
                 "id": 1,
@@ -1105,8 +1166,48 @@ def test_diagnose_blocks_merge_ready_without_approved_review(
     captured = capsys.readouterr()
     assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
     assert "reviewDecision: REVIEW_REQUIRED" in captured.out
-    assert "next: wait for approved code owner review" in captured.out
+    assert "next: wait for approved review required by remote rules" in captured.out
     assert "next: PR automation state is merge-ready" not in captured.out
+
+
+def test_diagnose_allows_merge_ready_without_remote_approval_requirement(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = DiagnoseRunner(
+        merge_state="CLEAN",
+        check_bucket="pass",
+        check_state="SUCCESS",
+        review_decision="REVIEW_REQUIRED",
+        issue_comments=[
+            {
+                "id": 1,
+                "user": {"login": "test-user"},
+                "body": _codex_review_trigger_body(),
+                "created_at": "2026-05-28T09:00:00Z",
+                "updated_at": "2026-05-28T09:00:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 10,
+                "user": {"login": "chatgpt-codex-connector"},
+                "state": "COMMENTED",
+                "commit_id": "1" * 40,
+                "submitted_at": "2026-05-28T10:00:00Z",
+                "body": "Codex Review: Didn't find any major issues.",
+            }
+        ],
+        review_threads=[],
+    )
+
+    code = pr_flow.diagnose(repo_root=tmp_path, pr="7", runner=runner)
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert "reviewDecision: REVIEW_REQUIRED" in captured.out
+    assert "next: wait for approved review required by remote rules" not in captured.out
+    assert "next: PR automation state is merge-ready" in captured.out
 
 
 def test_diagnose_waits_for_pending_checks_before_ruleset_attention(
@@ -2569,6 +2670,26 @@ def test_merge_pr_uses_diagnose_and_match_head_commit(tmp_path: Path) -> None:
     ] in runner.calls
 
 
+def test_merge_pr_allows_unapproved_review_when_remote_does_not_require_approval(
+    tmp_path: Path,
+) -> None:
+    runner = MergeReadyRunner()
+    runner.review_decision = "REVIEW_REQUIRED"
+
+    code = pr_flow.merge_pr(repo_root=tmp_path, pr="7", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert [
+        "gh",
+        "pr",
+        "merge",
+        "7",
+        "--merge",
+        "--match-head-commit",
+        "1" * 40,
+    ] in runner.calls
+
+
 def test_merge_pr_blocks_when_local_head_differs_from_pr_head(
     tmp_path: Path,
     capsys,
@@ -2590,12 +2711,13 @@ def test_merge_pr_blocks_without_approved_review_decision(
 ) -> None:
     runner = MergeReadyRunner()
     runner.review_decision = "REVIEW_REQUIRED"
+    runner.required_approving_review_count = 1
 
     code = pr_flow.merge_pr(repo_root=tmp_path, pr="7", runner=runner)
 
     captured = capsys.readouterr()
     assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
-    assert "next: wait for approved code owner review" in captured.out
+    assert "next: wait for approved review required by remote rules" in captured.out
     assert not any(call[:3] == ["gh", "pr", "merge"] for call in runner.calls)
 
 
