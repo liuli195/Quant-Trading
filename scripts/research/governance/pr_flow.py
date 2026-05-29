@@ -48,6 +48,9 @@ CODEX_NO_MAJOR_ISSUES_PATTERN = re.compile(
 BLOCKING_CODEX_FINDING_PATTERN = re.compile(r"\bP[01]\b|P[01]\s*Badge")
 ACTIONS_CHECK_URL_PATTERN = re.compile(r"/actions/runs/(?P<run_id>\d+)/job/(?P<job_id>\d+)")
 CHECKS_JSON_FIELDS = "name,state,bucket,link,workflow,startedAt,completedAt"
+PR_DIAGNOSE_JSON_FIELDS = (
+    "number,url,state,isDraft,headRefOid,mergeStateStatus,reviewDecision,body"
+)
 CODEX_REVIEW_WAIT_TIMEOUT_SECONDS = 1800.0
 CODEX_REVIEW_WAIT_INTERVAL_SECONDS = 30.0
 
@@ -391,6 +394,135 @@ def wait(
     else:
         print(summary.stdout, end="")
     return watched.returncode
+
+
+def diagnose(
+    *,
+    repo_root: str | Path = ".",
+    pr: str | None = None,
+    runner: Runner | None = None,
+) -> int:
+    root = Path(repo_root).resolve()
+    runner = runner or CommandRunner()
+    try:
+        metadata = _diagnose_pr_metadata(root, runner, pr=pr)
+        pr_number = str(metadata.get("number") or pr or "")
+        pr_url = _single_line_text(metadata.get("url"))
+        head_sha = _single_line_text(metadata.get("headRefOid"))
+        state = _single_line_text(metadata.get("state")) or "UNKNOWN"
+        is_draft = bool(metadata.get("isDraft"))
+        merge_state = _single_line_text(metadata.get("mergeStateStatus")) or "UNKNOWN"
+        review_decision = _single_line_text(metadata.get("reviewDecision")) or "UNKNOWN"
+        if not pr_number or not pr_url or not head_sha:
+            raise GitHubDataUnavailable(
+                "GitHub PR metadata incomplete",
+                details=("gh pr view --json " + PR_DIAGNOSE_JSON_FIELDS,),
+            )
+
+        print(f"PR_DIAGNOSE: #{pr_number} {state} head={_short_sha(head_sha)}")
+        print(f"isDraft: {str(is_draft).lower()}")
+        print(f"mergeStateStatus: {merge_state}")
+        print(f"reviewDecision: {review_decision}")
+        print(f"pr body evidence: {_diagnose_pr_body_evidence_state(metadata)}")
+
+        check_state, check_details, checks_unavailable = _diagnose_required_checks(
+            root=root,
+            runner=runner,
+            pr_number=pr_number,
+        )
+        print(f"required checks: {check_state}")
+        for detail in check_details:
+            print(f"- {detail}")
+
+        pr_info = _github_pr_info_from_url(pr_url)
+        unresolved_threads: tuple[str, ...] = ()
+        codex_blockers: tuple[str, ...] = ()
+        codex_review_evidence: str | None = None
+        trigger_time = ""
+        completion_time = ""
+        if pr_info is None:
+            raise GitHubDataUnavailable(
+                "GitHub PR URL unsupported",
+                details=(pr_url,),
+            )
+        if head_sha:
+            repo, parsed_number = pr_info
+            issue_comments = _gh_api_list(
+                root,
+                runner,
+                f"repos/{repo}/issues/{parsed_number}/comments?per_page=100",
+            )
+            trigger_time = _latest_codex_trigger_time(
+                issue_comments,
+                pr_url=pr_url,
+                head_sha=head_sha,
+            )
+            completion_time = _latest_codex_completion_comment_time(
+                issue_comments,
+                trigger_time=trigger_time,
+            )
+            unresolved_threads = _unresolved_blocking_codex_thread_findings(
+                _current_pr_review_threads(
+                    root=root,
+                    runner=runner,
+                    repo=repo,
+                    pr_number=parsed_number,
+                )
+            )
+            codex_review_evidence = _current_head_codex_review_evidence(
+                pr_url=pr_url,
+                head_sha=head_sha,
+                root=root,
+                runner=runner,
+            )
+            codex_blockers = _current_head_codex_blocking_findings(
+                pr_url=pr_url,
+                head_sha=head_sha,
+                root=root,
+                runner=runner,
+            )
+        print(f"codex trigger: {'present' if trigger_time else 'missing'}")
+        print(f"codex completion: {'present' if completion_time else 'missing'}")
+        print(
+            "codex review evidence: "
+            + ("present" if codex_review_evidence else "missing")
+        )
+        print(f"codex blockers: {len(codex_blockers)}")
+        for detail in codex_blockers:
+            print(f"- {detail}")
+        print(f"review threads: unresolved={len(unresolved_threads)}")
+        for detail in unresolved_threads:
+            print(f"- {detail}")
+
+        if state.upper() != "OPEN":
+            print("next: reopen the PR before merge")
+            return EXCEPTION_REQUIRED_EXIT_CODE
+        if is_draft:
+            print("next: mark the PR ready for review")
+            return EXCEPTION_REQUIRED_EXIT_CODE
+        if unresolved_threads:
+            print("next: resolve unresolved review threads")
+            return REPLY_OR_FIX_REQUIRED_EXIT_CODE
+        if codex_blockers:
+            print("next: reply to or fix Codex blockers")
+            return REPLY_OR_FIX_REQUIRED_EXIT_CODE
+        if checks_unavailable:
+            print("next: restore GitHub checks/API access")
+            return EXCEPTION_REQUIRED_EXIT_CODE
+        if check_state == "failing":
+            print("next: fix or rerun failing required checks")
+            return EXCEPTION_REQUIRED_EXIT_CODE
+        if check_state == "pending":
+            print("next: wait for pending required checks")
+            return EXCEPTION_REQUIRED_EXIT_CODE
+        if _merge_state_requires_attention(merge_state):
+            print("next: inspect branch protection or ruleset blockers")
+            return EXCEPTION_REQUIRED_EXIT_CODE
+        print("next: PR automation state is merge-ready")
+        return SUCCESS_EXIT_CODE
+    except GitHubDataUnavailable as exc:
+        _print_github_data_unavailable(exc)
+        return EXCEPTION_REQUIRED_EXIT_CODE
 
 
 def ready(
@@ -745,6 +877,35 @@ def _current_pr_metadata(
 
 def _current_pr_number(root: Path, runner: Runner) -> str:
     return str(_current_pr_metadata(root, runner).get("number") or "")
+
+
+def _diagnose_pr_metadata(
+    root: Path,
+    runner: Runner,
+    *,
+    pr: str | None,
+) -> dict[str, Any]:
+    command = ["gh", "pr", "view"]
+    if pr:
+        command.append(pr)
+    command.extend(["--json", PR_DIAGNOSE_JSON_FIELDS])
+    result = runner.run(command, cwd=root)
+    if result.returncode != 0:
+        raise _github_data_unavailable(
+            "GitHub PR metadata unavailable",
+            " ".join(command),
+            result,
+        )
+    return _json_object_from_result(result, " ".join(command))
+
+
+def _diagnose_pr_body_evidence_state(metadata: dict[str, Any]) -> str:
+    body = str(metadata.get("body") or "")
+    if MANAGED_BLOCK_START not in body or MANAGED_BLOCK_END not in body:
+        return "missing"
+    if "## AI Review 风险分级" not in body:
+        return "incomplete"
+    return "present"
 
 
 def _current_pr_labels(root: Path, runner: Runner) -> tuple[str, ...]:
@@ -1194,18 +1355,27 @@ def _unresolved_blocking_codex_thread_findings(
 ) -> tuple[str, ...]:
     findings: list[str] = []
     for thread in threads:
-        if _thread_is_resolved(thread) or _thread_is_outdated(thread):
+        if _thread_is_resolved(thread):
             continue
-        for comment in _thread_comments(thread):
-            author = comment.get("author")
-            if not isinstance(author, dict):
-                author = comment.get("user")
-            login = str(author.get("login", "")) if isinstance(author, dict) else ""
-            body = str(comment.get("body") or "")
-            if login in CODEX_REVIEW_AUTHORS and BLOCKING_CODEX_FINDING_PATTERN.search(body):
-                findings.append(f"unresolved review thread {_single_line_text(body)}")
-            elif login in CODEX_REVIEW_AUTHORS and pr_review_evidence.CODEX_CONTEXT_INVALID_PATTERN.search(body):
-                findings.append(f"unresolved review thread context invalid {_single_line_text(body)}")
+        comments = _thread_comments(thread)
+        if not comments:
+            findings.append("unresolved review thread")
+            continue
+        codex_comment = next(
+            (comment for comment in comments if _comment_author_login(comment) in CODEX_REVIEW_AUTHORS),
+            None,
+        )
+        comment = codex_comment or comments[0]
+        body = str(comment.get("body") or "")
+        if (
+            codex_comment is not None
+            and pr_review_evidence.CODEX_CONTEXT_INVALID_PATTERN.search(body)
+        ):
+            findings.append(
+                f"unresolved review thread context invalid {_single_line_text(body)}"
+            )
+        else:
+            findings.append(f"unresolved review thread {_single_line_text(body)}")
     return tuple(findings)
 
 
@@ -1226,6 +1396,13 @@ def _thread_comments(thread: dict[str, Any]) -> tuple[dict[str, Any], ...]:
         if isinstance(nodes, list):
             return tuple(item for item in nodes if isinstance(item, dict))
     return ()
+
+
+def _comment_author_login(comment: dict[str, Any]) -> str:
+    author = comment.get("author")
+    if not isinstance(author, dict):
+        author = comment.get("user")
+    return str(author.get("login", "")) if isinstance(author, dict) else ""
 
 
 def _is_current_head_codex_item(
@@ -1704,6 +1881,43 @@ def _json_check_passed(check: dict[str, Any]) -> bool:
     return bucket in {"pass", "skipping"} or state in {"neutral", "skipped", "success"}
 
 
+def _diagnose_required_checks(
+    *,
+    root: Path,
+    runner: Runner,
+    pr_number: str,
+) -> tuple[str, tuple[str, ...], bool]:
+    result = runner.run(
+        ["gh", "pr", "checks", pr_number, "--required", "--json", CHECKS_JSON_FIELDS],
+        cwd=root,
+    )
+    if result.returncode != 0:
+        details = tuple(
+            detail
+            for detail in (
+                _single_line_text(result.stderr),
+                _single_line_text(result.stdout),
+            )
+            if detail
+        )
+        return "unavailable", details, True
+    checks = _latest_required_check_results(result.stdout)
+    if checks is None:
+        return "unavailable", ("required check JSON was invalid",), True
+    failing = tuple(_failing_json_check_names(checks))
+    if failing:
+        return "failing", failing, False
+    pending = tuple(_pending_json_check_names(checks))
+    if pending:
+        return "pending", pending, False
+    return "passed", (), False
+
+
+def _merge_state_requires_attention(merge_state: str) -> bool:
+    normalized = merge_state.upper()
+    return bool(normalized and normalized not in {"CLEAN", "HAS_HOOKS"})
+
+
 def _command_stdout(result: CommandResult) -> str:
     return result.stdout.strip()
 
@@ -1758,6 +1972,10 @@ def _normalize_path(path: str) -> str:
     return normalized.lstrip("/")
 
 
+def _short_sha(sha: str) -> str:
+    return sha[:12] if sha else "unknown"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", default=".")
@@ -1767,6 +1985,8 @@ def build_parser() -> argparse.ArgumentParser:
     sync_parser.add_argument("--title")
     wait_parser = subparsers.add_parser("wait")
     wait_parser.add_argument("--pr")
+    diagnose_parser = subparsers.add_parser("diagnose")
+    diagnose_parser.add_argument("--pr")
     ready_parser = subparsers.add_parser("ready")
     ready_parser.add_argument("--title")
     ready_parser.add_argument(
@@ -1790,6 +2010,8 @@ def main(argv: list[str] | None = None) -> int:
         return sync(repo_root=args.repo_root, title=args.title)
     if args.command == "wait":
         return wait(repo_root=args.repo_root, pr=args.pr)
+    if args.command == "diagnose":
+        return diagnose(repo_root=args.repo_root, pr=args.pr)
     if args.command == "ready":
         return ready(
             repo_root=args.repo_root,

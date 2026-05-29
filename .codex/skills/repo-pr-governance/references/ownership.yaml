@@ -10,10 +10,12 @@ owned_commands:
   - make verify-fast
   - make verify-full
   - make pr-ready
+  - make pr-diagnose
   - make ai-review
   - make risk-check
   - .\.venv\Scripts\python.exe -m scripts.research.governance
   - .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow ready
+  - .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow diagnose
 owned_scripts:
   - scripts/research/governance/pr_flow.py
   - scripts/research/governance/pr_review_evidence.py
@@ -35,6 +37,7 @@ read_rules:
 recommended_commands:
   - make verify-full
   - make pr-ready TITLE="<PR标题>"
+  - make pr-diagnose PR=<PR号>
   - make ai-review
   - make risk-check
 status: active

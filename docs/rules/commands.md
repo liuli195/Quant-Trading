@@ -42,6 +42,7 @@ Windows 示例：
 .\.venv\Scripts\python.exe -m scripts.research.governance verify fast --files docs\rules\commands.md
 .\.venv\Scripts\python.exe -m scripts.research.governance verify full
 .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow ready --title "<PR标题>"
+.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow diagnose --pr <PR号>
 gh pr checks <PR号或URL> --required --watch --interval 10
 gh pr checks <PR号或URL> --required
 ```
@@ -58,7 +59,7 @@ gh pr checks <PR号或URL> --required
 | `scripts.research.variants` | `list`、`register`、`materialize`、`branch-plan`、`branch-create`、`merge-plan`、`merge-apply` |
 | `scripts.research.registry.tool_registry` | `list`、`validate` |
 | `scripts.research.governance` | `audit`、`gate`、`verify explain/fast/full` |
-| `scripts.research.governance.pr_flow` | `prepare`、`sync`、`wait`、`ready` |
+| `scripts.research.governance.pr_flow` | `prepare`、`sync`、`wait`、`ready`、`diagnose` |
 
 POSIX 示例把 Windows Python 路径替换为 `.venv/bin/python`。
 

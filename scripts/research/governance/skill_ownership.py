@@ -49,7 +49,7 @@ OWNED_LOCAL_SCRIPT_PREFIXES = (".\\.githooks\\", ".githooks/")
 VALID_PYTHON_OWNED_ARGS = {
     "scripts.research.docs": ((), ("index",)),
     "scripts.research.governance": ((), ("audit",)),
-    "scripts.research.governance.pr_flow": ((), ("ready",)),
+    "scripts.research.governance.pr_flow": ((), ("ready",), ("diagnose",)),
     "scripts.tools.jq_automation": (
         (),
         ("compile-check",),

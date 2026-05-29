@@ -137,9 +137,7 @@ def validate_pr_body(
         review_threads is not None
         and unresolved_blocking_codex_thread_count(review_threads) > 0
     ):
-        errors.append(
-            "Codex review must not have unresolved non-outdated P0/P1 threads"
-        )
+        errors.append("Codex review must not have unresolved review threads")
     if not official_codex_required:
         return EvidenceReport(not errors, tuple(errors))
 
@@ -869,14 +867,13 @@ def _codex_completion_comment_errors(
 def unresolved_blocking_codex_thread_count(
     review_threads: Sequence[Mapping[str, object]],
 ) -> int:
-    """Count unresolved, non-outdated Codex review threads with P0/P1 findings."""
+    """Count unresolved review threads that block conversation resolution."""
 
     count = 0
     for thread in review_threads:
-        if _thread_is_resolved(thread) or _thread_is_outdated(thread):
+        if _thread_is_resolved(thread):
             continue
-        if _thread_has_blocking_codex_comment(thread):
-            count += 1
+        count += 1
     return count
 
 
@@ -892,19 +889,6 @@ def _first_thread_value(thread: Mapping[str, object], *keys: str) -> object:
     for key in keys:
         if key in thread:
             return thread[key]
-    return False
-
-
-def _thread_has_blocking_codex_comment(thread: Mapping[str, object]) -> bool:
-    for comment in _thread_comments(thread):
-        author = comment.get("author")
-        if not isinstance(author, Mapping):
-            author = comment.get("user")
-        login = author.get("login") if isinstance(author, Mapping) else ""
-        if str(login) not in CODEX_REVIEW_AUTHORS:
-            continue
-        if BLOCKING_CODEX_FINDING_PATTERN.search(str(comment.get("body", ""))):
-            return True
     return False
 
 
@@ -1421,7 +1405,14 @@ def _fetch_github_graphql(
     )
     with urllib.request.urlopen(request, timeout=30) as response:
         payload = json.loads(response.read().decode("utf-8"))
-    return payload if isinstance(payload, Mapping) else {}
+    if not isinstance(payload, Mapping):
+        raise RuntimeError("GitHub GraphQL returned unexpected payload")
+    errors = payload.get("errors")
+    if errors:
+        raise RuntimeError(
+            "GitHub GraphQL returned errors: " + " ".join(str(errors).split())
+        )
+    return payload
 
 
 def _fetch_github_list(*, repo: str, path: str, token: str) -> list[object]:
@@ -1598,31 +1589,41 @@ def _fetch_pr_review_threads(
         )
         connection = _graphql_review_threads_connection(payload)
         nodes = connection.get("nodes")
-        if isinstance(nodes, list):
-            threads.extend(item for item in nodes if isinstance(item, Mapping))
+        if not isinstance(nodes, list):
+            raise RuntimeError("GitHub reviewThreads response missing nodes")
+        threads.extend(item for item in nodes if isinstance(item, Mapping))
         page_info = connection.get("pageInfo")
-        if not isinstance(page_info, Mapping) or not bool(page_info.get("hasNextPage")):
+        if not isinstance(page_info, Mapping):
+            raise RuntimeError("GitHub reviewThreads response missing pageInfo")
+        if not bool(page_info.get("hasNextPage")):
             break
         cursor = str(page_info.get("endCursor", "") or "")
         if not cursor:
-            break
+            raise RuntimeError("GitHub reviewThreads pagination cursor missing")
     return threads
 
 
 def _graphql_review_threads_connection(
     payload: Mapping[str, object],
 ) -> Mapping[str, object]:
+    errors = payload.get("errors")
+    if errors:
+        raise RuntimeError(
+            "GitHub reviewThreads GraphQL errors: " + " ".join(str(errors).split())
+        )
     data = payload.get("data")
     if not isinstance(data, Mapping):
-        return {}
+        raise RuntimeError("GitHub reviewThreads response missing data")
     repository = data.get("repository")
     if not isinstance(repository, Mapping):
-        return {}
+        raise RuntimeError("GitHub reviewThreads response missing repository")
     pull_request = repository.get("pullRequest")
     if not isinstance(pull_request, Mapping):
-        return {}
+        raise RuntimeError("GitHub reviewThreads response missing pullRequest")
     review_threads = pull_request.get("reviewThreads")
-    return review_threads if isinstance(review_threads, Mapping) else {}
+    if not isinstance(review_threads, Mapping):
+        raise RuntimeError("GitHub reviewThreads response missing reviewThreads")
+    return review_threads
 
 
 def _read_env(name: str | None) -> str | None:

@@ -1,4 +1,4 @@
-.PHONY: verify-fast verify-full pre-pr ai-review risk-check pr-ready
+.PHONY: verify-fast verify-full pre-pr ai-review risk-check pr-ready pr-diagnose
 
 ifeq ($(OS),Windows_NT)
 PYTHON ?= ./.venv/Scripts/python.exe
@@ -32,3 +32,6 @@ risk-check:
 
 pr-ready:
 	$(PYTHON) -m scripts.research.governance.pr_flow ready --title "$(TITLE)"
+
+pr-diagnose:
+	$(PYTHON) -m scripts.research.governance.pr_flow diagnose $(if $(PR),--pr "$(PR)",)
