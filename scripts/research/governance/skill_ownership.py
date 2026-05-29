@@ -53,6 +53,7 @@ VALID_PYTHON_OWNED_ARGS = {
         (),
         ("ready",),
         ("diagnose",),
+        ("resolve-threads",),
         ("ready-for-review",),
         ("merge",),
         ("cleanup",),

@@ -813,6 +813,48 @@ class PaginatedThreadsRunner:
         )
 
 
+class ResolveThreadsRunner:
+    def __init__(
+        self,
+        *,
+        is_resolved: bool = True,
+        returncode: int = 0,
+    ) -> None:
+        self.calls: list[list[str]] = []
+        self.is_resolved = is_resolved
+        self.returncode = returncode
+
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        self.calls.append(command)
+        if command[:3] != ["gh", "api", "graphql"]:
+            raise AssertionError(f"unexpected command: {command}")
+        if self.returncode != 0:
+            return pr_flow.CommandResult(self.returncode, "", "graphql failed")
+        thread_id = command[-1].removeprefix("threadId=")
+        return pr_flow.CommandResult(
+            0,
+            json.dumps(
+                {
+                    "data": {
+                        "resolveReviewThread": {
+                            "thread": {
+                                "id": thread_id,
+                                "isResolved": self.is_resolved,
+                            }
+                        }
+                    }
+                }
+            ),
+            "",
+        )
+
+
 def test_wait_uses_latest_duplicate_required_check_result(
     tmp_path: Path,
     capsys,
@@ -823,6 +865,61 @@ def test_wait_uses_latest_duplicate_required_check_result(
 
     assert code == 0
     assert "required checks passed" in capsys.readouterr().out
+
+
+def test_resolve_review_threads_resolves_each_thread(tmp_path: Path, capsys) -> None:
+    runner = ResolveThreadsRunner()
+
+    code = pr_flow.resolve_review_threads(
+        repo_root=tmp_path,
+        thread_ids=("PRRT_one", "PRRT_two"),
+        runner=runner,
+    )
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert "resolved review thread: PRRT_one" in captured.out
+    assert "resolved review thread: PRRT_two" in captured.out
+    assert len(runner.calls) == 2
+    assert all(call[:3] == ["gh", "api", "graphql"] for call in runner.calls)
+    assert ["-F", "threadId=PRRT_one"] in [
+        runner.calls[0][index : index + 2]
+        for index in range(len(runner.calls[0]) - 1)
+    ]
+
+
+def test_resolve_review_threads_fails_closed_on_graphql_error(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = ResolveThreadsRunner(returncode=1)
+
+    code = pr_flow.resolve_review_threads(
+        repo_root=tmp_path,
+        thread_ids=("PRRT_one",),
+        runner=runner,
+    )
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "gh api graphql resolveReviewThread" in captured.err
+
+
+def test_resolve_review_threads_fails_closed_when_thread_remains_unresolved(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = ResolveThreadsRunner(is_resolved=False)
+
+    code = pr_flow.resolve_review_threads(
+        repo_root=tmp_path,
+        thread_ids=("PRRT_one",),
+        runner=runner,
+    )
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "review thread was not resolved" in captured.err
 
 
 def test_wait_blocks_latest_duplicate_required_check_failure(
@@ -2534,10 +2631,12 @@ def test_complete_pr_runs_ready_review_merge_and_cleanup(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    calls: list[tuple[str, str | None]] = []
+    calls: list[tuple[object, ...]] = []
 
     def fake_ready(**kwargs: object) -> int:
-        calls.append(("ready", str(kwargs.get("title"))))
+        resolve_threads = kwargs.get("resolve_threads")
+        assert isinstance(resolve_threads, tuple)
+        calls.append(("ready", str(kwargs.get("title")), resolve_threads))
         return pr_flow.SUCCESS_EXIT_CODE
 
     def fake_ready_for_review(**kwargs: object) -> int:
@@ -2562,6 +2661,7 @@ def test_complete_pr_runs_ready_review_merge_and_cleanup(
         repo_root=tmp_path,
         title="PR 自动化",
         pr="7",
+        resolve_threads=("PRRT_one",),
         runner=RecordingRunner(),
         codex_review_timeout_seconds=0,
         codex_review_poll_seconds=0,
@@ -2569,7 +2669,7 @@ def test_complete_pr_runs_ready_review_merge_and_cleanup(
 
     assert code == pr_flow.SUCCESS_EXIT_CODE
     assert calls == [
-        ("ready", "PR 自动化"),
+        ("ready", "PR 自动化", ("PRRT_one",)),
         ("ready-for-review", "7"),
         ("merge", "7"),
         ("cleanup", "7"),
@@ -2604,3 +2704,48 @@ def test_complete_pr_rejects_explicit_pr_mismatch(
     assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
     assert "explicit PR does not match current branch PR" in captured.err
     assert not ready_called
+
+
+def test_ready_resolves_threads_after_sync_before_wait(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _write_valid_report(tmp_path)
+    calls: list[str] = []
+
+    monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: pr_flow.SUCCESS_EXIT_CODE)
+    monkeypatch.setattr(pr_flow, "sync", lambda **_kwargs: pr_flow.SUCCESS_EXIT_CODE)
+    monkeypatch.setattr(
+        pr_flow,
+        "_current_pr_metadata",
+        lambda _root, _runner, required: {
+            "url": "https://github.com/liuli195/Quant-Trading/pull/7"
+        },
+    )
+    def fake_blockers(**_kwargs: object) -> tuple[str, ...]:
+        calls.append("blockers")
+        return ()
+
+    def fake_resolve(**_kwargs: object) -> int:
+        calls.append("resolve")
+        return pr_flow.SUCCESS_EXIT_CODE
+
+    def fake_wait(**_kwargs: object) -> int:
+        calls.append("wait")
+        return pr_flow.SUCCESS_EXIT_CODE
+
+    monkeypatch.setattr(pr_flow, "_current_head_codex_blocking_findings", fake_blockers)
+    monkeypatch.setattr(pr_flow, "resolve_review_threads", fake_resolve)
+    monkeypatch.setattr(pr_flow, "wait", fake_wait)
+
+    code = pr_flow.ready(
+        repo_root=tmp_path,
+        title="PR 自动化",
+        runner=RecordingRunner(),
+        resolve_threads=("PRRT_one",),
+        codex_review_timeout_seconds=0,
+        codex_review_poll_seconds=0,
+    )
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert calls == ["resolve", "blockers", "wait"]

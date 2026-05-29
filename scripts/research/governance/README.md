@@ -37,6 +37,7 @@ make pre-pr
 make ai-review
 make risk-check
 make pr-ready TITLE="<PR标题>"
+make pr-resolve-threads THREADS="<thread-id> [<thread-id>...]"
 make pr-complete TITLE="<PR标题>"
 ```
 
@@ -49,6 +50,16 @@ make pr-complete TITLE="<PR标题>"
 ```
 
 它会准备本地 review 证据、渲染 `.local/ai-review/pr-body.md`、同步 GitHub PR 的 `pr-flow` 托管区、按风险补 `ai-risk-review` label、触发必要的 `@codex review`，并等待 required checks。
+
+修复 Codex review thread 后，把明确已修复的 thread ID 传回自动化入口，让 `pr_flow` 先同步 evidence，再 resolve 指定 thread 并继续状态机：
+
+```powershell
+make pr-ready TITLE="<PR标题>" THREADS="PRRT_xxx PRRT_yyy"
+make pr-complete TITLE="<PR标题>" THREADS="PRRT_xxx"
+make pr-resolve-threads THREADS="PRRT_xxx"
+```
+
+`THREADS` 只接受显式 thread ID；工具不会猜测或批量 resolve 全部未处理 thread。
 
 `make pr-complete TITLE="<PR标题>"` 会在 `pr-ready` 通过后继续把 draft PR 标记为 ready、等待新一轮 required checks、用当前 head SHA 锁定合并，并按受控 fast-forward 规则同步本地 `main`、删除已合并的本地和远端分支。已有 PR 可传 `PR=<PR号>`：
 

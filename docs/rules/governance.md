@@ -16,6 +16,7 @@
 - `Codex Review Monitor` 监听当前 head 的 Codex Review 状态；低风险且无需官方 review 的 PR 可快速通过/空跑。
 - `Codex Review Monitor` success 可作为 `pr_flow` 自动采集官方 Codex 通过证据的信号之一，但不能替代 PR body 的 `Codex Code Review 结论`。
 - 只要 GitHub conversation resolution ruleset 要求 resolved conversation，任何未 resolved 的 review thread 必须阻断，任何跳过授权不得绕过。
+- 修复后的 review thread 只能由 `pr_flow resolve-threads` 或 `pr-ready` / `pr-complete --resolve-thread <thread-id>` resolve，且必须显式传入 thread ID；不得猜测或批量 resolve 全部未处理 thread。
 - 本地仓库必须设置 `git config core.hooksPath .githooks`。
 - `.githooks/pre-commit`、`.githooks/pre-push`、`.githooks/reference-transaction` 必须通过 `.githooks/run-python.sh` 选择项目虚拟环境，不硬编码单一平台解释器。
 - `.githooks/pre-push` 必须调用 `scripts.research.governance.branch_protection pre-push` 和 `scripts.research.governance verify full`，并保留 Git LFS pre-push 转交。

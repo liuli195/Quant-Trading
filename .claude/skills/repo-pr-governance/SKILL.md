@@ -20,6 +20,7 @@ description: 准备进入主干的 PR、review 证据、required checks、Codex 
 make verify-full
 make pr-ready TITLE="<PR标题>"
 make pr-diagnose PR=<PR号>
+make pr-resolve-threads THREADS="<thread-id> [<thread-id>...]"
 make pr-complete TITLE="<PR标题>"
 make pr-cleanup PR=<PR号>
 make ai-review

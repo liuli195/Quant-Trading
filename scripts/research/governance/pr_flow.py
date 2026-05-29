@@ -418,6 +418,56 @@ def wait(
     return watched.returncode
 
 
+def resolve_review_threads(
+    *,
+    repo_root: str | Path = ".",
+    thread_ids: Sequence[str] = (),
+    runner: Runner | None = None,
+) -> int:
+    root = Path(repo_root).resolve()
+    runner = runner or CommandRunner()
+    normalized_thread_ids = tuple(
+        thread_id.strip() for thread_id in thread_ids if thread_id.strip()
+    )
+    if not normalized_thread_ids:
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "no review thread IDs provided",
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    for thread_id in normalized_thread_ids:
+        result = runner.run(
+            [
+                "gh",
+                "api",
+                "graphql",
+                "-f",
+                "query=mutation($threadId:ID!){resolveReviewThread(input:{threadId:$threadId}){thread{id isResolved}}}",
+                "-F",
+                f"threadId={thread_id}",
+            ],
+            cwd=root,
+        )
+        if result.returncode != 0:
+            _print_command_failure("gh api graphql resolveReviewThread", result)
+            return EXCEPTION_REQUIRED_EXIT_CODE
+        payload = _json_object_from_result(result, "gh api graphql resolveReviewThread")
+        thread = (
+            payload.get("data", {})
+            .get("resolveReviewThread", {})
+            .get("thread", {})
+        )
+        if not isinstance(thread, dict) or not bool(thread.get("isResolved")):
+            _print_state(
+                "EXCEPTION_REQUIRED",
+                "review thread was not resolved",
+                details=[thread_id],
+            )
+            return EXCEPTION_REQUIRED_EXIT_CODE
+        print(f"resolved review thread: {thread_id}")
+    return SUCCESS_EXIT_CODE
+
+
 def diagnose(
     *,
     repo_root: str | Path = ".",
@@ -554,6 +604,7 @@ def ready(
     *,
     repo_root: str | Path = ".",
     title: str | None = None,
+    resolve_threads: Sequence[str] = (),
     runner: Runner | None = None,
     codex_review_timeout_seconds: float = CODEX_REVIEW_WAIT_TIMEOUT_SECONDS,
     codex_review_poll_seconds: float = CODEX_REVIEW_WAIT_INTERVAL_SECONDS,
@@ -622,6 +673,15 @@ def ready(
             details=[f"exit_code={code}"],
         )
         return EXCEPTION_REQUIRED_EXIT_CODE
+
+    if resolve_threads:
+        code = resolve_review_threads(
+            repo_root=repo_root,
+            thread_ids=resolve_threads,
+            runner=runner,
+        )
+        if code != SUCCESS_EXIT_CODE:
+            return code
 
     try:
         metadata = _current_pr_metadata(root, runner, required=True)
@@ -906,6 +966,7 @@ def complete_pr(
     repo_root: str | Path = ".",
     title: str | None = None,
     pr: str | None = None,
+    resolve_threads: Sequence[str] = (),
     runner: Runner | None = None,
     codex_review_timeout_seconds: float = CODEX_REVIEW_WAIT_TIMEOUT_SECONDS,
     codex_review_poll_seconds: float = CODEX_REVIEW_WAIT_INTERVAL_SECONDS,
@@ -924,6 +985,7 @@ def complete_pr(
     code = ready(
         repo_root=root,
         title=title,
+        resolve_threads=resolve_threads,
         runner=runner,
         codex_review_timeout_seconds=codex_review_timeout_seconds,
         codex_review_poll_seconds=codex_review_poll_seconds,
@@ -2264,6 +2326,9 @@ def build_parser() -> argparse.ArgumentParser:
     wait_parser.add_argument("--pr")
     diagnose_parser = subparsers.add_parser("diagnose")
     diagnose_parser.add_argument("--pr")
+    resolve_threads_parser = subparsers.add_parser("resolve-threads")
+    resolve_threads_parser.add_argument("thread_ids", nargs="*")
+    resolve_threads_parser.add_argument("--thread", action="append", default=[])
     ready_for_review_parser = subparsers.add_parser("ready-for-review")
     ready_for_review_parser.add_argument("--pr")
     merge_parser = subparsers.add_parser("merge")
@@ -2272,6 +2337,7 @@ def build_parser() -> argparse.ArgumentParser:
     cleanup_parser.add_argument("--pr")
     ready_parser = subparsers.add_parser("ready")
     ready_parser.add_argument("--title")
+    ready_parser.add_argument("--resolve-thread", action="append", default=[])
     ready_parser.add_argument(
         "--codex-review-timeout-seconds",
         type=float,
@@ -2285,6 +2351,7 @@ def build_parser() -> argparse.ArgumentParser:
     complete_parser = subparsers.add_parser("complete")
     complete_parser.add_argument("--title")
     complete_parser.add_argument("--pr")
+    complete_parser.add_argument("--resolve-thread", action="append", default=[])
     complete_parser.add_argument(
         "--codex-review-timeout-seconds",
         type=float,
@@ -2308,6 +2375,11 @@ def main(argv: list[str] | None = None) -> int:
         return wait(repo_root=args.repo_root, pr=args.pr)
     if args.command == "diagnose":
         return diagnose(repo_root=args.repo_root, pr=args.pr)
+    if args.command == "resolve-threads":
+        return resolve_review_threads(
+            repo_root=args.repo_root,
+            thread_ids=tuple(args.thread_ids) + tuple(args.thread),
+        )
     if args.command == "ready-for-review":
         return ready_for_review(repo_root=args.repo_root, pr=args.pr)
     if args.command == "merge":
@@ -2318,6 +2390,7 @@ def main(argv: list[str] | None = None) -> int:
         return ready(
             repo_root=args.repo_root,
             title=args.title,
+            resolve_threads=tuple(args.resolve_thread),
             codex_review_timeout_seconds=args.codex_review_timeout_seconds,
             codex_review_poll_seconds=args.codex_review_poll_seconds,
         )
@@ -2326,6 +2399,7 @@ def main(argv: list[str] | None = None) -> int:
             repo_root=args.repo_root,
             title=args.title,
             pr=args.pr,
+            resolve_threads=tuple(args.resolve_thread),
             codex_review_timeout_seconds=args.codex_review_timeout_seconds,
             codex_review_poll_seconds=args.codex_review_poll_seconds,
         )
