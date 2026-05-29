@@ -426,6 +426,159 @@ class PendingRequiredChecksRunner:
         raise AssertionError(f"unexpected command: {command}")
 
 
+class DiagnoseRunner:
+    def __init__(
+        self,
+        *,
+        merge_state: str = "BLOCKED",
+        check_bucket: str = "fail",
+        check_state: str = "FAILURE",
+        issue_comments: list[dict[str, object]] | None = None,
+        reviews: list[dict[str, object]] | None = None,
+        review_threads: list[dict[str, object]] | None = None,
+    ) -> None:
+        self.calls: list[list[str]] = []
+        self.merge_state = merge_state
+        self.check_bucket = check_bucket
+        self.check_state = check_state
+        self.issue_comments = issue_comments
+        self.reviews = reviews
+        self.review_threads = review_threads
+
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        self.calls.append(command)
+        if command == [
+            "gh",
+            "pr",
+            "view",
+            "7",
+            "--json",
+            "number,url,state,isDraft,headRefOid,mergeStateStatus,reviewDecision,body",
+        ]:
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "number": 7,
+                        "url": "https://github.com/liuli195/Quant-Trading/pull/7",
+                        "state": "OPEN",
+                        "isDraft": False,
+                        "headRefOid": "1" * 40,
+                        "mergeStateStatus": self.merge_state,
+                        "reviewDecision": "REVIEW_REQUIRED",
+                        "body": (
+                            f"{pr_flow.MANAGED_BLOCK_START}\n"
+                            "## AI Review 风险分级\n"
+                            f"{pr_flow.MANAGED_BLOCK_END}\n"
+                        ),
+                    }
+                ),
+                "",
+            )
+        if command == [
+            "gh",
+            "pr",
+            "checks",
+            "7",
+            "--required",
+            "--json",
+            pr_flow.CHECKS_JSON_FIELDS,
+        ]:
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    [
+                        {
+                            "name": "pr-review-evidence",
+                            "state": self.check_state,
+                            "bucket": self.check_bucket,
+                            "workflow": "Research Governance",
+                            "link": "https://github.com/o/r/actions/runs/20/job/200",
+                        }
+                    ]
+                ),
+                "",
+            )
+        if _gh_api_path(command) == "repos/liuli195/Quant-Trading/issues/7/comments?per_page=100":
+            return pr_flow.CommandResult(
+                0,
+                _gh_api_json(
+                    command,
+                    self.issue_comments
+                    if self.issue_comments is not None
+                    else [
+                        {
+                            "id": 1,
+                            "user": {"login": "test-user"},
+                            "body": _codex_review_trigger_body(),
+                            "created_at": "2026-05-28T09:00:00Z",
+                            "updated_at": "2026-05-28T09:00:00Z",
+                        },
+                        {
+                            "id": 2,
+                            "user": {"login": "chatgpt-codex-connector"},
+                            "body": "Codex Review: Didn't find any major issues.",
+                            "created_at": "2026-05-28T10:00:00Z",
+                            "updated_at": "2026-05-28T10:00:00Z",
+                        },
+                    ],
+                ),
+                "",
+            )
+        if _gh_api_path(command) == "repos/liuli195/Quant-Trading/pulls/7/reviews?per_page=100":
+            return pr_flow.CommandResult(
+                0,
+                _gh_api_json(command, self.reviews or []),
+                "",
+            )
+        if command[:3] == ["gh", "api", "graphql"]:
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "data": {
+                            "repository": {
+                                "pullRequest": {
+                                    "reviewThreads": {
+                                        "nodes": self.review_threads
+                                        if self.review_threads is not None
+                                        else [
+                                            {
+                                                "isResolved": False,
+                                                "isOutdated": True,
+                                                "comments": {
+                                                    "nodes": [
+                                                        {
+                                                            "body": "P2: optional cleanup can wait.",
+                                                            "author": {
+                                                                "login": "chatgpt-codex-connector"
+                                                            },
+                                                        }
+                                                    ]
+                                                },
+                                            }
+                                        ],
+                                        "pageInfo": {
+                                            "hasNextPage": False,
+                                            "endCursor": None,
+                                        },
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ),
+                "",
+            )
+        raise AssertionError(f"unexpected command: {command}")
+
+
 class SlurpedPagesRunner:
     def run(
         self,
@@ -600,6 +753,101 @@ def test_wait_reports_exception_when_required_checks_are_pending(
     assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
     assert "EXCEPTION_REQUIRED" in captured.err
     assert "Research Governance / governance" in captured.err
+
+
+def test_diagnose_reports_required_checks_and_unresolved_threads(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    code = pr_flow.diagnose(repo_root=tmp_path, pr="7", runner=DiagnoseRunner())
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.REPLY_OR_FIX_REQUIRED_EXIT_CODE
+    assert "PR_DIAGNOSE: #7 OPEN head=111111111111" in captured.out
+    assert "mergeStateStatus: BLOCKED" in captured.out
+    assert "pr body evidence: present" in captured.out
+    assert "required checks: failing" in captured.out
+    assert "Research Governance / pr-review-evidence" in captured.out
+    assert "review threads: unresolved=1" in captured.out
+    assert "next: resolve unresolved review threads" in captured.out
+
+
+def test_diagnose_reports_current_head_review_evidence(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = DiagnoseRunner(
+        merge_state="CLEAN",
+        check_bucket="pass",
+        check_state="SUCCESS",
+        issue_comments=[
+            {
+                "id": 1,
+                "user": {"login": "test-user"},
+                "body": _codex_review_trigger_body(),
+                "created_at": "2026-05-28T09:00:00Z",
+                "updated_at": "2026-05-28T09:00:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 10,
+                "user": {"login": "chatgpt-codex-connector"},
+                "state": "COMMENTED",
+                "commit_id": "1" * 40,
+                "submitted_at": "2026-05-28T10:00:00Z",
+                "body": "Codex Review: Didn't find any major issues.",
+            }
+        ],
+        review_threads=[],
+    )
+
+    code = pr_flow.diagnose(repo_root=tmp_path, pr="7", runner=runner)
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert "codex review evidence: present" in captured.out
+    assert "codex blockers: 0" in captured.out
+    assert "next: PR automation state is merge-ready" in captured.out
+
+
+def test_diagnose_stops_on_current_head_review_blocker(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = DiagnoseRunner(
+        merge_state="CLEAN",
+        check_bucket="pass",
+        check_state="SUCCESS",
+        issue_comments=[
+            {
+                "id": 1,
+                "user": {"login": "test-user"},
+                "body": _codex_review_trigger_body(),
+                "created_at": "2026-05-28T09:00:00Z",
+                "updated_at": "2026-05-28T09:00:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 10,
+                "user": {"login": "chatgpt-codex-connector"},
+                "state": "COMMENTED",
+                "commit_id": "1" * 40,
+                "submitted_at": "2026-05-28T10:00:00Z",
+                "body": "P1 Badge: review evidence can be bypassed.",
+            }
+        ],
+        review_threads=[],
+    )
+
+    code = pr_flow.diagnose(repo_root=tmp_path, pr="7", runner=runner)
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.REPLY_OR_FIX_REQUIRED_EXIT_CODE
+    assert "codex blockers: 1" in captured.out
+    assert "P1 Badge" in captured.out
+    assert "next: reply to or fix Codex blockers" in captured.out
 
 
 def test_gh_api_list_flattens_slurped_paginated_pages(tmp_path: Path) -> None:
@@ -1737,6 +1985,50 @@ def test_ready_stops_on_unresolved_codex_thread_even_when_official_review_not_re
 
     assert code == pr_flow.REPLY_OR_FIX_REQUIRED_EXIT_CODE
     assert "unresolved" in capsys.readouterr().err
+
+
+def test_ready_stops_on_any_unresolved_codex_thread_even_outdated_p2(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_valid_report(
+        tmp_path,
+        risk_level="low",
+        requires_official=False,
+        changed_files=["docs/guides/example.md"],
+    )
+    runner = FakeRunner(
+        existing_pr=True,
+        api_review_threads=[
+            {
+                "isResolved": False,
+                "isOutdated": True,
+                "comments": {
+                    "nodes": [
+                        {
+                            "body": "P2: optional cleanup can wait.",
+                            "author": {"login": "chatgpt-codex-connector"},
+                        }
+                    ]
+                },
+            }
+        ],
+    )
+    monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+
+    code = pr_flow.ready(
+        repo_root=tmp_path,
+        title="治理自动化",
+        runner=runner,
+        codex_review_timeout_seconds=0,
+        codex_review_poll_seconds=0,
+    )
+
+    assert code == pr_flow.REPLY_OR_FIX_REQUIRED_EXIT_CODE
+    stderr = capsys.readouterr().err
+    assert "unresolved review thread" in stderr
+    assert "P2" in stderr
 
 
 def test_ready_ignores_resolved_codex_review_thread(

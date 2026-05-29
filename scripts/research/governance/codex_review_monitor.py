@@ -178,7 +178,7 @@ def build_monitor_report(
         )
     elif blocking_findings:
         status = "blocked"
-        message = "Codex review 含 P0/P1 阻断发现，不能填写通过结论。"
+        message = "Codex review 含阻断发现或未解决 thread，不能填写通过结论。"
     elif official_errors:
         status = "evidence_invalid"
         message = "PR review evidence invalid: " + "; ".join(official_errors)
@@ -202,7 +202,7 @@ def build_monitor_report(
         message = "已发现触发评论，正在等待 Codex 针对当前 head 输出 review。"
     else:
         status = "passed"
-        message = "当前 head 的 Codex review 未发现 P0/P1，可以更新 PR 证据结论。"
+        message = "当前 head 的 Codex review 未发现阻断项，可以更新 PR 证据结论。"
 
     return MonitorReport(
         status=status,
@@ -250,7 +250,7 @@ def render_monitor_comment(report: MonitorReport) -> str:
             f"- 最新当前 head Codex review: {latest_review}",
             f"- review commit: `{latest_sha}`",
             f"- context invalid: `{report.context_invalid_reviews}`",
-            f"- P0/P1: `{report.blocking_findings}`",
+            f"- 阻断项/未 resolved thread: `{report.blocking_findings}`",
             f"- P2: `{report.advisory_findings}`",
             "",
             report.message,
@@ -306,8 +306,8 @@ def sync_commit_status(
         "trigger_invalid": "Codex review trigger disables required context",
         "context_invalid": "Codex review context is invalid for current head",
         "evidence_invalid": "PR review evidence invalid",
-        "blocked": "Codex review has P0/P1 findings",
-        "passed": "Codex review has no P0/P1 findings",
+        "blocked": "Codex review has blockers",
+        "passed": "Codex review has no blockers",
         "skipped": "Official Codex review not required or skipped",
     }.get(report.status, "Codex review monitor status unavailable")
     _request_json(

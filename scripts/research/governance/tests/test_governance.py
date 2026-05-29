@@ -2541,8 +2541,7 @@ def test_governance_audit_flags_agents_without_python_venv_rule(
     assert not report.ok
     assert any(
         finding.rule_id == "agent_entry_sync"
-        and "默认必须提权使用项目 `.venv`，不改用系统 Python"
-        in finding.message
+        and "默认必须提权使用项目 `.venv`，不改用系统 Python" in finding.message
         for finding in report.findings
     )
 
@@ -3869,10 +3868,51 @@ def test_codex_skip_authorization_does_not_bypass_unresolved_blocking_threads() 
     )
 
     assert not report.ok
-    assert (
-        "Codex review must not have unresolved non-outdated P0/P1 threads"
-        in report.errors
+    assert "Codex review must not have unresolved review threads" in report.errors
+
+
+def test_codex_skip_authorization_does_not_bypass_any_unresolved_codex_thread() -> None:
+    report = validate_pr_body(
+        _official_codex_skip_body(),
+        comments=[],
+        review_threads=[
+            {
+                "isResolved": False,
+                "isOutdated": True,
+                "comments": [
+                    {
+                        "body": "P2: optional cleanup can wait.",
+                        "author": {"login": "chatgpt-codex-connector[bot]"},
+                    }
+                ],
+            }
+        ],
     )
+
+    assert not report.ok
+    assert "Codex review must not have unresolved review threads" in report.errors
+
+
+def test_pr_review_evidence_rejects_any_unresolved_review_thread() -> None:
+    report = validate_pr_body(
+        _official_codex_skip_body(),
+        comments=[],
+        review_threads=[
+            {
+                "isResolved": False,
+                "isOutdated": False,
+                "comments": [
+                    {
+                        "body": "Please update this doc before merge.",
+                        "author": {"login": "human-reviewer"},
+                    }
+                ],
+            }
+        ],
+    )
+
+    assert not report.ok
+    assert "Codex review must not have unresolved review threads" in report.errors
 
 
 def _codex_completion_comment(
@@ -4988,6 +5028,40 @@ def test_pr_review_evidence_main_uses_current_pr_body_over_stale_event_env(
     assert "PR review evidence ok" in capsys.readouterr().out
 
 
+def test_fetch_pr_review_threads_rejects_graphql_errors(monkeypatch) -> None:
+    monkeypatch.setattr(
+        pr_review_evidence,
+        "_fetch_github_graphql",
+        lambda *, query, variables, token: {
+            "errors": [{"message": "reviewThreads unavailable"}]
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="GraphQL errors"):
+        pr_review_evidence._fetch_pr_review_threads(
+            repo="liuli195/Quant-Trading",
+            pr_number="5",
+            token="token",
+        )
+
+
+def test_fetch_pr_review_threads_rejects_missing_connection(monkeypatch) -> None:
+    monkeypatch.setattr(
+        pr_review_evidence,
+        "_fetch_github_graphql",
+        lambda *, query, variables, token: {
+            "data": {"repository": {"pullRequest": {}}}
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="reviewThreads"):
+        pr_review_evidence._fetch_pr_review_threads(
+            repo="liuli195/Quant-Trading",
+            pr_number="5",
+            token="token",
+        )
+
+
 def test_pr_review_evidence_ignores_codex_help_text_when_matching_trigger() -> None:
     head_sha = "0" * 40
     body = _valid_codex_review_body().replace(
@@ -5451,10 +5525,7 @@ def test_pr_review_evidence_rejects_unresolved_blocking_codex_threads() -> None:
         ],
     )
     assert not report.ok
-    assert (
-        "Codex review must not have unresolved non-outdated P0/P1 threads"
-        in report.errors
-    )
+    assert "Codex review must not have unresolved review threads" in report.errors
 
 
 def test_parse_next_link_finds_github_pagination_next_url() -> None:
