@@ -17,10 +17,10 @@ GitHub Free 的私有仓库中，远端 branch protection / rulesets 可能不�
 - `.githooks/pre-push` 必须调用 `scripts.research.governance.branch_protection pre-push`，在本地阻断直接推送 `main` / `master`。
 - `.githooks/reference-transaction` 必须阻断本地 `main` / `master` ref 更新；PR 在 GitHub 云端合并后，本地主干只能用带审计说明的 fast-forward 同步到 `origin/main`。
 - PR 必须通过 required checks。
-- 关键路径必须由 CODEOWNERS 覆盖并经过 owner review。
+- 关键路径必须由 CODEOWNERS 覆盖；是否要求 approval / Code Owner review 阻断合并，以远端实际 branch protection / ruleset 为准。
 - waiver 必须有 owner、批准人、过期时间和迁移计划。
 - scheduled drift audit 定期检查规则系统本身是否漂移。
 
 ## 影响
 
-在远端保护可用时，最终合并权威是 CI required checks、branch protection 和 CODEOWNER review。在 GitHub Free 私有仓库中，代码化的 `pre-push` 是本地强门禁，CI 是事后审计；紧急绕过必须显式设置环境变量并留下审计说明。PR 合并后的本地主干同步只接受 `origin/main` 的 fast-forward，不接受本地功能分支合并。
+在远端保护可用时，最终合并权威是 CI required checks、branch protection / ruleset，以及远端实际启用的 PR review 要求。在 GitHub Free 私有仓库中，代码化的 `pre-push` 是本地强门禁，CI 是事后审计；紧急绕过必须显式设置环境变量并留下审计说明。PR 合并后的本地主干同步只接受 `origin/main` 的 fast-forward，不接受本地功能分支合并。

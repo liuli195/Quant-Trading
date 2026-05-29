@@ -11,11 +11,21 @@ owned_commands:
   - make verify-full
   - make pr-ready
   - make pr-diagnose
+  - make pr-resolve-threads
+  - make pr-ready-for-review
+  - make pr-merge
+  - make pr-cleanup
+  - make pr-complete
   - make ai-review
   - make risk-check
   - .\.venv\Scripts\python.exe -m scripts.research.governance
   - .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow ready
   - .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow diagnose
+  - .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow resolve-threads
+  - .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow ready-for-review
+  - .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow merge
+  - .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow cleanup
+  - .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow complete
 owned_scripts:
   - scripts/research/governance/pr_flow.py
   - scripts/research/governance/pr_review_evidence.py
@@ -38,6 +48,9 @@ recommended_commands:
   - make verify-full
   - make pr-ready TITLE="<PR标题>"
   - make pr-diagnose PR=<PR号>
+  - make pr-resolve-threads THREADS="<thread-id> [<thread-id>...]"
+  - make pr-complete TITLE="<PR标题>"
+  - make pr-cleanup PR=<PR号>
   - make ai-review
   - make risk-check
 status: active

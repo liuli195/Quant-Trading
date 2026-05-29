@@ -143,6 +143,12 @@ class FakeRunner:
             return pr_flow.CommandResult(0, "feature/pr-flow\n", "")
         if command == ["git", "rev-parse", "HEAD"]:
             return pr_flow.CommandResult(0, "1" * 40 + "\n", "")
+        if command == ["git", "ls-remote", "--heads", "origin", "feature/pr-flow"]:
+            return pr_flow.CommandResult(
+                0,
+                "1" * 40 + "\trefs/heads/feature/pr-flow\n",
+                "",
+            )
         if command == ["gh", "pr", "view", "--json", "number,url,state,isDraft"]:
             if not self.existing_pr:
                 return pr_flow.CommandResult(1, "", "no pull request")
@@ -433,6 +439,11 @@ class DiagnoseRunner:
         merge_state: str = "BLOCKED",
         check_bucket: str = "fail",
         check_state: str = "FAILURE",
+        review_decision: str = "REVIEW_REQUIRED",
+        required_approving_review_count: int = 0,
+        require_code_owner_review: bool = False,
+        require_last_push_approval: bool = False,
+        local_head: str | None = None,
         issue_comments: list[dict[str, object]] | None = None,
         reviews: list[dict[str, object]] | None = None,
         review_threads: list[dict[str, object]] | None = None,
@@ -441,6 +452,11 @@ class DiagnoseRunner:
         self.merge_state = merge_state
         self.check_bucket = check_bucket
         self.check_state = check_state
+        self.review_decision = review_decision
+        self.required_approving_review_count = required_approving_review_count
+        self.require_code_owner_review = require_code_owner_review
+        self.require_last_push_approval = require_last_push_approval
+        self.local_head = local_head or "1" * 40
         self.issue_comments = issue_comments
         self.reviews = reviews
         self.review_threads = review_threads
@@ -459,7 +475,7 @@ class DiagnoseRunner:
             "view",
             "7",
             "--json",
-            "number,url,state,isDraft,headRefOid,mergeStateStatus,reviewDecision,body",
+            pr_flow.PR_DIAGNOSE_JSON_FIELDS,
         ]:
             return pr_flow.CommandResult(
                 0,
@@ -470,8 +486,9 @@ class DiagnoseRunner:
                         "state": "OPEN",
                         "isDraft": False,
                         "headRefOid": "1" * 40,
+                        "baseRefName": "main",
                         "mergeStateStatus": self.merge_state,
-                        "reviewDecision": "REVIEW_REQUIRED",
+                        "reviewDecision": self.review_decision,
                         "body": (
                             f"{pr_flow.MANAGED_BLOCK_START}\n"
                             "## AI Review 风险分级\n"
@@ -481,6 +498,61 @@ class DiagnoseRunner:
                 ),
                 "",
             )
+        if _gh_api_path(command) == "repos/liuli195/Quant-Trading/rulesets?includes_parents=true":
+            return pr_flow.CommandResult(
+                0,
+                _gh_api_json(
+                    command,
+                    [
+                        {
+                            "id": 11,
+                            "name": "main rules",
+                            "target": "branch",
+                            "enforcement": "active",
+                            "conditions": {
+                                "ref_name": {
+                                    "include": ["refs/heads/main"],
+                                    "exclude": [],
+                                }
+                            },
+                            "rules": None,
+                        }
+                    ],
+                ),
+                "",
+            )
+        if _gh_api_path(command) == "repos/liuli195/Quant-Trading/rulesets/11":
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "id": 11,
+                        "name": "main rules",
+                        "target": "branch",
+                        "enforcement": "active",
+                        "conditions": {
+                            "ref_name": {
+                                "include": ["refs/heads/main"],
+                                "exclude": [],
+                            }
+                        },
+                        "rules": [
+                            {
+                                "type": "pull_request",
+                                "parameters": {
+                                    "required_approving_review_count": self.required_approving_review_count,
+                                    "require_code_owner_review": self.require_code_owner_review,
+                                    "require_last_push_approval": self.require_last_push_approval,
+                                    "required_review_thread_resolution": True,
+                                },
+                            }
+                        ],
+                    }
+                ),
+                "",
+            )
+        if command == ["git", "rev-parse", "HEAD"]:
+            return pr_flow.CommandResult(0, self.local_head + "\n", "")
         if command == [
             "gh",
             "pr",
@@ -579,6 +651,154 @@ class DiagnoseRunner:
         raise AssertionError(f"unexpected command: {command}")
 
 
+class MissingRemoteHeadRunner(FakeRunner):
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        if command == ["git", "ls-remote", "--heads", "origin", "feature/pr-flow"]:
+            self.calls.append(command)
+            return pr_flow.CommandResult(0, "", "")
+        if command[:3] == ["gh", "pr", "create"]:
+            self.calls.append(command)
+            return pr_flow.CommandResult(
+                1,
+                "",
+                "GraphQL: Head sha can't be blank, Base sha can't be blank",
+            )
+        return super().run(command, cwd=cwd, input_text=input_text)
+
+
+class ReadyForReviewRunner:
+    def __init__(self) -> None:
+        self.calls: list[list[str]] = []
+
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        self.calls.append(command)
+        if command == ["gh", "pr", "ready", "7"]:
+            return pr_flow.CommandResult(0, "", "")
+        if command == [
+            "gh",
+            "pr",
+            "checks",
+            "7",
+            "--required",
+            "--watch",
+            "--interval",
+            "10",
+        ]:
+            return pr_flow.CommandResult(0, "checks passed\n", "")
+        raise AssertionError(f"unexpected command: {command}")
+
+
+class MergeReadyRunner(DiagnoseRunner):
+    def __init__(self) -> None:
+        super().__init__(
+            merge_state="CLEAN",
+            check_bucket="pass",
+            check_state="SUCCESS",
+            review_decision="APPROVED",
+            issue_comments=[
+                {
+                    "id": 1,
+                    "user": {"login": "test-user"},
+                    "body": _codex_review_trigger_body(),
+                    "created_at": "2026-05-28T09:00:00Z",
+                    "updated_at": "2026-05-28T09:00:00Z",
+                }
+            ],
+            reviews=[
+                {
+                    "id": 10,
+                    "user": {"login": "chatgpt-codex-connector"},
+                    "state": "COMMENTED",
+                    "commit_id": "1" * 40,
+                    "submitted_at": "2026-05-28T10:00:00Z",
+                    "body": "Codex Review: Didn't find any major issues.",
+                }
+            ],
+            review_threads=[],
+        )
+
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        if command == [
+            "gh",
+            "pr",
+            "merge",
+            "7",
+            "--merge",
+            "--match-head-commit",
+            "1" * 40,
+        ]:
+            self.calls.append(command)
+            return pr_flow.CommandResult(0, "", "")
+        return super().run(command, cwd=cwd, input_text=input_text)
+
+
+class CleanupRunner:
+    def __init__(self, *, is_cross_repository: bool = False) -> None:
+        self.calls: list[list[str]] = []
+        self.is_cross_repository = is_cross_repository
+
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        self.calls.append(command)
+        if command == [
+            "gh",
+            "pr",
+            "view",
+            "7",
+            "--json",
+            "number,state,mergedAt,headRefName,baseRefName,isCrossRepository",
+        ]:
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "number": 7,
+                        "state": "MERGED",
+                        "mergedAt": "2026-05-29T16:48:26Z",
+                        "headRefName": "feature/pr-flow",
+                        "baseRefName": "main",
+                        "isCrossRepository": self.is_cross_repository,
+                    }
+                ),
+                "",
+            )
+        if command in (
+            ["git", "fetch", "--prune", "origin"],
+            ["git", "switch", "main"],
+            ["git", "merge", "--ff-only", "origin/main"],
+            ["git", "branch", "-d", "feature/pr-flow"],
+            ["git", "push", "origin", "--delete", "feature/pr-flow"],
+            ["git", "rev-list", "--left-right", "--count", "main...origin/main"],
+            ["git", "ls-remote", "--heads", "origin", "feature/pr-flow"],
+        ):
+            stdout = "0\t0\n" if command[1:3] == ["rev-list", "--left-right"] else ""
+            return pr_flow.CommandResult(0, stdout, "")
+        raise AssertionError(f"unexpected command: {command}")
+
+
 class SlurpedPagesRunner:
     def run(
         self,
@@ -653,6 +873,48 @@ class PaginatedThreadsRunner:
         )
 
 
+class ResolveThreadsRunner:
+    def __init__(
+        self,
+        *,
+        is_resolved: bool = True,
+        returncode: int = 0,
+    ) -> None:
+        self.calls: list[list[str]] = []
+        self.is_resolved = is_resolved
+        self.returncode = returncode
+
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        self.calls.append(command)
+        if command[:3] != ["gh", "api", "graphql"]:
+            raise AssertionError(f"unexpected command: {command}")
+        if self.returncode != 0:
+            return pr_flow.CommandResult(self.returncode, "", "graphql failed")
+        thread_id = command[-1].removeprefix("threadId=")
+        return pr_flow.CommandResult(
+            0,
+            json.dumps(
+                {
+                    "data": {
+                        "resolveReviewThread": {
+                            "thread": {
+                                "id": thread_id,
+                                "isResolved": self.is_resolved,
+                            }
+                        }
+                    }
+                }
+            ),
+            "",
+        )
+
+
 def test_wait_uses_latest_duplicate_required_check_result(
     tmp_path: Path,
     capsys,
@@ -663,6 +925,61 @@ def test_wait_uses_latest_duplicate_required_check_result(
 
     assert code == 0
     assert "required checks passed" in capsys.readouterr().out
+
+
+def test_resolve_review_threads_resolves_each_thread(tmp_path: Path, capsys) -> None:
+    runner = ResolveThreadsRunner()
+
+    code = pr_flow.resolve_review_threads(
+        repo_root=tmp_path,
+        thread_ids=("PRRT_one", "PRRT_two"),
+        runner=runner,
+    )
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert "resolved review thread: PRRT_one" in captured.out
+    assert "resolved review thread: PRRT_two" in captured.out
+    assert len(runner.calls) == 2
+    assert all(call[:3] == ["gh", "api", "graphql"] for call in runner.calls)
+    assert ["-F", "threadId=PRRT_one"] in [
+        runner.calls[0][index : index + 2]
+        for index in range(len(runner.calls[0]) - 1)
+    ]
+
+
+def test_resolve_review_threads_fails_closed_on_graphql_error(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = ResolveThreadsRunner(returncode=1)
+
+    code = pr_flow.resolve_review_threads(
+        repo_root=tmp_path,
+        thread_ids=("PRRT_one",),
+        runner=runner,
+    )
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "gh api graphql resolveReviewThread" in captured.err
+
+
+def test_resolve_review_threads_fails_closed_when_thread_remains_unresolved(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = ResolveThreadsRunner(is_resolved=False)
+
+    code = pr_flow.resolve_review_threads(
+        repo_root=tmp_path,
+        thread_ids=("PRRT_one",),
+        runner=runner,
+    )
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "review thread was not resolved" in captured.err
 
 
 def test_wait_blocks_latest_duplicate_required_check_failure(
@@ -780,6 +1097,7 @@ def test_diagnose_reports_current_head_review_evidence(
         merge_state="CLEAN",
         check_bucket="pass",
         check_state="SUCCESS",
+        review_decision="APPROVED",
         issue_comments=[
             {
                 "id": 1,
@@ -809,6 +1127,126 @@ def test_diagnose_reports_current_head_review_evidence(
     assert "codex review evidence: present" in captured.out
     assert "codex blockers: 0" in captured.out
     assert "next: PR automation state is merge-ready" in captured.out
+
+
+def test_diagnose_blocks_merge_ready_without_approved_review(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = DiagnoseRunner(
+        merge_state="CLEAN",
+        check_bucket="pass",
+        check_state="SUCCESS",
+        review_decision="REVIEW_REQUIRED",
+        required_approving_review_count=1,
+        issue_comments=[
+            {
+                "id": 1,
+                "user": {"login": "test-user"},
+                "body": _codex_review_trigger_body(),
+                "created_at": "2026-05-28T09:00:00Z",
+                "updated_at": "2026-05-28T09:00:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 10,
+                "user": {"login": "chatgpt-codex-connector"},
+                "state": "COMMENTED",
+                "commit_id": "1" * 40,
+                "submitted_at": "2026-05-28T10:00:00Z",
+                "body": "Codex Review: Didn't find any major issues.",
+            }
+        ],
+        review_threads=[],
+    )
+
+    code = pr_flow.diagnose(repo_root=tmp_path, pr="7", runner=runner)
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "reviewDecision: REVIEW_REQUIRED" in captured.out
+    assert "next: wait for approved review required by remote rules" in captured.out
+    assert "next: PR automation state is merge-ready" not in captured.out
+
+
+def test_diagnose_allows_merge_ready_without_remote_approval_requirement(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = DiagnoseRunner(
+        merge_state="CLEAN",
+        check_bucket="pass",
+        check_state="SUCCESS",
+        review_decision="REVIEW_REQUIRED",
+        issue_comments=[
+            {
+                "id": 1,
+                "user": {"login": "test-user"},
+                "body": _codex_review_trigger_body(),
+                "created_at": "2026-05-28T09:00:00Z",
+                "updated_at": "2026-05-28T09:00:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 10,
+                "user": {"login": "chatgpt-codex-connector"},
+                "state": "COMMENTED",
+                "commit_id": "1" * 40,
+                "submitted_at": "2026-05-28T10:00:00Z",
+                "body": "Codex Review: Didn't find any major issues.",
+            }
+        ],
+        review_threads=[],
+    )
+
+    code = pr_flow.diagnose(repo_root=tmp_path, pr="7", runner=runner)
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert "reviewDecision: REVIEW_REQUIRED" in captured.out
+    assert "next: wait for approved review required by remote rules" not in captured.out
+    assert "next: PR automation state is merge-ready" in captured.out
+
+
+def test_diagnose_waits_for_pending_checks_before_ruleset_attention(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = DiagnoseRunner(
+        merge_state="BLOCKED",
+        check_bucket="pending",
+        check_state="IN_PROGRESS",
+        issue_comments=[
+            {
+                "id": 1,
+                "user": {"login": "test-user"},
+                "body": _codex_review_trigger_body(),
+                "created_at": "2026-05-28T09:00:00Z",
+                "updated_at": "2026-05-28T09:00:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 10,
+                "user": {"login": "chatgpt-codex-connector"},
+                "state": "COMMENTED",
+                "commit_id": "1" * 40,
+                "submitted_at": "2026-05-28T10:00:00Z",
+                "body": "Codex Review: Didn't find any major issues.",
+            }
+        ],
+        review_threads=[],
+    )
+
+    code = pr_flow.diagnose(repo_root=tmp_path, pr="7", runner=runner)
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "required checks: pending" in captured.out
+    assert "next: wait for pending required checks" in captured.out
+    assert "next: inspect branch protection or ruleset blockers" not in captured.out
 
 
 def test_diagnose_stops_on_current_head_review_blocker(
@@ -1196,6 +1634,27 @@ def test_sync_creates_missing_draft_pr_without_label_or_codex_comment(
     assert "## AI Review 风险分级" in runner.created_bodies[0]
     assert not any("--add-label" in call for call in runner.calls)
     assert not runner.comments
+
+
+def test_sync_stops_with_push_required_when_remote_head_is_missing(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_valid_report(tmp_path)
+    (tmp_path / ".github").mkdir()
+    (tmp_path / ".github/pull_request_template.md").write_text(
+        "<!-- pr-flow:start -->\nold\n<!-- pr-flow:end -->\n",
+        encoding="utf-8",
+    )
+    runner = MissingRemoteHeadRunner(existing_pr=False)
+
+    code = pr_flow.sync(repo_root=tmp_path, title="文档更新", runner=runner)
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "PUSH_REQUIRED" in captured.err
+    assert "git push -u origin feature/pr-flow" in captured.err
+    assert not any(call[:3] == ["gh", "pr", "create"] for call in runner.calls)
 
 
 def test_sync_removes_stale_ai_risk_review_label_for_low_risk(
@@ -2173,3 +2632,242 @@ def test_ready_retriggers_codex_review_when_evidence_is_for_old_head(
     assert code == pr_flow.CODEX_REVIEW_PENDING_EXIT_CODE
     assert any(call[:3] == ["gh", "pr", "comment"] for call in runner.calls)
     assert not any(call[:4] == ["gh", "pr", "checks", "7"] for call in runner.calls)
+
+
+def test_ready_for_review_marks_pr_ready_and_waits(tmp_path: Path) -> None:
+    runner = ReadyForReviewRunner()
+
+    code = pr_flow.ready_for_review(repo_root=tmp_path, pr="7", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert ["gh", "pr", "ready", "7"] in runner.calls
+    assert [
+        "gh",
+        "pr",
+        "checks",
+        "7",
+        "--required",
+        "--watch",
+        "--interval",
+        "10",
+    ] in runner.calls
+
+
+def test_merge_pr_uses_diagnose_and_match_head_commit(tmp_path: Path) -> None:
+    runner = MergeReadyRunner()
+
+    code = pr_flow.merge_pr(repo_root=tmp_path, pr="7", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert [
+        "gh",
+        "pr",
+        "merge",
+        "7",
+        "--merge",
+        "--match-head-commit",
+        "1" * 40,
+    ] in runner.calls
+
+
+def test_merge_pr_allows_unapproved_review_when_remote_does_not_require_approval(
+    tmp_path: Path,
+) -> None:
+    runner = MergeReadyRunner()
+    runner.review_decision = "REVIEW_REQUIRED"
+
+    code = pr_flow.merge_pr(repo_root=tmp_path, pr="7", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert [
+        "gh",
+        "pr",
+        "merge",
+        "7",
+        "--merge",
+        "--match-head-commit",
+        "1" * 40,
+    ] in runner.calls
+
+
+def test_merge_pr_blocks_when_local_head_differs_from_pr_head(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = MergeReadyRunner()
+    runner.local_head = "2" * 40
+
+    code = pr_flow.merge_pr(repo_root=tmp_path, pr="7", runner=runner)
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "local HEAD does not match PR head" in captured.err
+    assert not any(call[:3] == ["gh", "pr", "merge"] for call in runner.calls)
+
+
+def test_merge_pr_blocks_without_approved_review_decision(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = MergeReadyRunner()
+    runner.review_decision = "REVIEW_REQUIRED"
+    runner.required_approving_review_count = 1
+
+    code = pr_flow.merge_pr(repo_root=tmp_path, pr="7", runner=runner)
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "next: wait for approved review required by remote rules" in captured.out
+    assert not any(call[:3] == ["gh", "pr", "merge"] for call in runner.calls)
+
+
+def test_cleanup_pr_syncs_main_and_deletes_merged_branch(tmp_path: Path) -> None:
+    runner = CleanupRunner()
+
+    code = pr_flow.cleanup_pr(repo_root=tmp_path, pr="7", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert ["git", "fetch", "--prune", "origin"] in runner.calls
+    assert ["git", "switch", "main"] in runner.calls
+    assert ["git", "merge", "--ff-only", "origin/main"] in runner.calls
+    assert ["git", "branch", "-d", "feature/pr-flow"] in runner.calls
+    assert ["git", "push", "origin", "--delete", "feature/pr-flow"] in runner.calls
+    assert ["git", "ls-remote", "--heads", "origin", "feature/pr-flow"] in runner.calls
+
+
+def test_cleanup_pr_skips_head_branch_delete_for_fork_pr(tmp_path: Path) -> None:
+    runner = CleanupRunner(is_cross_repository=True)
+
+    code = pr_flow.cleanup_pr(repo_root=tmp_path, pr="7", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert ["git", "fetch", "--prune", "origin"] in runner.calls
+    assert ["git", "switch", "main"] in runner.calls
+    assert ["git", "merge", "--ff-only", "origin/main"] in runner.calls
+    assert ["git", "branch", "-d", "feature/pr-flow"] not in runner.calls
+    assert ["git", "push", "origin", "--delete", "feature/pr-flow"] not in runner.calls
+    assert ["git", "ls-remote", "--heads", "origin", "feature/pr-flow"] not in runner.calls
+
+
+def test_complete_pr_runs_ready_review_merge_and_cleanup(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    calls: list[tuple[object, ...]] = []
+
+    def fake_ready(**kwargs: object) -> int:
+        resolve_threads = kwargs.get("resolve_threads")
+        assert isinstance(resolve_threads, tuple)
+        calls.append(("ready", str(kwargs.get("title")), resolve_threads))
+        return pr_flow.SUCCESS_EXIT_CODE
+
+    def fake_ready_for_review(**kwargs: object) -> int:
+        calls.append(("ready-for-review", str(kwargs.get("pr"))))
+        return pr_flow.SUCCESS_EXIT_CODE
+
+    def fake_merge_pr(**kwargs: object) -> int:
+        calls.append(("merge", str(kwargs.get("pr"))))
+        return pr_flow.SUCCESS_EXIT_CODE
+
+    def fake_cleanup_pr(**kwargs: object) -> int:
+        calls.append(("cleanup", str(kwargs.get("pr"))))
+        return pr_flow.SUCCESS_EXIT_CODE
+
+    monkeypatch.setattr(pr_flow, "ready", fake_ready)
+    monkeypatch.setattr(pr_flow, "ready_for_review", fake_ready_for_review)
+    monkeypatch.setattr(pr_flow, "merge_pr", fake_merge_pr)
+    monkeypatch.setattr(pr_flow, "cleanup_pr", fake_cleanup_pr)
+    monkeypatch.setattr(pr_flow, "_current_pr_number", lambda _root, _runner: "7")
+
+    code = pr_flow.complete_pr(
+        repo_root=tmp_path,
+        title="PR 自动化",
+        pr="7",
+        resolve_threads=("PRRT_one",),
+        runner=RecordingRunner(),
+        codex_review_timeout_seconds=0,
+        codex_review_poll_seconds=0,
+    )
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert calls == [
+        ("ready", "PR 自动化", ("PRRT_one",)),
+        ("ready-for-review", "7"),
+        ("merge", "7"),
+        ("cleanup", "7"),
+    ]
+
+
+def test_complete_pr_rejects_explicit_pr_mismatch(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    ready_called = False
+
+    def fake_ready(**_kwargs: object) -> int:
+        nonlocal ready_called
+        ready_called = True
+        return pr_flow.SUCCESS_EXIT_CODE
+
+    monkeypatch.setattr(pr_flow, "ready", fake_ready)
+    monkeypatch.setattr(pr_flow, "_current_pr_number", lambda _root, _runner: "8")
+
+    code = pr_flow.complete_pr(
+        repo_root=tmp_path,
+        title="PR 自动化",
+        pr="7",
+        runner=RecordingRunner(),
+        codex_review_timeout_seconds=0,
+        codex_review_poll_seconds=0,
+    )
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "explicit PR does not match current branch PR" in captured.err
+    assert not ready_called
+
+
+def test_ready_resolves_threads_after_sync_before_wait(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _write_valid_report(tmp_path)
+    calls: list[str] = []
+
+    monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: pr_flow.SUCCESS_EXIT_CODE)
+    monkeypatch.setattr(pr_flow, "sync", lambda **_kwargs: pr_flow.SUCCESS_EXIT_CODE)
+    monkeypatch.setattr(
+        pr_flow,
+        "_current_pr_metadata",
+        lambda _root, _runner, required: {
+            "url": "https://github.com/liuli195/Quant-Trading/pull/7"
+        },
+    )
+    def fake_blockers(**_kwargs: object) -> tuple[str, ...]:
+        calls.append("blockers")
+        return ()
+
+    def fake_resolve(**_kwargs: object) -> int:
+        calls.append("resolve")
+        return pr_flow.SUCCESS_EXIT_CODE
+
+    def fake_wait(**_kwargs: object) -> int:
+        calls.append("wait")
+        return pr_flow.SUCCESS_EXIT_CODE
+
+    monkeypatch.setattr(pr_flow, "_current_head_codex_blocking_findings", fake_blockers)
+    monkeypatch.setattr(pr_flow, "resolve_review_threads", fake_resolve)
+    monkeypatch.setattr(pr_flow, "wait", fake_wait)
+
+    code = pr_flow.ready(
+        repo_root=tmp_path,
+        title="PR 自动化",
+        runner=RecordingRunner(),
+        resolve_threads=("PRRT_one",),
+        codex_review_timeout_seconds=0,
+        codex_review_poll_seconds=0,
+    )
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert calls == ["resolve", "blockers", "wait"]

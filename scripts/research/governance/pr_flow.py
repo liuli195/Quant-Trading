@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
+import os
 import re
 import subprocess
 import sys
@@ -49,7 +51,7 @@ BLOCKING_CODEX_FINDING_PATTERN = re.compile(r"\bP[01]\b|P[01]\s*Badge")
 ACTIONS_CHECK_URL_PATTERN = re.compile(r"/actions/runs/(?P<run_id>\d+)/job/(?P<job_id>\d+)")
 CHECKS_JSON_FIELDS = "name,state,bucket,link,workflow,startedAt,completedAt"
 PR_DIAGNOSE_JSON_FIELDS = (
-    "number,url,state,isDraft,headRefOid,mergeStateStatus,reviewDecision,body"
+    "number,url,state,isDraft,headRefOid,baseRefName,mergeStateStatus,reviewDecision,body"
 )
 CODEX_REVIEW_WAIT_TIMEOUT_SECONDS = 1800.0
 CODEX_REVIEW_WAIT_INTERVAL_SECONDS = 30.0
@@ -67,6 +69,12 @@ class CodexReviewWaitResult:
     evidence: str | None
     state: str
     details: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class PullRequestReviewRequirement:
+    approval_required: bool
+    source: str
 
 
 class GitHubDataUnavailable(RuntimeError):
@@ -247,6 +255,27 @@ def sync(
         if not title:
             print("error: --title is required when no PR exists", file=sys.stderr)
             return 1
+        remote_head = runner.run(
+            ["git", "ls-remote", "--heads", "origin", branch],
+            cwd=root,
+        )
+        if remote_head.returncode != 0:
+            _print_state(
+                "EXCEPTION_REQUIRED",
+                "remote branch status unavailable",
+                details=[
+                    _single_line_text(remote_head.stderr),
+                    _single_line_text(remote_head.stdout),
+                ],
+            )
+            return EXCEPTION_REQUIRED_EXIT_CODE
+        if not _command_stdout(remote_head):
+            _print_state(
+                "PUSH_REQUIRED",
+                "remote branch missing for PR creation",
+                details=[f"git push -u origin {branch}"],
+            )
+            return EXCEPTION_REQUIRED_EXIT_CODE
         body_file = _write_managed_body_file(local, _pr_template_body(root), pr_body)
         create = runner.run(
             [
@@ -396,6 +425,56 @@ def wait(
     return watched.returncode
 
 
+def resolve_review_threads(
+    *,
+    repo_root: str | Path = ".",
+    thread_ids: Sequence[str] = (),
+    runner: Runner | None = None,
+) -> int:
+    root = Path(repo_root).resolve()
+    runner = runner or CommandRunner()
+    normalized_thread_ids = tuple(
+        thread_id.strip() for thread_id in thread_ids if thread_id.strip()
+    )
+    if not normalized_thread_ids:
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "no review thread IDs provided",
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    for thread_id in normalized_thread_ids:
+        result = runner.run(
+            [
+                "gh",
+                "api",
+                "graphql",
+                "-f",
+                "query=mutation($threadId:ID!){resolveReviewThread(input:{threadId:$threadId}){thread{id isResolved}}}",
+                "-F",
+                f"threadId={thread_id}",
+            ],
+            cwd=root,
+        )
+        if result.returncode != 0:
+            _print_command_failure("gh api graphql resolveReviewThread", result)
+            return EXCEPTION_REQUIRED_EXIT_CODE
+        payload = _json_object_from_result(result, "gh api graphql resolveReviewThread")
+        thread = (
+            payload.get("data", {})
+            .get("resolveReviewThread", {})
+            .get("thread", {})
+        )
+        if not isinstance(thread, dict) or not bool(thread.get("isResolved")):
+            _print_state(
+                "EXCEPTION_REQUIRED",
+                "review thread was not resolved",
+                details=[thread_id],
+            )
+            return EXCEPTION_REQUIRED_EXIT_CODE
+        print(f"resolved review thread: {thread_id}")
+    return SUCCESS_EXIT_CODE
+
+
 def diagnose(
     *,
     repo_root: str | Path = ".",
@@ -409,6 +488,7 @@ def diagnose(
         pr_number = str(metadata.get("number") or pr or "")
         pr_url = _single_line_text(metadata.get("url"))
         head_sha = _single_line_text(metadata.get("headRefOid"))
+        base_ref = _single_line_text(metadata.get("baseRefName"))
         state = _single_line_text(metadata.get("state")) or "UNKNOWN"
         is_draft = bool(metadata.get("isDraft"))
         merge_state = _single_line_text(metadata.get("mergeStateStatus")) or "UNKNOWN"
@@ -445,6 +525,12 @@ def diagnose(
                 "GitHub PR URL unsupported",
                 details=(pr_url,),
             )
+        review_requirement = _remote_pr_review_requirement(
+            root=root,
+            runner=runner,
+            repo=pr_info[0],
+            base_ref=base_ref,
+        )
         if head_sha:
             repo, parsed_number = pr_info
             issue_comments = _gh_api_list(
@@ -493,6 +579,11 @@ def diagnose(
         print(f"review threads: unresolved={len(unresolved_threads)}")
         for detail in unresolved_threads:
             print(f"- {detail}")
+        print(
+            "approval requirement: "
+            + ("required" if review_requirement.approval_required else "not required")
+            + f" ({review_requirement.source})"
+        )
 
         if state.upper() != "OPEN":
             print("next: reopen the PR before merge")
@@ -515,6 +606,12 @@ def diagnose(
         if check_state == "pending":
             print("next: wait for pending required checks")
             return EXCEPTION_REQUIRED_EXIT_CODE
+        if not _review_decision_allows_merge(
+            review_decision,
+            review_requirement=review_requirement,
+        ):
+            print("next: wait for approved review required by remote rules")
+            return EXCEPTION_REQUIRED_EXIT_CODE
         if _merge_state_requires_attention(merge_state):
             print("next: inspect branch protection or ruleset blockers")
             return EXCEPTION_REQUIRED_EXIT_CODE
@@ -529,6 +626,7 @@ def ready(
     *,
     repo_root: str | Path = ".",
     title: str | None = None,
+    resolve_threads: Sequence[str] = (),
     runner: Runner | None = None,
     codex_review_timeout_seconds: float = CODEX_REVIEW_WAIT_TIMEOUT_SECONDS,
     codex_review_poll_seconds: float = CODEX_REVIEW_WAIT_INTERVAL_SECONDS,
@@ -597,6 +695,15 @@ def ready(
             details=[f"exit_code={code}"],
         )
         return EXCEPTION_REQUIRED_EXIT_CODE
+
+    if resolve_threads:
+        code = resolve_review_threads(
+            repo_root=repo_root,
+            thread_ids=resolve_threads,
+            runner=runner,
+        )
+        if code != SUCCESS_EXIT_CODE:
+            return code
 
     try:
         metadata = _current_pr_metadata(root, runner, required=True)
@@ -687,6 +794,264 @@ def ready(
         _print_github_data_unavailable(exc)
         return EXCEPTION_REQUIRED_EXIT_CODE
     return wait(repo_root=repo_root, runner=runner)
+
+
+def ready_for_review(
+    *,
+    repo_root: str | Path = ".",
+    pr: str | None = None,
+    runner: Runner | None = None,
+) -> int:
+    root = Path(repo_root).resolve()
+    runner = runner or CommandRunner()
+    pr_ref = pr or _current_pr_number(root, runner)
+    if not pr_ref:
+        print("error: PR not found for current branch", file=sys.stderr)
+        return 1
+    mark_ready = runner.run(["gh", "pr", "ready", pr_ref], cwd=root)
+    if mark_ready.returncode != 0:
+        _print_command_failure("gh pr ready", mark_ready)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    return wait(repo_root=root, pr=pr_ref, runner=runner)
+
+
+def merge_pr(
+    *,
+    repo_root: str | Path = ".",
+    pr: str | None = None,
+    runner: Runner | None = None,
+) -> int:
+    root = Path(repo_root).resolve()
+    runner = runner or CommandRunner()
+    code = diagnose(repo_root=root, pr=pr, runner=runner)
+    if code != SUCCESS_EXIT_CODE:
+        return code
+    try:
+        metadata = _diagnose_pr_metadata(root, runner, pr=pr)
+    except GitHubDataUnavailable as exc:
+        _print_github_data_unavailable(exc)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    pr_ref = str(metadata.get("number") or pr or "")
+    head_sha = _single_line_text(metadata.get("headRefOid"))
+    pr_url = _single_line_text(metadata.get("url"))
+    base_ref = _single_line_text(metadata.get("baseRefName"))
+    review_decision = _single_line_text(metadata.get("reviewDecision"))
+    if not pr_ref or not head_sha or not pr_url:
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "PR head metadata unavailable for merge",
+            details=("gh pr view --json " + PR_DIAGNOSE_JSON_FIELDS,),
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    pr_info = _github_pr_info_from_url(pr_url)
+    if pr_info is None:
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "GitHub PR URL unsupported",
+            details=[pr_url],
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    try:
+        review_requirement = _remote_pr_review_requirement(
+            root=root,
+            runner=runner,
+            repo=pr_info[0],
+            base_ref=base_ref,
+        )
+    except GitHubDataUnavailable as exc:
+        _print_github_data_unavailable(exc)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    local_head = runner.run(["git", "rev-parse", "HEAD"], cwd=root)
+    if local_head.returncode != 0:
+        _print_command_failure("git rev-parse HEAD", local_head)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    local_head_sha = _command_stdout(local_head)
+    if local_head_sha != head_sha:
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "local HEAD does not match PR head",
+            details=[f"local={local_head_sha}", f"pr={head_sha}"],
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    if not _review_decision_allows_merge(
+        review_decision,
+        review_requirement=review_requirement,
+    ):
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "approved review is required before merge",
+            details=[
+                f"reviewDecision={review_decision or 'UNKNOWN'}",
+                f"source={review_requirement.source}",
+            ],
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    merged = runner.run(
+        ["gh", "pr", "merge", pr_ref, "--merge", "--match-head-commit", head_sha],
+        cwd=root,
+    )
+    if merged.returncode != 0:
+        _print_command_failure("gh pr merge", merged)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    return SUCCESS_EXIT_CODE
+
+
+def cleanup_pr(
+    *,
+    repo_root: str | Path = ".",
+    pr: str | None = None,
+    runner: Runner | None = None,
+) -> int:
+    root = Path(repo_root).resolve()
+    runner = runner or CommandRunner()
+    pr_ref = pr or _current_pr_number(root, runner)
+    if not pr_ref:
+        print("error: PR not found for current branch", file=sys.stderr)
+        return 1
+    view = runner.run(
+        [
+            "gh",
+            "pr",
+            "view",
+            pr_ref,
+            "--json",
+            "number,state,mergedAt,headRefName,baseRefName,isCrossRepository",
+        ],
+        cwd=root,
+    )
+    if view.returncode != 0:
+        _print_command_failure("gh pr view --json merge cleanup fields", view)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    metadata = _json_object_from_result(
+        view,
+        "gh pr view --json number,state,mergedAt,headRefName,baseRefName,isCrossRepository",
+    )
+    state = _single_line_text(metadata.get("state")).upper()
+    merged_at = _single_line_text(metadata.get("mergedAt"))
+    head_branch = _single_line_text(metadata.get("headRefName"))
+    base_branch = _single_line_text(metadata.get("baseRefName")) or "main"
+    is_cross_repository = bool(metadata.get("isCrossRepository"))
+    if state != "MERGED" or not merged_at:
+        _print_state("EXCEPTION_REQUIRED", "PR is not merged")
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    if not head_branch:
+        _print_state("EXCEPTION_REQUIRED", "merged PR head branch unavailable")
+        return EXCEPTION_REQUIRED_EXIT_CODE
+
+    for label, command in (
+        ("git fetch --prune origin", ["git", "fetch", "--prune", "origin"]),
+        ("git switch base branch", ["git", "switch", base_branch]),
+    ):
+        result = runner.run(command, cwd=root)
+        if result.returncode != 0:
+            _print_command_failure(label, result)
+            return EXCEPTION_REQUIRED_EXIT_CODE
+
+    with _temporary_env(
+        {
+            "ALLOW_MAIN_REF_UPDATE": "1",
+            "MAIN_REF_UPDATE_REASON": f"sync local {base_branch} after PR #{pr_ref} merge",
+        }
+    ):
+        synced = runner.run(
+            ["git", "merge", "--ff-only", f"origin/{base_branch}"],
+            cwd=root,
+        )
+    if synced.returncode != 0:
+        _print_command_failure("git merge --ff-only origin base", synced)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+
+    if is_cross_repository:
+        print(f"skip head branch delete for fork PR: {head_branch}")
+    else:
+        local_delete = runner.run(["git", "branch", "-d", head_branch], cwd=root)
+        if local_delete.returncode != 0:
+            _print_command_failure("git branch -d", local_delete)
+            return EXCEPTION_REQUIRED_EXIT_CODE
+
+        remote_delete = runner.run(
+            ["git", "push", "origin", "--delete", head_branch],
+            cwd=root,
+        )
+        if remote_delete.returncode != 0:
+            _print_command_failure("git push origin --delete", remote_delete)
+            return EXCEPTION_REQUIRED_EXIT_CODE
+
+        remote_ref = runner.run(
+            ["git", "ls-remote", "--heads", "origin", head_branch],
+            cwd=root,
+        )
+        if remote_ref.returncode != 0:
+            _print_command_failure("git ls-remote --heads", remote_ref)
+            return EXCEPTION_REQUIRED_EXIT_CODE
+        if _command_stdout(remote_ref):
+            _print_state(
+                "EXCEPTION_REQUIRED",
+                "remote branch still exists after cleanup",
+                details=[head_branch],
+            )
+            return EXCEPTION_REQUIRED_EXIT_CODE
+
+    synced_state = runner.run(
+        ["git", "rev-list", "--left-right", "--count", f"{base_branch}...origin/{base_branch}"],
+        cwd=root,
+    )
+    if synced_state.returncode != 0:
+        _print_command_failure("git rev-list main...origin/main", synced_state)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    if _command_stdout(synced_state) != "0\t0":
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "local base branch is not synced to origin",
+            details=[_command_stdout(synced_state)],
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    return SUCCESS_EXIT_CODE
+
+
+def complete_pr(
+    *,
+    repo_root: str | Path = ".",
+    title: str | None = None,
+    pr: str | None = None,
+    resolve_threads: Sequence[str] = (),
+    runner: Runner | None = None,
+    codex_review_timeout_seconds: float = CODEX_REVIEW_WAIT_TIMEOUT_SECONDS,
+    codex_review_poll_seconds: float = CODEX_REVIEW_WAIT_INTERVAL_SECONDS,
+) -> int:
+    root = Path(repo_root).resolve()
+    runner = runner or CommandRunner()
+    if pr:
+        current_pr = _current_pr_number(root, runner)
+        if current_pr != str(pr):
+            _print_state(
+                "EXCEPTION_REQUIRED",
+                "explicit PR does not match current branch PR",
+                details=[f"current={current_pr or 'none'}", f"requested={pr}"],
+            )
+            return EXCEPTION_REQUIRED_EXIT_CODE
+    code = ready(
+        repo_root=root,
+        title=title,
+        resolve_threads=resolve_threads,
+        runner=runner,
+        codex_review_timeout_seconds=codex_review_timeout_seconds,
+        codex_review_poll_seconds=codex_review_poll_seconds,
+    )
+    if code != SUCCESS_EXIT_CODE:
+        return code
+    pr_ref = str(pr or _current_pr_number(root, runner) or "")
+    if not pr_ref:
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "PR not found after ready step",
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    for step in (ready_for_review, merge_pr, cleanup_pr):
+        code = step(repo_root=root, pr=pr_ref, runner=runner)
+        if code != SUCCESS_EXIT_CODE:
+            return code
+    return SUCCESS_EXIT_CODE
 
 
 def _run_local_check(
@@ -1563,6 +1928,147 @@ def _github_pr_info_from_url(pr_url: str) -> tuple[str, str] | None:
     return match.group("repo"), match.group("number")
 
 
+def _remote_pr_review_requirement(
+    *,
+    root: Path,
+    runner: Runner,
+    repo: str,
+    base_ref: str,
+) -> PullRequestReviewRequirement:
+    branch = base_ref or "main"
+    rulesets = _gh_api_list(
+        root,
+        runner,
+        f"repos/{repo}/rulesets?includes_parents=true",
+    )
+    saw_pull_request_rule = False
+    for summary in rulesets:
+        ruleset = _ruleset_detail(root=root, runner=runner, repo=repo, summary=summary)
+        if not _ruleset_applies_to_branch(ruleset, branch):
+            continue
+        pull_request_parameters = _pull_request_rule_parameters(ruleset)
+        if pull_request_parameters is None:
+            continue
+        saw_pull_request_rule = True
+        if _pull_request_rule_requires_approval(pull_request_parameters):
+            return PullRequestReviewRequirement(
+                approval_required=True,
+                source=f"ruleset:{_single_line_text(ruleset.get('name')) or 'unnamed'}",
+            )
+    if saw_pull_request_rule:
+        return PullRequestReviewRequirement(
+            approval_required=False,
+            source="rulesets",
+        )
+    return _legacy_branch_protection_review_requirement(
+        root=root,
+        runner=runner,
+        repo=repo,
+        branch=branch,
+    )
+
+
+def _ruleset_detail(
+    *,
+    root: Path,
+    runner: Runner,
+    repo: str,
+    summary: dict[str, Any],
+) -> dict[str, Any]:
+    if isinstance(summary.get("rules"), list):
+        return summary
+    ruleset_id = summary.get("id")
+    if not ruleset_id:
+        raise GitHubDataUnavailable(
+            "GitHub ruleset metadata incomplete",
+            details=(f"repos/{repo}/rulesets?includes_parents=true",),
+        )
+    return _gh_api_object(root, runner, f"repos/{repo}/rulesets/{ruleset_id}")
+
+
+def _ruleset_applies_to_branch(ruleset: dict[str, Any], branch: str) -> bool:
+    if _single_line_text(ruleset.get("target")) != "branch":
+        return False
+    if _single_line_text(ruleset.get("enforcement")) != "active":
+        return False
+    conditions = ruleset.get("conditions")
+    if not isinstance(conditions, dict):
+        return True
+    ref_name = conditions.get("ref_name")
+    if not isinstance(ref_name, dict):
+        return True
+    includes = _string_or_list(ref_name.get("include"))
+    excludes = _string_or_list(ref_name.get("exclude"))
+    if any(_ref_pattern_matches(pattern, branch) for pattern in excludes):
+        return False
+    if not includes:
+        return True
+    return any(_ref_pattern_matches(pattern, branch) for pattern in includes)
+
+
+def _ref_pattern_matches(pattern: str, branch: str) -> bool:
+    ref = f"refs/heads/{branch}"
+    return (
+        pattern == "~DEFAULT_BRANCH"
+        or fnmatch.fnmatchcase(ref, pattern)
+        or fnmatch.fnmatchcase(branch, pattern)
+    )
+
+
+def _pull_request_rule_parameters(ruleset: dict[str, Any]) -> dict[str, Any] | None:
+    rules = ruleset.get("rules")
+    if not isinstance(rules, list):
+        return None
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        if _single_line_text(rule.get("type")) != "pull_request":
+            continue
+        parameters = rule.get("parameters")
+        return parameters if isinstance(parameters, dict) else {}
+    return None
+
+
+def _pull_request_rule_requires_approval(parameters: dict[str, Any]) -> bool:
+    return (
+        _int_value(parameters.get("required_approving_review_count")) > 0
+        or bool(parameters.get("require_code_owner_review"))
+        or bool(parameters.get("require_last_push_approval"))
+    )
+
+
+def _legacy_branch_protection_review_requirement(
+    *,
+    root: Path,
+    runner: Runner,
+    repo: str,
+    branch: str,
+) -> PullRequestReviewRequirement:
+    path = f"repos/{repo}/branches/{branch}/protection/required_pull_request_reviews"
+    result = runner.run(["gh", "api", path], cwd=root)
+    if result.returncode != 0:
+        text = f"{result.stdout}\n{result.stderr}"
+        if "404" in text or "Not Found" in text:
+            return PullRequestReviewRequirement(
+                approval_required=False,
+                source="branch-protection:none",
+            )
+        raise _github_data_unavailable(
+            "GitHub branch protection review rule unavailable",
+            f"gh api {path}",
+            result,
+        )
+    payload = _json_object_from_result(result, f"gh api {path}")
+    return PullRequestReviewRequirement(
+        approval_required=(
+            _int_value(payload.get("required_approving_review_count")) > 0
+            or bool(payload.get("require_code_owner_reviews"))
+            or bool(payload.get("require_last_push_approval"))
+        ),
+        source="branch-protection",
+    )
+
+
 def _github_link_matches_pr(
     match: re.Match[str],
     *,
@@ -1675,6 +2181,17 @@ def _gh_api_list(root: Path, runner: Runner, path: str) -> list[dict[str, Any]]:
     return [item for item in payload if isinstance(item, dict)]
 
 
+def _gh_api_object(root: Path, runner: Runner, path: str) -> dict[str, Any]:
+    result = runner.run(["gh", "api", path], cwd=root)
+    if result.returncode != 0:
+        raise _github_data_unavailable(
+            "GitHub API object unavailable",
+            f"gh api {path}",
+            result,
+        )
+    return _json_object_from_result(result, f"gh api {path}")
+
+
 def _latest_codex_trigger_time(
     comments: Sequence[dict[str, Any]],
     *,
@@ -1773,6 +2290,13 @@ def _string_or_list(value: Any) -> list[str]:
 
 def _single_line_text(value: Any) -> str:
     return " ".join(str(value or "").split())
+
+
+def _int_value(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _failing_check_names(output: str) -> list[str]:
@@ -1918,6 +2442,34 @@ def _merge_state_requires_attention(merge_state: str) -> bool:
     return bool(normalized and normalized not in {"CLEAN", "HAS_HOOKS"})
 
 
+def _review_decision_allows_merge(
+    review_decision: str,
+    *,
+    review_requirement: PullRequestReviewRequirement,
+) -> bool:
+    if not review_requirement.approval_required:
+        return True
+    return review_decision.upper() == "APPROVED"
+
+
+class _temporary_env:
+    def __init__(self, updates: dict[str, str]) -> None:
+        self.updates = updates
+        self.originals: dict[str, str | None] = {}
+
+    def __enter__(self) -> None:
+        for key, value in self.updates.items():
+            self.originals[key] = os.environ.get(key)
+            os.environ[key] = value
+
+    def __exit__(self, *_exc: object) -> None:
+        for key, value in self.originals.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
 def _command_stdout(result: CommandResult) -> str:
     return result.stdout.strip()
 
@@ -1987,14 +2539,38 @@ def build_parser() -> argparse.ArgumentParser:
     wait_parser.add_argument("--pr")
     diagnose_parser = subparsers.add_parser("diagnose")
     diagnose_parser.add_argument("--pr")
+    resolve_threads_parser = subparsers.add_parser("resolve-threads")
+    resolve_threads_parser.add_argument("thread_ids", nargs="*")
+    resolve_threads_parser.add_argument("--thread", action="append", default=[])
+    ready_for_review_parser = subparsers.add_parser("ready-for-review")
+    ready_for_review_parser.add_argument("--pr")
+    merge_parser = subparsers.add_parser("merge")
+    merge_parser.add_argument("--pr")
+    cleanup_parser = subparsers.add_parser("cleanup")
+    cleanup_parser.add_argument("--pr")
     ready_parser = subparsers.add_parser("ready")
     ready_parser.add_argument("--title")
+    ready_parser.add_argument("--resolve-thread", action="append", default=[])
     ready_parser.add_argument(
         "--codex-review-timeout-seconds",
         type=float,
         default=CODEX_REVIEW_WAIT_TIMEOUT_SECONDS,
     )
     ready_parser.add_argument(
+        "--codex-review-poll-seconds",
+        type=float,
+        default=CODEX_REVIEW_WAIT_INTERVAL_SECONDS,
+    )
+    complete_parser = subparsers.add_parser("complete")
+    complete_parser.add_argument("--title")
+    complete_parser.add_argument("--pr")
+    complete_parser.add_argument("--resolve-thread", action="append", default=[])
+    complete_parser.add_argument(
+        "--codex-review-timeout-seconds",
+        type=float,
+        default=CODEX_REVIEW_WAIT_TIMEOUT_SECONDS,
+    )
+    complete_parser.add_argument(
         "--codex-review-poll-seconds",
         type=float,
         default=CODEX_REVIEW_WAIT_INTERVAL_SECONDS,
@@ -2012,10 +2588,31 @@ def main(argv: list[str] | None = None) -> int:
         return wait(repo_root=args.repo_root, pr=args.pr)
     if args.command == "diagnose":
         return diagnose(repo_root=args.repo_root, pr=args.pr)
+    if args.command == "resolve-threads":
+        return resolve_review_threads(
+            repo_root=args.repo_root,
+            thread_ids=tuple(args.thread_ids) + tuple(args.thread),
+        )
+    if args.command == "ready-for-review":
+        return ready_for_review(repo_root=args.repo_root, pr=args.pr)
+    if args.command == "merge":
+        return merge_pr(repo_root=args.repo_root, pr=args.pr)
+    if args.command == "cleanup":
+        return cleanup_pr(repo_root=args.repo_root, pr=args.pr)
     if args.command == "ready":
         return ready(
             repo_root=args.repo_root,
             title=args.title,
+            resolve_threads=tuple(args.resolve_thread),
+            codex_review_timeout_seconds=args.codex_review_timeout_seconds,
+            codex_review_poll_seconds=args.codex_review_poll_seconds,
+        )
+    if args.command == "complete":
+        return complete_pr(
+            repo_root=args.repo_root,
+            title=args.title,
+            pr=args.pr,
+            resolve_threads=tuple(args.resolve_thread),
             codex_review_timeout_seconds=args.codex_review_timeout_seconds,
             codex_review_poll_seconds=args.codex_review_poll_seconds,
         )

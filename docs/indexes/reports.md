@@ -37,7 +37,7 @@
 | docs |  | 输出平安银行信息的中文名称 | `docs/joinquant-data/JQ_股票数据.md` | 0 |
 | docs |  | JQ_舆情数据 | `docs/joinquant-data/JQ_舆情数据.md` | 0 |
 | docs |  | JQ_行业概念数据 | `docs/joinquant-data/JQ_行业概念数据.md` | 0 |
-| docs |  | PR #21 流程问题复盘 | `docs/problems/2026-05-29-pr21-flow-retrospective.md` | 6 |
+| docs |  | PR #21/#22 流程问题复盘 | `docs/problems/2026-05-29-pr21-flow-retrospective.md` | 6 |
 | docs |  | 定义一个全局变量, 保存要操作的股票 | `docs/reference/joinquant-api.md` | 28 |
 | docs |  | JoinQuant 参数分析框架分析报告 | `docs/reference/joinquant-parameter-analysis-framework.md` | 2 |
 | docs |  | 代码风格和策略实现规则 | `docs/rules/code-style.md` | 2 |
@@ -45,7 +45,7 @@
 | docs |  | 命令和本地环境规则 | `docs/rules/commands.md` | 4 |
 | docs |  | 文档和 Pathref 规则 | `docs/rules/docs-and-pathref.md` | 0 |
 | docs |  | 本地与聚宽环境差异 | `docs/rules/environments.md` | 0 |
-| docs |  | 治理门禁规则 | `docs/rules/governance.md` | 0 |
+| docs |  | 治理门禁规则 | `docs/rules/governance.md` | 1 |
 | docs |  | 仓库规则总索引 | `docs/rules/index.md` | 15 |
 | docs |  | PR 工作流规则 | `docs/rules/pr-workflow.md` | 3 |
 | docs |  | 研究流程规则 | `docs/rules/research-workflow.md` | 0 |

@@ -20,4 +20,4 @@ Superseded in part by [ADR 0005](0005-ai-entry-progressive-disclosure.md) <!-- p
 
 ## 后果
 
-合并前检查从本地子 Agent 结论改为 GitHub PR 上的官方 Codex review 结论。CI 仍保留证据校验，CODEOWNER review 仍是人工 owner 门禁。
+合并前检查从本地子 Agent 结论改为 GitHub PR 上的官方 Codex review 结论。CI 仍保留证据校验；approval / Code Owner review 只在远端实际 branch protection / ruleset 要求时作为合并门禁。
