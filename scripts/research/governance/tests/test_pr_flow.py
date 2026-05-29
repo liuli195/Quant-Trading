@@ -439,6 +439,8 @@ class DiagnoseRunner:
         merge_state: str = "BLOCKED",
         check_bucket: str = "fail",
         check_state: str = "FAILURE",
+        review_decision: str = "REVIEW_REQUIRED",
+        local_head: str | None = None,
         issue_comments: list[dict[str, object]] | None = None,
         reviews: list[dict[str, object]] | None = None,
         review_threads: list[dict[str, object]] | None = None,
@@ -447,6 +449,8 @@ class DiagnoseRunner:
         self.merge_state = merge_state
         self.check_bucket = check_bucket
         self.check_state = check_state
+        self.review_decision = review_decision
+        self.local_head = local_head or "1" * 40
         self.issue_comments = issue_comments
         self.reviews = reviews
         self.review_threads = review_threads
@@ -477,7 +481,7 @@ class DiagnoseRunner:
                         "isDraft": False,
                         "headRefOid": "1" * 40,
                         "mergeStateStatus": self.merge_state,
-                        "reviewDecision": "REVIEW_REQUIRED",
+                        "reviewDecision": self.review_decision,
                         "body": (
                             f"{pr_flow.MANAGED_BLOCK_START}\n"
                             "## AI Review 风险分级\n"
@@ -487,6 +491,8 @@ class DiagnoseRunner:
                 ),
                 "",
             )
+        if command == ["git", "rev-parse", "HEAD"]:
+            return pr_flow.CommandResult(0, self.local_head + "\n", "")
         if command == [
             "gh",
             "pr",
@@ -640,6 +646,7 @@ class MergeReadyRunner(DiagnoseRunner):
             merge_state="CLEAN",
             check_bucket="pass",
             check_state="SUCCESS",
+            review_decision="APPROVED",
             issue_comments=[
                 {
                     "id": 1,
@@ -931,6 +938,7 @@ def test_diagnose_reports_current_head_review_evidence(
         merge_state="CLEAN",
         check_bucket="pass",
         check_state="SUCCESS",
+        review_decision="APPROVED",
         issue_comments=[
             {
                 "id": 1,
@@ -960,6 +968,46 @@ def test_diagnose_reports_current_head_review_evidence(
     assert "codex review evidence: present" in captured.out
     assert "codex blockers: 0" in captured.out
     assert "next: PR automation state is merge-ready" in captured.out
+
+
+def test_diagnose_blocks_merge_ready_without_approved_review(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = DiagnoseRunner(
+        merge_state="CLEAN",
+        check_bucket="pass",
+        check_state="SUCCESS",
+        review_decision="REVIEW_REQUIRED",
+        issue_comments=[
+            {
+                "id": 1,
+                "user": {"login": "test-user"},
+                "body": _codex_review_trigger_body(),
+                "created_at": "2026-05-28T09:00:00Z",
+                "updated_at": "2026-05-28T09:00:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 10,
+                "user": {"login": "chatgpt-codex-connector"},
+                "state": "COMMENTED",
+                "commit_id": "1" * 40,
+                "submitted_at": "2026-05-28T10:00:00Z",
+                "body": "Codex Review: Didn't find any major issues.",
+            }
+        ],
+        review_threads=[],
+    )
+
+    code = pr_flow.diagnose(repo_root=tmp_path, pr="7", runner=runner)
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "reviewDecision: REVIEW_REQUIRED" in captured.out
+    assert "next: wait for approved code owner review" in captured.out
+    assert "next: PR automation state is merge-ready" not in captured.out
 
 
 def test_diagnose_waits_for_pending_checks_before_ruleset_attention(
@@ -2422,6 +2470,36 @@ def test_merge_pr_uses_diagnose_and_match_head_commit(tmp_path: Path) -> None:
     ] in runner.calls
 
 
+def test_merge_pr_blocks_when_local_head_differs_from_pr_head(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = MergeReadyRunner()
+    runner.local_head = "2" * 40
+
+    code = pr_flow.merge_pr(repo_root=tmp_path, pr="7", runner=runner)
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "local HEAD does not match PR head" in captured.err
+    assert not any(call[:3] == ["gh", "pr", "merge"] for call in runner.calls)
+
+
+def test_merge_pr_blocks_without_approved_review_decision(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = MergeReadyRunner()
+    runner.review_decision = "REVIEW_REQUIRED"
+
+    code = pr_flow.merge_pr(repo_root=tmp_path, pr="7", runner=runner)
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "next: wait for approved code owner review" in captured.out
+    assert not any(call[:3] == ["gh", "pr", "merge"] for call in runner.calls)
+
+
 def test_cleanup_pr_syncs_main_and_deletes_merged_branch(tmp_path: Path) -> None:
     runner = CleanupRunner()
 
@@ -2462,6 +2540,7 @@ def test_complete_pr_runs_ready_review_merge_and_cleanup(
     monkeypatch.setattr(pr_flow, "ready_for_review", fake_ready_for_review)
     monkeypatch.setattr(pr_flow, "merge_pr", fake_merge_pr)
     monkeypatch.setattr(pr_flow, "cleanup_pr", fake_cleanup_pr)
+    monkeypatch.setattr(pr_flow, "_current_pr_number", lambda _root, _runner: "7")
 
     code = pr_flow.complete_pr(
         repo_root=tmp_path,
@@ -2479,3 +2558,33 @@ def test_complete_pr_runs_ready_review_merge_and_cleanup(
         ("merge", "7"),
         ("cleanup", "7"),
     ]
+
+
+def test_complete_pr_rejects_explicit_pr_mismatch(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    ready_called = False
+
+    def fake_ready(**_kwargs: object) -> int:
+        nonlocal ready_called
+        ready_called = True
+        return pr_flow.SUCCESS_EXIT_CODE
+
+    monkeypatch.setattr(pr_flow, "ready", fake_ready)
+    monkeypatch.setattr(pr_flow, "_current_pr_number", lambda _root, _runner: "8")
+
+    code = pr_flow.complete_pr(
+        repo_root=tmp_path,
+        title="PR 自动化",
+        pr="7",
+        runner=RecordingRunner(),
+        codex_review_timeout_seconds=0,
+        codex_review_poll_seconds=0,
+    )
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "explicit PR does not match current branch PR" in captured.err
+    assert not ready_called

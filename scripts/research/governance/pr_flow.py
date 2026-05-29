@@ -537,6 +537,9 @@ def diagnose(
         if check_state == "pending":
             print("next: wait for pending required checks")
             return EXCEPTION_REQUIRED_EXIT_CODE
+        if not _review_decision_allows_merge(review_decision):
+            print("next: wait for approved code owner review")
+            return EXCEPTION_REQUIRED_EXIT_CODE
         if _merge_state_requires_attention(merge_state):
             print("next: inspect branch protection or ruleset blockers")
             return EXCEPTION_REQUIRED_EXIT_CODE
@@ -748,11 +751,31 @@ def merge_pr(
         return EXCEPTION_REQUIRED_EXIT_CODE
     pr_ref = str(metadata.get("number") or pr or "")
     head_sha = _single_line_text(metadata.get("headRefOid"))
+    review_decision = _single_line_text(metadata.get("reviewDecision"))
     if not pr_ref or not head_sha:
         _print_state(
             "EXCEPTION_REQUIRED",
             "PR head metadata unavailable for merge",
             details=("gh pr view --json " + PR_DIAGNOSE_JSON_FIELDS,),
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    local_head = runner.run(["git", "rev-parse", "HEAD"], cwd=root)
+    if local_head.returncode != 0:
+        _print_command_failure("git rev-parse HEAD", local_head)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    local_head_sha = _command_stdout(local_head)
+    if local_head_sha != head_sha:
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "local HEAD does not match PR head",
+            details=[f"local={local_head_sha}", f"pr={head_sha}"],
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    if not _review_decision_allows_merge(review_decision):
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "approved review is required before merge",
+            details=[f"reviewDecision={review_decision or 'UNKNOWN'}"],
         )
         return EXCEPTION_REQUIRED_EXIT_CODE
     merged = runner.run(
@@ -883,9 +906,19 @@ def complete_pr(
     codex_review_timeout_seconds: float = CODEX_REVIEW_WAIT_TIMEOUT_SECONDS,
     codex_review_poll_seconds: float = CODEX_REVIEW_WAIT_INTERVAL_SECONDS,
 ) -> int:
+    root = Path(repo_root).resolve()
     runner = runner or CommandRunner()
+    if pr:
+        current_pr = _current_pr_number(root, runner)
+        if current_pr != str(pr):
+            _print_state(
+                "EXCEPTION_REQUIRED",
+                "explicit PR does not match current branch PR",
+                details=[f"current={current_pr or 'none'}", f"requested={pr}"],
+            )
+            return EXCEPTION_REQUIRED_EXIT_CODE
     code = ready(
-        repo_root=repo_root,
+        repo_root=root,
         title=title,
         runner=runner,
         codex_review_timeout_seconds=codex_review_timeout_seconds,
@@ -893,8 +926,15 @@ def complete_pr(
     )
     if code != SUCCESS_EXIT_CODE:
         return code
+    pr_ref = str(pr or _current_pr_number(root, runner) or "")
+    if not pr_ref:
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "PR not found after ready step",
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
     for step in (ready_for_review, merge_pr, cleanup_pr):
-        code = step(repo_root=repo_root, pr=pr, runner=runner)
+        code = step(repo_root=root, pr=pr_ref, runner=runner)
         if code != SUCCESS_EXIT_CODE:
             return code
     return SUCCESS_EXIT_CODE
@@ -2127,6 +2167,10 @@ def _diagnose_required_checks(
 def _merge_state_requires_attention(merge_state: str) -> bool:
     normalized = merge_state.upper()
     return bool(normalized and normalized not in {"CLEAN", "HAS_HOOKS"})
+
+
+def _review_decision_allows_merge(review_decision: str) -> bool:
+    return review_decision.upper() == "APPROVED"
 
 
 class _temporary_env:
