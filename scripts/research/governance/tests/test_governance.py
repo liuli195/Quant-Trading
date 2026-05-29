@@ -466,6 +466,46 @@ def test_skill_ownership_rejects_missing_owned_script_path(tmp_path: Path) -> No
     )
 
 
+def test_skill_ownership_reports_invalid_records_without_discovery_crash(
+    tmp_path: Path,
+) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    path = tmp_path / ".codex/skills/repo-python-env/references/ownership.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data.pop("trigger_phrases")
+    path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any("missing fields: trigger_phrases" in error for error in errors)
+
+
+def test_skill_ownership_rejects_missing_owned_rule_anchor(tmp_path: Path) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    path = tmp_path / ".codex/skills/skill-system/references/ownership.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["owned_rules"] = ["docs/rules/skills.md#missing-anchor"]
+    path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "missing markdown anchor in owned rule for skill-system: docs/rules/skills.md#missing-anchor"
+        in error
+        for error in errors
+    )
+
+
 def test_skill_ownership_rejects_adapter_description_mismatch(tmp_path: Path) -> None:
     from scripts.research.governance.skill_ownership import validate_ownerships
 
@@ -586,6 +626,28 @@ def test_skill_ownership_rejects_unsupported_recommended_command(
 
     assert any(
         "unsupported recommended command for skill-system" in error for error in errors
+    )
+
+
+def test_skill_ownership_rejects_unsupported_owned_command_prefix(
+    tmp_path: Path,
+) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    path = tmp_path / ".codex/skills/skill-system/references/ownership.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["owned_commands"] = ["python -m not.real.module"]
+    path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "unsupported owned command for skill-system: python -m not.real.module" in error
+        for error in errors
     )
 
 
@@ -1130,6 +1192,8 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     (root / "docs/rules/commands.md").write_text(
+        "# 命令和本地环境规则\n\n"
+        "## Python Env\n\n"
         "scripts.research.cli scripts.research.datasets scripts.research.variants "
         "scripts.research.governance scripts.research.governance gate scripts.research.registry "
         "scripts.tools.path_tools.refactor .\\.githooks\\setup-python.ps1 "
@@ -1137,6 +1201,38 @@ def _write_minimal_repo(root: Path) -> None:
         ".\\.venv\\Scripts\\python.exe .venv/bin/python PYTHONUTF8 PYTHONIOENCODING "
         "Python 命令默认走项目 `.venv`，不改用系统 Python "
         "gh pr checks `gh` CLI 默认提权执行",
+        encoding="utf-8",
+    )
+    (root / "docs/rules/environments.md").write_text(
+        "# 本地与聚宽环境差异\n\n"
+        "## Local Cloud Boundary\n\n"
+        "本地负责开发、测试、文档和分析。\n\n"
+        "## JoinQuant Compat\n\n"
+        "策略代码必须兼容聚宽 Python 3.6。\n\n"
+        "## JoinQuant Cloud Run\n\n"
+        "云端回测和本地研究分工明确。\n",
+        encoding="utf-8",
+    )
+    (root / "docs/rules/research-workflow.md").write_text(
+        "# 研究流程规则\n\n"
+        "## Local First\n\n"
+        "先本地 fast/full 漏斗。\n\n"
+        "## Data Center\n\n"
+        "新数据快照登记 catalog。\n\n"
+        "## Reports\n\n"
+        "报告保留可追溯证据。\n\n"
+        "## Cloud Handoff\n\n"
+        "云端回测保留 run 和 manifest。\n\n"
+        "## Experiments\n\n"
+        "A/B 保留控制变量。\n",
+        encoding="utf-8",
+    )
+    (root / "docs/rules/code-style.md").write_text(
+        "# 代码风格和策略实现规则\n\n## JoinQuant Strategy\n\n策略代码必须兼容聚宽。\n",
+        encoding="utf-8",
+    )
+    (root / "docs/rules/docs-and-pathref.md").write_text(
+        "# 文档和 Pathref 规则\n\n## Pathref\n\nMarkdown 内部文件引用使用 pathref。\n",
         encoding="utf-8",
     )
     (root / "docs/rules/skills.md").write_text(

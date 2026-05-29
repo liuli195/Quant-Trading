@@ -45,6 +45,7 @@ VALID_COMMAND_PREFIXES = (
     "make ",
     "jq-auto ",
 )
+OWNED_LOCAL_SCRIPT_PREFIXES = (".\\.githooks\\", ".githooks/")
 VALID_PYTHON_OWNED_ARGS = {
     "scripts.research.docs": ((), ("index",)),
     "scripts.research.governance": ((), ("audit",)),
@@ -170,9 +171,61 @@ def _base_rule_path(value: str) -> str:
     return value.split("#", 1)[0]
 
 
-def _path_reference_exists(root: Path, value: str) -> bool:
-    path = value.split("#", 1)[0]
-    return bool(path) and (root / path).exists()
+def _path_reference_errors(
+    root: Path,
+    ownership: SkillOwnership,
+    value: str,
+    field_name: str,
+) -> list[str]:
+    path_text, _, anchor = value.partition("#")
+    if not path_text or not (root / path_text).exists():
+        return [f"missing {field_name} for {ownership.skill}: {value}"]
+    path = root / path_text
+    if anchor and path.suffix.lower() == ".md" and not _markdown_anchor_exists(
+        path, anchor
+    ):
+        return [
+            f"missing markdown anchor in {field_name} for {ownership.skill}: {value}"
+        ]
+    return []
+
+
+def _markdown_anchor_exists(path: Path, anchor: str) -> bool:
+    return anchor in _markdown_anchors(path)
+
+
+def _markdown_anchors(path: Path) -> set[str]:
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    anchors: set[str] = set()
+    for match in re.finditer(
+        r"<a\s+(?:[^>]*\s)?(?:id|name)=[\"']([^\"']+)[\"']",
+        text,
+        flags=re.IGNORECASE,
+    ):
+        anchors.add(match.group(1))
+    seen: dict[str, int] = {}
+    for line in text.splitlines():
+        heading_match = re.match(r"^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$", line)
+        if heading_match is None:
+            continue
+        slug = _markdown_heading_slug(heading_match.group(1))
+        if not slug:
+            continue
+        count = seen.get(slug, 0)
+        seen[slug] = count + 1
+        anchors.add(slug if count == 0 else f"{slug}-{count}")
+    return anchors
+
+
+def _markdown_heading_slug(heading: str) -> str:
+    heading = re.sub(r"<[^>]+>", "", heading)
+    heading = heading.replace("`", "")
+    heading = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", heading)
+    slug = heading.casefold()
+    slug = re.sub(r"[^\w\u4e00-\u9fff\s-]", "", slug)
+    slug = re.sub(r"\s+", "-", slug).strip("-")
+    slug = re.sub(r"-+", "-", slug)
+    return slug
 
 
 def _command_covers(owner_command: str, required_command: str) -> bool:
@@ -206,6 +259,14 @@ def _script_command_exists(root: Path, command: str) -> bool:
     return (root / script).exists()
 
 
+def _has_supported_command_prefix(command: str, field_name: str) -> bool:
+    if command.startswith(VALID_COMMAND_PREFIXES):
+        return True
+    return field_name == "owned command" and command.startswith(
+        OWNED_LOCAL_SCRIPT_PREFIXES
+    )
+
+
 def _command_reference_errors(
     root: Path,
     ownership: SkillOwnership,
@@ -215,7 +276,9 @@ def _command_reference_errors(
     require_supported_prefix: bool,
 ) -> list[str]:
     errors: list[str] = []
-    if require_supported_prefix and not command.startswith(VALID_COMMAND_PREFIXES):
+    if require_supported_prefix and not _has_supported_command_prefix(
+        command, field_name
+    ):
         errors.append(f"unsupported {field_name} for {ownership.skill}: {command}")
         return errors
     if field_name == "owned command" and any(
@@ -353,17 +416,23 @@ def load_ownerships(repo_root: str | Path = ".") -> tuple[SkillOwnership, ...]:
     return tuple(_load_ownership(path, root) for path in _ownership_paths(root))
 
 
-def discover_owner(repo_root: str | Path, query: str) -> DiscoveryResult:
-    """Return active owner skills whose name or trigger phrases match the query."""
-
+def _discover_owner_from_ownerships(
+    ownerships: Iterable[SkillOwnership], query: str
+) -> DiscoveryResult:
     matches: list[SkillOwnership] = []
-    for ownership in load_ownerships(repo_root):
+    for ownership in ownerships:
         if ownership.status != "active":
             continue
         phrases = (ownership.skill, *ownership.trigger_phrases)
         if any(phrase and _phrase_matches_query(phrase, query) for phrase in phrases):
             matches.append(ownership)
     return DiscoveryResult(query=query, matches=tuple(matches))
+
+
+def discover_owner(repo_root: str | Path, query: str) -> DiscoveryResult:
+    """Return active owner skills whose name or trigger phrases match the query."""
+
+    return _discover_owner_from_ownerships(load_ownerships(repo_root), query)
 
 
 def _python_module_from_command(command: str) -> str | None:
@@ -502,8 +571,12 @@ def validate_ownerships(repo_root: str | Path = ".") -> list[str]:
                     seen_owned[key] = ownership.skill
 
         for script in ownership.owned_scripts:
-            if not _path_reference_exists(root, script):
-                errors.append(f"missing owned script for {ownership.skill}: {script}")
+            errors.extend(
+                _path_reference_errors(root, ownership, script, "owned script")
+            )
+
+        for rule in ownership.owned_rules:
+            errors.extend(_path_reference_errors(root, ownership, rule, "owned rule"))
 
         expected_adapter = f".claude/skills/{ownership.skill}/SKILL.md"
         if expected_adapter not in ownership.adapters:
@@ -529,7 +602,7 @@ def validate_ownerships(repo_root: str | Path = ".") -> list[str]:
                     ownership,
                     command,
                     "owned command",
-                    require_supported_prefix=False,
+                    require_supported_prefix=True,
                 )
             )
 
@@ -545,8 +618,7 @@ def validate_ownerships(repo_root: str | Path = ".") -> list[str]:
             )
 
         for rule in ownership.read_rules:
-            if not (root / rule).exists():
-                errors.append(f"missing read rule for {ownership.skill}: {rule}")
+            errors.extend(_path_reference_errors(root, ownership, rule, "read rule"))
 
         owner_path = root / ".codex" / "skills" / ownership.skill / "SKILL.md"
         owner_text = ""
@@ -573,7 +645,7 @@ def validate_ownerships(repo_root: str | Path = ".") -> list[str]:
                     f"owner SKILL.md missing recommended command for {ownership.skill}: {command}"
                 )
         for phrase in ownership.trigger_phrases:
-            result = discover_owner(root, phrase)
+            result = _discover_owner_from_ownerships(ownerships, phrase)
             matched_skills = tuple(match.skill for match in result.matches)
             if matched_skills != (ownership.skill,):
                 errors.append(

@@ -4,6 +4,10 @@
 
 ## MUST
 
+<a id="python-env"></a>
+
+### Python 环境
+
 - Python 命令默认走项目 `.venv`，不改用系统 Python。
 - setup script 只负责 bootstrap `.venv` 并配置 hooks。
 - Windows 本地默认入口：`.\.venv\Scripts\python.exe`。
