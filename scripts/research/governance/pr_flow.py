@@ -104,8 +104,8 @@ class Runner(Protocol):
         ...
 
 
-def select_local_checks(changed_files: Sequence[str]) -> list[str]:
-    affected = plan_checks(changed_files)
+def select_local_checks(changed_files: Sequence[str], *, repo_root: str | Path = ".") -> list[str]:
+    affected = plan_checks(changed_files, repo_root=repo_root)
     selected: list[str] = []
     for check in affected.checked:
         for local_check in _local_checks_for_check_id(check.check_id):
@@ -144,7 +144,7 @@ def prepare(
     )
     check_files = sorted({*(changed_files or []), *report_files})
     passed_checks: list[str] = []
-    for check in select_local_checks(check_files):
+    for check in select_local_checks(check_files, repo_root=root):
         check_result = _run_local_check(check, root=root, runner=runner, changed_files=check_files)
         if check_result.returncode != 0:
             _print_command_failure(check, check_result)

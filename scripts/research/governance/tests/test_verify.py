@@ -12,7 +12,10 @@ from scripts.research.governance.affected import plan_checks
 def test_docs_files_map_to_pathref_changed_files() -> None:
     plan = plan_checks(["docs/rules/commands.md"])
 
-    assert [check.check_id for check in plan.checked] == ["pathref.changed-files"]
+    assert [check.check_id for check in plan.checked] == [
+        "pathref.changed-files",
+        "governance.full",
+    ]
     assert plan.skipped
     assert plan.full_not_run is True
 
@@ -38,6 +41,7 @@ def test_skill_files_map_to_skill_ownership_scoped() -> None:
     assert [check.check_id for check in plan.checked] == [
         "pathref.changed-files",
         "skill-ownership.scoped",
+        "governance.full",
     ]
     assert plan.checked[1].subjects == ("repo-python-env",)
     assert plan.full_not_run is True
@@ -51,12 +55,26 @@ def test_governance_files_map_to_static_and_test_checks() -> None:
         "bandit.governance",
         "mypy.governance",
         "pytest.governance",
+        "governance.full",
     ]
-    assert all(check.scope == "scoped" for check in plan.checked)
+    assert [check.scope for check in plan.checked] == [
+        "scoped",
+        "scoped",
+        "scoped",
+        "scoped",
+        "full",
+    ]
     assert plan.full_not_run is True
 
 
-def test_strategy_file_maps_to_compile_and_pytest_checks() -> None:
+def test_strategy_file_maps_to_compile_and_pytest_checks(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "strategies/demo/tests").mkdir(parents=True)
+    (tmp_path / "strategies/demo/demo.py").write_text("pass\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
     plan = plan_checks(["strategies/demo/demo.py"])
 
     assert [check.check_id for check in plan.checked] == [
@@ -64,7 +82,91 @@ def test_strategy_file_maps_to_compile_and_pytest_checks() -> None:
         "pytest.strategy",
     ]
     assert plan.checked[0].inputs == ("strategies/demo/demo.py",)
-    assert plan.checked[1].inputs == ("strategies/demo/tests",)
+    assert plan.checked[1].inputs == ("strategies/demo/tests", "strategies/demo/demo.py")
+
+
+def test_multiple_strategy_files_keep_each_strategy_check(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    for strategy in ("alpha", "beta"):
+        (tmp_path / f"strategies/{strategy}/tests").mkdir(parents=True)
+        (tmp_path / f"strategies/{strategy}/{strategy}.py").write_text(
+            "pass\n",
+            encoding="utf-8",
+        )
+    monkeypatch.chdir(tmp_path)
+
+    plan = plan_checks(["strategies/alpha/alpha.py", "strategies/beta/beta.py"])
+
+    assert [check.check_id for check in plan.checked] == [
+        "py_compile.strategy",
+        "pytest.strategy",
+        "py_compile.strategy",
+        "pytest.strategy",
+    ]
+    assert [check.subjects for check in plan.checked] == [
+        ("alpha",),
+        ("alpha",),
+        ("beta",),
+        ("beta",),
+    ]
+
+
+def test_strategy_pytest_cache_inputs_include_changed_source(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "strategies/demo/tests").mkdir(parents=True)
+    (tmp_path / "strategies/demo/demo.py").write_text("VALUE = 1\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    plan = plan_checks(["strategies/demo/demo.py"])
+    pytest_check = next(check for check in plan.checked if check.check_id == "pytest.strategy")
+
+    assert pytest_check.inputs == ("strategies/demo/tests", "strategies/demo/demo.py")
+
+
+def test_strategy_compile_uses_actual_changed_python_file(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "strategies/value_stock_rsrs/Value_Stock_RSRS.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("pass\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    plan = plan_checks(["strategies/value_stock_rsrs/Value_Stock_RSRS.py"])
+
+    assert plan.checked[0].command == (
+        "python",
+        "-m",
+        "py_compile",
+        "strategies/value_stock_rsrs/Value_Stock_RSRS.py",
+    )
+    assert plan.checked[0].inputs == ("strategies/value_stock_rsrs/Value_Stock_RSRS.py",)
+
+
+def test_deleted_markdown_skips_changed_file_pathref_and_runs_full_pathref(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    plan = plan_checks(["docs/deleted.md"])
+
+    assert [check.check_id for check in plan.checked] == ["pathref.full"]
+
+
+def test_deleted_strategy_source_skips_scoped_strategy_checks(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    plan = plan_checks(["strategies/demo/demo.py"])
+
+    assert plan.checked == ()
 
 
 def test_dependency_files_map_to_pip_audit() -> None:
@@ -215,7 +317,7 @@ def test_verify_explain_default_text_names_checked_skipped_and_full_not_run(
     assert "full-not-run: true" in output
 
 
-def test_docs_fast_runs_changed_file_pathref_without_full_gate(
+def test_docs_rules_fast_runs_changed_file_pathref_and_full_gate(
     monkeypatch,
     capsys,
     tmp_path: Path,
@@ -245,12 +347,15 @@ def test_docs_fast_runs_changed_file_pathref_without_full_gate(
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["full_not_run"] is True
-    assert payload["checked"][0]["check_id"] == "pathref.changed-files"
+    assert [item["check_id"] for item in payload["checked"]] == [
+        "pathref.changed-files",
+        "governance.full",
+    ]
     assert any("scripts.tools.path_tools.refactor" in call for call in calls)
-    assert not any("scripts.research.governance" in call for call in calls)
+    assert any("scripts.research.governance" in call and "gate" in call for call in calls)
 
 
-def test_skill_fast_runs_skill_ownership_without_full_gate(
+def test_skill_fast_runs_skill_ownership_and_full_gate(
     monkeypatch,
     capsys,
     tmp_path: Path,
@@ -282,13 +387,14 @@ def test_skill_fast_runs_skill_ownership_without_full_gate(
     assert [item["check_id"] for item in payload["checked"]] == [
         "pathref.changed-files",
         "skill-ownership.scoped",
+        "governance.full",
     ]
     assert payload["checked"][1]["subjects"] == ["repo-python-env"]
     assert any("scripts.research.governance.skill_ownership" in call for call in calls)
-    assert not any(call == ["scripts.research.governance", "gate"] for call in calls)
+    assert any("scripts.research.governance" in call and "gate" in call for call in calls)
 
 
-def test_governance_fast_runs_scoped_static_checks_without_full_gate(
+def test_governance_fast_runs_scoped_static_checks_and_full_gate(
     monkeypatch,
     capsys,
     tmp_path: Path,
@@ -322,8 +428,15 @@ def test_governance_fast_runs_scoped_static_checks_without_full_gate(
         "bandit.governance",
         "mypy.governance",
         "pytest.governance",
+        "governance.full",
     ]
-    assert all(item["scope"] == "scoped" for item in payload["checked"])
+    assert [item["scope"] for item in payload["checked"]] == [
+        "scoped",
+        "scoped",
+        "scoped",
+        "scoped",
+        "full",
+    ]
     assert any("ruff" in call for call in calls)
     assert any("bandit" in call for call in calls)
     assert any("mypy" in call for call in calls)
@@ -332,7 +445,7 @@ def test_governance_fast_runs_scoped_static_checks_without_full_gate(
     assert ".local/pytest-tmp/governance-fast" in pytest_call
     assert "-p" in pytest_call
     assert "no:cacheprovider" in pytest_call
-    assert not any("scripts.research.governance" in call and "gate" in call for call in calls)
+    assert any("scripts.research.governance" in call and "gate" in call for call in calls)
 
 
 def test_strategy_fast_skips_pytest_when_tests_dir_is_missing(
@@ -431,8 +544,8 @@ def test_fast_cache_hits_for_same_passed_input(
     capsys,
     tmp_path: Path,
 ) -> None:
-    (tmp_path / "docs/rules").mkdir(parents=True)
-    changed = tmp_path / "docs/rules/commands.md"
+    (tmp_path / "docs/guides").mkdir(parents=True)
+    changed = tmp_path / "docs/guides/commands.md"
     changed.write_text("# Commands\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     calls: list[list[str]] = []
@@ -443,9 +556,9 @@ def test_fast_cache_hits_for_same_passed_input(
 
     monkeypatch.setattr(verify.subprocess, "run", fake_run)
 
-    assert verify.main(["fast", "--files", "docs/rules/commands.md", "--format", "json"]) == 0
+    assert verify.main(["fast", "--files", "docs/guides/commands.md", "--format", "json"]) == 0
     capsys.readouterr()
-    assert verify.main(["fast", "--files", "docs/rules/commands.md", "--format", "json"]) == 0
+    assert verify.main(["fast", "--files", "docs/guides/commands.md", "--format", "json"]) == 0
     payload = json.loads(capsys.readouterr().out)
 
     assert len(calls) == 1
@@ -458,8 +571,8 @@ def test_fast_cache_invalidates_when_input_content_changes(
     capsys,
     tmp_path: Path,
 ) -> None:
-    (tmp_path / "docs/rules").mkdir(parents=True)
-    changed = tmp_path / "docs/rules/commands.md"
+    (tmp_path / "docs/guides").mkdir(parents=True)
+    changed = tmp_path / "docs/guides/commands.md"
     changed.write_text("# Commands\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     calls: list[list[str]] = []
@@ -470,10 +583,10 @@ def test_fast_cache_invalidates_when_input_content_changes(
 
     monkeypatch.setattr(verify.subprocess, "run", fake_run)
 
-    assert verify.main(["fast", "--files", "docs/rules/commands.md", "--format", "json"]) == 0
+    assert verify.main(["fast", "--files", "docs/guides/commands.md", "--format", "json"]) == 0
     capsys.readouterr()
     changed.write_text("# Commands\n\nUpdated.\n", encoding="utf-8")
-    assert verify.main(["fast", "--files", "docs/rules/commands.md", "--format", "json"]) == 0
+    assert verify.main(["fast", "--files", "docs/guides/commands.md", "--format", "json"]) == 0
     payload = json.loads(capsys.readouterr().out)
 
     assert len(calls) == 2
@@ -485,8 +598,8 @@ def test_fast_cache_does_not_store_failed_results(
     capsys,
     tmp_path: Path,
 ) -> None:
-    (tmp_path / "docs/rules").mkdir(parents=True)
-    changed = tmp_path / "docs/rules/commands.md"
+    (tmp_path / "docs/guides").mkdir(parents=True)
+    changed = tmp_path / "docs/guides/commands.md"
     changed.write_text("# Commands\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     calls = 0
@@ -498,9 +611,9 @@ def test_fast_cache_does_not_store_failed_results(
 
     monkeypatch.setattr(verify.subprocess, "run", fake_run)
 
-    assert verify.main(["fast", "--files", "docs/rules/commands.md", "--format", "json"]) == 1
+    assert verify.main(["fast", "--files", "docs/guides/commands.md", "--format", "json"]) == 1
     capsys.readouterr()
-    assert verify.main(["fast", "--files", "docs/rules/commands.md", "--format", "json"]) == 0
+    assert verify.main(["fast", "--files", "docs/guides/commands.md", "--format", "json"]) == 0
     payload = json.loads(capsys.readouterr().out)
 
     assert calls == 2

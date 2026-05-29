@@ -117,7 +117,7 @@ def _cmd_explain(args: argparse.Namespace) -> int:
         source = _collect_source(args)
     except ChangedFileCollectionError as exc:
         return _render_collection_error(args, str(exc))
-    plan = plan_checks(source.files)
+    plan = plan_checks(source.files, repo_root=args.repo_root)
     if args.format == "json":
         print(json.dumps(_explain_payload(plan, Path(args.repo_root)), ensure_ascii=False, indent=2))
     else:
@@ -130,7 +130,7 @@ def _cmd_fast(args: argparse.Namespace) -> int:
         source = _collect_source(args)
     except ChangedFileCollectionError as exc:
         return _render_collection_error(args, str(exc))
-    plan = plan_checks(source.files)
+    plan = plan_checks(source.files, repo_root=args.repo_root)
     results = [_run_check(check, repo_root=Path(args.repo_root)) for check in plan.checked]
     ok = all(result.ok for result in results)
     payload = {

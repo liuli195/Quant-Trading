@@ -626,7 +626,18 @@ def test_current_pr_review_threads_reads_all_graphql_pages(tmp_path: Path) -> No
     assert len(threads) == 2
 
 
-def test_select_local_checks_for_changed_files() -> None:
+def test_select_local_checks_for_changed_files(tmp_path: Path) -> None:
+    (tmp_path / "docs/guides").mkdir(parents=True)
+    (tmp_path / "docs/guides/a.md").write_text("# Guide\n", encoding="utf-8")
+    (tmp_path / "scripts/research/governance").mkdir(parents=True)
+    (tmp_path / "scripts/research/governance/rules.py").write_text(
+        "# rules\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "strategies/demo").mkdir(parents=True)
+    (tmp_path / "strategies/demo/demo.py").write_text("pass\n", encoding="utf-8")
+    (tmp_path / "requirements.txt").write_text("pytest\n", encoding="utf-8")
+    (tmp_path / "requirements-dev.txt").write_text("pytest\n", encoding="utf-8")
     cases = [
         (["docs/guides/a.md"], ["governance-full"]),
         (
@@ -667,7 +678,7 @@ def test_select_local_checks_for_changed_files() -> None:
     ]
 
     for changed_files, expected in cases:
-        assert pr_flow.select_local_checks(changed_files) == expected
+        assert pr_flow.select_local_checks(changed_files, repo_root=tmp_path) == expected
 
 
 def test_prepare_selects_checks_from_latest_report_when_diff_is_empty(
@@ -752,6 +763,7 @@ def test_prepare_uses_report_files_for_strategy_checks(
         changed_files=["strategies/demo/demo.py"],
     )
     (tmp_path / "strategies/demo/tests").mkdir(parents=True)
+    (tmp_path / "strategies/demo/demo.py").write_text("pass\n", encoding="utf-8")
     monkeypatch.setattr(pr_flow.ai_review_gate, "_discover_changed_files", lambda _root: [])
     runner = RecordingRunner()
 

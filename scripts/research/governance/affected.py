@@ -52,6 +52,13 @@ class CheckSpec:
 
 
 @dataclass(frozen=True)
+class StrategyChange:
+    name: str
+    source_files: tuple[str, ...]
+    run_pytest: bool = False
+
+
+@dataclass(frozen=True)
 class AffectedPlan:
     changed_files: tuple[str, ...]
     checked: tuple[CheckSpec, ...]
@@ -120,11 +127,17 @@ def collect_changed_files(
     return ChangedFileSource(source="+".join(source_parts) or "none", files=normalized)
 
 
-def plan_checks(changed_files: Sequence[str | Path]) -> AffectedPlan:
+def plan_checks(changed_files: Sequence[str | Path], *, repo_root: str | Path = ".") -> AffectedPlan:
+    root = Path(repo_root).resolve()
     normalized = tuple(sorted(dict.fromkeys(_normalize_path(path) for path in changed_files)))
     checked: list[CheckSpec] = []
 
-    markdown = tuple(path for path in normalized if path.endswith(".md"))
+    markdown = tuple(
+        path for path in normalized if path.endswith(".md") and _path_exists(root, path)
+    )
+    deleted_markdown = tuple(
+        path for path in normalized if path.endswith(".md") and not _path_exists(root, path)
+    )
     if markdown:
         checked.append(
             CheckSpec(
@@ -134,7 +147,7 @@ def plan_checks(changed_files: Sequence[str | Path]) -> AffectedPlan:
             )
         )
 
-    if _requires_full_pathref(normalized):
+    if deleted_markdown or _requires_full_pathref(normalized):
         checked.append(
             CheckSpec(
                 "pathref.full",
@@ -241,33 +254,36 @@ def plan_checks(changed_files: Sequence[str | Path]) -> AffectedPlan:
             )
         )
 
-    strategies = _strategy_names(normalized)
-    for strategy in strategies:
-        source = f"strategies/{strategy}/{strategy}.py"
-        checked.append(
-            CheckSpec(
-                "py_compile.strategy",
-                ("python", "-m", "py_compile", source),
-                inputs=(source,),
+    for strategy_change in _strategy_changes(normalized, root):
+        for source in strategy_change.source_files:
+            checked.append(
+                CheckSpec(
+                    "py_compile.strategy",
+                    ("python", "-m", "py_compile", source),
+                    inputs=(source,),
+                    subjects=(strategy_change.name,),
+                )
             )
-        )
-        checked.append(
-            CheckSpec(
-                "pytest.strategy",
-                (
-                    "python",
-                    "-m",
-                    "pytest",
-                    f"strategies/{strategy}/tests",
-                    "-q",
-                    "--basetemp",
-                    f".local/pytest-tmp/strategy-{strategy}-fast",
-                    "-p",
-                    "no:cacheprovider",
-                ),
-                inputs=(f"strategies/{strategy}/tests",),
+        if strategy_change.run_pytest:
+            test_dir = f"strategies/{strategy_change.name}/tests"
+            checked.append(
+                CheckSpec(
+                    "pytest.strategy",
+                    (
+                        "python",
+                        "-m",
+                        "pytest",
+                        test_dir,
+                        "-q",
+                        "--basetemp",
+                        f".local/pytest-tmp/strategy-{strategy_change.name}-fast",
+                        "-p",
+                        "no:cacheprovider",
+                    ),
+                    inputs=(test_dir, *strategy_change.source_files),
+                    subjects=(strategy_change.name,),
+                )
             )
-        )
 
     checked = _dedupe_checks(checked)
     checked_ids = {check.check_id for check in checked}
@@ -290,6 +306,10 @@ def _normalize_path(path: str | Path) -> str:
     while normalized.startswith("./"):
         normalized = normalized[2:]
     return normalized
+
+
+def _path_exists(root: Path, path: str) -> bool:
+    return (root / path).exists()
 
 
 def _git_changed_files(root: Path, args: Sequence[str]) -> list[str]:
@@ -320,13 +340,35 @@ def _changed_files_from_ai_review(path: Path) -> list[str]:
     return [_normalize_path(item) for item in files if isinstance(item, str)]
 
 
-def _strategy_names(paths: Sequence[str]) -> tuple[str, ...]:
-    names: list[str] = []
+def _strategy_changes(paths: Sequence[str], root: Path) -> tuple[StrategyChange, ...]:
+    changes: dict[str, dict[str, object]] = {}
     for path in paths:
         parts = path.split("/")
-        if len(parts) >= 2 and parts[0] == "strategies":
-            names.append(parts[1])
-    return tuple(sorted(dict.fromkeys(names)))
+        if len(parts) < 2 or parts[0] != "strategies":
+            continue
+        strategy = parts[1]
+        record = changes.setdefault(strategy, {"source_files": set(), "run_pytest": False})
+        exists = _path_exists(root, path)
+        is_test_path = len(parts) >= 3 and parts[2] == "tests"
+        if is_test_path and exists:
+            record["run_pytest"] = True
+        elif path.endswith(".py") and exists:
+            source_files = record["source_files"]
+            if isinstance(source_files, set):
+                source_files.add(path)
+            record["run_pytest"] = True
+
+    strategy_changes: list[StrategyChange] = []
+    for strategy in sorted(changes):
+        record = changes[strategy]
+        source_files = record["source_files"]
+        sources = tuple(sorted(source_files)) if isinstance(source_files, set) else ()
+        run_pytest = bool(record["run_pytest"])
+        if sources or run_pytest:
+            strategy_changes.append(
+                StrategyChange(name=strategy, source_files=sources, run_pytest=run_pytest)
+            )
+    return tuple(strategy_changes)
 
 
 def _skill_names(paths: Sequence[str]) -> tuple[str, ...]:
@@ -351,6 +393,11 @@ def _requires_full_governance(paths: Sequence[str]) -> bool:
     prefixes = (
         ".githooks/",
         ".github/workflows/",
+        ".codex/skills/",
+        ".claude/skills/",
+        "docs/adr/",
+        "docs/rules/",
+        "scripts/research/governance/",
         "scripts/research/registry/",
         "scripts/research/layers/",
         "scripts/tools/path_tools/",
@@ -380,10 +427,11 @@ def _full_governance_inputs() -> tuple[str, ...]:
 
 def _dedupe_checks(checks: Sequence[CheckSpec]) -> list[CheckSpec]:
     deduped: list[CheckSpec] = []
-    seen: set[str] = set()
+    seen: set[tuple[str, tuple[str, ...], tuple[str, ...], tuple[str, ...], str]] = set()
     for check in checks:
-        if check.check_id in seen:
+        key = (check.check_id, check.command, check.inputs, check.subjects, check.scope)
+        if key in seen:
             continue
         deduped.append(check)
-        seen.add(check.check_id)
+        seen.add(key)
     return deduped
