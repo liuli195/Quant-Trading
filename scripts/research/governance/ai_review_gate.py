@@ -355,8 +355,8 @@ def _discover_changed_files(repo_root: str | Path = ".") -> list[str] | None:
     root = Path(repo_root)
     discovered: list[str] = []
     for command in (
-        ["git", "diff", "--name-only", "--cached"],
-        ["git", "diff", "--name-only"],
+        ["git", "-c", "core.quotePath=false", "diff", "--name-only", "--cached"],
+        ["git", "-c", "core.quotePath=false", "diff", "--name-only"],
     ):
         result = subprocess.run(
             command,
@@ -373,7 +373,7 @@ def _discover_changed_files(repo_root: str | Path = ".") -> list[str] | None:
     base = _discover_branch_diff_base(root)
     if base:
         result = subprocess.run(
-            ["git", "diff", "--name-only", f"{base}...HEAD"],
+            ["git", "-c", "core.quotePath=false", "diff", "--name-only", f"{base}...HEAD"],
             cwd=root,
             capture_output=True,
             text=True,
@@ -385,7 +385,7 @@ def _discover_changed_files(repo_root: str | Path = ".") -> list[str] | None:
             return None
         discovered.extend(result.stdout.splitlines())
     untracked = subprocess.run(
-        ["git", "ls-files", "--others", "--exclude-standard"],
+        ["git", "-c", "core.quotePath=false", "ls-files", "--others", "--exclude-standard"],
         cwd=root,
         capture_output=True,
         text=True,
