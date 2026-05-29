@@ -807,7 +807,7 @@ def cleanup_pr(
             "view",
             pr_ref,
             "--json",
-            "number,state,mergedAt,headRefName,baseRefName",
+            "number,state,mergedAt,headRefName,baseRefName,isCrossRepository",
         ],
         cwd=root,
     )
@@ -816,12 +816,13 @@ def cleanup_pr(
         return EXCEPTION_REQUIRED_EXIT_CODE
     metadata = _json_object_from_result(
         view,
-        "gh pr view --json number,state,mergedAt,headRefName,baseRefName",
+        "gh pr view --json number,state,mergedAt,headRefName,baseRefName,isCrossRepository",
     )
     state = _single_line_text(metadata.get("state")).upper()
     merged_at = _single_line_text(metadata.get("mergedAt"))
     head_branch = _single_line_text(metadata.get("headRefName"))
     base_branch = _single_line_text(metadata.get("baseRefName")) or "main"
+    is_cross_repository = bool(metadata.get("isCrossRepository"))
     if state != "MERGED" or not merged_at:
         _print_state("EXCEPTION_REQUIRED", "PR is not merged")
         return EXCEPTION_REQUIRED_EXIT_CODE
@@ -852,33 +853,36 @@ def cleanup_pr(
         _print_command_failure("git merge --ff-only origin base", synced)
         return EXCEPTION_REQUIRED_EXIT_CODE
 
-    local_delete = runner.run(["git", "branch", "-d", head_branch], cwd=root)
-    if local_delete.returncode != 0:
-        _print_command_failure("git branch -d", local_delete)
-        return EXCEPTION_REQUIRED_EXIT_CODE
+    if is_cross_repository:
+        print(f"skip head branch delete for fork PR: {head_branch}")
+    else:
+        local_delete = runner.run(["git", "branch", "-d", head_branch], cwd=root)
+        if local_delete.returncode != 0:
+            _print_command_failure("git branch -d", local_delete)
+            return EXCEPTION_REQUIRED_EXIT_CODE
 
-    remote_delete = runner.run(
-        ["git", "push", "origin", "--delete", head_branch],
-        cwd=root,
-    )
-    if remote_delete.returncode != 0:
-        _print_command_failure("git push origin --delete", remote_delete)
-        return EXCEPTION_REQUIRED_EXIT_CODE
-
-    remote_ref = runner.run(
-        ["git", "ls-remote", "--heads", "origin", head_branch],
-        cwd=root,
-    )
-    if remote_ref.returncode != 0:
-        _print_command_failure("git ls-remote --heads", remote_ref)
-        return EXCEPTION_REQUIRED_EXIT_CODE
-    if _command_stdout(remote_ref):
-        _print_state(
-            "EXCEPTION_REQUIRED",
-            "remote branch still exists after cleanup",
-            details=[head_branch],
+        remote_delete = runner.run(
+            ["git", "push", "origin", "--delete", head_branch],
+            cwd=root,
         )
-        return EXCEPTION_REQUIRED_EXIT_CODE
+        if remote_delete.returncode != 0:
+            _print_command_failure("git push origin --delete", remote_delete)
+            return EXCEPTION_REQUIRED_EXIT_CODE
+
+        remote_ref = runner.run(
+            ["git", "ls-remote", "--heads", "origin", head_branch],
+            cwd=root,
+        )
+        if remote_ref.returncode != 0:
+            _print_command_failure("git ls-remote --heads", remote_ref)
+            return EXCEPTION_REQUIRED_EXIT_CODE
+        if _command_stdout(remote_ref):
+            _print_state(
+                "EXCEPTION_REQUIRED",
+                "remote branch still exists after cleanup",
+                details=[head_branch],
+            )
+            return EXCEPTION_REQUIRED_EXIT_CODE
 
     synced_state = runner.run(
         ["git", "rev-list", "--left-right", "--count", f"{base_branch}...origin/{base_branch}"],

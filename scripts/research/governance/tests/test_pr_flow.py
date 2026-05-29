@@ -691,8 +691,9 @@ class MergeReadyRunner(DiagnoseRunner):
 
 
 class CleanupRunner:
-    def __init__(self) -> None:
+    def __init__(self, *, is_cross_repository: bool = False) -> None:
         self.calls: list[list[str]] = []
+        self.is_cross_repository = is_cross_repository
 
     def run(
         self,
@@ -708,7 +709,7 @@ class CleanupRunner:
             "view",
             "7",
             "--json",
-            "number,state,mergedAt,headRefName,baseRefName",
+            "number,state,mergedAt,headRefName,baseRefName,isCrossRepository",
         ]:
             return pr_flow.CommandResult(
                 0,
@@ -719,6 +720,7 @@ class CleanupRunner:
                         "mergedAt": "2026-05-29T16:48:26Z",
                         "headRefName": "feature/pr-flow",
                         "baseRefName": "main",
+                        "isCrossRepository": self.is_cross_repository,
                     }
                 ),
                 "",
@@ -2512,6 +2514,20 @@ def test_cleanup_pr_syncs_main_and_deletes_merged_branch(tmp_path: Path) -> None
     assert ["git", "branch", "-d", "feature/pr-flow"] in runner.calls
     assert ["git", "push", "origin", "--delete", "feature/pr-flow"] in runner.calls
     assert ["git", "ls-remote", "--heads", "origin", "feature/pr-flow"] in runner.calls
+
+
+def test_cleanup_pr_skips_head_branch_delete_for_fork_pr(tmp_path: Path) -> None:
+    runner = CleanupRunner(is_cross_repository=True)
+
+    code = pr_flow.cleanup_pr(repo_root=tmp_path, pr="7", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert ["git", "fetch", "--prune", "origin"] in runner.calls
+    assert ["git", "switch", "main"] in runner.calls
+    assert ["git", "merge", "--ff-only", "origin/main"] in runner.calls
+    assert ["git", "branch", "-d", "feature/pr-flow"] not in runner.calls
+    assert ["git", "push", "origin", "--delete", "feature/pr-flow"] not in runner.calls
+    assert ["git", "ls-remote", "--heads", "origin", "feature/pr-flow"] not in runner.calls
 
 
 def test_complete_pr_runs_ready_review_merge_and_cleanup(
