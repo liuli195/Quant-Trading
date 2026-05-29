@@ -49,6 +49,14 @@ make pr-ready TITLE="<PR标题>"
 
 它会准备本地 review 证据、渲染 `.local/ai-review/pr-body.md`、同步 GitHub PR 的 `pr-flow` 托管区、按风险补 `ai-risk-review` label、触发必要的 `@codex review`，并等待 required checks。
 
+排障时先使用 `diagnose` 汇总当前 PR 状态：
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow diagnose --pr <PR号>
+```
+
+它会读取 head、PR body evidence、merge state、review decision、required checks、Codex trigger/completion 和 review threads，并给出下一步机器状态；仓库禁用 auto-merge 时不要把 `--auto` 当作建议路径。
+
 `.local/ai-review/latest.json` 的 `reviewers` 字段必须记录至少两个独立 reviewer，作为子 agent 交叉评审证据；单 reviewer 或重复 reviewer 会被 `make ai-review` 拒绝。`cross_review.review_skills` 必须记录 Superpowers 评审模板，对应值为 `superpowers:subagent-driven-development/spec-reviewer-prompt.md` 和 `superpowers:subagent-driven-development/code-quality-reviewer-prompt.md`。`security_review` 必须记录本地安全 review：Codex provider 要求 `tool=codex-security`，Claude provider 要求 `tool=security-guidance`，并填写 `evidence`。schema v2 默认 `review_mode=complete`，`complete_review.iterations` 必须证明每个 reviewer 持续查找更多发现，直到最后一轮 `no_new_findings=true` 且 `new_findings=[]`；`review_mode=partial` 必须填写用户授权。生成的 `.local/ai-review/latest.md` 会列出交叉评审和安全 review 证据。PR body 的 `子 agent 交叉评审` 字段必须使用 `reviewers: A, B` 写明两个独立 reviewer，还必须说明任务分发情况，未分发时写明具体原因；`本地安全 review` 字段必须写明 `provider`、`tool` 和 `evidence`。high/unknown PR 必须带 `ai-risk-review` label。
 
 `.githooks/pre-push` calls all required push gates before handing off to Git LFS:
@@ -128,10 +136,12 @@ ruleset:
 comments, Codex review submitted/edited/dismissed events, and Codex inline
 review comments, including inline comment deletion. Trigger comments are counted
 only when their effective time is after the current PR head update, and a
-passing review must be submitted after that trigger. It updates one PR comment
+passing review must be submitted after that trigger. Unresolved review threads
+block when GitHub conversation resolution is required, regardless of
+whether the thread is advisory or outdated. It updates one PR comment
 marked with `<!-- codex-review-monitor -->`, reporting whether the current PR
-head is still waiting for Codex, blocked by P0/P1 findings, or ready for the PR
-body evidence to be updated. It also writes the commit status context `Codex
+head is still waiting for Codex, blocked, or ready for the PR body evidence to
+be updated. It also writes the commit status context `Codex
 Review Monitor` to the PR head, so trigger-comment deletion can invalidate the
 head status instead of only updating a PR discussion comment. Low-risk PRs that
 do not require official Codex review can pass this required status without an

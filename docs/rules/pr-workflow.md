@@ -5,7 +5,7 @@ Review 细则见 [review-guidelines.md](review-guidelines.md) <!-- pathref: docs
 ## 默认入口
 
 - 日常用 `make pr-ready TITLE="<PR标题>"`，等价于 `.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow ready --title "<PR标题>"`。
-- `pr-ready` / `pr_flow ready` 是一键 PR 状态机：准备本地 evidence、同步 PR、加必要的 `ai-risk-review` label、触发必要的 `@codex review`，并在当前 head 的官方 review 无 P0/P1 时自动记录真实证据后继续等待 required checks。
+- `pr-ready` / `pr_flow ready` 是一键 PR 状态机：准备本地 evidence、同步 PR、加必要的 `ai-risk-review` label、触发必要的 `@codex review`，并在当前 head 的官方 review 无阻断项且没有未 resolved review thread 时自动记录真实证据后继续等待 required checks。
 - Skills / agents 负责 review 判断和结论；`pr_flow` 只同步结构化证据，不伪造本地 AI review、交叉 review、安全 review 或官方 Codex review；缺本地 review evidence 时必须停止并进入任务分发。
 - Git hooks 只守本地不变量：pre-commit 走快速治理门禁，pre-push 和 CI 走完整治理门禁。
 
@@ -20,4 +20,4 @@ Review 细则见 [review-guidelines.md](review-guidelines.md) <!-- pathref: docs
 ## Review 和等待
 
 - Review 按 [review-guidelines.md](review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md --> 执行。
-- `pr-ready` / `pr_flow ready` 负责按 Review 规则推进无问题路径；只有异常处理、任务分发、问题回复三类情况需要人工或 agents 介入。手工排障才单独使用 `gh pr checks <PR号或URL> --required --watch --interval 10` 或 `scripts.research.governance.codex_review_monitor`。
+- `pr-ready` / `pr_flow ready` 负责按 Review 规则推进无问题路径；只有异常处理、任务分发、问题回复三类情况需要人工或 agents 介入。手工排障先用 `scripts.research.governance.pr_flow diagnose --pr <PR号>` 汇总 head、PR body evidence、merge state、required checks、Codex trigger/completion 和 review threads；需要盯 CI 时再单独使用 `gh pr checks <PR号或URL> --required --watch --interval 10` 或 `scripts.research.governance.codex_review_monitor`。

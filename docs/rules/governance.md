@@ -2,6 +2,7 @@
 
 ## MUST
 
+- **规则优先**：仓库规则最优先是元规则。任何与规则冲突的改动、对规则本身的改动都必须显式获得授权，否则不得执行。入口见 [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->。
 - `scripts.research.governance gate` 保留强门禁语义；`scripts.research.governance verify` 负责编排 affected fast、explain 和 full。
 - 日常小改默认使用 `scripts.research.governance verify fast`，只表示可继续开发，不作为 PR 或合并证据。
 - PR 准备、push 前、CI 和最终交付证据必须使用 `scripts.research.governance verify full`。
@@ -14,7 +15,7 @@
 - `pr-review-evidence` 校验 PR body 的 `AI Review 风险分级`、`review_mode=complete` / `partial` 授权、`security_review` / `本地安全 review`、`codex-security` / `security-guidance`、`官方 Codex Review 跳过授权`、P2 保留、Codex Review 证据和高风险 label。
 - `Codex Review Monitor` 监听当前 head 的 Codex Review 状态；低风险且无需官方 review 的 PR 可快速通过/空跑。
 - `Codex Review Monitor` success 可作为 `pr_flow` 自动采集官方 Codex 通过证据的信号之一，但不能替代 PR body 的 `Codex Code Review 结论`。
-- 未解决且未过期的 Codex P0/P1 thread 必须阻断，任何跳过授权不得绕过。
+- 只要 GitHub conversation resolution ruleset 要求 resolved conversation，任何未 resolved 的 review thread 必须阻断，任何跳过授权不得绕过。
 - 本地仓库必须设置 `git config core.hooksPath .githooks`。
 - `.githooks/pre-commit`、`.githooks/pre-push`、`.githooks/reference-transaction` 必须通过 `.githooks/run-python.sh` 选择项目虚拟环境，不硬编码单一平台解释器。
 - `.githooks/pre-push` 必须调用 `scripts.research.governance.branch_protection pre-push` 和 `scripts.research.governance verify full`，并保留 Git LFS pre-push 转交。

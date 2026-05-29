@@ -18,7 +18,7 @@
 - 官方 Codex Review 按 Review Scope 聚焦 P0/P1 合并阻断风险；无法生成明确 scope 的大型 PR 应拆分，否则按全量高风险 PR 处理。
 - 官方 Codex Review 无 P0/P1 且匹配当前 head 时，`pr_flow` 可以自动把真实 review/comment 链接写入 PR body evidence。
 - 自动写入不等于跳过 review；证据必须来自当前 PR、当前 head、当前 trigger 之后的 Codex 结果。
-- `pr-review-evidence` 和 `Codex Review Monitor` 必须读取 review thread 状态；未解决且未过期的 Codex P0/P1 thread 永远阻断，跳过授权不得绕过。
+- `pr-review-evidence` 和 `Codex Review Monitor` 必须读取 review thread 状态；只要 GitHub conversation resolution ruleset 要求 resolved conversation，任何未 resolved 的 review thread 都阻断，跳过授权不得绕过。
 - `Codex Review Monitor` 是 GitHub `main` 全局 required status check；低风险且无需官方 Codex Review 的 PR 允许快速通过/空跑，但不替代 PR body 证据。
 - 如果 Codex review 无法读取当前 PR diff、要求额外提供 unified diff、引用不存在或非当前 head，按 review 上下文失效阻断。
 - 必须保留本地检查证据，至少包括 `.\.venv\Scripts\python.exe -m scripts.research.governance verify full`；`verify fast` 不能作为 PR 证据。

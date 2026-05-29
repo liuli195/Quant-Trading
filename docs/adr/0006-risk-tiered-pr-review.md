@@ -29,6 +29,6 @@ Accepted
 - 官方 Codex Review 从全量必跑变成高风险复核；`Codex Review Monitor` 仍是全局 required check。
 - 本地 AI review 和 CI gate 承担低风险 PR 的主要自动化检查责任。
 - 本地 AI review 报告 schema 需要机器校验至少两个独立 reviewer、两个 Superpowers 评审模板、安全 review provider/tool/evidence、完全 review 终止条件和不完全模式授权；PR 模板需要用 `reviewers: A, B` 记录子 agent 交叉评审，并记录任务分发和本地安全 review 说明。
-- 官方 Codex Review 跳过授权只影响是否等待官方 review，不影响未解决 Codex P0/P1 thread 的阻断。
+- 官方 Codex Review 跳过授权只影响是否等待官方 review，不影响未 resolved review thread 的阻断。
 - 无法证明低风险的 PR 一律按高风险处理。
 - 规则、PR 模板、workflow 和 governance gate 必须使用同一套风险评级语义。

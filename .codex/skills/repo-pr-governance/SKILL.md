@@ -9,6 +9,7 @@ description: 准备进入主干的 PR、review 证据、required checks、Codex 
 
 ## 必读规则
 
+- `AGENTS.md` — 仓库通用入口和核心规则（含「规则优先」元规则）
 - `docs/rules/pr-workflow.md`
 - `docs/rules/review-guidelines.md`
 - `docs/rules/governance.md`
@@ -24,6 +25,7 @@ description: 准备进入主干的 PR、review 证据、required checks、Codex 
 ```powershell
 make verify-full
 make pr-ready TITLE="<PR标题>"
+make pr-diagnose PR=<PR号>
 make ai-review
 make risk-check
 ```
