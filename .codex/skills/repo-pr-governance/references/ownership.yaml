@@ -1,0 +1,37 @@
+skill: repo-pr-governance
+group: Repo Governance
+owned_rules:
+  - docs/rules/pr-workflow.md
+  - docs/rules/review-guidelines.md
+  - docs/rules/governance.md
+  - docs/rules/collaboration.md
+owned_commands:
+  - make pre-pr
+  - make pr-ready
+  - make ai-review
+  - make risk-check
+  - .\.venv\Scripts\python.exe -m scripts.research.governance
+  - .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow ready
+owned_scripts:
+  - scripts/research/governance/pr_flow.py
+  - scripts/research/governance/pr_review_evidence.py
+  - scripts/research/governance/codex_review_monitor.py
+uses:
+  - repo-python-env
+adapters:
+  - .claude/skills/repo-pr-governance/SKILL.md
+trigger_phrases:
+  - 进入主干的 PR
+  - review 证据
+  - required checks
+  - Codex review
+  - 主干保护
+read_rules:
+  - docs/rules/pr-workflow.md
+  - docs/rules/review-guidelines.md
+  - docs/rules/governance.md
+recommended_commands:
+  - make pr-ready TITLE="<PR标题>"
+  - make ai-review
+  - make risk-check
+status: active

@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "catalog_type": "documents",
-  "generated_at": "2026-05-28T12:04:54+00:00",
-  "count": 432,
+  "generated_at": "2026-05-29T00:20:55+00:00",
+  "count": 436,
   "reports": [
     {
       "path": "docs/README.md",
@@ -32,7 +32,7 @@
         "docs/indexes/docs_catalog.json",
         "docs/guides/feishu-relay-tools.md"
       ],
-      "updated_at": "2026-05-28T07:57:23+00:00"
+      "updated_at": "2026-05-28T17:23:46+00:00"
     },
     {
       "path": "docs/adr/0001-rule-source-and-governance-model.md",
@@ -104,10 +104,9 @@
         "docs/rules/commands.md",
         "repo/AGENTS.md",
         "docs/rules/commands.md",
-        "repo/AGENTS.md",
         "docs/rules/index.md"
       ],
-      "updated_at": "2026-05-28T07:57:23+00:00"
+      "updated_at": "2026-05-28T17:23:46+00:00"
     },
     {
       "path": "docs/adr/0006-risk-tiered-pr-review.md",
@@ -147,7 +146,7 @@
         "docs/indexes/reports.md",
         "scripts/research/layers"
       ],
-      "updated_at": "2026-05-28T07:57:23+00:00"
+      "updated_at": "2026-05-28T23:48:34+00:00"
     },
     {
       "path": "docs/design/cc-switch-cli.md",
@@ -174,21 +173,34 @@
         "docs/rules/governance.md",
         "docs/rules/docs-and-pathref.md",
         "repo/.claude/skills",
-        "repo/.claude/skills/agent-doc-add/SKILL.md",
-        "repo/.claude/skills/agent-doc-refactor/SKILL.md",
-        "repo/.claude/skills/jq-ab-test/SKILL.md",
-        "repo/.claude/skills/jq-analyze/SKILL.md",
-        "repo/.claude/skills/jq-fix/SKILL.md",
-        "repo/.claude/skills/jq-param-scan/SKILL.md",
-        "repo/.claude/skills/jq-research/SKILL.md",
-        "repo/.claude/skills/jq-run/SKILL.md",
         "repo/AGENTS.md",
         "repo/CLAUDE.md",
+        "repo/.codex/skills",
         "repo/.claude/skills",
         "repo/AGENTS.md",
         "repo/CLAUDE.md"
       ],
-      "updated_at": "2026-05-28T07:57:23+00:00"
+      "updated_at": "2026-05-29T00:20:06+00:00"
+    },
+    {
+      "path": "docs/design/skill-system-migration-review.md",
+      "title": "Skill 系统迁移审查",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-29T00:20:24+00:00"
+    },
+    {
+      "path": "docs/design/skill-system-refactor.md",
+      "title": "Skill 系统精简重构方案",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-29T00:20:12+00:00"
     },
     {
       "path": "docs/design/本地研究平台重构.md",
@@ -261,7 +273,7 @@
         "repo/requirements-dev.txt",
         "repo/requirements.txt"
       ],
-      "updated_at": "2026-05-28T07:57:23+00:00"
+      "updated_at": "2026-05-28T17:23:46+00:00"
     },
     {
       "path": "docs/guides/research-workflow-migration.md",
@@ -290,7 +302,7 @@
         "scripts/research/platform",
         "docs/architecture/research-platform-architecture.md"
       ],
-      "updated_at": "2026-05-28T07:57:23+00:00"
+      "updated_at": "2026-05-28T23:48:34+00:00"
     },
     {
       "path": "docs/joinquant-data/JQ_Alpha101.md",
@@ -530,7 +542,7 @@
         "scripts/tools/jq_automation/README.md",
         "scripts/tools/path_tools/README.md"
       ],
-      "updated_at": "2026-05-28T07:57:23+00:00"
+      "updated_at": "2026-05-28T17:23:46+00:00"
     },
     {
       "path": "docs/rules/docs-and-pathref.md",
@@ -560,7 +572,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-28T10:05:40+00:00"
+      "updated_at": "2026-05-28T17:23:46+00:00"
     },
     {
       "path": "docs/rules/index.md",
@@ -575,6 +587,7 @@
         "repo/CLAUDE.md",
         "docs/adr",
         "docs/rules/commands.md",
+        "docs/rules/skills.md",
         "docs/rules/environments.md",
         "docs/rules/code-style.md",
         "docs/rules/research-workflow.md",
@@ -585,7 +598,7 @@
         "docs/rules/governance.md",
         "docs/adr"
       ],
-      "updated_at": "2026-05-28T07:57:23+00:00"
+      "updated_at": "2026-05-28T23:11:15+00:00"
     },
     {
       "path": "docs/rules/pr-workflow.md",
@@ -599,7 +612,7 @@
         "docs/rules/governance.md",
         "docs/rules/review-guidelines.md"
       ],
-      "updated_at": "2026-05-28T10:05:40+00:00"
+      "updated_at": "2026-05-28T17:23:46+00:00"
     },
     {
       "path": "docs/rules/research-workflow.md",
@@ -631,7 +644,20 @@
         "docs/rules/governance.md",
         "docs/rules/review-guidelines.md"
       ],
-      "updated_at": "2026-05-28T10:05:40+00:00"
+      "updated_at": "2026-05-28T17:23:46+00:00"
+    },
+    {
+      "path": "docs/rules/skills.md",
+      "title": "Skill 规则",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "repo/AGENTS.md",
+        "docs/rules/index.md"
+      ],
+      "updated_at": "2026-05-28T23:45:57+00:00"
     },
     {
       "path": "docs/superpowers/plans/2026-05-20-backtest-data-redundancy-compaction.md",
@@ -711,7 +737,24 @@
       "date": "2026-05-28",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-28T12:01:14+00:00"
+      "updated_at": "2026-05-28T12:19:27+00:00"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-05-29-skill-system-refactor-implementation.md",
+      "title": "Skill System Refactor Implementation Plan",
+      "category": "docs",
+      "strategy": null,
+      "date": "2026-05-29",
+      "tags": [],
+      "pathrefs": [
+        "docs/design/skill-system-refactor.md",
+        "docs/design/cross-ai-skill-management.md",
+        "repo/AGENTS.md",
+        "repo/CLAUDE.md",
+        "docs/rules/governance.md",
+        "docs/rules/docs-and-pathref.md"
+      ],
+      "updated_at": "2026-05-28T22:59:21+00:00"
     },
     {
       "path": "docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md",
@@ -4447,7 +4490,7 @@
         "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260507-hard-vs-soft-trend-gate-ab)/ab-hard-vs-soft-trend-gate-summary.json",
         "test_batch_report_dir(strategy=etf_factor_rotation, batch_id=20260507-hard-vs-soft-trend-gate-ab)/ab-hard-vs-soft-trend-gate-comparison.md"
       ],
-      "updated_at": "2026-05-28T08:47:54+00:00"
+      "updated_at": "2026-05-28T12:19:27+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/test_batches/20260507-hard-vs-soft-trend-gate-ab/report/ab-hard-vs-soft-trend-gate-comparison.md",
@@ -4457,7 +4500,7 @@
       "date": "2026-05-07",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-28T08:44:52+00:00"
+      "updated_at": "2026-05-28T12:19:27+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/test_batches/20260507-hard-vs-soft-trend-gate-ab/report/ab-hard-vs-soft-trend-gate-plan.md",
@@ -4470,7 +4513,7 @@
         "strategies/etf_factor_rotation/test_batches/20260507-hard-vs-soft-trend-gate-ab/abtests/hard-vs-soft-trend-gate.json",
         "strategies/etf_factor_rotation/test_batches/20260507-hard-vs-soft-trend-gate-ab/manifest.json"
       ],
-      "updated_at": "2026-05-28T08:45:19+00:00"
+      "updated_at": "2026-05-28T12:19:27+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/test_batches/20260507-rsrsmaxmultiplier-scan/report/batch-comparison.md",

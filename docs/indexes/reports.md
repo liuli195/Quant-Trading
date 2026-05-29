@@ -7,11 +7,13 @@
 | docs |  | ADR 0002: 多 AI Agent 并行工作使用 Git 分支 | `docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md` | 0 |
 | docs |  | ADR 0003: Governance Gate 和主干保护 | `docs/adr/0003-governance-gate-and-main-branch-protection.md` | 0 |
 | docs |  | ADR 0004: 使用官方 Codex Code Review 作为 PR 评审门禁 | `docs/adr/0004-codex-code-review-governance.md` | 7 |
-| docs |  | ADR 0005: AI 入口采用渐进式披露 | `docs/adr/0005-ai-entry-progressive-disclosure.md` | 9 |
+| docs |  | ADR 0005: AI 入口采用渐进式披露 | `docs/adr/0005-ai-entry-progressive-disclosure.md` | 8 |
 | docs |  | ADR 0006: PR 风险分级评审流程 | `docs/adr/0006-risk-tiered-pr-review.md` | 0 |
 | docs |  | 本地研究平台架构 | `docs/architecture/research-platform-architecture.md` | 19 |
 | docs |  | CC-Switch CLI | `docs/design/cc-switch-cli.md` | 0 |
-| docs |  | 跨 AI 工具 Skill 管理实施计划 | `docs/design/cross-ai-skill-management.md` | 20 |
+| docs |  | 跨 AI 工具 Skill 管理实施计划 | `docs/design/cross-ai-skill-management.md` | 13 |
+| docs |  | Skill 系统迁移审查 | `docs/design/skill-system-migration-review.md` | 0 |
+| docs |  | Skill 系统精简重构方案 | `docs/design/skill-system-refactor.md` | 0 |
 | docs |  | 本地研究平台重构 | `docs/design/本地研究平台重构.md` | 0 |
 | docs |  | 本地研究平台重构技术实施方案 | `docs/design/本地研究平台重构技术实施方案.md` | 6 |
 | docs |  | 长期项目防止开发规则漂移方案 | `docs/design/长期项目防止开发规则漂移方案.md` | 8 |
@@ -42,16 +44,18 @@
 | docs |  | 文档和 Pathref 规则 | `docs/rules/docs-and-pathref.md` | 0 |
 | docs |  | 本地与聚宽环境差异 | `docs/rules/environments.md` | 0 |
 | docs |  | 治理门禁规则 | `docs/rules/governance.md` | 0 |
-| docs |  | 仓库规则总索引 | `docs/rules/index.md` | 14 |
+| docs |  | 仓库规则总索引 | `docs/rules/index.md` | 15 |
 | docs |  | PR 工作流规则 | `docs/rules/pr-workflow.md` | 3 |
 | docs |  | 研究流程规则 | `docs/rules/research-workflow.md` | 0 |
 | docs |  | PR Review 指南 | `docs/rules/review-guidelines.md` | 11 |
+| docs |  | Skill 规则 | `docs/rules/skills.md` | 2 |
 | docs |  | 回测数据冗余压缩实施计划 | `docs/superpowers/plans/2026-05-20-backtest-data-redundancy-compaction.md` | 7 |
 | docs |  | Feishu Relay Tools Implementation Plan | `docs/superpowers/plans/2026-05-20-feishu-relay-tools-implementation.md` | 5 |
 | docs |  | PR 风险分级评审流程 Implementation Plan | `docs/superpowers/plans/2026-05-20-pr-risk-tiered-review-workflow.md` | 1 |
 | docs |  | ETF Vol Relief A/B Test Implementation Plan | `docs/superpowers/plans/2026-05-26-etf-vol-relief-ab-test.md` | 3 |
 | docs |  | PR Flow Automation Implementation Plan | `docs/superpowers/plans/2026-05-28-pr-flow-automation.md` | 0 |
 | docs |  | PR Flow Handsfree Automation Implementation Plan | `docs/superpowers/plans/2026-05-28-pr-flow-handsfree-automation.md` | 0 |
+| docs |  | Skill System Refactor Implementation Plan | `docs/superpowers/plans/2026-05-29-skill-system-refactor-implementation.md` | 6 |
 | docs |  | 飞书交易通知工具设计 | `docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md` | 2 |
 | backtest_run | etf_dynamic_rebalance | 回测归因分析 — ETF 动态调仓策略 | `strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/attribution-analysis.md` | 0 |
 | backtest_run | etf_dynamic_rebalance | 回测报告 — ETF 动态调仓策略 | `strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/backtest_report.md` | 3 |

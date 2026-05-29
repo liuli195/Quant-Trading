@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 import json
 from pathlib import Path
+
+import yaml
 
 from scripts.research.governance.branch_protection import (
     check_pre_push_input,
@@ -28,6 +31,770 @@ from scripts.research.governance.pr_review_evidence import (
 )
 from scripts.research.governance.rules import run_audit
 from scripts.research.registry import default_tool_registry
+from scripts.tools.path_tools.refactor import should_skip
+
+
+SKILL_DISCOVERY_CASES = (
+    ("新增或修改一个 owner Skill，并同步 Claude adapter。", "skill-system"),
+    ("这个仓库本地 Python 应该怎么跑，为什么不能用系统 Python？", "repo-python-env"),
+    ("我移动了文档和报告链接，怎么检查 pathref 和索引？", "repo-docs-pathref"),
+    (
+        "准备一个进入主干的 PR，确认 review 证据和 required checks。",
+        "repo-pr-governance",
+    ),
+    ("先本地筛选研究候选，别直接消耗 JoinQuant 云端额度。", "research-local-first"),
+    ("把历史回测 run 做成可追溯数据快照。", "research-data-center"),
+    ("补齐回测报告并对比多个 run 的收益和回撤。", "research-report-analysis"),
+    ("做一个策略参数 A/B 实验，保留控制变量和 delta 归因。", "strategy-experiment"),
+    ("JoinQuant 云端策略编译报错，帮我本地定位兼容问题。", "joinquant-strategy-fix"),
+    ("上传策略到 JoinQuant 跑云端回测并抓结果，但注意配额。", "joinquant-cloud-run"),
+)
+
+
+def test_pathref_scanner_skips_local_workspace_artifacts() -> None:
+    assert should_skip(Path(".local/pytest-governance-tmp/example.md"))
+
+
+SKILL_FIXTURES = (
+    {
+        "skill": "skill-system",
+        "group": "Skill System",
+        "description": "创建、修改、验证 Codex owner Skill、Claude adapter、触发语义、ownership 索引和 Skill 发现治理时使用。",
+        "owned_rules": ["docs/rules/skills.md"],
+        "owned_commands": [
+            ".\\.venv\\Scripts\\python.exe -m scripts.research.governance.skill_ownership check",
+            ".\\.venv\\Scripts\\python.exe -m scripts.research.governance.skill_ownership discover",
+            ".\\.venv\\Scripts\\python.exe -m scripts.research.registry.tool_registry",
+        ],
+        "owned_scripts": ["scripts/research/governance/skill_ownership.py"],
+        "read_rules": ["docs/rules/skills.md", "docs/rules/governance.md"],
+        "recommended_commands": [
+            ".\\.venv\\Scripts\\python.exe -m scripts.research.governance.skill_ownership check",
+            ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate",
+        ],
+        "trigger_phrases": ["新增或修改一个 owner Skill", "同步 Claude adapter"],
+    },
+    {
+        "skill": "repo-python-env",
+        "group": "Repo Governance",
+        "description": "处理本仓库 Python 环境、项目 .venv、UTF-8、本地/云端运行边界和系统 Python 禁用规则时使用。",
+        "owned_rules": [
+            "docs/rules/commands.md#python-env",
+            "docs/rules/environments.md#local-cloud-boundary",
+        ],
+        "owned_commands": [
+            ".\\.venv\\Scripts\\python.exe",
+            ".venv/bin/python",
+            ".\\.githooks\\setup-python.ps1",
+            ".githooks/setup-python.sh",
+        ],
+        "owned_scripts": [".githooks/setup-python.ps1", ".githooks/setup-python.sh"],
+        "read_rules": ["docs/rules/commands.md", "docs/rules/environments.md"],
+        "recommended_commands": [".\\.venv\\Scripts\\python.exe -m pytest"],
+        "trigger_phrases": ["本地 Python 应该怎么跑", "不能用系统 Python"],
+    },
+    {
+        "skill": "repo-docs-pathref",
+        "group": "Repo Governance",
+        "description": "处理 Markdown 链接、pathref、文档索引、报告索引和 catalog 同步时使用。",
+        "owned_rules": [
+            "docs/rules/index.md",
+            "docs/rules/docs-and-pathref.md#pathref",
+        ],
+        "owned_commands": [
+            ".\\.venv\\Scripts\\python.exe -m scripts.tools.path_tools.refactor check",
+            ".\\.venv\\Scripts\\python.exe -m scripts.tools.path_tools.aliases",
+            ".\\.venv\\Scripts\\python.exe -m scripts.research.docs index",
+        ],
+        "owned_scripts": [
+            "scripts/tools/path_tools/refactor.py",
+            "scripts/tools/path_tools/aliases.py",
+        ],
+        "read_rules": ["docs/rules/docs-and-pathref.md"],
+        "recommended_commands": [
+            ".\\.venv\\Scripts\\python.exe -m scripts.tools.path_tools.refactor check"
+        ],
+        "trigger_phrases": ["移动了文档和报告链接", "检查 pathref 和索引"],
+    },
+    {
+        "skill": "repo-pr-governance",
+        "group": "Repo Governance",
+        "description": "准备进入主干的 PR、review 证据、required checks、Codex review、主干保护和分支清理时使用。",
+        "owned_rules": [
+            "docs/rules/pr-workflow.md",
+            "docs/rules/review-guidelines.md",
+            "docs/rules/governance.md",
+            "docs/rules/collaboration.md",
+        ],
+        "owned_commands": [
+            "make pre-pr",
+            "make pr-ready",
+            "make ai-review",
+            "make risk-check",
+            ".\\.venv\\Scripts\\python.exe -m scripts.research.governance",
+            ".\\.venv\\Scripts\\python.exe -m scripts.research.governance.pr_flow ready",
+        ],
+        "owned_scripts": ["scripts/research/governance"],
+        "read_rules": [
+            "docs/rules/pr-workflow.md",
+            "docs/rules/review-guidelines.md",
+            "docs/rules/governance.md",
+        ],
+        "recommended_commands": ['make pr-ready TITLE="<PR标题>"'],
+        "trigger_phrases": ["进入主干的 PR", "review 证据", "required checks"],
+    },
+    {
+        "skill": "research-local-first",
+        "group": "Strategy Research",
+        "description": "处理本地优先研究、候选漏斗、fast/full 筛选和云端交接判断时使用。",
+        "owned_rules": ["docs/rules/research-workflow.md#local-first"],
+        "owned_commands": [
+            ".\\.venv\\Scripts\\python.exe -m scripts.research.cli",
+            ".\\.venv\\Scripts\\python.exe -m scripts.research.etf_window_research.cli",
+            ".\\.venv\\Scripts\\python.exe -m scripts.research.momentum_tilt_research",
+            ".\\.venv\\Scripts\\python.exe -m scripts.research.execution_timing_research.cli",
+        ],
+        "owned_scripts": [
+            "scripts/research/cli.py",
+            "scripts/research/workflows",
+            "scripts/research/etf_window_research",
+            "scripts/research/momentum_tilt_research",
+            "scripts/research/execution_timing_research",
+        ],
+        "read_rules": ["docs/rules/research-workflow.md"],
+        "recommended_commands": [
+            ".\\.venv\\Scripts\\python.exe -m scripts.research.cli"
+        ],
+        "trigger_phrases": ["本地筛选研究候选", "别直接消耗 JoinQuant 云端额度"],
+    },
+    {
+        "skill": "research-data-center",
+        "group": "Strategy Research",
+        "description": "处理回测 run 数据快照、数据中心压缩、catalog、pointer 和可追溯证据时使用。",
+        "owned_rules": ["docs/rules/research-workflow.md#data-center"],
+        "owned_commands": [
+            ".\\.venv\\Scripts\\python.exe -m scripts.research.datasets"
+        ],
+        "owned_scripts": ["scripts/research/platform/datasets.py", "research_datasets"],
+        "read_rules": ["docs/rules/research-workflow.md"],
+        "recommended_commands": [
+            ".\\.venv\\Scripts\\python.exe -m scripts.research.datasets"
+        ],
+        "trigger_phrases": ["历史回测 run", "可追溯数据快照"],
+    },
+    {
+        "skill": "research-report-analysis",
+        "group": "Strategy Research",
+        "description": "处理本地回测报告补齐、结果分析、多个 run 收益回撤对比和报告索引时使用。",
+        "owned_rules": ["docs/rules/research-workflow.md#reports"],
+        "owned_commands": [],
+        "owned_scripts": [
+            "scripts/research/platform/reporting.py",
+            "scripts/research/cash_decomposition",
+        ],
+        "read_rules": ["docs/rules/research-workflow.md"],
+        "recommended_commands": [
+            ".\\.venv\\Scripts\\python.exe -m scripts.research.docs index"
+        ],
+        "trigger_phrases": ["补齐回测报告", "对比多个 run", "收益和回撤"],
+    },
+    {
+        "skill": "strategy-experiment",
+        "group": "Strategy Research",
+        "description": "处理策略参数扫描、A/B 实验、variant registry、控制变量和 delta 归因时使用。",
+        "owned_rules": ["docs/rules/research-workflow.md#experiments"],
+        "owned_commands": [
+            ".\\.venv\\Scripts\\python.exe -m scripts.research.variants",
+            "jq-auto ab",
+        ],
+        "owned_scripts": [
+            "scripts/research/platform/strategy_variants.py",
+            "scripts/tools/jq_automation/abtest.py",
+        ],
+        "read_rules": ["docs/rules/research-workflow.md"],
+        "recommended_commands": [
+            ".\\.venv\\Scripts\\python.exe -m scripts.research.variants"
+        ],
+        "trigger_phrases": ["策略参数 A/B 实验", "控制变量", "delta 归因"],
+    },
+    {
+        "skill": "joinquant-strategy-fix",
+        "group": "JoinQuant Automation",
+        "description": "处理 JoinQuant 云端策略编译报错、本地兼容定位、compile-check 和最小策略修复时使用。",
+        "owned_rules": [
+            "docs/rules/environments.md#joinquant-compat",
+            "docs/rules/code-style.md#joinquant-strategy",
+        ],
+        "owned_commands": [
+            ".\\.venv\\Scripts\\python.exe -m scripts.tools.jq_automation compile-check",
+            ".\\.venv\\Scripts\\python.exe -m py_compile",
+        ],
+        "owned_scripts": [
+            "scripts/tools/jq_automation/cli.py#compile-check",
+            "scripts/tools/jq_automation/snippets/compile.js",
+        ],
+        "read_rules": ["docs/rules/environments.md", "docs/rules/code-style.md"],
+        "recommended_commands": [
+            ".\\.venv\\Scripts\\python.exe -m scripts.tools.jq_automation compile-check <策略文件>"
+        ],
+        "trigger_phrases": ["JoinQuant 云端策略编译报错", "本地定位兼容问题"],
+    },
+    {
+        "skill": "joinquant-cloud-run",
+        "group": "JoinQuant Automation",
+        "description": "处理 JoinQuant 上传、云端回测 run、fetch、batch、结果落盘和配额保护时使用。",
+        "owned_rules": [
+            "docs/rules/environments.md#joinquant-cloud-run",
+            "docs/rules/research-workflow.md#cloud-handoff",
+        ],
+        "owned_commands": [
+            ".\\.venv\\Scripts\\python.exe -m scripts.tools.jq_automation upload",
+            ".\\.venv\\Scripts\\python.exe -m scripts.tools.jq_automation run",
+            ".\\.venv\\Scripts\\python.exe -m scripts.tools.jq_automation fetch",
+            ".\\.venv\\Scripts\\python.exe -m scripts.tools.jq_automation batch",
+        ],
+        "owned_scripts": [
+            "scripts/tools/jq_automation/cli.py#cloud-run",
+            "scripts/tools/jq_automation/dataset_registration.py",
+        ],
+        "read_rules": ["docs/rules/environments.md", "docs/rules/research-workflow.md"],
+        "recommended_commands": [
+            ".\\.venv\\Scripts\\python.exe -m scripts.tools.jq_automation run <场景配置.json> --yes"
+        ],
+        "trigger_phrases": ["上传策略到 JoinQuant", "跑云端回测", "注意配额"],
+    },
+)
+
+
+def _fixture_list(fixture: Mapping[str, object], key: str) -> list[str]:
+    value = fixture.get(key, [])
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, Sequence):
+        return [str(item) for item in value]
+    return [str(value)]
+
+
+def _write_owner_skill(root: Path, fixture: Mapping[str, object]) -> None:
+    skill = str(fixture["skill"])
+    description = str(fixture["description"])
+    read_rules = _fixture_list(fixture, "read_rules")
+    recommended_commands = _fixture_list(fixture, "recommended_commands")
+    owner_root = root / ".codex" / "skills" / skill
+    adapter_root = root / ".claude" / "skills" / skill
+    (owner_root / "agents").mkdir(parents=True, exist_ok=True)
+    (owner_root / "references").mkdir(parents=True, exist_ok=True)
+    adapter_root.mkdir(parents=True, exist_ok=True)
+    skill_text = (
+        "---\n"
+        f"name: {skill}\n"
+        f"description: {description}\n"
+        "---\n\n"
+        f"# {skill}\n"
+        "\n## 必读规则\n\n"
+        + "\n".join(f"- `{rule}`" for rule in read_rules)
+        + "\n\n## 推荐命令\n\n"
+        + "\n".join(f"- `{command}`" for command in recommended_commands)
+        + "\n"
+    )
+    (owner_root / "SKILL.md").write_text(skill_text, encoding="utf-8")
+    (adapter_root / "SKILL.md").write_text(skill_text, encoding="utf-8")
+    (owner_root / "agents" / "openai.yaml").write_text(
+        f"interface:\n  display_name: {skill}\n",
+        encoding="utf-8",
+    )
+    data = {
+        "skill": skill,
+        "group": str(fixture["group"]),
+        "owned_rules": _fixture_list(fixture, "owned_rules"),
+        "owned_commands": _fixture_list(fixture, "owned_commands"),
+        "owned_scripts": _fixture_list(fixture, "owned_scripts"),
+        "uses": _fixture_list(fixture, "uses"),
+        "adapters": [f".claude/skills/{skill}/SKILL.md"],
+        "trigger_phrases": _fixture_list(fixture, "trigger_phrases"),
+        "read_rules": read_rules,
+        "recommended_commands": recommended_commands,
+        "status": "active",
+    }
+    (owner_root / "references" / "ownership.yaml").write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+
+def _write_all_owner_skills(root: Path) -> None:
+    for fixture in SKILL_FIXTURES:
+        _write_owner_skill(root, fixture)
+
+
+def test_skill_ownership_discovers_skill_system_owner(tmp_path: Path) -> None:
+    skill_root = tmp_path / ".codex" / "skills" / "skill-system" / "references"
+    skill_root.mkdir(parents=True)
+    (tmp_path / ".claude" / "skills" / "skill-system").mkdir(parents=True)
+    (tmp_path / ".codex" / "skills" / "skill-system" / "SKILL.md").write_text(
+        "---\n"
+        "name: skill-system\n"
+        "description: 创建、修改、验证 owner Skill 与 Claude adapter。\n"
+        "---\n",
+        encoding="utf-8",
+    )
+    (tmp_path / ".claude" / "skills" / "skill-system" / "SKILL.md").write_text(
+        "---\n"
+        "name: skill-system\n"
+        "description: 创建、修改、验证 owner Skill 与 Claude adapter。\n"
+        "---\n",
+        encoding="utf-8",
+    )
+    (skill_root / "ownership.yaml").write_text(
+        "skill: skill-system\n"
+        "group: Skill System\n"
+        "owned_rules:\n"
+        "  - docs/rules/skills.md\n"
+        "owned_commands:\n"
+        "  - scripts.research.governance.skill_ownership\n"
+        "owned_scripts:\n"
+        "  - scripts/research/governance/skill_ownership.py\n"
+        "uses: []\n"
+        "adapters:\n"
+        "  - .claude/skills/skill-system/SKILL.md\n"
+        "trigger_phrases:\n"
+        "  - 新增或修改一个 owner Skill\n"
+        "read_rules:\n"
+        "  - docs/rules/skills.md\n"
+        "recommended_commands:\n"
+        "  - .\\.venv\\Scripts\\python.exe -m scripts.research.governance.skill_ownership check\n"
+        "status: active\n",
+        encoding="utf-8",
+    )
+
+    from scripts.research.governance.skill_ownership import discover_owner
+
+    result = discover_owner(
+        tmp_path, "新增或修改一个 owner Skill，并同步 Claude adapter。"
+    )
+
+    assert [match.skill for match in result.matches] == ["skill-system"]
+    assert result.matches[0].read_rules == ("docs/rules/skills.md",)
+
+
+def test_skill_ownership_discovers_all_owner_examples() -> None:
+    from scripts.research.governance.skill_ownership import discover_owner
+
+    repo_root = Path.cwd()
+    for query, expected_skill in SKILL_DISCOVERY_CASES:
+        result = discover_owner(repo_root, query)
+        assert [match.skill for match in result.matches] == [expected_skill]
+
+
+def test_skill_ownership_discovers_partial_natural_language_queries() -> None:
+    from scripts.research.governance.skill_ownership import discover_owner
+
+    repo_root = Path.cwd()
+
+    assert [
+        match.skill for match in discover_owner(repo_root, "Python 怎么跑").matches
+    ] == ["repo-python-env"]
+    assert [
+        match.skill for match in discover_owner(repo_root, "pathref 怎么检查").matches
+    ] == ["repo-docs-pathref"]
+
+
+def test_skill_ownership_rejects_duplicate_owned_rule(tmp_path: Path) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    first = tmp_path / ".codex/skills/skill-system/references/ownership.yaml"
+    second = tmp_path / ".codex/skills/repo-python-env/references/ownership.yaml"
+    first_data = yaml.safe_load(first.read_text(encoding="utf-8"))
+    second_data = yaml.safe_load(second.read_text(encoding="utf-8"))
+    first_data["owned_rules"] = ["docs/rules/commands.md"]
+    second_data["owned_rules"] = ["docs/rules/commands.md"]
+    first.write_text(
+        yaml.safe_dump(first_data, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    second.write_text(
+        yaml.safe_dump(second_data, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "duplicate owned_rules owner for docs/rules/commands.md" in error
+        for error in errors
+    )
+
+
+def test_skill_ownership_rejects_adapter_description_mismatch(tmp_path: Path) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    adapter = tmp_path / ".claude/skills/skill-system/SKILL.md"
+    adapter.write_text(
+        "---\nname: skill-system\ndescription: 完全不同的用途。\n---\n",
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "adapter .claude/skills/skill-system/SKILL.md description is not equivalent"
+        in error
+        for error in errors
+    )
+
+
+def test_skill_ownership_rejects_duplicate_trigger_phrase(tmp_path: Path) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    path = tmp_path / ".codex/skills/repo-python-env/references/ownership.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["trigger_phrases"] = ["新增或修改一个 owner Skill"]
+    path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        'duplicate trigger phrase "新增或修改一个 owner Skill"' in error
+        for error in errors
+    )
+
+
+def test_skill_ownership_rejects_unsupported_recommended_command(
+    tmp_path: Path,
+) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    path = tmp_path / ".codex/skills/skill-system/references/ownership.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["recommended_commands"] = ["python -m scripts.research.governance gate"]
+    path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "unsupported recommended command for skill-system" in error for error in errors
+    )
+
+
+def test_skill_ownership_rejects_unknown_python_module_command(
+    tmp_path: Path,
+) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    path = tmp_path / ".codex/skills/skill-system/references/ownership.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["recommended_commands"] = [".\\.venv\\Scripts\\python.exe -m not.real.module"]
+    path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "unknown python module in recommended command for skill-system: not.real.module"
+        in error
+        for error in errors
+    )
+
+
+def test_skill_ownership_command_cover_does_not_treat_python_as_owner() -> None:
+    from scripts.research.governance.skill_ownership import _command_covers
+
+    python = ".\\.venv\\Scripts\\python.exe"
+    assert not _command_covers(python, f"{python} -m scripts.research.unowned")
+    assert not _command_covers(
+        f"{python} -m scripts.research.cli typo",
+        f"{python} -m scripts.research.cli",
+    )
+    assert _command_covers(
+        f"{python} -m scripts.research.governance",
+        f"{python} -m scripts.research.governance audit",
+    )
+    assert _command_covers(
+        f"{python} -m scripts.research.docs index",
+        f"{python} -m scripts.research.docs",
+    )
+    assert not _command_covers(
+        f"{python} -m scripts.research.docs index bogus",
+        f"{python} -m scripts.research.docs",
+    )
+
+
+def test_skill_ownership_rejects_owned_command_runtime_options(
+    tmp_path: Path,
+) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    path = tmp_path / ".codex/skills/research-report-analysis/references/ownership.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["owned_commands"] = [
+        ".\\.venv\\Scripts\\python.exe -m scripts.research.docs index --reports"
+    ]
+    path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "owned command for research-report-analysis must be a command prefix" in error
+        for error in errors
+    )
+
+
+def test_skill_ownership_rejects_unknown_owned_command_subcommand(
+    tmp_path: Path,
+) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    path = tmp_path / ".codex/skills/research-local-first/references/ownership.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["owned_commands"] = [
+        ".\\.venv\\Scripts\\python.exe -m scripts.research.cli typo"
+    ]
+    path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "unsupported python command arguments in owned command for research-local-first: scripts.research.cli typo"
+        in error
+        for error in errors
+    )
+
+
+def test_skill_ownership_rejects_extra_owned_command_position_args(
+    tmp_path: Path,
+) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    path = tmp_path / ".codex/skills/repo-docs-pathref/references/ownership.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["owned_commands"] = [
+        ".\\.venv\\Scripts\\python.exe -m scripts.research.docs index bogus"
+    ]
+    path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "unsupported python command arguments in owned command for repo-docs-pathref: scripts.research.docs index bogus"
+        in error
+        for error in errors
+    )
+
+
+def test_skill_ownership_rejects_unknown_jq_auto_subcommand(
+    tmp_path: Path,
+) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    path = tmp_path / ".codex/skills/strategy-experiment/references/ownership.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["owned_commands"] = ["jq-auto ab bogus"]
+    path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "unknown jq-auto command in owned command for strategy-experiment: jq-auto ab bogus"
+        in error
+        for error in errors
+    )
+
+
+def test_skill_ownership_rejects_unowned_claude_adapter(
+    tmp_path: Path,
+) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    adapter = tmp_path / ".claude/skills/unowned/SKILL.md"
+    adapter.parent.mkdir(parents=True)
+    adapter.write_text(
+        "---\nname: unowned\ndescription: 未登记 adapter。\n---\n",
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "unowned Claude skill adapter: .claude/skills/unowned/SKILL.md" in error
+        for error in errors
+    )
+
+
+def test_skill_ownership_rejects_adapter_missing_read_rule_and_command(
+    tmp_path: Path,
+) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    adapter = tmp_path / ".claude/skills/skill-system/SKILL.md"
+    adapter.write_text(
+        "---\n"
+        "name: skill-system\n"
+        f"description: {SKILL_FIXTURES[0]['description']}\n"
+        "---\n"
+        "docs/rules/skills.md\n",
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "adapter .claude/skills/skill-system/SKILL.md missing recommended command"
+        in error
+        for error in errors
+    )
+
+
+def test_skill_ownership_rejects_legacy_active_skill_directories(
+    tmp_path: Path,
+) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    legacy = tmp_path / ".claude/skills/jq-run"
+    legacy.mkdir(parents=True)
+    (legacy / "SKILL.md").write_text(
+        "---\nname: jq-run\ndescription: 旧云端运行入口。\n---\n",
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "legacy skill directory must be removed: .claude/skills/jq-run" in error
+        for error in errors
+    )
+
+
+def test_skill_ownership_rejects_unowned_rule_doc(tmp_path: Path) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    (tmp_path / "docs/rules/unowned.md").write_text("unowned\n", encoding="utf-8")
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "rule doc missing owner: docs/rules/unowned.md" in error for error in errors
+    )
+
+
+def test_skill_ownership_rejects_unowned_make_target(tmp_path: Path) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    makefile = tmp_path / "Makefile"
+    makefile.write_text(
+        makefile.read_text(encoding="utf-8") + "\nextra-target:\n\t@echo extra\n",
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "make target missing owner: make extra-target" in error for error in errors
+    )
+
+
+def test_skill_ownership_rejects_trigger_phrase_not_covered_by_description(
+    tmp_path: Path,
+) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    path = tmp_path / ".codex/skills/skill-system/references/ownership.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["trigger_phrases"] = ["苹果香蕉梨子"]
+    path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "trigger phrase not covered by owner description for skill-system" in error
+        for error in errors
+    )
+
+
+def test_skill_ownership_rejects_trigger_phrase_ambiguous_discovery(
+    tmp_path: Path,
+) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    path = tmp_path / ".codex/skills/repo-python-env/references/ownership.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["trigger_phrases"] = ["owner Skill"]
+    path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any('trigger phrase "owner Skill" is ambiguous' in error for error in errors)
+
+
+def test_skill_ownership_rejects_skills_doc_without_human_summary(
+    tmp_path: Path,
+) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    (tmp_path / "docs/rules/skills.md").write_text(
+        "# Skill 规则\n\nownership.yaml 是机器可读 SSOT。\n",
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any("skills.md missing owner skill summary" in error for error in errors)
+
+
+def test_governance_audit_flags_missing_owner_skill(tmp_path: Path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".codex/skills/skill-system/references/ownership.yaml").unlink()
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "skill_ownership"
+        and "missing owner skill: skill-system" in finding.message
+        for finding in report.findings
+    )
 
 
 def _codex_review_request_body(
@@ -125,10 +892,6 @@ def _write_minimal_repo(root: Path) -> None:
         "research_datasets",
         ".github/workflows",
         ".githooks",
-        ".claude/skills/jq-research",
-        ".claude/skills/jq-ab-test",
-        ".codex/skills/quant-pr-workflow/agents",
-        ".codex/skills/quant-research-workflow/agents",
         "research_datasets/demo/snap/raw",
         "research_datasets/demo/snap/data",
     ):
@@ -136,23 +899,36 @@ def _write_minimal_repo(root: Path) -> None:
 
     for path in (
         "scripts/research/README.md",
+        "scripts/research/cli.py",
+        "scripts/research/datasets.py",
+        "scripts/research/docs.py",
+        "scripts/research/variants.py",
         "scripts/research/platform/README.md",
         "scripts/research/registry/README.md",
+        "scripts/research/registry/tool_registry.py",
         "scripts/research/governance/README.md",
+        "scripts/research/governance/pr_flow.py",
+        "scripts/research/governance/skill_ownership.py",
         "scripts/research/research_core/README.md",
+        "scripts/research/etf_window_research/cli.py",
         "scripts/research/etf_window_research/README.md",
         "scripts/research/momentum_tilt_research/README.md",
+        "scripts/research/execution_timing_research/cli.py",
         "scripts/research/execution_timing_research/README.md",
         "scripts/research/portfolio_volatility_research/README.md",
         "scripts/research/cash_decomposition/README.md",
         "scripts/research/workflows/README.md",
         "scripts/tools/jq_automation/README.md",
+        "scripts/tools/jq_automation/__init__.py",
         "scripts/tools/path_tools/README.md",
+        "scripts/tools/path_tools/aliases.py",
+        "scripts/tools/path_tools/refactor.py",
         "docs/guides/research-workflow.md",
         "docs/architecture/research-platform-architecture.md",
         "docs/rules/index.md",
         "docs/rules/pr-workflow.md",
         "docs/rules/governance.md",
+        "docs/rules/skills.md",
         "docs/rules/review-guidelines.md",
         "docs/rules/commands.md",
         "docs/rules/environments.md",
@@ -207,6 +983,7 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / "indexes.md").write_text(
         "AGENTS.md CLAUDE.md docs/rules/index.md docs/rules/commands.md "
+        "docs/rules/skills.md "
         "docs/rules/review-guidelines.md docs/rules/pr-workflow.md docs/rules/governance.md "
         "docs/rules/environments.md docs/rules/code-style.md "
         "docs/rules/research-workflow.md docs/rules/collaboration.md "
@@ -221,6 +998,24 @@ def _write_minimal_repo(root: Path) -> None:
         ".\\.venv\\Scripts\\python.exe .venv/bin/python PYTHONUTF8 PYTHONIOENCODING "
         "Python 命令默认走项目 `.venv`，不改用系统 Python "
         "gh pr checks `gh` CLI 默认提权执行",
+        encoding="utf-8",
+    )
+    (root / "docs/rules/skills.md").write_text(
+        "# Skill 规则\n\n"
+        "ownership.yaml 是机器可读 SSOT；本文只保留人类可读汇总。\n\n"
+        "## Owner Skill 汇总\n\n"
+        "| Skill | 范围 |\n"
+        "| --- | --- |\n"
+        "| `skill-system` | Skill 创建、adapter 和 ownership 治理 |\n"
+        "| `repo-python-env` | Python 环境和本地/云端边界 |\n"
+        "| `repo-docs-pathref` | 文档链接、pathref 和索引 |\n"
+        "| `repo-pr-governance` | PR、review 证据和主干保护 |\n"
+        "| `research-local-first` | 本地优先研究和候选漏斗 |\n"
+        "| `research-data-center` | run 快照和数据 catalog |\n"
+        "| `research-report-analysis` | 报告补齐和跨 run 对比 |\n"
+        "| `strategy-experiment` | 参数扫描、A/B 和变体治理 |\n"
+        "| `joinquant-strategy-fix` | JoinQuant 编译和兼容修复 |\n"
+        "| `joinquant-cloud-run` | JoinQuant 云端 run、fetch、batch |\n",
         encoding="utf-8",
     )
     (root / "docs/guides/local-python-env.md").write_text(
@@ -435,32 +1230,7 @@ def _write_minimal_repo(root: Path) -> None:
         "schema_version: 1\nwaivers: []\n",
         encoding="utf-8",
     )
-    (root / ".claude/skills/jq-research/SKILL.md").write_text(
-        "scripts.research.cli scripts.research.governance variant",
-        encoding="utf-8",
-    )
-    (root / ".claude/skills/jq-ab-test/SKILL.md").write_text(
-        "variant_id 参数变体 结构变体 scripts.research.variants",
-        encoding="utf-8",
-    )
-    (root / ".codex/skills/quant-pr-workflow/SKILL.md").write_text(
-        "Quant PR Workflow docs/rules/pr-workflow.md make pr-ready "
-        "scripts.research.governance.pr_flow 不要把功能分支本地合入 main",
-        encoding="utf-8",
-    )
-    (root / ".codex/skills/quant-pr-workflow/agents/openai.yaml").write_text(
-        'display_name: "Quant PR 工作流"\n',
-        encoding="utf-8",
-    )
-    (root / ".codex/skills/quant-research-workflow/SKILL.md").write_text(
-        "Quant Research Workflow docs/rules/research-workflow.md "
-        "scripts.research.cli scripts.research.governance 不要把本地 replay 结论包装成云端确认",
-        encoding="utf-8",
-    )
-    (root / ".codex/skills/quant-research-workflow/agents/openai.yaml").write_text(
-        'display_name: "Quant Research 工作流"\n',
-        encoding="utf-8",
-    )
+    _write_all_owner_skills(root)
     (root / "path_aliases.json").write_text(
         json.dumps(
             {
@@ -1496,38 +2266,6 @@ def test_governance_audit_flags_claude_with_codex_or_review_rules(tmp_path) -> N
     assert any(
         finding.rule_id == "claude_sync"
         and "Codex-only or standard review rules" in finding.message
-        for finding in report.findings
-    )
-
-
-def test_governance_audit_flags_missing_codex_pr_skill(tmp_path) -> None:
-    _write_minimal_repo(tmp_path)
-    (tmp_path / ".codex/skills/quant-pr-workflow/SKILL.md").unlink()
-
-    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
-
-    assert not report.ok
-    assert any(
-        finding.rule_id == "skill_sync"
-        and "quant-pr-workflow skill missing" in finding.message
-        for finding in report.findings
-    )
-
-
-def test_governance_audit_flags_stale_codex_research_skill(tmp_path) -> None:
-    _write_minimal_repo(tmp_path)
-    (tmp_path / ".codex/skills/quant-research-workflow/SKILL.md").write_text(
-        "Quant Research Workflow",
-        encoding="utf-8",
-    )
-
-    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
-
-    assert not report.ok
-    assert any(
-        finding.rule_id == "skill_sync"
-        and "quant-research-workflow skill missing docs/rules/research-workflow.md"
-        in finding.message
         for finding in report.findings
     )
 

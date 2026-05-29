@@ -1,0 +1,4 @@
+interface:
+  display_name: "JoinQuant 策略修复"
+  short_description: "本地定位 JoinQuant 编译和兼容问题。"
+  default_prompt: "使用 $joinquant-strategy-fix 修复 Quant Trading 的 JoinQuant 策略问题。"

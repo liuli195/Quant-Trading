@@ -1,0 +1,27 @@
+skill: skill-system
+group: Skill System
+owned_rules:
+  - docs/rules/skills.md
+owned_commands:
+  - .\.venv\Scripts\python.exe -m scripts.research.governance.skill_ownership check
+  - .\.venv\Scripts\python.exe -m scripts.research.governance.skill_ownership discover
+  - .\.venv\Scripts\python.exe -m scripts.research.registry.tool_registry
+owned_scripts:
+  - scripts/research/governance/skill_ownership.py
+uses:
+  - repo-docs-pathref
+  - repo-pr-governance
+adapters:
+  - .claude/skills/skill-system/SKILL.md
+trigger_phrases:
+  - 新增或修改一个 owner Skill
+  - 同步 Claude adapter
+  - 优化 Skill description
+  - 校验 Skill 发现
+read_rules:
+  - docs/rules/skills.md
+  - docs/rules/governance.md
+recommended_commands:
+  - .\.venv\Scripts\python.exe -m scripts.research.governance.skill_ownership check
+  - .\.venv\Scripts\python.exe -m scripts.research.governance gate
+status: active

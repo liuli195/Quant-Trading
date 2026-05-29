@@ -1,0 +1,4 @@
+interface:
+  display_name: "PR 治理"
+  short_description: "准备 PR、review 证据和主干保护检查。"
+  default_prompt: "使用 $repo-pr-governance 准备 Quant Trading 的治理 PR。"

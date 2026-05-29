@@ -1,0 +1,4 @@
+interface:
+  display_name: "本地优先研究"
+  short_description: "先做本地候选漏斗，再判断云端交接。"
+  default_prompt: "使用 $research-local-first 规划 Quant Trading 的本地优先研究。"

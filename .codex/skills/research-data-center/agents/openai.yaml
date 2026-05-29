@@ -1,0 +1,4 @@
+interface:
+  display_name: "研究数据中心"
+  short_description: "管理回测 run 快照、catalog 和 pointer。"
+  default_prompt: "使用 $research-data-center 管理 Quant Trading 的研究数据快照。"

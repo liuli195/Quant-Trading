@@ -1,4 +1,0 @@
-interface:
-  display_name: "Quant 研究流程"
-  short_description: "调用仓库研究流程规则，保持 Skill 薄入口。"
-  default_prompt: "使用 $quant-research-workflow 执行 Quant Trading 的研究流程。"

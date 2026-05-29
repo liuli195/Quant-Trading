@@ -1,0 +1,32 @@
+skill: research-local-first
+group: Strategy Research
+owned_rules:
+  - docs/rules/research-workflow.md#local-first
+owned_commands:
+  - .\.venv\Scripts\python.exe -m scripts.research.cli
+  - .\.venv\Scripts\python.exe -m scripts.research.etf_window_research.cli
+  - .\.venv\Scripts\python.exe -m scripts.research.momentum_tilt_research
+  - .\.venv\Scripts\python.exe -m scripts.research.execution_timing_research.cli
+owned_scripts:
+  - scripts/research/cli.py
+  - scripts/research/workflows
+  - scripts/research/etf_window_research
+  - scripts/research/momentum_tilt_research
+  - scripts/research/execution_timing_research
+uses:
+  - research-data-center
+  - research-report-analysis
+  - strategy-experiment
+adapters:
+  - .claude/skills/research-local-first/SKILL.md
+trigger_phrases:
+  - 本地优先研究
+  - 本地筛选研究候选
+  - 别直接消耗 JoinQuant 云端额度
+  - 候选漏斗
+read_rules:
+  - docs/rules/research-workflow.md
+recommended_commands:
+  - .\.venv\Scripts\python.exe -m scripts.research.cli
+  - .\.venv\Scripts\python.exe -m scripts.research.governance gate
+status: active

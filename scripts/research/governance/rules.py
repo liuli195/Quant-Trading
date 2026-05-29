@@ -13,6 +13,7 @@ from pathlib import Path
 import yaml
 
 from scripts.research.registry import default_tool_registry
+from scripts.research.governance.skill_ownership import validate_ownerships
 from scripts.research.governance.schemas import AuditFinding, AuditReport
 from scripts.research.platform.datasets import DatasetRegistry
 from scripts.research.platform.docs_index import DocsIndexer
@@ -35,6 +36,7 @@ REQUIRED_RULE_DOCS = (
     "docs/rules/index.md",
     "docs/rules/pr-workflow.md",
     "docs/rules/governance.md",
+    "docs/rules/skills.md",
     "docs/rules/review-guidelines.md",
     "docs/rules/commands.md",
     "docs/rules/environments.md",
@@ -57,26 +59,6 @@ REQUIRED_CODEOWNER_PATTERNS = (
     "scripts/research/registry/**",
     "path_aliases.json",
     "strategies/**",
-)
-REQUIRED_CODEX_SKILLS = (
-    (
-        "quant-pr-workflow",
-        (
-            "docs/rules/pr-workflow.md",
-            "make pr-ready",
-            "scripts.research.governance.pr_flow",
-            "不要把功能分支本地合入",
-        ),
-    ),
-    (
-        "quant-research-workflow",
-        (
-            "docs/rules/research-workflow.md",
-            "scripts.research.cli",
-            "scripts.research.governance",
-            "不要把本地 replay 结论包装成云端确认",
-        ),
-    ),
 )
 _OLD_PR_TEMPLATE_TOKENS = (
     "改动目标",
@@ -225,6 +207,10 @@ def run_audit(
     findings.extend(_audit_tool_registry(root))
     findings.extend(_audit_layer_docs(root))
     findings.extend(_audit_claude_and_skills(root))
+    findings.extend(
+        AuditFinding("skill_ownership", "error", message)
+        for message in validate_ownerships(root)
+    )
     findings.extend(_audit_review_guidelines(root))
     findings.extend(_audit_governance_gate(root))
     findings.extend(_audit_local_review_entrypoints(root))
@@ -380,62 +366,6 @@ def _audit_claude_and_skills(root: Path) -> list[AuditFinding]:
             if token not in text:
                 findings.append(AuditFinding("command_rules", "error", message))
 
-    skill = root / ".claude" / "skills" / "jq-research" / "SKILL.md"
-    if not skill.is_file():
-        findings.append(
-            AuditFinding("skill_sync", "error", "jq-research skill missing")
-        )
-    else:
-        text = skill.read_text(encoding="utf-8", errors="ignore")
-        for token in ("scripts.research.cli", "scripts.research.governance", "variant"):
-            if token not in text:
-                findings.append(
-                    AuditFinding(
-                        "skill_sync", "error", f"jq-research skill missing {token}"
-                    )
-                )
-
-    ab_skill = root / ".claude" / "skills" / "jq-ab-test" / "SKILL.md"
-    if not ab_skill.is_file():
-        findings.append(AuditFinding("skill_sync", "error", "jq-ab-test skill missing"))
-    else:
-        text = ab_skill.read_text(encoding="utf-8", errors="ignore")
-        for token in (
-            "variant_id",
-            "参数变体",
-            "结构变体",
-            "scripts.research.variants",
-        ):
-            if token not in text:
-                findings.append(
-                    AuditFinding(
-                        "skill_sync", "error", f"jq-ab-test skill missing {token}"
-                    )
-                )
-    for skill_name, required_tokens in REQUIRED_CODEX_SKILLS:
-        skill = root / ".codex" / "skills" / skill_name / "SKILL.md"
-        if not skill.is_file():
-            findings.append(
-                AuditFinding("skill_sync", "error", f"{skill_name} skill missing")
-            )
-            continue
-        text = skill.read_text(encoding="utf-8", errors="ignore")
-        for token in required_tokens:
-            if token not in text:
-                findings.append(
-                    AuditFinding(
-                        "skill_sync", "error", f"{skill_name} skill missing {token}"
-                    )
-                )
-        agent = root / ".codex" / "skills" / skill_name / "agents" / "openai.yaml"
-        if not agent.is_file():
-            findings.append(
-                AuditFinding(
-                    "skill_sync",
-                    "error",
-                    f"{skill_name} openai agent manifest missing",
-                )
-            )
     return findings
 
 

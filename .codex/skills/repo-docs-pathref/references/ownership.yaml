@@ -1,0 +1,29 @@
+skill: repo-docs-pathref
+group: Repo Governance
+owned_rules:
+  - docs/rules/index.md
+  - docs/rules/docs-and-pathref.md#pathref
+owned_commands:
+  - .\.venv\Scripts\python.exe -m scripts.tools.path_tools.refactor check
+  - .\.venv\Scripts\python.exe -m scripts.research.docs index
+  - .\.venv\Scripts\python.exe -m scripts.tools.path_tools.aliases
+owned_scripts:
+  - scripts/tools/path_tools/refactor.py
+  - scripts/tools/path_tools/aliases.py
+  - scripts/research/platform/docs_index.py
+uses:
+  - repo-python-env
+adapters:
+  - .claude/skills/repo-docs-pathref/SKILL.md
+trigger_phrases:
+  - 移动了文档和报告链接
+  - 检查 pathref 和索引
+  - docs index
+  - 报告索引
+read_rules:
+  - docs/rules/docs-and-pathref.md
+  - docs/rules/governance.md
+recommended_commands:
+  - .\.venv\Scripts\python.exe -m scripts.tools.path_tools.refactor check
+  - .\.venv\Scripts\python.exe -m scripts.research.docs index
+status: active

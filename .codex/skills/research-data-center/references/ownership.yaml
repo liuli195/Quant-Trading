@@ -1,0 +1,25 @@
+skill: research-data-center
+group: Strategy Research
+owned_rules:
+  - docs/rules/research-workflow.md#data-center
+owned_commands:
+  - .\.venv\Scripts\python.exe -m scripts.research.datasets
+owned_scripts:
+  - scripts/research/datasets.py
+  - scripts/research/platform/datasets.py
+  - research_datasets
+uses:
+  - repo-docs-pathref
+adapters:
+  - .claude/skills/research-data-center/SKILL.md
+trigger_phrases:
+  - 历史回测 run
+  - 可追溯数据快照
+  - 数据中心
+  - catalog
+read_rules:
+  - docs/rules/research-workflow.md
+recommended_commands:
+  - .\.venv\Scripts\python.exe -m scripts.research.datasets
+  - .\.venv\Scripts\python.exe -m scripts.research.docs index
+status: active
