@@ -6,6 +6,14 @@ from pathlib import Path
 from scripts.research.governance import pr_flow
 
 
+def _codex_review_trigger_body(head_sha: str = "1" * 40) -> str:
+    return pr_flow.render_codex_review_request(
+        pr_url="https://github.com/liuli195/Quant-Trading/pull/7",
+        head_sha=head_sha,
+        review_scope=("scripts/research/governance/pr_flow.py",),
+    )
+
+
 def _write_valid_report(
     root: Path,
     *,
@@ -1148,7 +1156,7 @@ def test_ready_uses_existing_trigger_result_without_retriggering(
             {
                 "id": 1,
                 "user": {"login": "test-user"},
-                "body": f"@codex review https://github.com/liuli195/Quant-Trading/pull/7 {'1' * 40}",
+                "body": _codex_review_trigger_body(),
                 "created_at": "2026-05-28T09:00:00Z",
                 "updated_at": "2026-05-28T09:00:00Z",
                 "html_url": "https://github.com/liuli195/Quant-Trading/pull/7#issuecomment-1",
@@ -1179,6 +1187,42 @@ def test_ready_uses_existing_trigger_result_without_retriggering(
     assert payload["official_codex_review"]["evidence"][0].endswith("#issuecomment-99")
 
 
+def test_ready_retriggers_when_existing_current_head_trigger_is_not_contract(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _write_valid_report(
+        tmp_path,
+        risk_level="high",
+        requires_official=True,
+        changed_files=["scripts/research/governance/pr_flow.py"],
+    )
+    runner = FakeRunner(
+        existing_pr=True,
+        api_issue_comments=[
+            {
+                "id": 1,
+                "user": {"login": "test-user"},
+                "body": f"@codex review https://github.com/liuli195/Quant-Trading/pull/7 {'1' * 40}",
+                "created_at": "2026-05-28T09:00:00Z",
+                "updated_at": "2026-05-28T09:00:00Z",
+            }
+        ],
+    )
+    monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+
+    code = pr_flow.ready(
+        repo_root=tmp_path,
+        title="治理自动化",
+        runner=runner,
+        codex_review_timeout_seconds=0,
+        codex_review_poll_seconds=0,
+    )
+
+    assert code == 0
+    assert any(call[:3] == ["gh", "pr", "comment"] for call in runner.calls)
+
+
 def test_ready_reports_exception_when_review_api_unavailable(
     monkeypatch,
     tmp_path: Path,
@@ -1196,7 +1240,7 @@ def test_ready_reports_exception_when_review_api_unavailable(
             {
                 "id": 1,
                 "user": {"login": "test-user"},
-                "body": f"@codex review https://github.com/liuli195/Quant-Trading/pull/7 {'1' * 40}",
+                "body": _codex_review_trigger_body(),
                 "created_at": "2026-05-28T09:00:00Z",
                 "updated_at": "2026-05-28T09:00:00Z",
             }
@@ -1776,7 +1820,7 @@ def test_ready_does_not_retrigger_codex_review_when_evidence_exists(
             {
                 "id": 1,
                 "user": {"login": "test-user"},
-                "body": f"@codex review https://github.com/liuli195/Quant-Trading/pull/7 {'1' * 40}",
+                "body": _codex_review_trigger_body(),
                 "created_at": "2026-05-28T09:00:00Z",
                 "updated_at": "2026-05-28T09:00:00Z",
             }

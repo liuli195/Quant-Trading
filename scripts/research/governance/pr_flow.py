@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from . import ai_review_gate, pr_review_evidence
-from .codex_review_contract import render_codex_review_request
+from .codex_review_contract import is_codex_review_request, render_codex_review_request
 
 
 MANAGED_BLOCK_START = "<!-- pr-flow:start -->"
@@ -1554,7 +1554,11 @@ def _is_codex_trigger_comment(
     head_sha: str,
 ) -> bool:
     body = str(comment.get("body", ""))
-    return "@codex review" in body and pr_url in body and head_sha in body
+    return is_codex_review_request(
+        body,
+        expected_pr_url=pr_url,
+        expected_head_sha=head_sha,
+    )
 
 
 def _is_codex_completion_comment(comment: dict[str, Any]) -> bool:
