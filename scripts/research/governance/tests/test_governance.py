@@ -2525,6 +2525,27 @@ def test_governance_audit_flags_agents_with_detailed_rule_duplication(tmp_path) 
     )
 
 
+def test_governance_audit_accepts_agents_review_guideline_rule_item(
+    tmp_path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    agents = tmp_path / "AGENTS.md"
+    agents.write_text(
+        agents.read_text(encoding="utf-8").replace(
+            "## Review 指南\n\n"
+            "Review 前必须先阅读并遵守 docs/rules/review-guidelines.md。"
+            "如果无法访问该文件，视为 review 被阻塞。",
+            "- **review 指南**：Review 前必须先阅读并遵守 "
+            "docs/rules/review-guidelines.md",
+        ),
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert report.ok
+
+
 def test_governance_audit_flags_agents_without_python_venv_rule(
     tmp_path,
 ) -> None:

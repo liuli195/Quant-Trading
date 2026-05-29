@@ -398,7 +398,12 @@ def _audit_review_guidelines(root: Path) -> list[AuditFinding]:
     if agents.is_file():
         agents_text = agents.read_text(encoding="utf-8", errors="ignore")
         if not any(
-            token in agents_text for token in ("## Review guidelines", "## Review 指南")
+            token in agents_text
+            for token in (
+                "## Review guidelines",
+                "## Review 指南",
+                "**review 指南**",
+            )
         ):
             findings.append(
                 AuditFinding(
