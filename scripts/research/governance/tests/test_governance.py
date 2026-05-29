@@ -426,6 +426,46 @@ def test_skill_ownership_rejects_duplicate_owned_rule(tmp_path: Path) -> None:
     )
 
 
+def test_skill_ownership_rejects_unowned_codex_owner_skill(tmp_path: Path) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    owner = tmp_path / ".codex/skills/unowned/SKILL.md"
+    owner.parent.mkdir(parents=True)
+    owner.write_text(
+        "---\nname: unowned\ndescription: 未登记 owner。\n---\n",
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "unowned Codex owner skill: .codex/skills/unowned/SKILL.md" in error
+        for error in errors
+    )
+
+
+def test_skill_ownership_rejects_missing_owned_script_path(tmp_path: Path) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    path = tmp_path / ".codex/skills/skill-system/references/ownership.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["owned_scripts"] = ["scripts/research/governance/missing.py"]
+    path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "missing owned script for skill-system: scripts/research/governance/missing.py"
+        in error
+        for error in errors
+    )
+
+
 def test_skill_ownership_rejects_adapter_description_mismatch(tmp_path: Path) -> None:
     from scripts.research.governance.skill_ownership import validate_ownerships
 
@@ -440,6 +480,50 @@ def test_skill_ownership_rejects_adapter_description_mismatch(tmp_path: Path) ->
 
     assert any(
         "adapter .claude/skills/skill-system/SKILL.md description is not equivalent"
+        in error
+        for error in errors
+    )
+
+
+def test_skill_ownership_rejects_missing_same_name_adapter(tmp_path: Path) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    path = tmp_path / ".codex/skills/skill-system/references/ownership.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["adapters"] = [".claude/skills/renamed/SKILL.md"]
+    path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "owner skill skill-system missing same-name Claude adapter" in error
+        for error in errors
+    )
+
+
+def test_skill_ownership_rejects_missing_frontmatter_name_or_description(
+    tmp_path: Path,
+) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    owner = tmp_path / ".codex/skills/skill-system/SKILL.md"
+    owner.write_text("---\ndescription: 创建 Skill。\n---\n", encoding="utf-8")
+    adapter = tmp_path / ".claude/skills/skill-system/SKILL.md"
+    adapter.write_text("---\nname: skill-system\n---\n", encoding="utf-8")
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "owner SKILL.md missing frontmatter name for skill-system" in error
+        for error in errors
+    )
+    assert any(
+        "adapter .claude/skills/skill-system/SKILL.md missing frontmatter description"
         in error
         for error in errors
     )
@@ -465,6 +549,25 @@ def test_skill_ownership_rejects_duplicate_trigger_phrase(tmp_path: Path) -> Non
     )
 
 
+def test_skill_ownership_rejects_non_active_required_owner(tmp_path: Path) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    path = tmp_path / ".codex/skills/skill-system/references/ownership.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["status"] = "draft"
+    path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "required owner skill must be active: skill-system" in error for error in errors
+    )
+
+
 def test_skill_ownership_rejects_unsupported_recommended_command(
     tmp_path: Path,
 ) -> None:
@@ -483,6 +586,35 @@ def test_skill_ownership_rejects_unsupported_recommended_command(
 
     assert any(
         "unsupported recommended command for skill-system" in error for error in errors
+    )
+
+
+def test_skill_ownership_rejects_owner_missing_read_rule_and_command(
+    tmp_path: Path,
+) -> None:
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo(tmp_path)
+    owner = tmp_path / ".codex/skills/skill-system/SKILL.md"
+    owner.write_text(
+        "---\n"
+        "name: skill-system\n"
+        f"description: {SKILL_FIXTURES[0]['description']}\n"
+        "---\n"
+        "docs/rules/skills.md\n",
+        encoding="utf-8",
+    )
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "owner SKILL.md missing read rule for skill-system: docs/rules/governance.md"
+        in error
+        for error in errors
+    )
+    assert any(
+        "owner SKILL.md missing recommended command for skill-system" in error
+        for error in errors
     )
 
 
@@ -904,6 +1036,9 @@ def _write_minimal_repo(root: Path) -> None:
         "scripts/research/docs.py",
         "scripts/research/variants.py",
         "scripts/research/platform/README.md",
+        "scripts/research/platform/datasets.py",
+        "scripts/research/platform/reporting.py",
+        "scripts/research/platform/strategy_variants.py",
         "scripts/research/registry/README.md",
         "scripts/research/registry/tool_registry.py",
         "scripts/research/governance/README.md",
@@ -920,6 +1055,10 @@ def _write_minimal_repo(root: Path) -> None:
         "scripts/research/workflows/README.md",
         "scripts/tools/jq_automation/README.md",
         "scripts/tools/jq_automation/__init__.py",
+        "scripts/tools/jq_automation/abtest.py",
+        "scripts/tools/jq_automation/cli.py",
+        "scripts/tools/jq_automation/dataset_registration.py",
+        "scripts/tools/jq_automation/snippets/compile.js",
         "scripts/tools/path_tools/README.md",
         "scripts/tools/path_tools/aliases.py",
         "scripts/tools/path_tools/refactor.py",
