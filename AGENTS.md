@@ -13,6 +13,12 @@ Claude Code 专属补充见 [CLAUDE.md](CLAUDE.md) <!-- pathref: repo/CLAUDE.md 
 
 ## 通用规则
 
+### Agent skills
+
+- **Issue 跟踪**：Issue 和 PRD 统一记录在 GitHub Issues：`liuli195/Quant-Trading`。详见 [issue-tracker.md](docs/agents/issue-tracker.md) <!-- pathref: docs/agents/issue-tracker.md -->。
+- **Triage 标签**：使用默认五类 triage 标签。详见 [triage-labels.md](docs/agents/triage-labels.md) <!-- pathref: docs/agents/triage-labels.md -->。
+- **领域文档**：本仓库按 single-context 处理：根文档、规则文档和 `docs/adr/` 共同作为领域上下文。详见 [domain.md](docs/agents/domain.md) <!-- pathref: docs/agents/domain.md -->。
+
 ### 环境与工具
 
 - **运行边界**：策略只在聚宽云端运行；本地只做编写、测试、文档和回测分析。环境差异见 [environments.md](docs/rules/environments.md) <!-- pathref: docs/rules/environments.md -->。

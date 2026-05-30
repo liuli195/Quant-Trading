@@ -1450,6 +1450,7 @@ def _write_minimal_repo(root: Path) -> None:
                 "CLAUDE.md @research-platform",
                 "AGENTS.md @research-platform",
                 "indexes.md @research-platform",
+                "docs/agents/** @research-platform",
                 "docs/rules/** @research-platform",
                 "docs/adr/** @research-platform",
                 ".codex/skills/** @research-platform",
