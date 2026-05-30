@@ -2850,6 +2850,13 @@ def _valid_codex_review_body(review_id: int = 4314779358) -> str:
             "- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent",
             "- P0/P1 未关闭项: 无",
             "",
+            "## 当前提交与差异摘要",
+            "",
+            "- Base: dd1a6a10077f",
+            "- Head SHA: 000000000000",
+            "- Diff hash: current-diff",
+            "- Changed files: 1",
+            "",
             "## P2 保留项",
             "",
             "- 无",
@@ -2927,25 +2934,36 @@ def test_pr_review_evidence_requires_verify_full_command() -> None:
 
 def test_pr_review_evidence_rejects_mismatched_current_head_summary() -> None:
     body = _valid_codex_review_body().replace(
-        "## P2 保留项",
+        "- Head SHA: 000000000000",
+        "- Head SHA: 222222222222",
+    )
+
+    report = validate_pr_body(body, expected_head_sha="0" * 40)
+
+    assert not report.ok
+    assert "current diff summary head SHA must match current PR head" in report.errors
+
+
+def test_pr_review_evidence_requires_current_head_summary_when_metadata_available() -> None:
+    body = _valid_codex_review_body().replace(
         "\n".join(
             [
                 "## 当前提交与差异摘要",
                 "",
                 "- Base: dd1a6a10077f",
-                "- Head SHA: 222222222222",
+                "- Head SHA: 000000000000",
                 "- Diff hash: current-diff",
-                "- Changed files: 20",
+                "- Changed files: 1",
                 "",
-                "## P2 保留项",
             ]
         ),
+        "",
     )
 
-    report = validate_pr_body(body, expected_head_sha="1" * 40)
+    report = validate_pr_body(body, expected_head_sha="0" * 40)
 
     assert not report.ok
-    assert "current diff summary head SHA must match current PR head" in report.errors
+    assert "PR body missing section: 当前提交与差异摘要" in report.errors
 
 
 def test_low_risk_pr_body_requires_cross_review_and_dispatch_evidence() -> None:

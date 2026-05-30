@@ -256,6 +256,8 @@ def _current_diff_summary_errors(
 ) -> list[str]:
     section = _extract_named_section(body, "当前提交与差异摘要")
     if section is None:
+        if expected_head_sha:
+            return ["PR body missing section: 当前提交与差异摘要"]
         return []
     errors: list[str] = []
     head_sha = _normalize_value(_read_field(section, "Head SHA"))
