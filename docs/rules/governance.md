@@ -8,15 +8,15 @@
 - PR 准备、push 前、CI 和最终交付证据必须使用 `scripts.research.governance verify full`。
 - `.githooks/pre-commit` 使用 `scripts.research.governance verify fast --staged`。
 - `.githooks/pre-push` 和 CI 必须覆盖完整治理审计和 pathref gate，不得使用 fast。
-- `scripts.research.governance.pr_flow` 是本地 PR 自动化入口；`make pr-ready TITLE="<PR标题>"` 负责准备 PR evidence、同步 GitHub draft PR、触发必要的 Codex review 并等待 required checks；`make pr-complete TITLE="<PR标题>"` 负责在无阻断路径上继续 ready-for-review、head-locked merge 和合并后 cleanup。
+- `scripts.research.governance.pr_flow` 是本地 PR 自动化入口；`make pr-ready TITLE="<PR标题>"` 按 preflight、freeze diff、local review、security review、build evidence、official Codex、threads、sync PR body、wait latest checks 推进到 `merge-ready`，永不合并；`make pr-complete TITLE="<PR标题>"` 负责在无阻断路径上继续 ready-for-review、head-locked merge 和合并后 cleanup。
 - GitHub `main` 必须启用 branch protection 或 ruleset：Require pull request、Require status checks、Require conversation resolution、Block force pushes；approval / Code Owner review 是否阻断以远端实际 ruleset / branch protection 为准，`pr_flow` 不得本地硬编码。
 - required checks 必须包括 `Research Governance / governance`、`Research Governance / pr-review-evidence`、`Codex Review Monitor`。
 - `Research Governance / governance` 通过 `verify full` 汇总静态扫描、类型检查、依赖漏洞扫描、测试、pathref 和 governance gate。
-- `pr-review-evidence` 校验 PR body 的 `AI Review 风险分级`、`review_mode=complete` / `partial` 授权、`security_review` / `本地安全 review`、`codex-security` / `security-guidance`、`官方 Codex Review 跳过授权`、P2 保留、Codex Review 证据和高风险 label。
-- `Codex Review Monitor` 监听当前 head 的 Codex Review 状态；低风险且无需官方 review 的 PR 可快速通过/空跑。
+- `pr-review-evidence` 校验 PR body 的 schema v3 evidence 渲染结果、`AI Review 风险分级`、`review_mode=complete` / `partial` 授权、review wrapper fragments、`security_review` / 独立 security fragment、`codex-security` / `security-guidance`、`external_findings`、`官方 Codex Review 跳过授权`、`官方 Codex Review` / reused evidence、P2 保留、thread summary 和高风险 label。
+- `Codex Review Monitor` 监听当前 head 的 Codex Review 状态；低风险且无需官方 review 的 PR 可快速通过/空跑；reused official evidence 只有满足 current head、scope impact 和 security impact 约束时才允许通过。
 - `Codex Review Monitor` success 可作为 `pr_flow` 自动采集官方 Codex 通过证据的信号之一，但不能替代 PR body 的 `Codex Code Review 结论`。
-- 只要 GitHub conversation resolution ruleset 要求 resolved conversation，任何未 resolved 的 review thread 必须阻断，任何跳过授权不得绕过。
-- 修复后的 review thread 只能由 `pr_flow resolve-threads` 或 `pr-ready` / `pr-complete --resolve-thread <thread-id>` resolve，且必须显式传入 thread ID；不得猜测或批量 resolve 全部未处理 thread。
+- 只要 GitHub conversation resolution ruleset 要求 resolved conversation，未 resolved 的 review thread 必须阻断，任何跳过授权不得绕过；官方 Codex P2/P3 thread 例外路径只能由 `pr_flow` 写入固定接受模板、`external_findings` 和 PR body P2 保留项后 resolve。
+- 修复后的 review thread 只能由 `pr_flow resolve-threads` 或 `pr-ready` / `pr-complete --resolve-thread <thread-id>` resolve，且必须显式传入 thread ID；不得猜测或批量 resolve 全部未处理 thread。官方 P0/P1、无 severity thread、人工 reviewer thread 阻断；过期 P0/P1 只有结构化 `fixed` / `false_positive` 证据时才可自动关闭。
 - 本地仓库必须设置 `git config core.hooksPath .githooks`。
 - `.githooks/pre-commit`、`.githooks/pre-push`、`.githooks/reference-transaction` 必须通过 `.githooks/run-python.sh` 选择项目虚拟环境，不硬编码单一平台解释器。
 - `.githooks/pre-push` 必须调用 `scripts.research.governance.branch_protection pre-push` 和 `scripts.research.governance verify full`，并保留 Git LFS pre-push 转交。

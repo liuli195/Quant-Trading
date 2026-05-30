@@ -3807,6 +3807,44 @@ def _low_risk_no_official_review_body() -> str:
 """
 
 
+def _reused_official_codex_review_body(*, current_head: str) -> str:
+    return f"""
+## AI Review 风险分级
+
+- 风险等级: high
+- 是否需要官方 Codex Review: 是
+- 官方 Codex Review 跳过授权: 无
+- 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence=Codex Security local review completed
+- 本地 AI review 模式: complete
+- 不完全 Review 模式授权: 无
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给 Standards 和 Spec 评审；official_scope_impact=false；security_impact=false
+- P0/P1 未关闭项: 无
+
+## 已运行检查
+
+- verify full: `.venv/bin/python -m scripts.research.governance verify full`
+
+## P2 保留项
+
+- 无
+
+## Codex Code Review 结论
+
+- Reviewer: Codex
+- 触发方式: @codex review (reused)
+- 结论: 通过
+- 阻断问题: 无
+- 复用状态: reused
+- 旧 head: 000000000000
+- 当前 head: {current_head[:12]}
+- 复用原因: only docs wording changed after official review
+- 关键证据:
+  - https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-1
+"""
+
+
 def test_low_risk_pr_body_rejects_bare_verify_full_module() -> None:
     body = _low_risk_no_official_review_body().replace(
         "`.venv/bin/python -m scripts.research.governance verify full`",
@@ -5717,6 +5755,27 @@ def test_codex_review_monitor_passes_low_risk_without_official_review() -> None:
     assert report.status == "skipped"
     assert not report.trigger_found
     assert "无需执行" in render_monitor_comment(report)
+
+
+def test_codex_review_monitor_passes_reused_official_review_evidence() -> None:
+    head_sha = "1" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={
+            "head": {"sha": head_sha},
+            "body": _reused_official_codex_review_body(current_head=head_sha),
+        },
+        issue_comments=[],
+        reviews=[],
+        review_comments=[],
+        changed_files=("scripts/research/governance/pr_flow.py",),
+        labels=("ai-risk-review",),
+    )
+
+    assert report.status == "passed"
+    assert not report.trigger_found
+    assert "reused" in render_monitor_comment(report)
 
 
 def test_codex_review_monitor_blocks_unresolved_blocking_threads() -> None:

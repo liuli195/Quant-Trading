@@ -48,6 +48,7 @@ CODEX_NO_MAJOR_ISSUES_PATTERN = re.compile(
     re.IGNORECASE,
 )
 BLOCKING_CODEX_FINDING_PATTERN = re.compile(r"\bP[01]\b|P[01]\s*Badge")
+CODEX_THREAD_SEVERITY_PATTERN = re.compile(r"\bP(?P<level>[0-3])\b")
 ACTIONS_CHECK_URL_PATTERN = re.compile(r"/actions/runs/(?P<run_id>\d+)/job/(?P<job_id>\d+)")
 CHECKS_JSON_FIELDS = "name,state,bucket,link,workflow,startedAt,completedAt"
 PR_DIAGNOSE_JSON_FIELDS = (
@@ -55,6 +56,21 @@ PR_DIAGNOSE_JSON_FIELDS = (
 )
 CODEX_REVIEW_WAIT_TIMEOUT_SECONDS = 1800.0
 CODEX_REVIEW_WAIT_INTERVAL_SECONDS = 30.0
+AUTO_ACCEPTED_REVIEW_THREAD_SEVERITIES = {"P2", "P3"}
+CLOSED_REVIEW_THREAD_STATUSES = {"fixed", "false_positive"}
+GITHUB_READ_MAX_ATTEMPTS = 3
+GITHUB_READ_RETRY_BACKOFF_SECONDS = 0.1
+PR_READY_PHASES = (
+    "preflight",
+    "freeze_diff",
+    "local_review",
+    "security_review",
+    "build_evidence",
+    "official_codex",
+    "threads",
+    "sync_pr_body",
+    "wait_latest_checks",
+)
 
 
 @dataclass(frozen=True)
@@ -77,10 +93,50 @@ class PullRequestReviewRequirement:
     source: str
 
 
+@dataclass(frozen=True)
+class GitHubErrorClassification:
+    retryable: bool
+    reason: str
+
+
+@dataclass(frozen=True)
+class StopStatus:
+    state: str
+    message: str
+    reason_code: str
+    phase: str
+    retryable: bool
+    dispatch_target: str
+    blocking_items: tuple[str, ...] = ()
+    evidence_refs: tuple[str, ...] = ()
+    next_actions: tuple[str, ...] = ()
+
+    def as_json(self) -> dict[str, Any]:
+        return {
+            "schema_version": 1,
+            "state": self.state,
+            "message": self.message,
+            "reason_code": self.reason_code,
+            "phase": self.phase,
+            "retryable": self.retryable,
+            "dispatch_target": self.dispatch_target,
+            "blocking_items": list(self.blocking_items),
+            "evidence_refs": list(self.evidence_refs),
+            "next_actions": list(self.next_actions),
+        }
+
+
 class GitHubDataUnavailable(RuntimeError):
-    def __init__(self, message: str, *, details: Sequence[str] = ()) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        details: Sequence[str] = (),
+        retryable: bool = True,
+    ) -> None:
         super().__init__(message)
         self.details = tuple(detail for detail in details if detail)
+        self.retryable = retryable
 
 
 class CommandRunner:
@@ -234,12 +290,20 @@ def sync(
         return 1
     head_sha = _command_stdout(runner.run(["git", "rev-parse", "HEAD"], cwd=root))
 
-    view = runner.run(["gh", "pr", "view", "--json", "number,url,state,isDraft"], cwd=root)
+    view = _run_github_read_command(
+        root,
+        runner,
+        ["gh", "pr", "view", "--json", "number,url,state,isDraft"],
+    )
     if view.returncode == 0:
         metadata = _json_from_result(view)
         pr_number = str(metadata.get("number") or "")
         pr_url = str(metadata.get("url") or "")
-        body_view = runner.run(["gh", "pr", "view", "--json", "body"], cwd=root)
+        body_view = _run_github_read_command(
+            root,
+            runner,
+            ["gh", "pr", "view", "--json", "body"],
+        )
         existing_body = ""
         if body_view.returncode == 0:
             existing_body = str(_json_from_result(body_view).get("body") or "")
@@ -376,33 +440,67 @@ def wait(
     if not pr_ref:
         print("error: PR not found for current branch", file=sys.stderr)
         return 1
-    watched = runner.run(
+    watched = _run_github_read_command(
+        root,
+        runner,
         ["gh", "pr", "checks", pr_ref, "--required", "--watch", "--interval", "10"],
-        cwd=root,
     )
     if watched.returncode == 0:
         print(watched.stdout, end="")
         return 0
-    json_summary = runner.run(
+    json_summary = _run_github_read_command(
+        root,
+        runner,
         ["gh", "pr", "checks", pr_ref, "--required", "--json", CHECKS_JSON_FIELDS],
-        cwd=root,
     )
     latest_results = _latest_required_check_results(json_summary.stdout)
     if json_summary.returncode == 0 and latest_results is not None:
         failing = _failing_json_check_names(latest_results)
         pending = _pending_json_check_names(latest_results)
         if failing:
-            _print_state("EXCEPTION_REQUIRED", "failing required checks", details=failing)
+            _print_state(
+                "EXCEPTION_REQUIRED",
+                "failing required checks",
+                repo_root=root,
+                reason_code="REQUIRED_CHECKS_FAILED",
+                phase="wait_required_checks",
+                dispatch_target="github",
+                details=failing,
+                next_actions=("fix or rerun failing required checks",),
+            )
             return EXCEPTION_REQUIRED_EXIT_CODE
         if pending:
-            _print_state("EXCEPTION_REQUIRED", "pending required checks", details=pending)
+            _print_state(
+                "EXCEPTION_REQUIRED",
+                "pending required checks",
+                repo_root=root,
+                reason_code="REQUIRED_CHECKS_PENDING",
+                phase="wait_required_checks",
+                retryable=True,
+                dispatch_target="github",
+                details=pending,
+                next_actions=("wait for pending required checks",),
+            )
             return EXCEPTION_REQUIRED_EXIT_CODE
         print("required checks passed")
         return 0
-    summary = runner.run(["gh", "pr", "checks", pr_ref, "--required"], cwd=root)
+    summary = _run_github_read_command(
+        root,
+        runner,
+        ["gh", "pr", "checks", pr_ref, "--required"],
+    )
     failing = _failing_check_names(summary.stdout)
     if failing:
-        _print_state("EXCEPTION_REQUIRED", "failing required checks", details=failing)
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "failing required checks",
+            repo_root=root,
+            reason_code="REQUIRED_CHECKS_FAILED",
+            phase="wait_required_checks",
+            dispatch_target="github",
+            details=failing,
+            next_actions=("fix or rerun failing required checks",),
+        )
         return EXCEPTION_REQUIRED_EXIT_CODE
     if summary.returncode != 0:
         details = [
@@ -417,7 +515,16 @@ def wait(
         _print_state(
             "EXCEPTION_REQUIRED",
             "required checks unavailable",
+            repo_root=root,
+            reason_code="REQUIRED_CHECKS_UNAVAILABLE",
+            phase="wait_required_checks",
+            retryable=any(
+                _classify_github_error(result).retryable
+                for result in (watched, json_summary, summary)
+            ),
+            dispatch_target="github",
             details=details,
+            next_actions=("restore GitHub checks/API access",),
         )
         return EXCEPTION_REQUIRED_EXIT_CODE
     else:
@@ -587,38 +694,131 @@ def diagnose(
 
         if state.upper() != "OPEN":
             print("next: reopen the PR before merge")
+            _print_diagnose_stop(
+                root,
+                "EXCEPTION_REQUIRED",
+                "PR is not open",
+                reason_code="PR_NOT_OPEN",
+                dispatch_target="author",
+                blocking_items=(state,),
+                next_actions=("reopen the PR before merge",),
+            )
             return EXCEPTION_REQUIRED_EXIT_CODE
         if is_draft:
             print("next: mark the PR ready for review")
+            _print_diagnose_stop(
+                root,
+                "EXCEPTION_REQUIRED",
+                "PR is draft",
+                reason_code="PR_DRAFT",
+                dispatch_target="author",
+                blocking_items=(f"PR #{pr_number} is draft",),
+                next_actions=("mark the PR ready for review",),
+            )
             return EXCEPTION_REQUIRED_EXIT_CODE
         if unresolved_threads:
             print("next: resolve unresolved review threads")
+            _print_diagnose_stop(
+                root,
+                "REPLY_OR_FIX_REQUIRED",
+                "unresolved review threads",
+                reason_code="REVIEW_THREADS_UNRESOLVED",
+                dispatch_target="author",
+                blocking_items=unresolved_threads,
+                next_actions=("resolve unresolved review threads",),
+            )
             return REPLY_OR_FIX_REQUIRED_EXIT_CODE
         if codex_blockers:
             print("next: reply to or fix Codex blockers")
+            _print_diagnose_stop(
+                root,
+                "REPLY_OR_FIX_REQUIRED",
+                "current-head Codex blockers",
+                reason_code="CODEX_BLOCKERS_PRESENT",
+                dispatch_target="author",
+                blocking_items=codex_blockers,
+                next_actions=("reply to or fix Codex blockers",),
+            )
             return REPLY_OR_FIX_REQUIRED_EXIT_CODE
         if checks_unavailable:
             print("next: restore GitHub checks/API access")
+            _print_diagnose_stop(
+                root,
+                "EXCEPTION_REQUIRED",
+                "required checks unavailable",
+                reason_code="REQUIRED_CHECKS_UNAVAILABLE",
+                retryable=True,
+                dispatch_target="github",
+                blocking_items=check_details,
+                next_actions=("restore GitHub checks/API access",),
+            )
             return EXCEPTION_REQUIRED_EXIT_CODE
         if check_state == "failing":
             print("next: fix or rerun failing required checks")
+            _print_diagnose_stop(
+                root,
+                "EXCEPTION_REQUIRED",
+                "failing required checks",
+                reason_code="REQUIRED_CHECKS_FAILED",
+                dispatch_target="github",
+                blocking_items=check_details,
+                next_actions=("fix or rerun failing required checks",),
+            )
             return EXCEPTION_REQUIRED_EXIT_CODE
         if check_state == "pending":
             print("next: wait for pending required checks")
+            _print_diagnose_stop(
+                root,
+                "EXCEPTION_REQUIRED",
+                "pending required checks",
+                reason_code="REQUIRED_CHECKS_PENDING",
+                retryable=True,
+                dispatch_target="github",
+                blocking_items=check_details,
+                next_actions=("wait for pending required checks",),
+            )
             return EXCEPTION_REQUIRED_EXIT_CODE
         if not _review_decision_allows_merge(
             review_decision,
             review_requirement=review_requirement,
         ):
             print("next: wait for approved review required by remote rules")
+            _print_diagnose_stop(
+                root,
+                "EXCEPTION_REQUIRED",
+                "remote review approval required",
+                reason_code="APPROVAL_REQUIRED",
+                dispatch_target="reviewer",
+                blocking_items=(review_decision,),
+                next_actions=("wait for approved review required by remote rules",),
+            )
             return EXCEPTION_REQUIRED_EXIT_CODE
         if _merge_state_requires_attention(merge_state):
             print("next: inspect branch protection or ruleset blockers")
+            _print_diagnose_stop(
+                root,
+                "EXCEPTION_REQUIRED",
+                "merge state requires attention",
+                reason_code="MERGE_STATE_REQUIRES_ATTENTION",
+                dispatch_target="github",
+                blocking_items=(merge_state,),
+                next_actions=("inspect branch protection or ruleset blockers",),
+            )
             return EXCEPTION_REQUIRED_EXIT_CODE
         print("next: PR automation state is merge-ready")
         return SUCCESS_EXIT_CODE
     except GitHubDataUnavailable as exc:
-        _print_github_data_unavailable(exc)
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            str(exc),
+            repo_root=root,
+            reason_code="GITHUB_DATA_UNAVAILABLE",
+            phase="diagnose",
+            retryable=exc.retryable,
+            dispatch_target="github",
+            details=exc.details,
+            next_actions=("restore GitHub API access",),
+        )
         return EXCEPTION_REQUIRED_EXIT_CODE
 
 
@@ -633,95 +833,121 @@ def ready(
     sleeper: Callable[[float], None] = time.sleep,
 ) -> int:
     runner = runner or CommandRunner()
-    code = prepare(repo_root=repo_root, runner=runner)
+    root = Path(repo_root).resolve()
+    completed_phases: list[str] = []
+    _record_pr_ready_phase(root, completed_phases, "preflight")
+    code = prepare(repo_root=root, runner=runner)
     if code != 0:
-        root = Path(repo_root).resolve()
         latest = root / ".local" / "ai-review" / "latest.json"
         if not latest.is_file():
             _print_state(
                 "DISPATCH_REQUIRED",
                 "missing .local/ai-review/latest.json; local AI review must be produced by humans or agents",
+                repo_root=root,
+                reason_code="LOCAL_AI_REVIEW_MISSING",
+                phase="local_review",
+                dispatch_target="review-agent",
                 details=[
                     "run the required local AI review",
                     "record two independent reviewers",
                     "record security_review with codex-security evidence",
                 ],
+                next_actions=("produce .local/ai-review/latest.json",),
             )
             return DISPATCH_REQUIRED_EXIT_CODE
         payload = _read_json_object(latest)
-        result = ai_review_gate.validate_report_file(latest)
+        _record_pr_ready_phase(root, completed_phases, "freeze_diff")
+        current_fingerprint = ai_review_gate.current_diff_fingerprint(root)
+        _record_pr_ready_phase(root, completed_phases, "local_review")
+        _record_pr_ready_phase(root, completed_phases, "security_review")
+        result = ai_review_gate.validate_report_file(
+            latest,
+            current_diff_fingerprint=current_fingerprint,
+        )
         if payload is None or not result.ok:
             _print_state(
                 "DISPATCH_REQUIRED",
                 "local AI review evidence is incomplete or invalid",
+                repo_root=root,
+                reason_code="LOCAL_AI_REVIEW_INVALID",
+                phase="local_review",
+                dispatch_target="review-agent",
                 details=result.errors,
+                next_actions=("repair .local/ai-review/latest.json",),
             )
             return DISPATCH_REQUIRED_EXIT_CODE
         _print_state(
             "EXCEPTION_REQUIRED",
             "prepare failed",
+            repo_root=root,
+            reason_code="PREPARE_FAILED",
+            phase="preflight",
+            dispatch_target="operator",
             details=[f"exit_code={code}"],
+            next_actions=("inspect local prepare failure",),
         )
         return EXCEPTION_REQUIRED_EXIT_CODE
-    root = Path(repo_root).resolve()
+    _record_pr_ready_phase(root, completed_phases, "freeze_diff")
     latest = root / ".local" / "ai-review" / "latest.json"
     payload = _read_json_object(latest)
     if payload is None:
         _print_state(
             "DISPATCH_REQUIRED",
             "missing .local/ai-review/latest.json; local AI review must be produced by humans or agents",
+            repo_root=root,
+            reason_code="LOCAL_AI_REVIEW_MISSING",
+            phase="local_review",
+            dispatch_target="review-agent",
             details=[
                 "run the required local AI review",
                 "record two independent reviewers",
                 "record security_review with codex-security evidence",
             ],
+            next_actions=("produce .local/ai-review/latest.json",),
         )
         return DISPATCH_REQUIRED_EXIT_CODE
-    result = ai_review_gate.validate_report_file(latest)
+    current_fingerprint = ai_review_gate.current_diff_fingerprint(root)
+    _record_pr_ready_phase(root, completed_phases, "local_review")
+    _record_pr_ready_phase(root, completed_phases, "security_review")
+    result = ai_review_gate.validate_report_file(
+        latest,
+        current_diff_fingerprint=current_fingerprint,
+    )
     if not result.ok:
         _print_state(
             "DISPATCH_REQUIRED",
             "local AI review evidence is incomplete or invalid",
+            repo_root=root,
+            reason_code="LOCAL_AI_REVIEW_INVALID",
+            phase="local_review",
+            dispatch_target="review-agent",
             details=result.errors,
+            next_actions=("repair .local/ai-review/latest.json",),
         )
         return DISPATCH_REQUIRED_EXIT_CODE
-    code = sync(repo_root=repo_root, title=title, runner=runner)
+    _record_pr_ready_phase(root, completed_phases, "build_evidence")
+    code = sync(repo_root=root, title=title, runner=runner)
     if code != 0:
         if code == EXCEPTION_REQUIRED_EXIT_CODE:
             return code
         _print_state(
             "EXCEPTION_REQUIRED",
             "sync failed",
+            repo_root=root,
+            reason_code="SYNC_FAILED",
+            phase="sync_pr_body",
+            dispatch_target="operator",
             details=[f"exit_code={code}"],
+            next_actions=("inspect PR sync failure",),
         )
         return EXCEPTION_REQUIRED_EXIT_CODE
-
-    if resolve_threads:
-        code = resolve_review_threads(
-            repo_root=repo_root,
-            thread_ids=resolve_threads,
-            runner=runner,
-        )
-        if code != SUCCESS_EXIT_CODE:
-            return code
 
     try:
         metadata = _current_pr_metadata(root, runner, required=True)
         pr_url = str(metadata.get("url") or "")
         head_sha = _command_stdout(runner.run(["git", "rev-parse", "HEAD"], cwd=root))
-        blocking = _current_head_codex_blocking_findings(
-            pr_url=pr_url,
-            head_sha=head_sha,
-            root=root,
-            runner=runner,
-        )
-        if blocking:
-            _print_state(
-                "REPLY_OR_FIX_REQUIRED",
-                "Codex review reported blocking current-head findings",
-                details=blocking,
-            )
-            return REPLY_OR_FIX_REQUIRED_EXIT_CODE
+        pr_info = _github_pr_info_from_url(pr_url)
+        _record_pr_ready_phase(root, completed_phases, "official_codex")
         if (
             payload is not None
             and result.requires_official_codex_review
@@ -750,50 +976,127 @@ def ready(
                 _print_state(
                     "EXCEPTION_REQUIRED",
                     "head changed during Codex review wait",
+                    repo_root=root,
+                    reason_code="HEAD_CHANGED_DURING_CODEX_REVIEW_WAIT",
+                    phase="official_codex",
+                    retryable=True,
+                    dispatch_target="author",
                     details=wait_result.details,
+                    next_actions=("refresh local branch and rerun pr-ready",),
                 )
                 return EXCEPTION_REQUIRED_EXIT_CODE
             if wait_result.state == "blocked":
                 _print_state(
                     "REPLY_OR_FIX_REQUIRED",
                     "Codex review reported blocking current-head findings",
+                    repo_root=root,
+                    reason_code="CODEX_REVIEW_REPORTED_BLOCKING_CURRENT_HEAD_FINDINGS",
+                    phase="official_codex",
+                    dispatch_target="author",
                     details=wait_result.details,
+                    next_actions=("fix or reply to official Codex P0/P1 findings",),
                 )
                 return REPLY_OR_FIX_REQUIRED_EXIT_CODE
             if not wait_result.evidence:
                 _print_state(
                     "EXCEPTION_REQUIRED",
                     "official Codex review still pending",
+                    repo_root=root,
+                    reason_code="OFFICIAL_CODEX_REVIEW_PENDING",
+                    phase="official_codex",
+                    retryable=True,
+                    dispatch_target="github",
                     details=[f"rerun: make pr-ready TITLE=\"{title or '<same title>'}\""],
+                    next_actions=("wait for official Codex review completion",),
                 )
                 return CODEX_REVIEW_PENDING_EXIT_CODE
-            latest.write_text(
-                json.dumps(
-                    _payload_with_official_codex_review_evidence(
-                        payload,
-                        root=root,
-                        evidence=wait_result.evidence,
-                    ),
-                    ensure_ascii=False,
-                    indent=2,
-                )
-                + "\n",
-                encoding="utf-8",
+            payload = _payload_with_official_codex_review_evidence(
+                payload,
+                root=root,
+                evidence=wait_result.evidence,
             )
-            code = sync(repo_root=repo_root, title=title, runner=runner)
-            if code != 0:
-                if code == EXCEPTION_REQUIRED_EXIT_CODE:
-                    return code
-                _print_state(
-                    "EXCEPTION_REQUIRED",
-                    "sync failed",
-                    details=[f"exit_code={code}"],
-                )
-                return EXCEPTION_REQUIRED_EXIT_CODE
+            _write_ai_review_payload(root, payload)
+        _record_pr_ready_phase(root, completed_phases, "threads")
+        if resolve_threads:
+            code = resolve_review_threads(
+                repo_root=root,
+                thread_ids=resolve_threads,
+                runner=runner,
+            )
+            if code != SUCCESS_EXIT_CODE:
+                return code
+        if pr_info is not None:
+            repo, pr_number = pr_info
+            threads = _current_pr_review_threads(
+                root=root,
+                runner=runner,
+                repo=repo,
+                pr_number=pr_number,
+            )
+            code, payload, changed = _auto_process_official_codex_review_threads(
+                root=root,
+                runner=runner,
+                repo=repo,
+                pr_number=pr_number,
+                threads=threads,
+                payload=payload,
+            )
+            if code != SUCCESS_EXIT_CODE:
+                return code
+            if changed:
+                _write_ai_review_payload(root, payload)
+        blocking = _current_head_codex_blocking_findings(
+            pr_url=pr_url,
+            head_sha=head_sha,
+            root=root,
+            runner=runner,
+        )
+        if blocking:
+            _print_state(
+                "REPLY_OR_FIX_REQUIRED",
+                "Codex review reported blocking current-head findings",
+                repo_root=root,
+                reason_code="CODEX_REVIEW_REPORTED_BLOCKING_CURRENT_HEAD_FINDINGS",
+                phase="threads",
+                dispatch_target="author",
+                details=blocking,
+                next_actions=("fix or reply to blocking review findings",),
+            )
+            return REPLY_OR_FIX_REQUIRED_EXIT_CODE
+        _record_pr_ready_phase(root, completed_phases, "sync_pr_body")
+        code = sync(repo_root=root, title=title, runner=runner)
+        if code != 0:
+            if code == EXCEPTION_REQUIRED_EXIT_CODE:
+                return code
+            _print_state(
+                "EXCEPTION_REQUIRED",
+                "sync failed",
+                repo_root=root,
+                reason_code="SYNC_FAILED",
+                phase="sync_pr_body",
+                dispatch_target="operator",
+                details=[f"exit_code={code}"],
+                next_actions=("inspect PR sync failure",),
+            )
+            return EXCEPTION_REQUIRED_EXIT_CODE
     except GitHubDataUnavailable as exc:
-        _print_github_data_unavailable(exc)
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            str(exc),
+            repo_root=root,
+            reason_code="GITHUB_DATA_UNAVAILABLE",
+            phase="github",
+            retryable=exc.retryable,
+            dispatch_target="github",
+            details=exc.details,
+            next_actions=("restore GitHub API access",),
+        )
         return EXCEPTION_REQUIRED_EXIT_CODE
-    return wait(repo_root=repo_root, runner=runner)
+    _record_pr_ready_phase(root, completed_phases, "wait_latest_checks")
+    code = wait(repo_root=root, runner=runner)
+    if code == SUCCESS_EXIT_CODE:
+        _record_pr_ready_merge_ready(root, completed_phases)
+    return code
 
 
 def ready_for_review(
@@ -893,6 +1196,10 @@ def merge_pr(
     if merged.returncode != 0:
         _print_command_failure("gh pr merge", merged)
         return EXCEPTION_REQUIRED_EXIT_CODE
+    print(f"merge: PR #{pr_ref} merged with head lock {_short_sha(head_sha)}")
+    merge_output = _single_line_text(merged.stdout)
+    if merge_output:
+        print(f"merge: {merge_output}")
     return SUCCESS_EXIT_CODE
 
 
@@ -937,6 +1244,7 @@ def cleanup_pr(
     if not head_branch:
         _print_state("EXCEPTION_REQUIRED", "merged PR head branch unavailable")
         return EXCEPTION_REQUIRED_EXIT_CODE
+    print(f"cleanup: PR #{pr_ref} merged at {merged_at}")
 
     for label, command in (
         ("git fetch --prune origin", ["git", "fetch", "--prune", "origin"]),
@@ -960,6 +1268,7 @@ def cleanup_pr(
     if synced.returncode != 0:
         _print_command_failure("git merge --ff-only origin base", synced)
         return EXCEPTION_REQUIRED_EXIT_CODE
+    print(f"cleanup: base {base_branch} synced with origin/{base_branch}")
 
     if is_cross_repository:
         print(f"skip head branch delete for fork PR: {head_branch}")
@@ -968,6 +1277,7 @@ def cleanup_pr(
         if local_delete.returncode != 0:
             _print_command_failure("git branch -d", local_delete)
             return EXCEPTION_REQUIRED_EXIT_CODE
+        print(f"cleanup: local branch deleted: {head_branch}")
 
         remote_delete = runner.run(
             ["git", "push", "origin", "--delete", head_branch],
@@ -976,6 +1286,7 @@ def cleanup_pr(
         if remote_delete.returncode != 0:
             _print_command_failure("git push origin --delete", remote_delete)
             return EXCEPTION_REQUIRED_EXIT_CODE
+        print(f"cleanup: remote branch deleted: {head_branch}")
 
         remote_ref = runner.run(
             ["git", "ls-remote", "--heads", "origin", head_branch],
@@ -1006,6 +1317,10 @@ def cleanup_pr(
             details=[_command_stdout(synced_state)],
         )
         return EXCEPTION_REQUIRED_EXIT_CODE
+    print(
+        f"cleanup: final base sync verified: "
+        f"{base_branch}...origin/{base_branch} = 0 0"
+    )
     return SUCCESS_EXIT_CODE
 
 
@@ -1051,6 +1366,7 @@ def complete_pr(
         code = step(repo_root=root, pr=pr_ref, runner=runner)
         if code != SUCCESS_EXIT_CODE:
             return code
+    print(f"pr-complete: PR #{pr_ref} complete")
     return SUCCESS_EXIT_CODE
 
 
@@ -1171,7 +1487,11 @@ def _payload_with_prepare_evidence(
             merged_checks["pytest strategy tests"] = "passed"
     if merged_checks:
         updated["checks"] = merged_checks
-    return updated
+    return ai_review_gate.payload_as_schema_v3(
+        updated,
+        repo_root=root,
+        changed_files=changed_files or updated.get("changed_files"),
+    )
 
 
 def _verify_full_evidence_command(root: Path) -> str:
@@ -1223,7 +1543,11 @@ def _current_pr_metadata(
     *,
     required: bool = False,
 ) -> dict[str, Any]:
-    view = runner.run(["gh", "pr", "view", "--json", "number,url,state,isDraft"], cwd=root)
+    view = _run_github_read_command(
+        root,
+        runner,
+        ["gh", "pr", "view", "--json", "number,url,state,isDraft"],
+    )
     if view.returncode != 0:
         if required:
             raise _github_data_unavailable(
@@ -1254,7 +1578,7 @@ def _diagnose_pr_metadata(
     if pr:
         command.append(pr)
     command.extend(["--json", PR_DIAGNOSE_JSON_FIELDS])
-    result = runner.run(command, cwd=root)
+    result = _run_github_read_command(root, runner, command)
     if result.returncode != 0:
         raise _github_data_unavailable(
             "GitHub PR metadata unavailable",
@@ -1274,7 +1598,11 @@ def _diagnose_pr_body_evidence_state(metadata: dict[str, Any]) -> str:
 
 
 def _current_pr_labels(root: Path, runner: Runner) -> tuple[str, ...]:
-    view = runner.run(["gh", "pr", "view", "--json", "labels"], cwd=root)
+    view = _run_github_read_command(
+        root,
+        runner,
+        ["gh", "pr", "view", "--json", "labels"],
+    )
     if view.returncode != 0:
         return ()
     labels = _json_from_result(view).get("labels")
@@ -1410,6 +1738,7 @@ def _wait_for_current_head_codex_review_evidence(
             head_sha=head_sha,
             root=root,
             runner=runner,
+            include_threads=False,
         )
         if blocking:
             return CodexReviewWaitResult(
@@ -1437,7 +1766,11 @@ def _wait_for_current_head_codex_review_evidence(
 
 
 def _current_pr_head_sha(root: Path, runner: Runner) -> str:
-    view = runner.run(["gh", "pr", "view", "--json", "headRefOid"], cwd=root)
+    view = _run_github_read_command(
+        root,
+        runner,
+        ["gh", "pr", "view", "--json", "headRefOid"],
+    )
     if view.returncode != 0:
         raise _github_data_unavailable(
             "GitHub PR head unavailable",
@@ -1537,12 +1870,265 @@ def _current_head_codex_trigger_exists(
     )
 
 
+def _auto_process_official_codex_review_threads(
+    *,
+    root: Path,
+    runner: Runner,
+    repo: str,
+    pr_number: str,
+    threads: Sequence[dict[str, Any]],
+    payload: dict[str, Any],
+) -> tuple[int, dict[str, Any], bool]:
+    updated = payload
+    changed = False
+    for thread in threads:
+        action = _auto_review_thread_action(thread, updated)
+        if action not in {"accept", "close"}:
+            continue
+        thread_id = _thread_id(thread)
+        if not thread_id:
+            continue
+        finding = (
+            _external_finding_for_review_thread(
+                repo=repo,
+                pr_number=pr_number,
+                thread=thread,
+                status="accepted",
+            )
+            if action == "accept"
+            else _closed_external_finding_for_thread(updated, thread)
+        )
+        if finding is None:
+            continue
+        reply_body = (
+            _accepted_review_thread_reply(finding)
+            if action == "accept"
+            else _closed_review_thread_reply(finding)
+        )
+        code = _reply_to_review_thread(
+            root=root,
+            runner=runner,
+            thread_id=thread_id,
+            body=reply_body,
+        )
+        if code != SUCCESS_EXIT_CODE:
+            return code, updated, changed
+        code = resolve_review_threads(
+            repo_root=root,
+            runner=runner,
+            thread_ids=(thread_id,),
+        )
+        if code != SUCCESS_EXIT_CODE:
+            return code, updated, changed
+        thread["isResolved"] = True
+        updated = _payload_with_external_finding(
+            updated,
+            repo_root=root,
+            finding=finding,
+        )
+        changed = True
+        verb = "accepted" if action == "accept" else "closed"
+        print(f"{verb} official Codex review thread: {thread_id}")
+    return SUCCESS_EXIT_CODE, updated, changed
+
+
+def _auto_review_thread_action(
+    thread: dict[str, Any],
+    payload: dict[str, Any],
+) -> str:
+    if _thread_is_resolved(thread):
+        return ""
+    severity = _codex_thread_severity(thread)
+    if severity in AUTO_ACCEPTED_REVIEW_THREAD_SEVERITIES:
+        return "accept"
+    if (
+        severity in {"P0", "P1"}
+        and _thread_is_outdated(thread)
+        and _closed_external_finding_for_thread(payload, thread) is not None
+    ):
+        return "close"
+    return ""
+
+
+def _reply_to_review_thread(
+    *,
+    root: Path,
+    runner: Runner,
+    thread_id: str,
+    body: str,
+) -> int:
+    result = runner.run(
+        [
+            "gh",
+            "api",
+            "graphql",
+            "-f",
+            "query=mutation($threadId:ID!,$body:String!){addPullRequestReviewThreadReply(input:{pullRequestReviewThreadId:$threadId,body:$body}){comment{id}}}",
+            "-F",
+            f"threadId={thread_id}",
+            "-f",
+            f"body={body}",
+        ],
+        cwd=root,
+    )
+    if result.returncode != 0:
+        _print_command_failure("gh api graphql addPullRequestReviewThreadReply", result)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    payload = _json_object_from_result(
+        result,
+        "gh api graphql addPullRequestReviewThreadReply",
+    )
+    comment = (
+        payload.get("data", {})
+        .get("addPullRequestReviewThreadReply", {})
+        .get("comment", {})
+    )
+    if not isinstance(comment, dict) or not _single_line_text(comment.get("id")):
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "review thread reply was not created",
+            details=[thread_id],
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    return SUCCESS_EXIT_CODE
+
+
+def _payload_with_external_finding(
+    payload: dict[str, Any],
+    *,
+    repo_root: Path,
+    finding: dict[str, Any],
+) -> dict[str, Any]:
+    changed_files = ai_review_gate._string_list(payload.get("changed_files"))
+    updated = ai_review_gate.payload_as_schema_v3(
+        payload,
+        repo_root=repo_root,
+        changed_files=changed_files,
+    )
+    external_findings = [
+        item
+        for item in updated.get("external_findings") or []
+        if isinstance(item, dict)
+    ]
+    thread_id = _single_line_text(finding.get("thread_id"))
+    source = _single_line_text(finding.get("source"))
+    retained = [
+        item
+        for item in external_findings
+        if not (
+            _single_line_text(item.get("thread_id")) == thread_id
+            and _single_line_text(item.get("source")) == source
+        )
+    ]
+    retained.append(finding)
+    updated["external_findings"] = retained
+    return updated
+
+
+def _write_ai_review_payload(root: Path, payload: dict[str, Any]) -> None:
+    local = root / ".local" / "ai-review"
+    local.mkdir(parents=True, exist_ok=True)
+    (local / "latest.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (local / "latest.md").write_text(
+        ai_review_gate.render_markdown_report(payload),
+        encoding="utf-8",
+    )
+    (local / "pr-body.md").write_text(
+        ai_review_gate.render_pr_body(payload),
+        encoding="utf-8",
+    )
+
+
+def _external_finding_for_review_thread(
+    *,
+    repo: str,
+    pr_number: str,
+    thread: dict[str, Any],
+    status: str,
+) -> dict[str, Any]:
+    thread_id = _thread_id(thread)
+    severity = _codex_thread_severity(thread)
+    body = _codex_thread_body(thread)
+    return {
+        "id": f"EXT-CODEX-THREAD-{thread_id}",
+        "source": "official_codex_review_thread",
+        "thread_id": thread_id,
+        "severity": severity,
+        "title": _single_line_text(body)[:120] or "Official Codex review thread",
+        "path": f"https://github.com/{repo}/pull/{pr_number}",
+        "status": status,
+        "evidence": f"https://github.com/{repo}/pull/{pr_number}#discussion_r{thread_id}",
+        "defer_reason": (
+            f"official Codex {severity} finding is not a P0/P1 merge blocker"
+        ),
+        "risk_acceptance": (
+            "accepted as retained official Codex review advice for this PR"
+        ),
+        "handling": "fixed acceptance reply posted and review thread resolved",
+        "body": _single_line_text(body),
+    }
+
+
+def _closed_external_finding_for_thread(
+    payload: dict[str, Any],
+    thread: dict[str, Any],
+) -> dict[str, Any] | None:
+    thread_id = _thread_id(thread)
+    if not thread_id:
+        return None
+    for item in payload.get("external_findings") or []:
+        if not isinstance(item, dict):
+            continue
+        if _single_line_text(item.get("thread_id")) != thread_id:
+            continue
+        if _single_line_text(item.get("severity")) not in {"P0", "P1"}:
+            continue
+        if _single_line_text(item.get("status")) not in CLOSED_REVIEW_THREAD_STATUSES:
+            continue
+        if not _single_line_text(item.get("evidence")):
+            continue
+        closed = dict(item)
+        closed.setdefault(
+            "handling",
+            "structured fixed or false_positive evidence recorded; review thread resolved",
+        )
+        return closed
+    return None
+
+
+def _accepted_review_thread_reply(finding: dict[str, Any]) -> str:
+    return (
+        "已按 PR review 规则接受该官方 Codex 建议。\n\n"
+        f"- finding: `{_single_line_text(finding.get('id'))}`\n"
+        f"- severity: `{_single_line_text(finding.get('severity'))}`\n"
+        "- status: `accepted`\n"
+        f"- defer_reason: {_single_line_text(finding.get('defer_reason'))}\n"
+        f"- risk_acceptance: {_single_line_text(finding.get('risk_acceptance'))}\n"
+        f"- handling: {_single_line_text(finding.get('handling'))}\n"
+    )
+
+
+def _closed_review_thread_reply(finding: dict[str, Any]) -> str:
+    return (
+        "已按 PR review 规则关闭过期官方 Codex 阻断项。\n\n"
+        f"- finding: `{_single_line_text(finding.get('id'))}`\n"
+        f"- severity: `{_single_line_text(finding.get('severity'))}`\n"
+        f"- status: `{_single_line_text(finding.get('status'))}`\n"
+        f"- evidence: {_single_line_text(finding.get('evidence'))}\n"
+        f"- handling: {_single_line_text(finding.get('handling'))}\n"
+    )
+
+
 def _current_head_codex_blocking_findings(
     *,
     pr_url: str,
     head_sha: str,
     root: Path,
     runner: Runner,
+    include_threads: bool = True,
 ) -> tuple[str, ...]:
     pr_info = _github_pr_info_from_url(pr_url)
     if pr_info is None:
@@ -1585,16 +2171,17 @@ def _current_head_codex_blocking_findings(
             continue
         if BLOCKING_CODEX_FINDING_PATTERN.search(body):
             findings.append(f"{_item_link(repo, pr_number, item)} {_single_line_text(body)}")
-    findings.extend(
-        _unresolved_blocking_codex_thread_findings(
-            _current_pr_review_threads(
-                root=root,
-                runner=runner,
-                repo=repo,
-                pr_number=pr_number,
+    if include_threads:
+        findings.extend(
+            _unresolved_blocking_codex_thread_findings(
+                _current_pr_review_threads(
+                    root=root,
+                    runner=runner,
+                    repo=repo,
+                    pr_number=pr_number,
+                )
             )
         )
-    )
     return tuple(findings)
 
 
@@ -1612,6 +2199,7 @@ def _current_pr_review_threads(
         pullRequest(number: $number) {
           reviewThreads(first: 100, after: $cursor) {
             nodes {
+              id
               isResolved
               isOutdated
               comments(first: 50) {
@@ -1650,7 +2238,7 @@ def _current_pr_review_threads(
         ]
         if cursor:
             command.extend(["-F", f"cursor={cursor}"])
-        result = runner.run(command, cwd=root)
+        result = _run_github_read_command(root, runner, command)
         if result.returncode != 0:
             raise _github_data_unavailable(
                 "GitHub review threads unavailable",
@@ -1750,6 +2338,36 @@ def _thread_is_resolved(thread: dict[str, Any]) -> bool:
 
 def _thread_is_outdated(thread: dict[str, Any]) -> bool:
     return bool(thread.get("isOutdated") or thread.get("is_outdated"))
+
+
+def _thread_id(thread: dict[str, Any]) -> str:
+    return _single_line_text(thread.get("id") or thread.get("thread_id"))
+
+
+def _codex_thread_body(thread: dict[str, Any]) -> str:
+    comment = _codex_thread_comment(thread)
+    return str(comment.get("body") or "") if comment is not None else ""
+
+
+def _codex_thread_severity(thread: dict[str, Any]) -> str:
+    comment = _codex_thread_comment(thread)
+    if comment is None:
+        return ""
+    match = CODEX_THREAD_SEVERITY_PATTERN.search(str(comment.get("body") or ""))
+    if not match:
+        return ""
+    return f"P{match.group('level')}"
+
+
+def _codex_thread_comment(thread: dict[str, Any]) -> dict[str, Any] | None:
+    return next(
+        (
+            comment
+            for comment in _thread_comments(thread)
+            if _comment_author_login(comment) in CODEX_REVIEW_AUTHORS
+        ),
+        None,
+    )
 
 
 def _thread_comments(thread: dict[str, Any]) -> tuple[dict[str, Any], ...]:
@@ -2045,7 +2663,7 @@ def _legacy_branch_protection_review_requirement(
     branch: str,
 ) -> PullRequestReviewRequirement:
     path = f"repos/{repo}/branches/{branch}/protection/required_pull_request_reviews"
-    result = runner.run(["gh", "api", path], cwd=root)
+    result = _run_github_read_command(root, runner, ["gh", "api", path])
     if result.returncode != 0:
         text = f"{result.stdout}\n{result.stderr}"
         if "404" in text or "Not Found" in text:
@@ -2158,7 +2776,11 @@ def _codex_completion_comment_matches_current_head(
 
 
 def _gh_api_list(root: Path, runner: Runner, path: str) -> list[dict[str, Any]]:
-    result = runner.run(["gh", "api", "--paginate", "--slurp", path], cwd=root)
+    result = _run_github_read_command(
+        root,
+        runner,
+        ["gh", "api", "--paginate", "--slurp", path],
+    )
     if result.returncode != 0:
         raise _github_data_unavailable("GitHub API list unavailable", f"gh api {path}", result)
     try:
@@ -2182,7 +2804,7 @@ def _gh_api_list(root: Path, runner: Runner, path: str) -> list[dict[str, Any]]:
 
 
 def _gh_api_object(root: Path, runner: Runner, path: str) -> dict[str, Any]:
-    result = runner.run(["gh", "api", path], cwd=root)
+    result = _run_github_read_command(root, runner, ["gh", "api", path])
     if result.returncode != 0:
         raise _github_data_unavailable(
             "GitHub API object unavailable",
@@ -2190,6 +2812,61 @@ def _gh_api_object(root: Path, runner: Runner, path: str) -> dict[str, Any]:
             result,
         )
     return _json_object_from_result(result, f"gh api {path}")
+
+
+def _run_github_read_command(
+    root: Path,
+    runner: Runner,
+    command: list[str],
+) -> CommandResult:
+    result = CommandResult(1, "", "GitHub command was not attempted")
+    for attempt in range(1, GITHUB_READ_MAX_ATTEMPTS + 1):
+        result = runner.run(command, cwd=root)
+        if result.returncode == 0:
+            return result
+        classification = _classify_github_error(result)
+        if not classification.retryable or attempt >= GITHUB_READ_MAX_ATTEMPTS:
+            return result
+        time.sleep(GITHUB_READ_RETRY_BACKOFF_SECONDS * attempt)
+    return result
+
+
+def _classify_github_error(result: CommandResult) -> GitHubErrorClassification:
+    text = f"{result.stdout}\n{result.stderr}".casefold()
+    if any(
+        token in text
+        for token in (
+            "authentication",
+            "permission",
+            "forbidden",
+            "not found",
+            "404",
+            "graphql errors",
+            "validation failed",
+            "merge policy",
+            "required checks failed",
+        )
+    ):
+        return GitHubErrorClassification(False, "non_retryable")
+    if any(
+        token in text
+        for token in (
+            "eof",
+            "tls",
+            "connection reset",
+            "timeout",
+            "timed out",
+            "temporary failure",
+            "secondary rate limit",
+            "500",
+            "502",
+            "503",
+            "504",
+            "5xx",
+        )
+    ):
+        return GitHubErrorClassification(True, "transient")
+    return GitHubErrorClassification(False, "unknown")
 
 
 def _latest_codex_trigger_time(
@@ -2490,26 +3167,191 @@ def _github_data_unavailable(
     label: str,
     result: CommandResult,
 ) -> GitHubDataUnavailable:
+    classification = _classify_github_error(result)
     details = [label, f"exit_code={result.returncode}"]
     if result.stderr.strip():
         details.append(_single_line_text(result.stderr))
     if result.stdout.strip():
         details.append(_single_line_text(result.stdout))
-    return GitHubDataUnavailable(message, details=details)
+    return GitHubDataUnavailable(
+        message,
+        details=details,
+        retryable=classification.retryable,
+    )
 
 
 def _print_github_data_unavailable(exc: GitHubDataUnavailable) -> None:
     _print_state(
         "EXCEPTION_REQUIRED",
         str(exc),
+        reason_code="GITHUB_DATA_UNAVAILABLE",
+        phase="github",
+        retryable=exc.retryable,
+        dispatch_target="github",
         details=exc.details,
+        next_actions=("restore GitHub API access",),
     )
 
 
-def _print_state(state: str, message: str, *, details: Sequence[str] = ()) -> None:
-    print(f"{state}: {message}", file=sys.stderr)
-    for detail in details:
-        print(f"- {detail}", file=sys.stderr)
+def _print_state(
+    state: str,
+    message: str,
+    *,
+    details: Sequence[str] = (),
+    repo_root: str | Path | None = None,
+    reason_code: str | None = None,
+    phase: str = "unknown",
+    retryable: bool = False,
+    dispatch_target: str | None = None,
+    blocking_items: Sequence[str] | None = None,
+    evidence_refs: Sequence[str] = (),
+    next_actions: Sequence[str] = (),
+) -> None:
+    status = StopStatus(
+        state=state,
+        message=message,
+        reason_code=reason_code or _reason_code_from_message(message),
+        phase=phase,
+        retryable=retryable,
+        dispatch_target=dispatch_target or _default_dispatch_target(state),
+        blocking_items=tuple(blocking_items if blocking_items is not None else details),
+        evidence_refs=tuple(evidence_refs),
+        next_actions=tuple(next_actions),
+    )
+    _emit_stop_status(status, stream=sys.stderr, repo_root=repo_root)
+
+
+def _print_diagnose_stop(
+    repo_root: str | Path,
+    state: str,
+    message: str,
+    *,
+    reason_code: str,
+    retryable: bool = False,
+    dispatch_target: str,
+    blocking_items: Sequence[str] = (),
+    evidence_refs: Sequence[str] = (),
+    next_actions: Sequence[str] = (),
+) -> None:
+    status = StopStatus(
+        state=state,
+        message=message,
+        reason_code=reason_code,
+        phase="diagnose",
+        retryable=retryable,
+        dispatch_target=dispatch_target,
+        blocking_items=tuple(blocking_items),
+        evidence_refs=tuple(evidence_refs),
+        next_actions=tuple(next_actions),
+    )
+    _emit_stop_status(status, stream=sys.stdout, repo_root=repo_root)
+
+
+def _emit_stop_status(
+    status: StopStatus,
+    *,
+    stream: Any,
+    repo_root: str | Path | None,
+) -> None:
+    print(f"{status.state}: {status.message}", file=stream)
+    print(f"reason_code: {status.reason_code}", file=stream)
+    print(f"phase: {status.phase}", file=stream)
+    print(f"retryable: {str(status.retryable).lower()}", file=stream)
+    print(f"dispatch_target: {status.dispatch_target}", file=stream)
+    if status.blocking_items:
+        print("blocking_items:", file=stream)
+        for item in status.blocking_items:
+            print(f"- {item}", file=stream)
+    if status.evidence_refs:
+        print("evidence_refs:", file=stream)
+        for item in status.evidence_refs:
+            print(f"- {item}", file=stream)
+    if status.next_actions:
+        print("next_actions:", file=stream)
+        for item in status.next_actions:
+            print(f"- {item}", file=stream)
+    if repo_root is not None:
+        _write_last_status(repo_root, status)
+
+
+def _write_last_status(repo_root: str | Path, status: StopStatus) -> None:
+    path = Path(repo_root).resolve() / ".local" / "pr-flow" / "last-status.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(status.as_json(), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _record_pr_ready_phase(
+    root: Path,
+    completed_phases: list[str],
+    phase: str,
+) -> None:
+    if phase not in PR_READY_PHASES:
+        raise ValueError(f"unknown pr-ready phase: {phase}")
+    _append_unique(completed_phases, phase)
+    _write_pr_flow_state(
+        root,
+        state="running",
+        current_phase=phase,
+        completed_phases=completed_phases,
+        next_action="continue",
+    )
+
+
+def _record_pr_ready_merge_ready(
+    root: Path,
+    completed_phases: list[str],
+) -> None:
+    _write_pr_flow_state(
+        root,
+        state="merge-ready",
+        current_phase="merge_ready",
+        completed_phases=completed_phases,
+        next_action="pr-complete",
+    )
+
+
+def _write_pr_flow_state(
+    root: Path,
+    *,
+    state: str,
+    current_phase: str,
+    completed_phases: Sequence[str],
+    next_action: str,
+) -> None:
+    path = root / ".local" / "pr-flow" / "state.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "command": "pr-ready",
+                "state": state,
+                "current_phase": current_phase,
+                "completed_phases": list(completed_phases),
+                "next_action": next_action,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _reason_code_from_message(message: str) -> str:
+    normalized = re.sub(r"[^A-Za-z0-9]+", "_", message.strip()).strip("_")
+    return normalized.upper() or "UNKNOWN_STOP"
+
+
+def _default_dispatch_target(state: str) -> str:
+    return {
+        "DISPATCH_REQUIRED": "agent",
+        "REPLY_OR_FIX_REQUIRED": "author",
+        "EXCEPTION_REQUIRED": "operator",
+    }.get(state, "operator")
 
 
 def _append_unique(values: list[str], value: str) -> None:

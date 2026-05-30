@@ -102,6 +102,59 @@ def _valid_complete_payload(
     }
 
 
+def _diff_fingerprint(
+    *,
+    changed_files: list[str] | None = None,
+    head_sha: str = "1" * 40,
+    diff_files_hash: str = "diff-hash-1",
+) -> dict:
+    files = changed_files or ["docs/guides/example.md"]
+    return {
+        "base_ref": "origin/main",
+        "head_sha": head_sha,
+        "diff_files_hash": diff_files_hash,
+        "changed_files": files,
+    }
+
+
+def _valid_v3_payload(
+    *,
+    changed_files: list[str] | None = None,
+    diff_files_hash: str = "diff-hash-1",
+    review_mode: str = "complete",
+) -> dict:
+    files = changed_files or ["docs/guides/example.md"]
+    fingerprint = _diff_fingerprint(
+        changed_files=files,
+        diff_files_hash=diff_files_hash,
+    )
+    payload = _valid_complete_payload(changed_files=files)
+    payload.update(
+        {
+            "schema_version": 3,
+            "review_mode": review_mode,
+            "diff_fingerprint": fingerprint,
+            "review_fragments": {
+                "standards": {
+                    "status": "pass",
+                    "evidence": "standards review completed",
+                },
+                "spec": {"status": "pass", "evidence": "spec review completed"},
+                "security": {
+                    "status": "pass",
+                    "evidence": "security review completed",
+                },
+            },
+            "external_findings": [],
+            "current_commit_evidence": {
+                "head_sha": fingerprint["head_sha"],
+                "checks": payload["checks"],
+            },
+        }
+    )
+    return payload
+
+
 def test_discover_changed_files_merges_cached_and_worktree(
     monkeypatch,
     tmp_path: Path,
@@ -225,16 +278,20 @@ def test_draft_command_writes_high_risk_defaults(
 
     assert code == 0
     payload = json.loads(output.read_text(encoding="utf-8"))
-    assert payload == {
-        "schema_version": 2,
-        "tool": "codex",
-        "review_mode": "complete",
-        "risk_level": "high",
-        "requires_official_codex_review": True,
-        "changed_files": ["scripts/research/governance/ai_review_gate.py"],
-        "findings": [],
-        "checks": {},
-    }
+    assert payload["schema_version"] == 3
+    assert payload["tool"] == "codex"
+    assert payload["review_mode"] == "complete"
+    assert payload["risk_level"] == "high"
+    assert payload["requires_official_codex_review"] is True
+    assert payload["changed_files"] == ["scripts/research/governance/ai_review_gate.py"]
+    assert payload["diff_fingerprint"]["changed_files"] == [
+        "scripts/research/governance/ai_review_gate.py"
+    ]
+    assert payload["review_fragments"] == {}
+    assert payload["external_findings"] == []
+    assert payload["current_commit_evidence"]["head_sha"] == "unknown"
+    assert payload["findings"] == []
+    assert payload["checks"] == {}
     assert "security_review" not in payload
     assert "cross_review" not in payload
     assert "complete_review" not in payload
@@ -306,6 +363,19 @@ def test_pr_body_command_renders_low_risk_body_accepted_by_validator(
     assert evidence.ok, evidence.errors
 
 
+def test_pr_body_renders_v3_head_and_diff_summary_without_full_diff() -> None:
+    payload = _valid_v3_payload(
+        changed_files=["docs/guides/example.md"],
+        diff_files_hash="current-diff",
+    )
+    body = ai_review_gate.render_pr_body(payload)
+
+    assert "Head SHA: 111111111111" in body
+    assert "Diff hash: current-diff" in body
+    assert "Changed files: 1" in body
+    assert "diff --git" not in body
+
+
 def test_pr_body_command_renders_accepted_p2_details(
     tmp_path: Path,
 ) -> None:
@@ -341,6 +411,31 @@ def test_pr_body_command_renders_accepted_p2_details(
         labels=[],
     )
     assert evidence.ok, evidence.errors
+
+
+def test_pr_body_renders_accepted_external_p2_details() -> None:
+    payload = _valid_v3_payload(changed_files=["docs/guides/example.md"])
+    payload["external_findings"] = [
+        {
+            "id": "EXT-CODEX-THREAD-PRRT_p2",
+            "source": "official_codex_review_thread",
+            "thread_id": "PRRT_p2",
+            "severity": "P2",
+            "title": "Official Codex advisory",
+            "path": "https://github.com/liuli195/Quant-Trading/pull/7",
+            "status": "accepted",
+            "defer_reason": "official Codex P2 finding is not a merge blocker",
+            "risk_acceptance": "accepted as retained P2 review advice",
+            "handling": "fixed acceptance reply posted and thread resolved",
+        }
+    ]
+
+    body = ai_review_gate.render_pr_body(payload)
+
+    assert "EXT-CODEX-THREAD-PRRT_p2" in body
+    assert "defer_reason: official Codex P2 finding is not a merge blocker" in body
+    assert "risk_acceptance: accepted as retained P2 review advice" in body
+    assert "handling: fixed acceptance reply posted and thread resolved" in body
 
 
 def test_pr_body_renders_codex_section_only_when_evidence_is_present(
@@ -545,6 +640,319 @@ def test_schema_v2_defaults_to_complete_review_mode(tmp_path: Path) -> None:
     result = validate_report_file(report)
 
     assert result.ok, result.errors
+
+
+def test_schema_v3_accepts_matching_diff_fingerprint() -> None:
+    payload = _valid_v3_payload(
+        changed_files=["docs/guides/example.md"],
+        diff_files_hash="current-diff",
+    )
+    current = _diff_fingerprint(
+        changed_files=["docs/guides/example.md"],
+        diff_files_hash="current-diff",
+    )
+
+    result = ai_review_gate.validate_report(
+        payload,
+        current_diff_fingerprint=current,
+    )
+
+    assert result.ok, result.errors
+
+
+def test_schema_v3_rejects_changed_file_drift() -> None:
+    payload = _valid_v3_payload(
+        changed_files=["docs/guides/example.md"],
+        diff_files_hash="current-diff",
+    )
+    current = _diff_fingerprint(
+        changed_files=["docs/guides/example.md", "scripts/research/governance/pr_flow.py"],
+        diff_files_hash="current-diff",
+    )
+
+    result = ai_review_gate.validate_report(
+        payload,
+        current_diff_fingerprint=current,
+    )
+
+    assert not result.ok
+    assert "diff_fingerprint changed_files does not match current diff" in result.errors
+
+
+def test_schema_v3_rejects_diff_hash_drift() -> None:
+    payload = _valid_v3_payload(
+        changed_files=["docs/guides/example.md"],
+        diff_files_hash="old-diff",
+    )
+    current = _diff_fingerprint(
+        changed_files=["docs/guides/example.md"],
+        diff_files_hash="current-diff",
+    )
+
+    result = ai_review_gate.validate_report(
+        payload,
+        current_diff_fingerprint=current,
+    )
+
+    assert not result.ok
+    assert "diff_fingerprint diff_files_hash does not match current diff" in result.errors
+
+
+def test_schema_v3_accepts_incremental_review_covering_current_diff() -> None:
+    payload = _valid_v3_payload(
+        changed_files=[
+            "docs/guides/example.md",
+            "scripts/research/governance/pr_flow.py",
+        ],
+        diff_files_hash="current-diff",
+        review_mode="incremental",
+    )
+    payload["risk_level"] = "high"
+    payload["requires_official_codex_review"] = True
+    payload["incremental_review"] = {
+        "base_review": {
+            "diff_files_hash": "base-diff",
+            "covered_changed_files": ["docs/guides/example.md"],
+        },
+        "increments": [
+            {
+                "diff_files_hash": "current-diff",
+                "covered_changed_files": ["scripts/research/governance/pr_flow.py"],
+                "evidence": "incremental review covered new governance file",
+            }
+        ],
+    }
+    current = _diff_fingerprint(
+        changed_files=[
+            "docs/guides/example.md",
+            "scripts/research/governance/pr_flow.py",
+        ],
+        diff_files_hash="current-diff",
+    )
+
+    result = ai_review_gate.validate_report(
+        payload,
+        current_diff_fingerprint=current,
+    )
+
+    assert result.ok, result.errors
+
+
+def test_review_wrapper_builds_standards_spec_fragments_and_raw_summary() -> None:
+    evidence = ai_review_gate.build_review_wrapper_evidence(
+        standards_summary="Standards axis passed.",
+        spec_summary="Spec axis matched issue #27.",
+        standards_semantic_change=True,
+        spec_semantic_change=True,
+        parallel_attempted=True,
+    )
+
+    assert set(evidence["review_fragments"]) == {"standards", "spec"}
+    assert evidence["review_fragments"]["standards"]["evidence"] == (
+        "Standards axis passed."
+    )
+    assert evidence["review_fragments"]["spec"]["evidence"] == (
+        "Spec axis matched issue #27."
+    )
+    assert evidence["raw_review_summary"]["standards"] == "Standards axis passed."
+    assert evidence["raw_review_summary"]["spec"] == "Spec axis matched issue #27."
+    assert evidence["raw_review_summary"]["parallel"]["attempted"] is True
+
+
+def test_schema_v3_accepts_feature_pr_with_spec_ref() -> None:
+    payload = _valid_v3_payload()
+    payload["pr_class"] = "feature"
+    payload["spec_ref"] = "https://github.com/liuli195/Quant-Trading/issues/27"
+
+    result = ai_review_gate.validate_report(payload)
+
+    assert result.ok, result.errors
+
+
+def test_schema_v3_accepts_maintenance_without_spec_ref() -> None:
+    payload = _valid_v3_payload()
+    payload["pr_class"] = "maintenance"
+
+    result = ai_review_gate.validate_report(payload)
+
+    assert result.ok, result.errors
+
+
+def test_schema_v3_accepts_governance_wording_without_semantic_change() -> None:
+    payload = _valid_v3_payload(changed_files=["docs/rules/pr-workflow.md"])
+    payload["risk_level"] = "high"
+    payload["requires_official_codex_review"] = True
+    payload["pr_class"] = "governance_wording"
+    payload["review_fragments"]["standards"]["semantic_change"] = False
+    payload["review_fragments"]["spec"]["semantic_change"] = False
+
+    result = ai_review_gate.validate_report(payload)
+
+    assert result.ok, result.errors
+
+
+def test_schema_v3_rejects_governance_functional_without_spec_ref() -> None:
+    payload = _valid_v3_payload(changed_files=["docs/rules/pr-workflow.md"])
+    payload["risk_level"] = "high"
+    payload["requires_official_codex_review"] = True
+    payload["pr_class"] = "governance_functional"
+
+    result = ai_review_gate.validate_report(payload)
+
+    assert not result.ok
+    assert "pr_class governance_functional requires issue_ref or spec_ref" in result.errors
+
+
+def test_schema_v3_accepts_issue_spec_skip_authorization() -> None:
+    payload = _valid_v3_payload(changed_files=["scripts/research/governance/pr_flow.py"])
+    payload["risk_level"] = "high"
+    payload["requires_official_codex_review"] = True
+    payload["pr_class"] = "governance_functional"
+    payload["issue_spec_skip_authorization"] = {
+        "authorized_by": "用户",
+        "reason": "当前 PR 是一次性流程修复",
+        "evidence": "用户明确授权跳过 issue/spec 要求",
+    }
+
+    result = ai_review_gate.validate_report(payload)
+
+    assert result.ok, result.errors
+
+
+def test_risk_classifier_outputs_low_high_unknown_and_official_requirement() -> None:
+    low = ai_review_gate.classify_risk(_valid_complete_payload(risk_level="low"))
+    high = ai_review_gate.classify_risk(_valid_complete_payload(risk_level="high"))
+    unknown = ai_review_gate.classify_risk(
+        _valid_complete_payload(risk_level="unknown")
+    )
+
+    assert low.risk_level == "low"
+    assert low.requires_official_codex_review is False
+    assert high.risk_level == "high"
+    assert high.requires_official_codex_review is True
+    assert unknown.risk_level == "unknown"
+    assert unknown.requires_official_codex_review is True
+
+
+def test_risk_classifier_ignores_accepted_p2_p3_findings() -> None:
+    payload = _valid_complete_payload(risk_level="low")
+    payload["findings"] = [
+        {
+            "id": "AIR-002",
+            "severity": "P2",
+            "status": "accepted",
+            "defer_reason": "后续统一处理",
+            "risk_acceptance": "不影响合并安全",
+            "handling": "保留为后续任务",
+        },
+        {"id": "AIR-003", "severity": "P3", "status": "accepted"},
+    ]
+
+    result = ai_review_gate.classify_risk(payload)
+
+    assert result.risk_level == "low"
+    assert result.requires_official_codex_review is False
+    assert "accepted P2/P3 findings are non-blocking" in result.reasons
+
+
+def test_risk_classifier_blocks_unclosed_p0_p1_findings() -> None:
+    payload = _valid_complete_payload(risk_level="low")
+    payload["findings"] = [
+        {"id": "AIR-001", "severity": "P1", "status": "open"},
+    ]
+
+    result = ai_review_gate.classify_risk(payload)
+
+    assert result.risk_level == "unknown"
+    assert result.requires_official_codex_review is True
+    assert "P0/P1 finding AIR-001 is not closed" in result.blocking_errors
+
+
+def test_risk_classifier_allows_current_pr_downgrade_without_blockers() -> None:
+    payload = _valid_complete_payload(risk_level="high")
+    payload["risk_downgrade_authorization"] = {
+        "authorized_by": "用户",
+        "reason": "当前 PR 只调整注释",
+        "evidence": "用户明确授权当前 PR 降级",
+    }
+
+    result = ai_review_gate.classify_risk(payload)
+
+    assert result.risk_level == "low"
+    assert result.requires_official_codex_review is False
+    assert "risk downgrade authorized for current PR" in result.reasons
+
+
+def test_risk_classifier_rejects_downgrade_when_coverage_incomplete() -> None:
+    payload = _valid_complete_payload(risk_level="high")
+    payload["risk_downgrade_authorization"] = {
+        "authorized_by": "用户",
+        "reason": "当前 PR 降级",
+        "evidence": "用户明确授权",
+    }
+
+    result = ai_review_gate.classify_risk(payload, coverage_complete=False)
+
+    assert result.risk_level == "unknown"
+    assert result.requires_official_codex_review is True
+    assert (
+        "risk downgrade authorization cannot override incomplete coverage"
+        in result.blocking_errors
+    )
+
+
+def test_official_review_decision_supports_all_actions() -> None:
+    low = _valid_complete_payload(risk_level="low")
+    high = _valid_complete_payload(risk_level="high")
+    reusable = _valid_v3_payload(changed_files=["scripts/research/governance/pr_flow.py"])
+    reusable["risk_level"] = "high"
+    reusable["requires_official_codex_review"] = True
+    reusable["review_fragments"]["standards"]["official_scope_impact"] = False
+    reusable["review_fragments"]["spec"]["official_scope_impact"] = False
+    reusable["review_fragments"]["security"]["security_impact"] = False
+    reusable["official_codex_review_reuse"] = {
+        "old_head_sha": "0" * 40,
+        "current_head_sha": "1" * 40,
+        "reason": "only docs wording changed after official review",
+        "evidence": ["https://github.com/liuli195/Quant-Trading/pull/7#pullrequestreview-1"],
+    }
+
+    assert ai_review_gate.decide_official_review_action(low).action == "not_required"
+    assert (
+        ai_review_gate.decide_official_review_action(
+            high,
+            current_head_present=True,
+        ).action
+        == "current_head_present"
+    )
+    assert (
+        ai_review_gate.decide_official_review_action(high, pending_trigger=True).action
+        == "pending"
+    )
+    assert ai_review_gate.decide_official_review_action(high).action == "trigger_needed"
+    assert ai_review_gate.decide_official_review_action(reusable).action == "reused"
+
+
+def test_pr_body_renders_reused_official_review_evidence() -> None:
+    payload = _valid_v3_payload(changed_files=["scripts/research/governance/pr_flow.py"])
+    payload["risk_level"] = "high"
+    payload["requires_official_codex_review"] = True
+    payload["review_fragments"]["standards"]["official_scope_impact"] = False
+    payload["review_fragments"]["spec"]["official_scope_impact"] = False
+    payload["review_fragments"]["security"]["security_impact"] = False
+    payload["official_codex_review_reuse"] = {
+        "old_head_sha": "0" * 40,
+        "current_head_sha": "1" * 40,
+        "reason": "only docs wording changed after official review",
+        "evidence": ["https://github.com/liuli195/Quant-Trading/pull/7#pullrequestreview-1"],
+    }
+
+    body = ai_review_gate.render_pr_body(payload)
+
+    assert "复用状态: reused" in body
+    assert "旧 head: 000000000000" in body
+    assert "当前 head: 111111111111" in body
+    assert "only docs wording changed after official review" in body
 
 
 def test_complete_review_requires_each_reviewer_to_end_with_no_new_findings(

@@ -130,6 +130,7 @@ class FakeRunner:
         self.edited_bodies: list[str] = []
         self.created_bodies: list[str] = []
         self.comments: list[str] = []
+        self.thread_replies: list[dict[str, str]] = []
 
     def run(
         self,
@@ -254,6 +255,48 @@ class FakeRunner:
                 "",
             )
         if command[:3] == ["gh", "api", "graphql"]:
+            query = _graphql_query(command)
+            if "addPullRequestReviewThreadReply" in query:
+                thread_id = _command_field(command, "threadId")
+                body = _command_field(command, "body")
+                self.thread_replies.append({"thread_id": thread_id, "body": body})
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps(
+                        {
+                            "data": {
+                                "addPullRequestReviewThreadReply": {
+                                    "comment": {"id": f"reply-{thread_id}"}
+                                }
+                            }
+                        }
+                    ),
+                    "",
+                )
+            if "resolveReviewThread" in query:
+                thread_id = _command_field(command, "threadId")
+                is_resolved = True
+                for thread in self.api_review_threads:
+                    if str(thread.get("id") or "") == thread_id:
+                        thread["isResolved"] = True
+                        is_resolved = bool(thread.get("isResolved"))
+                        break
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps(
+                        {
+                            "data": {
+                                "resolveReviewThread": {
+                                    "thread": {
+                                        "id": thread_id,
+                                        "isResolved": is_resolved,
+                                    }
+                                }
+                            }
+                        }
+                    ),
+                    "",
+                )
             return pr_flow.CommandResult(
                 0,
                 json.dumps(
@@ -293,6 +336,21 @@ def _gh_api_path(command: list[str]) -> str:
 
 def _gh_api_json(command: list[str], payload: object) -> str:
     return json.dumps([payload]) if "--slurp" in command else json.dumps(payload)
+
+
+def _graphql_query(command: list[str]) -> str:
+    for item in command:
+        if item.startswith("query="):
+            return item.removeprefix("query=")
+    return ""
+
+
+def _command_field(command: list[str], name: str) -> str:
+    prefix = f"{name}="
+    for index, item in enumerate(command[:-1]):
+        if item in {"-F", "-f"} and command[index + 1].startswith(prefix):
+            return command[index + 1].removeprefix(prefix)
+    return ""
 
 
 class RecordingRunner:
@@ -746,7 +804,11 @@ class MergeReadyRunner(DiagnoseRunner):
             "1" * 40,
         ]:
             self.calls.append(command)
-            return pr_flow.CommandResult(0, "", "")
+            return pr_flow.CommandResult(
+                0,
+                "Merged pull request #7 (merge commit abc1234)\n",
+                "",
+            )
         return super().run(command, cwd=cwd, input_text=input_text)
 
 
@@ -820,6 +882,24 @@ class SlurpedPagesRunner:
                 "",
             )
         raise AssertionError(f"unexpected command: {command}")
+
+
+class FlakyGitHubApiRunner:
+    def __init__(self, failures: list[pr_flow.CommandResult]) -> None:
+        self.calls: list[list[str]] = []
+        self.failures = failures
+
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        self.calls.append(command)
+        if self.failures:
+            return self.failures.pop(0)
+        return pr_flow.CommandResult(0, json.dumps([{"id": 1}]), "")
 
 
 class PaginatedThreadsRunner:
@@ -1072,6 +1152,34 @@ def test_wait_reports_exception_when_required_checks_are_pending(
     assert "Research Governance / governance" in captured.err
 
 
+def test_wait_writes_structured_last_status_for_pending_checks(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    code = pr_flow.wait(
+        repo_root=tmp_path,
+        pr="7",
+        runner=PendingRequiredChecksRunner(),
+    )
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "reason_code: REQUIRED_CHECKS_PENDING" in captured.err
+    assert "phase: wait_required_checks" in captured.err
+    assert "retryable: true" in captured.err
+
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
+    )
+    assert status["state"] == "EXCEPTION_REQUIRED"
+    assert status["reason_code"] == "REQUIRED_CHECKS_PENDING"
+    assert status["phase"] == "wait_required_checks"
+    assert status["retryable"] is True
+    assert status["dispatch_target"] == "github"
+    assert status["blocking_items"] == ["Research Governance / governance"]
+    assert status["next_actions"] == ["wait for pending required checks"]
+
+
 def test_diagnose_reports_required_checks_and_unresolved_threads(
     tmp_path: Path,
     capsys,
@@ -1087,6 +1195,31 @@ def test_diagnose_reports_required_checks_and_unresolved_threads(
     assert "Research Governance / pr-review-evidence" in captured.out
     assert "review threads: unresolved=1" in captured.out
     assert "next: resolve unresolved review threads" in captured.out
+
+
+def test_diagnose_writes_structured_last_status_for_unresolved_threads(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    code = pr_flow.diagnose(repo_root=tmp_path, pr="7", runner=DiagnoseRunner())
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.REPLY_OR_FIX_REQUIRED_EXIT_CODE
+    assert "reason_code: REVIEW_THREADS_UNRESOLVED" in captured.out
+    assert "phase: diagnose" in captured.out
+
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
+    )
+    assert status["state"] == "REPLY_OR_FIX_REQUIRED"
+    assert status["reason_code"] == "REVIEW_THREADS_UNRESOLVED"
+    assert status["phase"] == "diagnose"
+    assert status["retryable"] is False
+    assert status["dispatch_target"] == "author"
+    assert status["blocking_items"] == [
+        "unresolved review thread P2: optional cleanup can wait."
+    ]
+    assert status["next_actions"] == ["resolve unresolved review threads"]
 
 
 def test_diagnose_reports_current_head_review_evidence(
@@ -1298,6 +1431,42 @@ def test_gh_api_list_flattens_slurped_paginated_pages(tmp_path: Path) -> None:
     assert [item["id"] for item in items] == [1, 2]
 
 
+def test_gh_api_list_retries_transient_errors(tmp_path: Path) -> None:
+    runner = FlakyGitHubApiRunner(
+        [
+            pr_flow.CommandResult(1, "", "EOF"),
+            pr_flow.CommandResult(1, "", "connection reset by peer"),
+        ]
+    )
+
+    items = pr_flow._gh_api_list(
+        tmp_path,
+        runner,
+        "repos/o/r/issues/1/comments?per_page=100",
+    )
+
+    assert items == [{"id": 1}]
+    assert len(runner.calls) == 3
+
+
+def test_gh_api_list_does_not_retry_auth_errors(tmp_path: Path) -> None:
+    runner = FlakyGitHubApiRunner(
+        [pr_flow.CommandResult(1, "", "authentication required")]
+    )
+
+    try:
+        pr_flow._gh_api_list(
+            tmp_path,
+            runner,
+            "repos/o/r/issues/1/comments?per_page=100",
+        )
+    except pr_flow.GitHubDataUnavailable as exc:
+        assert exc.retryable is False
+    else:
+        raise AssertionError("expected GitHubDataUnavailable")
+    assert len(runner.calls) == 1
+
+
 def test_current_pr_review_threads_reads_all_graphql_pages(tmp_path: Path) -> None:
     runner = PaginatedThreadsRunner()
 
@@ -1436,6 +1605,40 @@ def test_prepare_records_verify_full_evidence(
     assert ".\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full" in gate_evidence
     body = (tmp_path / ".local/ai-review/pr-body.md").read_text(encoding="utf-8")
     assert gate_evidence in body
+
+
+def test_prepare_migrates_latest_report_to_schema_v3(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _write_valid_report(
+        tmp_path,
+        changed_files=["docs/guides/example.md"],
+    )
+    monkeypatch.setattr(pr_flow.ai_review_gate, "_discover_changed_files", lambda _root: [])
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["docs/guides/example.md"],
+        },
+    )
+    runner = RecordingRunner()
+
+    code = pr_flow.prepare(repo_root=tmp_path, runner=runner)
+
+    assert code == 0
+    payload = json.loads(
+        (tmp_path / ".local/ai-review/latest.json").read_text(encoding="utf-8")
+    )
+    assert payload["schema_version"] == 3
+    assert payload["diff_fingerprint"]["diff_files_hash"] == "current-diff"
+    assert set(payload["review_fragments"]) == {"standards", "spec", "security"}
+    assert payload["external_findings"] == []
+    assert payload["current_commit_evidence"]["head_sha"] == "1" * 40
 
 
 def test_prepare_uses_report_files_for_strategy_checks(
@@ -1715,6 +1918,37 @@ def test_ready_stops_with_dispatch_required_when_review_evidence_missing(
     assert not any(call[:3] == ["gh", "pr", "edit"] for call in runner.calls)
 
 
+def test_ready_writes_structured_last_status_when_review_evidence_missing(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = FakeRunner(existing_pr=True)
+    monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 1)
+
+    code = pr_flow.ready(
+        repo_root=tmp_path,
+        title="治理自动化",
+        runner=runner,
+        codex_review_timeout_seconds=0,
+        codex_review_poll_seconds=0,
+    )
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    assert "reason_code: LOCAL_AI_REVIEW_MISSING" in captured.err
+    assert "phase: local_review" in captured.err
+
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
+    )
+    assert status["state"] == "DISPATCH_REQUIRED"
+    assert status["reason_code"] == "LOCAL_AI_REVIEW_MISSING"
+    assert status["phase"] == "local_review"
+    assert status["dispatch_target"] == "review-agent"
+    assert status["next_actions"] == ["produce .local/ai-review/latest.json"]
+
+
 def test_ready_stops_with_dispatch_required_when_review_evidence_incomplete(
     monkeypatch,
     tmp_path: Path,
@@ -1738,6 +1972,66 @@ def test_ready_stops_with_dispatch_required_when_review_evidence_incomplete(
 
     assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
     assert "DISPATCH_REQUIRED" in capsys.readouterr().err
+    assert not any(call[:3] == ["gh", "pr", "edit"] for call in runner.calls)
+
+
+def test_ready_stops_with_dispatch_required_when_review_fingerprint_drifts(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_valid_report(tmp_path, changed_files=["docs/guides/example.md"])
+    latest = tmp_path / ".local/ai-review/latest.json"
+    payload = json.loads(latest.read_text(encoding="utf-8"))
+    payload.update(
+        {
+            "schema_version": 3,
+            "diff_fingerprint": {
+                "base_ref": "origin/main",
+                "head_sha": "1" * 40,
+                "diff_files_hash": "old-diff",
+                "changed_files": ["docs/guides/example.md"],
+            },
+            "review_fragments": {
+                "standards": {"evidence": "standards review completed"},
+                "spec": {"evidence": "spec review completed"},
+                "security": {"evidence": "security review completed"},
+            },
+            "external_findings": [],
+            "current_commit_evidence": {"head_sha": "1" * 40, "checks": {}},
+        }
+    )
+    latest.write_text(json.dumps(payload), encoding="utf-8")
+    runner = FakeRunner(existing_pr=True)
+    monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": [
+                "docs/guides/example.md",
+                "scripts/research/governance/pr_flow.py",
+            ],
+        },
+        raising=False,
+    )
+
+    code = pr_flow.ready(
+        repo_root=tmp_path,
+        title="治理自动化",
+        runner=runner,
+        codex_review_timeout_seconds=0,
+        codex_review_poll_seconds=0,
+    )
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    assert "DISPATCH_REQUIRED" in captured.err
+    assert "LOCAL_AI_REVIEW_INVALID" in captured.err
+    assert "diff_fingerprint changed_files does not match current diff" in captured.err
     assert not any(call[:3] == ["gh", "pr", "edit"] for call in runner.calls)
 
 
@@ -1818,6 +2112,49 @@ def test_ready_waits_after_requesting_required_codex_review(
         "--interval",
         "10",
     ] in runner.calls
+
+
+def test_ready_writes_ordered_merge_ready_state_without_merging(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _write_valid_report(
+        tmp_path,
+        risk_level="low",
+        requires_official=False,
+        changed_files=["docs/guides/example.md"],
+    )
+    runner = FakeRunner(existing_pr=True)
+    monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+
+    code = pr_flow.ready(
+        repo_root=tmp_path,
+        title="governance automation",
+        runner=runner,
+        codex_review_timeout_seconds=0,
+        codex_review_poll_seconds=0,
+    )
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    state = json.loads(
+        (tmp_path / ".local" / "pr-flow" / "state.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert state["state"] == "merge-ready"
+    assert state["completed_phases"] == [
+        "preflight",
+        "freeze_diff",
+        "local_review",
+        "security_review",
+        "build_evidence",
+        "official_codex",
+        "threads",
+        "sync_pr_body",
+        "wait_latest_checks",
+    ]
+    assert state["next_action"] == "pr-complete"
+    assert not any(call[:3] == ["gh", "pr", "merge"] for call in runner.calls)
 
 
 def test_ready_auto_records_current_head_codex_completion_comment(
@@ -2019,7 +2356,9 @@ def test_ready_reports_exception_when_review_threads_unavailable(
     assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
     assert "EXCEPTION_REQUIRED" in capsys.readouterr().err
     payload = json.loads((tmp_path / ".local/ai-review/latest.json").read_text(encoding="utf-8"))
-    assert "official_codex_review" not in payload
+    assert payload["official_codex_review"]["evidence"][0].endswith(
+        "#pullrequestreview-1"
+    )
 
 
 def test_ready_stops_when_codex_reports_blocking_finding(
@@ -2446,7 +2785,7 @@ def test_ready_stops_on_unresolved_codex_thread_even_when_official_review_not_re
     assert "unresolved" in capsys.readouterr().err
 
 
-def test_ready_stops_on_any_unresolved_codex_thread_even_outdated_p2(
+def test_ready_auto_accepts_official_p2_thread_and_syncs_pr_body(
     monkeypatch,
     tmp_path: Path,
     capsys,
@@ -2461,6 +2800,7 @@ def test_ready_stops_on_any_unresolved_codex_thread_even_outdated_p2(
         existing_pr=True,
         api_review_threads=[
             {
+                "id": "PRRT_p2",
                 "isResolved": False,
                 "isOutdated": True,
                 "comments": {
@@ -2478,16 +2818,186 @@ def test_ready_stops_on_any_unresolved_codex_thread_even_outdated_p2(
 
     code = pr_flow.ready(
         repo_root=tmp_path,
-        title="治理自动化",
+        title="governance automation",
+        runner=runner,
+        codex_review_timeout_seconds=0,
+        codex_review_poll_seconds=0,
+    )
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    captured = capsys.readouterr()
+    assert "accepted official Codex review thread: PRRT_p2" in captured.out
+    assert any(
+        call[:3] == ["gh", "api", "graphql"]
+        and any("addPullRequestReviewThreadReply" in item for item in call)
+        for call in runner.calls
+    )
+    assert any(
+        call[:3] == ["gh", "api", "graphql"]
+        and any("resolveReviewThread" in item for item in call)
+        and ["-F", "threadId=PRRT_p2"] in [
+            call[index : index + 2] for index in range(len(call) - 1)
+        ]
+        for call in runner.calls
+    )
+    payload = json.loads(
+        (tmp_path / ".local" / "ai-review" / "latest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert payload["external_findings"][0]["thread_id"] == "PRRT_p2"
+    assert payload["external_findings"][0]["status"] == "accepted"
+    assert len(runner.edited_bodies) >= 2
+    assert "EXT-CODEX-THREAD-PRRT_p2" in runner.edited_bodies[-1]
+
+
+def test_ready_blocks_official_thread_without_severity(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_valid_report(
+        tmp_path,
+        risk_level="low",
+        requires_official=False,
+        changed_files=["docs/guides/example.md"],
+    )
+    runner = FakeRunner(
+        existing_pr=True,
+        api_review_threads=[
+            {
+                "id": "PRRT_no_severity",
+                "isResolved": False,
+                "isOutdated": False,
+                "comments": {
+                    "nodes": [
+                        {
+                            "body": "This thread needs human classification.",
+                            "author": {"login": "chatgpt-codex-connector"},
+                        }
+                    ]
+                },
+            }
+        ],
+    )
+    monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+
+    code = pr_flow.ready(
+        repo_root=tmp_path,
+        title="governance automation",
         runner=runner,
         codex_review_timeout_seconds=0,
         codex_review_poll_seconds=0,
     )
 
     assert code == pr_flow.REPLY_OR_FIX_REQUIRED_EXIT_CODE
-    stderr = capsys.readouterr().err
-    assert "unresolved review thread" in stderr
-    assert "P2" in stderr
+    assert "unresolved review thread" in capsys.readouterr().err
+    assert not runner.thread_replies
+
+
+def test_ready_blocks_human_unresolved_thread(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_valid_report(
+        tmp_path,
+        risk_level="low",
+        requires_official=False,
+        changed_files=["docs/guides/example.md"],
+    )
+    runner = FakeRunner(
+        existing_pr=True,
+        api_review_threads=[
+            {
+                "id": "PRRT_human",
+                "isResolved": False,
+                "isOutdated": False,
+                "comments": {
+                    "nodes": [
+                        {
+                            "body": "P2: human reviewer asks for a change.",
+                            "author": {"login": "human-reviewer"},
+                        }
+                    ]
+                },
+            }
+        ],
+    )
+    monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+
+    code = pr_flow.ready(
+        repo_root=tmp_path,
+        title="governance automation",
+        runner=runner,
+        codex_review_timeout_seconds=0,
+        codex_review_poll_seconds=0,
+    )
+
+    assert code == pr_flow.REPLY_OR_FIX_REQUIRED_EXIT_CODE
+    assert "unresolved review thread" in capsys.readouterr().err
+    assert not runner.thread_replies
+
+
+def test_ready_auto_closes_outdated_p1_thread_with_structured_evidence(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_valid_report(
+        tmp_path,
+        risk_level="low",
+        requires_official=False,
+        changed_files=["docs/guides/example.md"],
+    )
+    latest = tmp_path / ".local" / "ai-review" / "latest.json"
+    payload = json.loads(latest.read_text(encoding="utf-8"))
+    payload["external_findings"] = [
+        {
+            "id": "EXT-CODEX-THREAD-PRRT_p1",
+            "source": "official_codex_review_thread",
+            "thread_id": "PRRT_p1",
+            "severity": "P1",
+            "title": "Outdated blocker",
+            "path": "scripts/research/governance/pr_flow.py",
+            "status": "fixed",
+            "evidence": "fixed by current diff and verified locally",
+            "handling": "outdated finding fixed; close stale thread",
+        }
+    ]
+    latest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    runner = FakeRunner(
+        existing_pr=True,
+        api_review_threads=[
+            {
+                "id": "PRRT_p1",
+                "isResolved": False,
+                "isOutdated": True,
+                "comments": {
+                    "nodes": [
+                        {
+                            "body": "P1 Badge: stale blocker from old diff.",
+                            "author": {"login": "chatgpt-codex-connector"},
+                        }
+                    ]
+                },
+            }
+        ],
+    )
+    monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+
+    code = pr_flow.ready(
+        repo_root=tmp_path,
+        title="governance automation",
+        runner=runner,
+        codex_review_timeout_seconds=0,
+        codex_review_poll_seconds=0,
+    )
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert "closed official Codex review thread: PRRT_p1" in capsys.readouterr().out
+    assert runner.thread_replies
+    assert "status: `fixed`" in runner.thread_replies[-1]["body"]
 
 
 def test_ready_ignores_resolved_codex_review_thread(
@@ -2653,11 +3163,15 @@ def test_ready_for_review_marks_pr_ready_and_waits(tmp_path: Path) -> None:
     ] in runner.calls
 
 
-def test_merge_pr_uses_diagnose_and_match_head_commit(tmp_path: Path) -> None:
+def test_merge_pr_uses_diagnose_and_match_head_commit(
+    tmp_path: Path,
+    capsys,
+) -> None:
     runner = MergeReadyRunner()
 
     code = pr_flow.merge_pr(repo_root=tmp_path, pr="7", runner=runner)
 
+    captured = capsys.readouterr()
     assert code == pr_flow.SUCCESS_EXIT_CODE
     assert [
         "gh",
@@ -2668,6 +3182,8 @@ def test_merge_pr_uses_diagnose_and_match_head_commit(tmp_path: Path) -> None:
         "--match-head-commit",
         "1" * 40,
     ] in runner.calls
+    assert "merge: PR #7 merged with head lock 111111111111" in captured.out
+    assert "merge commit abc1234" in captured.out
 
 
 def test_merge_pr_allows_unapproved_review_when_remote_does_not_require_approval(
@@ -2721,11 +3237,15 @@ def test_merge_pr_blocks_without_approved_review_decision(
     assert not any(call[:3] == ["gh", "pr", "merge"] for call in runner.calls)
 
 
-def test_cleanup_pr_syncs_main_and_deletes_merged_branch(tmp_path: Path) -> None:
+def test_cleanup_pr_syncs_main_and_deletes_merged_branch(
+    tmp_path: Path,
+    capsys,
+) -> None:
     runner = CleanupRunner()
 
     code = pr_flow.cleanup_pr(repo_root=tmp_path, pr="7", runner=runner)
 
+    captured = capsys.readouterr()
     assert code == pr_flow.SUCCESS_EXIT_CODE
     assert ["git", "fetch", "--prune", "origin"] in runner.calls
     assert ["git", "switch", "main"] in runner.calls
@@ -2733,6 +3253,11 @@ def test_cleanup_pr_syncs_main_and_deletes_merged_branch(tmp_path: Path) -> None
     assert ["git", "branch", "-d", "feature/pr-flow"] in runner.calls
     assert ["git", "push", "origin", "--delete", "feature/pr-flow"] in runner.calls
     assert ["git", "ls-remote", "--heads", "origin", "feature/pr-flow"] in runner.calls
+    assert "cleanup: PR #7 merged at 2026-05-29T16:48:26Z" in captured.out
+    assert "cleanup: base main synced with origin/main" in captured.out
+    assert "cleanup: local branch deleted: feature/pr-flow" in captured.out
+    assert "cleanup: remote branch deleted: feature/pr-flow" in captured.out
+    assert "cleanup: final base sync verified: main...origin/main = 0 0" in captured.out
 
 
 def test_cleanup_pr_skips_head_branch_delete_for_fork_pr(tmp_path: Path) -> None:
@@ -2752,6 +3277,7 @@ def test_cleanup_pr_skips_head_branch_delete_for_fork_pr(tmp_path: Path) -> None
 def test_complete_pr_runs_ready_review_merge_and_cleanup(
     tmp_path: Path,
     monkeypatch,
+    capsys,
 ) -> None:
     calls: list[tuple[object, ...]] = []
 
@@ -2789,6 +3315,7 @@ def test_complete_pr_runs_ready_review_merge_and_cleanup(
         codex_review_poll_seconds=0,
     )
 
+    captured = capsys.readouterr()
     assert code == pr_flow.SUCCESS_EXIT_CODE
     assert calls == [
         ("ready", "PR 自动化", ("PRRT_one",)),
@@ -2796,6 +3323,7 @@ def test_complete_pr_runs_ready_review_merge_and_cleanup(
         ("merge", "7"),
         ("cleanup", "7"),
     ]
+    assert "pr-complete: PR #7 complete" in captured.out
 
 
 def test_complete_pr_rejects_explicit_pr_mismatch(
@@ -2857,6 +3385,7 @@ def test_ready_resolves_threads_after_sync_before_wait(
         return pr_flow.SUCCESS_EXIT_CODE
 
     monkeypatch.setattr(pr_flow, "_current_head_codex_blocking_findings", fake_blockers)
+    monkeypatch.setattr(pr_flow, "_current_pr_review_threads", lambda **_kwargs: [])
     monkeypatch.setattr(pr_flow, "resolve_review_threads", fake_resolve)
     monkeypatch.setattr(pr_flow, "wait", fake_wait)
 

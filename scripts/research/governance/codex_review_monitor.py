@@ -81,6 +81,10 @@ def build_monitor_report(
     pr_url = str(pr.get("html_url", "")) or f"https://github.com/{repo}/pull/{pr_number}"
     pr_body = str(pr.get("body", ""))
     skip_authorized = official_codex_review_skip_authorized(pr_body)
+    reused_official_evidence = _has_reused_official_evidence(
+        pr_body,
+        head_sha=head_sha,
+    )
     official_required, official_errors = _official_codex_required(
         pr_body,
         changed_files=changed_files,
@@ -188,6 +192,9 @@ def build_monitor_report(
     elif not official_review_required:
         status = "skipped"
         message = "官方 Codex review 按 PR 风险证据无需执行。"
+    elif reused_official_evidence:
+        status = "passed"
+        message = "官方 Codex review evidence reused for current head."
     elif trigger_invalid:
         status = "trigger_invalid"
         message = (
@@ -406,6 +413,21 @@ def _has_context_hostile_trigger_comment(
         issue_comments, head_created_at=head_created_at, before_or_at=before_or_at
     )
     return latest is not None and _is_context_hostile_trigger_comment(latest)
+
+
+def _has_reused_official_evidence(body: str, *, head_sha: str) -> bool:
+    if "复用状态: reused" not in body:
+        return False
+    required_tokens = (
+        "触发方式: @codex review (reused)",
+        "结论: 通过",
+        "阻断问题: 无",
+        "旧 head:",
+        f"当前 head: {head_sha[:12]}",
+        "复用原因:",
+        "关键证据:",
+    )
+    return all(token in body for token in required_tokens)
 
 
 def _latest_trigger_candidate_comment(
