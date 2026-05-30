@@ -25,6 +25,7 @@
 - PR 云端合并后，本地同步 `main` 必须设置 `ALLOW_MAIN_REF_UPDATE=1` 和 `MAIN_REF_UPDATE_REASON=<reason>`，并只允许 fast-forward 到 `origin/main`。
 - PR 合并收尾必须删除已合并提交分支的本地和远端引用；不得 force delete 掩盖未合并分支。
 - `pr_flow merge` 必须使用当前 head SHA 的 `--match-head-commit` 合并；`pr_flow cleanup` 必须先 fetch，再走受控 fast-forward，同步后再删除本地和远端已合并分支并验证远端引用消失。
+- `.gitignore` 禁止裸 `data/`、`data`、`**/data/`、`**/data` 等宽泛数据忽略模式；如需忽略仓库根数据目录，只允许使用 `/data/`。
 - CODEOWNERS 必须覆盖关键路径。
 - waiver 必须登记 `id`、`rule_id`、`path`、`reason`、`owner`、`approved_by`、`expires_at`、`migration_plan`；过期或字段不全必须阻断。
 - 规则入口、Skill、README、workflow、registry、catalog、pathref 不能漂移。

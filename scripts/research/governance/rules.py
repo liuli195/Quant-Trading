@@ -229,6 +229,7 @@ def run_audit(
     findings.extend(_audit_path_aliases(root))
     findings.extend(_audit_strategy_manifests(root))
     findings.extend(_audit_project_configs(root))
+    findings.extend(_audit_gitignore_patterns(root))
     findings.extend(_audit_catalogs(root))
     findings.extend(_audit_workflow_templates(root))
     if check_cli_help:
@@ -1249,6 +1250,28 @@ def _audit_project_configs(root: Path) -> list[AuditFinding]:
             continue
         for error in validate_project_config(payload):
             findings.append(AuditFinding("project_config", "error", f"{rel}: {error}"))
+    return findings
+
+
+def _audit_gitignore_patterns(root: Path) -> list[AuditFinding]:
+    path = root / ".gitignore"
+    if not path.is_file():
+        return []
+    broad_patterns = {"data", "data/", "**/data", "**/data/"}
+    findings: list[AuditFinding] = []
+    for line_number, raw_line in enumerate(
+        path.read_text(encoding="utf-8", errors="ignore").splitlines(),
+        start=1,
+    ):
+        pattern = raw_line.split("#", 1)[0].strip()
+        if pattern in broad_patterns:
+            findings.append(
+                AuditFinding(
+                    "gitignore",
+                    "error",
+                    f".gitignore line {line_number} forbids broad data ignore pattern: {pattern}; use /data/ for repo-root data only",
+                )
+            )
     return findings
 
 

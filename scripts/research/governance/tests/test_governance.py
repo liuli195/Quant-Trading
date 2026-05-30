@@ -17,6 +17,7 @@ from scripts.research.governance.codex_review_monitor import (
 )
 from scripts.research.governance import __main__ as governance_main
 from scripts.research.governance import gate as governance_gate
+from scripts.research.governance import rules as governance_rules
 from scripts.research.governance.codex_review_contract import (
     is_codex_review_request,
     render_codex_review_request,
@@ -55,6 +56,20 @@ SKILL_DISCOVERY_CASES = (
 
 def test_pathref_scanner_skips_local_workspace_artifacts() -> None:
     assert should_skip(Path(".local/pytest-governance-tmp/example.md"))
+
+
+def test_gitignore_audit_rejects_broad_data_ignore_patterns(tmp_path: Path) -> None:
+    (tmp_path / ".gitignore").write_text(
+        "data/\n**/data/\n/data/\n",
+        encoding="utf-8",
+    )
+
+    findings = governance_rules._audit_gitignore_patterns(tmp_path)
+
+    messages = [finding.message for finding in findings]
+    assert any("data/" in message for message in messages)
+    assert any("**/data/" in message for message in messages)
+    assert not any("/data/" in message and "line 3" in message for message in messages)
 
 
 def test_pathref_scoped_check_only_scans_requested_markdown_files(
