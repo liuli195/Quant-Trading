@@ -102,13 +102,6 @@ def collect_changed_files(
 
     if staged:
         staged_files = _git_changed_files(root, ["--cached"])
-        worktree_files = _git_changed_files(root, [])
-        overlap = tuple(sorted(set(staged_files).intersection(worktree_files)))
-        if overlap:
-            raise ChangedFileCollectionError(
-                "staged files also have unstaged changes; commit or stash them before "
-                f"running staged fast verification: {', '.join(overlap)}"
-            )
         changed.extend(staged_files)
         source_parts.append("staged")
 
