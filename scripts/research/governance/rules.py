@@ -49,6 +49,7 @@ REQUIRED_CODEOWNER_PATTERNS = (
     "CLAUDE.md",
     "AGENTS.md",
     "indexes.md",
+    "docs/agents/**",
     "docs/rules/**",
     "docs/adr/**",
     ".codex/skills/**",

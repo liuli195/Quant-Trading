@@ -6,6 +6,7 @@
 
 - [AGENTS.md](AGENTS.md) <!-- pathref: repo/AGENTS.md --> — AI 助手通用入口，仓库级行为准则和运行边界
 - [CLAUDE.md](CLAUDE.md) <!-- pathref: repo/CLAUDE.md --> — Claude Code 专属，技能目录和工具路径指针
+- [docs/agents](docs/agents) <!-- pathref: docs/agents --> — 工程技能使用的 Issue、triage 标签和领域文档配置
 
 ## 规则文件
 

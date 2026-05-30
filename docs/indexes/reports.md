@@ -9,6 +9,9 @@
 | docs |  | ADR 0004: 使用官方 Codex Code Review 作为 PR 评审门禁 | `docs/adr/0004-codex-code-review-governance.md` | 7 |
 | docs |  | ADR 0005: AI 入口采用渐进式披露 | `docs/adr/0005-ai-entry-progressive-disclosure.md` | 8 |
 | docs |  | ADR 0006: PR 风险分级评审流程 | `docs/adr/0006-risk-tiered-pr-review.md` | 0 |
+| docs |  | 领域文档 | `docs/agents/domain.md` | 5 |
+| docs |  | Issue 跟踪：GitHub | `docs/agents/issue-tracker.md` | 0 |
+| docs |  | Triage 标签 | `docs/agents/triage-labels.md` | 0 |
 | docs |  | 本地研究平台架构 | `docs/architecture/research-platform-architecture.md` | 19 |
 | docs |  | CC-Switch CLI | `docs/design/cc-switch-cli.md` | 0 |
 | docs |  | 跨 AI 工具 Skill 管理实施计划 | `docs/design/cross-ai-skill-management.md` | 13 |
@@ -38,6 +41,7 @@
 | docs |  | JQ_舆情数据 | `docs/joinquant-data/JQ_舆情数据.md` | 0 |
 | docs |  | JQ_行业概念数据 | `docs/joinquant-data/JQ_行业概念数据.md` | 0 |
 | docs |  | PR #21/#22 流程问题复盘 | `docs/problems/2026-05-29-pr21-flow-retrospective.md` | 6 |
+| docs |  | PR #25 流程问题复盘 | `docs/problems/2026-05-30-pr25-flow-retrospective.md` | 7 |
 | docs |  | 定义一个全局变量, 保存要操作的股票 | `docs/reference/joinquant-api.md` | 28 |
 | docs |  | JoinQuant 参数分析框架分析报告 | `docs/reference/joinquant-parameter-analysis-framework.md` | 2 |
 | docs |  | 代码风格和策略实现规则 | `docs/rules/code-style.md` | 2 |
