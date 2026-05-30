@@ -1810,6 +1810,41 @@ def test_sync_rejects_stale_schema_v3_diff_fingerprint(
     assert not any(call[:3] == ["gh", "pr", "edit"] for call in runner.calls)
 
 
+def test_sync_migrates_legacy_report_to_schema_v3_before_rendering(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _write_valid_report(
+        tmp_path,
+        risk_level="low",
+        requires_official=False,
+        changed_files=["docs/guides/example.md"],
+    )
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["docs/guides/example.md"],
+        },
+    )
+    runner = FakeRunner(existing_pr=True)
+
+    code = pr_flow.sync(repo_root=tmp_path, title="PR 流程自动化", runner=runner)
+
+    assert code == 0
+    payload = json.loads(
+        (tmp_path / ".local" / "ai-review" / "latest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert payload["schema_version"] == 3
+    assert payload["diff_fingerprint"]["diff_files_hash"] == "current-diff"
+    assert "## 当前提交与差异摘要" in runner.edited_bodies[-1]
+
+
 def test_sync_replaces_existing_pr_block_with_windows_path_evidence(
     tmp_path: Path,
 ) -> None:
@@ -2003,6 +2038,16 @@ def test_ready_stops_with_dispatch_required_when_review_evidence_missing(
 ) -> None:
     runner = FakeRunner(existing_pr=True)
     monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["docs/guides/example.md"],
+        },
+    )
 
     code = pr_flow.ready(
         repo_root=tmp_path,
@@ -2225,6 +2270,16 @@ def test_ready_writes_ordered_merge_ready_state_without_merging(
     )
     runner = FakeRunner(existing_pr=True)
     monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["docs/guides/example.md"],
+        },
+    )
 
     code = pr_flow.ready(
         repo_root=tmp_path,
@@ -2483,6 +2538,16 @@ def test_ready_reports_exception_when_review_threads_unavailable(
         fail_graphql=True,
     )
     monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["scripts/research/governance/pr_flow.py"],
+        },
+    )
 
     code = pr_flow.ready(
         repo_root=tmp_path,
@@ -3197,6 +3262,16 @@ def test_ready_ignores_resolved_codex_review_thread(
         ],
     )
     monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["scripts/research/governance/pr_flow.py"],
+        },
+    )
 
     code = pr_flow.ready(
         repo_root=tmp_path,
@@ -3259,6 +3334,16 @@ def test_ready_does_not_retrigger_codex_review_when_evidence_exists(
         ],
     )
     monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["scripts/research/governance/rules.py"],
+        },
+    )
 
     code = pr_flow.ready(repo_root=tmp_path, title="治理改造", runner=runner)
 

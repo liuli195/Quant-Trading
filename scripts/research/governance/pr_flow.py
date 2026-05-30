@@ -278,14 +278,27 @@ def sync(
     if payload is None:
         print(f"error: AI review report missing or invalid: {latest}", file=sys.stderr)
         return 1
+    current_fingerprint = ai_review_gate.current_diff_fingerprint(root)
     result = ai_review_gate.validate_report_file(
         latest,
-        current_diff_fingerprint=ai_review_gate.current_diff_fingerprint(root),
+        current_diff_fingerprint=current_fingerprint,
     )
     if not result.ok:
         for error in result.errors:
             print(f"error: {error}", file=sys.stderr)
         return 1
+    if payload.get("schema_version") != ai_review_gate.CURRENT_SCHEMA_VERSION:
+        payload = ai_review_gate.payload_as_schema_v3(
+            payload,
+            repo_root=root,
+            changed_files=ai_review_gate._string_list(payload.get("changed_files")),
+        )
+        migrated_result = ai_review_gate.validate_report(payload)
+        if not migrated_result.ok:
+            for error in migrated_result.errors:
+                print(f"error: {error}", file=sys.stderr)
+            return 1
+        _write_ai_review_payload(root, payload)
 
     pr_body = ai_review_gate.render_pr_body(payload)
     pr_body_path = local / "pr-body.md"
