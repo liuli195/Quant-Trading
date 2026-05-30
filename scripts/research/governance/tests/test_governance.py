@@ -17,6 +17,7 @@ from scripts.research.governance.codex_review_monitor import (
 )
 from scripts.research.governance import __main__ as governance_main
 from scripts.research.governance import gate as governance_gate
+from scripts.research.governance import rules as governance_rules
 from scripts.research.governance.codex_review_contract import (
     is_codex_review_request,
     render_codex_review_request,
@@ -55,6 +56,20 @@ SKILL_DISCOVERY_CASES = (
 
 def test_pathref_scanner_skips_local_workspace_artifacts() -> None:
     assert should_skip(Path(".local/pytest-governance-tmp/example.md"))
+
+
+def test_gitignore_audit_rejects_broad_data_ignore_patterns(tmp_path: Path) -> None:
+    (tmp_path / ".gitignore").write_text(
+        "data/\n**/data/\n/data/\n",
+        encoding="utf-8",
+    )
+
+    findings = governance_rules._audit_gitignore_patterns(tmp_path)
+
+    messages = [finding.message for finding in findings]
+    assert any("data/" in message for message in messages)
+    assert any("**/data/" in message for message in messages)
+    assert not any("/data/" in message and "line 3" in message for message in messages)
 
 
 def test_pathref_scoped_check_only_scans_requested_markdown_files(
@@ -2835,6 +2850,15 @@ def _valid_codex_review_body(review_id: int = 4314779358) -> str:
             "- 任务分发说明: 已分发给实现、规格符合度评审和代码质量评审子 agent",
             "- P0/P1 未关闭项: 无",
             "",
+            "## 当前提交与差异摘要",
+            "",
+            "- Base: dd1a6a10077f",
+            "- Head SHA: 000000000000",
+            "- Diff hash: current-diff",
+            "- Changed files: 1",
+            "- Changed file paths:",
+            "  - `scripts/research/governance/pr_review_evidence.py`",
+            "",
             "## P2 保留项",
             "",
             "- 无",
@@ -2908,6 +2932,42 @@ def test_pr_review_evidence_requires_verify_full_command() -> None:
 
     assert not report.ok
     assert "review evidence must include verify full command" in report.errors
+
+
+def test_pr_review_evidence_rejects_mismatched_current_head_summary() -> None:
+    body = _valid_codex_review_body().replace(
+        "- Head SHA: 000000000000",
+        "- Head SHA: 222222222222",
+    )
+
+    report = validate_pr_body(body, expected_head_sha="0" * 40)
+
+    assert not report.ok
+    assert "current diff summary head SHA must match current PR head" in report.errors
+
+
+def test_pr_review_evidence_requires_current_head_summary_when_metadata_available() -> None:
+    body = _valid_codex_review_body().replace(
+        "\n".join(
+            [
+                "## 当前提交与差异摘要",
+                "",
+                "- Base: dd1a6a10077f",
+                "- Head SHA: 000000000000",
+                "- Diff hash: current-diff",
+                "- Changed files: 1",
+                "- Changed file paths:",
+                "  - `scripts/research/governance/pr_review_evidence.py`",
+                "",
+            ]
+        ),
+        "",
+    )
+
+    report = validate_pr_body(body, expected_head_sha="0" * 40)
+
+    assert not report.ok
+    assert "PR body missing section: 当前提交与差异摘要" in report.errors
 
 
 def test_low_risk_pr_body_requires_cross_review_and_dispatch_evidence() -> None:
@@ -3409,6 +3469,39 @@ def test_low_risk_pr_body_with_high_risk_changed_files_requires_codex_review() -
     assert "PR body missing section: Codex Code Review 结论" in report.errors
 
 
+def test_pr_review_evidence_rejects_matching_count_with_wrong_file_set() -> None:
+    body = _valid_codex_review_body().replace(
+        "scripts/research/governance/pr_review_evidence.py",
+        "scripts/research/governance/rules.py",
+    )
+
+    report = validate_pr_body(
+        body,
+        expected_head_sha="0" * 40,
+        changed_files=["scripts/research/governance/pr_review_evidence.py"],
+    )
+
+    assert not report.ok
+    assert "current diff summary changed files must match current PR files" in report.errors
+
+
+def test_pr_review_evidence_accepts_incremental_review_mode() -> None:
+    body = _valid_codex_review_body().replace(
+        "- 本地 AI review: `.local/ai-review/latest.md`",
+        "- 本地 AI review: `.local/ai-review/latest.md`\n"
+        "- 本地 AI review 模式: incremental",
+    )
+
+    report = validate_pr_body(
+        body,
+        expected_head_sha="0" * 40,
+        changed_files=["scripts/research/governance/pr_review_evidence.py"],
+        labels=["ai-risk-review"],
+    )
+
+    assert "本地 AI review 模式 must be complete or partial" not in report.errors
+
+
 def test_low_risk_pr_body_with_ai_risk_label_requires_codex_review() -> None:
     body = """
 ## AI Review 风险分级
@@ -3789,6 +3882,44 @@ def _low_risk_no_official_review_body() -> str:
 ## P2 保留项
 
 - 无
+"""
+
+
+def _reused_official_codex_review_body(*, current_head: str) -> str:
+    return f"""
+## AI Review 风险分级
+
+- 风险等级: high
+- 是否需要官方 Codex Review: 是
+- 官方 Codex Review 跳过授权: 无
+- 本地 AI review: `.local/ai-review/latest.md`
+- 本地安全 review: provider=codex；tool=codex-security；evidence=Codex Security local review completed
+- 本地 AI review 模式: complete
+- 不完全 Review 模式授权: 无
+- 子 agent 交叉评审: superpowers:subagent-driven-development/spec-reviewer-prompt.md；superpowers:subagent-driven-development/code-quality-reviewer-prompt.md；至少两个独立 reviewer；reviewers: spec-review-subagent, quality-review-subagent；见 `.local/ai-review/latest.md`
+- 任务分发说明: 已分发给 Standards 和 Spec 评审；official_scope_impact=false；security_impact=false
+- P0/P1 未关闭项: 无
+
+## 已运行检查
+
+- verify full: `.venv/bin/python -m scripts.research.governance verify full`
+
+## P2 保留项
+
+- 无
+
+## Codex Code Review 结论
+
+- Reviewer: Codex
+- 触发方式: @codex review (reused)
+- 结论: 通过
+- 阻断问题: 无
+- 复用状态: reused
+- 旧 head: 000000000000
+- 当前 head: {current_head[:12]}
+- 复用原因: only docs wording changed after official review
+- 关键证据:
+  - https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-1
 """
 
 
@@ -5702,6 +5833,27 @@ def test_codex_review_monitor_passes_low_risk_without_official_review() -> None:
     assert report.status == "skipped"
     assert not report.trigger_found
     assert "无需执行" in render_monitor_comment(report)
+
+
+def test_codex_review_monitor_rejects_unverified_reused_official_review_evidence() -> None:
+    head_sha = "1" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={
+            "head": {"sha": head_sha},
+            "body": _reused_official_codex_review_body(current_head=head_sha),
+        },
+        issue_comments=[],
+        reviews=[],
+        review_comments=[],
+        changed_files=("scripts/research/governance/pr_flow.py",),
+        labels=("ai-risk-review",),
+    )
+
+    assert report.status == "waiting_for_trigger"
+    assert not report.trigger_found
+    assert "未发现" in render_monitor_comment(report)
 
 
 def test_codex_review_monitor_blocks_unresolved_blocking_threads() -> None:

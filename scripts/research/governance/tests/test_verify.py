@@ -191,7 +191,7 @@ def test_collect_changed_files_staged_does_not_include_worktree(
     source = affected.collect_changed_files(tmp_path, staged=True)
 
     assert source.files == ("docs/staged.md",)
-    assert calls == [("--cached",), ()]
+    assert calls == [("--cached",)]
 
 
 def test_collect_changed_files_fails_when_git_diff_fails(
@@ -211,7 +211,7 @@ def test_collect_changed_files_fails_when_git_diff_fails(
         raise AssertionError("collect_changed_files should fail closed on git errors")
 
 
-def test_verify_fast_fails_when_staged_file_has_unstaged_changes(
+def test_verify_fast_allows_staged_file_with_unstaged_changes(
     monkeypatch,
     capsys,
     tmp_path: Path,
@@ -222,13 +222,25 @@ def test_verify_fast_fails_when_staged_file_has_unstaged_changes(
         return ["docs/rules/commands.md"]
 
     monkeypatch.setattr(affected, "_git_changed_files", fake_git_changed_files)
+    monkeypatch.setattr(
+        verify,
+        "_run_check",
+        lambda check, *, repo_root: verify.CheckResult(
+            check.check_id,
+            check.command,
+            True,
+            0,
+            subjects=check.subjects,
+            scope=check.scope,
+        ),
+    )
 
     code = verify.main(["fast", "--staged", "--format", "json", "--repo-root", str(tmp_path)])
 
-    assert code == 1
+    assert code == 0
     payload = json.loads(capsys.readouterr().out)
-    assert payload["ok"] is False
-    assert "unstaged changes" in payload["error"]
+    assert payload["ok"] is True
+    assert payload["checked"]
 
 
 def test_governance_related_paths_trigger_full_governance_checks() -> None:

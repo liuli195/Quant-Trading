@@ -408,6 +408,21 @@ def _has_context_hostile_trigger_comment(
     return latest is not None and _is_context_hostile_trigger_comment(latest)
 
 
+def _has_reused_official_evidence(body: str, *, head_sha: str) -> bool:
+    if "复用状态: reused" not in body:
+        return False
+    required_tokens = (
+        "触发方式: @codex review (reused)",
+        "结论: 通过",
+        "阻断问题: 无",
+        "旧 head:",
+        f"当前 head: {head_sha[:12]}",
+        "复用原因:",
+        "关键证据:",
+    )
+    return all(token in body for token in required_tokens)
+
+
 def _latest_trigger_candidate_comment(
     issue_comments: Sequence[Mapping[str, object]],
     *,

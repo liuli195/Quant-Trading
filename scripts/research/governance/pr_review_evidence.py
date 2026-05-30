@@ -133,6 +133,13 @@ def validate_pr_body(
     official_codex_required, errors = _official_codex_required(
         body, changed_files=changed_files, labels=labels
     )
+    errors.extend(
+        _current_diff_summary_errors(
+            body,
+            expected_head_sha=expected_head_sha,
+            changed_files=changed_files,
+        )
+    )
     if (
         review_threads is not None
         and unresolved_blocking_codex_thread_count(review_threads) > 0
@@ -239,6 +246,43 @@ def _extract_named_section(body: str, header: str) -> str | None:
             end = index
             break
     return "\n".join(lines[start:end])
+
+
+def _current_diff_summary_errors(
+    body: str,
+    *,
+    expected_head_sha: str | None,
+    changed_files: Sequence[str] | None,
+) -> list[str]:
+    section = _extract_named_section(body, "当前提交与差异摘要")
+    if section is None:
+        if expected_head_sha:
+            return ["PR body missing section: 当前提交与差异摘要"]
+        return []
+    errors: list[str] = []
+    head_sha = _normalize_value(_read_field(section, "Head SHA"))
+    expected_head = _normalize_value(expected_head_sha or "")
+    if expected_head and head_sha not in {expected_head, expected_head[:12]}:
+        errors.append("current diff summary head SHA must match current PR head")
+    count_text = _normalize_value(_read_field(section, "Changed files"))
+    if changed_files is not None and count_text:
+        try:
+            rendered_count = int(count_text)
+        except ValueError:
+            errors.append("current diff summary changed file count must be numeric")
+        else:
+            if rendered_count != len(changed_files):
+                errors.append(
+                    "current diff summary changed file count must match current PR files"
+                )
+    expected_files = _normalized_changed_file_paths(changed_files or ())
+    if expected_files:
+        rendered_files = _current_diff_summary_changed_files(section)
+        if not rendered_files:
+            errors.append("current diff summary changed file paths must be listed")
+        elif rendered_files != expected_files:
+            errors.append("current diff summary changed files must match current PR files")
+    return errors
 
 
 def _official_codex_required(
@@ -363,8 +407,8 @@ def _ai_review_mode_errors(
     value: str, *, partial_review_authorization: str
 ) -> list[str]:
     mode = _normalize_value(value) or "complete"
-    if mode not in {"complete", "partial"}:
-        return [f"{AI_REVIEW_MODE_FIELD} must be complete or partial"]
+    if mode not in {"complete", "partial", "incremental"}:
+        return [f"{AI_REVIEW_MODE_FIELD} must be complete, partial, or incremental"]
     if mode == "partial":
         return _authorization_field_errors(
             partial_review_authorization,
@@ -639,6 +683,46 @@ def _read_field(section: str, field: str) -> str:
     )
     match = pattern.search(section)
     return match.group(1) if match else ""
+
+
+def _current_diff_summary_changed_files(section: str) -> tuple[str, ...]:
+    lines = section.splitlines()
+    collecting = False
+    paths: list[str] = []
+    for raw_line in lines:
+        stripped = raw_line.strip()
+        if re.match(r"^[-*]\s*Changed file paths\s*[:：]\s*$", stripped):
+            collecting = True
+            continue
+        if not collecting:
+            continue
+        if stripped and not raw_line.startswith((" ", "\t")):
+            break
+        match = re.match(r"^\s*[-*]\s*(.+?)\s*$", raw_line)
+        if match:
+            path = _normalize_changed_file_path(match.group(1))
+            if path:
+                paths.append(path)
+    return tuple(sorted(set(paths)))
+
+
+def _normalized_changed_file_paths(paths: Sequence[str]) -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            {
+                normalized
+                for path in paths
+                if (normalized := _normalize_changed_file_path(path))
+            }
+        )
+    )
+
+
+def _normalize_changed_file_path(path: str) -> str:
+    normalized = path.strip().strip("`").replace("\\", "/")
+    if normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized.lstrip("/")
 
 
 def _normalize_value(value: str) -> str:
