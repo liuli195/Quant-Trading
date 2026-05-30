@@ -2278,6 +2278,16 @@ def test_ready_auto_records_current_head_codex_completion_comment(
         }
     )
     monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["docs/guides/example.md"],
+        },
+    )
 
     code = pr_flow.ready(
         repo_root=tmp_path,
@@ -2327,6 +2337,16 @@ def test_ready_uses_existing_trigger_result_without_retriggering(
         ],
     )
     monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["docs/guides/example.md"],
+        },
+    )
 
     code = pr_flow.ready(
         repo_root=tmp_path,
@@ -2365,6 +2385,16 @@ def test_ready_retriggers_when_existing_current_head_trigger_is_not_contract(
         ],
     )
     monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["docs/guides/example.md"],
+        },
+    )
 
     code = pr_flow.ready(
         repo_root=tmp_path,
@@ -2403,6 +2433,16 @@ def test_ready_reports_exception_when_review_api_unavailable(
         fail_api_paths={"repos/liuli195/Quant-Trading/pulls/7/reviews?per_page=100"},
     )
     monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["docs/guides/example.md"],
+        },
+    )
 
     code = pr_flow.ready(
         repo_root=tmp_path,
@@ -2914,6 +2954,16 @@ def test_ready_auto_accepts_official_p2_thread_and_syncs_pr_body(
         ],
     )
     monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["docs/guides/example.md"],
+        },
+    )
 
     code = pr_flow.ready(
         repo_root=tmp_path,
@@ -3084,6 +3134,16 @@ def test_ready_auto_closes_outdated_p1_thread_with_structured_evidence(
         ],
     )
     monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["docs/guides/example.md"],
+        },
+    )
 
     code = pr_flow.ready(
         repo_root=tmp_path,
