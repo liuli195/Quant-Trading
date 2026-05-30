@@ -229,7 +229,10 @@ def prepare(
         return 1
 
     payload = payload or _read_json_object(latest)
-    validation = ai_review_gate.validate_report_file(latest)
+    validation = ai_review_gate.validate_report_file(
+        latest,
+        current_diff_fingerprint=ai_review_gate.current_diff_fingerprint(root),
+    )
     if payload is None or not validation.ok:
         for error in validation.errors:
             print(f"error: {error}", file=sys.stderr)

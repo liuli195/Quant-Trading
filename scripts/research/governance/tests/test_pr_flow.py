@@ -93,6 +93,39 @@ def _write_valid_report(
     )
 
 
+def _write_valid_v3_report(
+    root: Path,
+    *,
+    changed_files: list[str],
+    diff_files_hash: str,
+) -> None:
+    _write_valid_report(root, changed_files=changed_files)
+    latest = root / ".local" / "ai-review" / "latest.json"
+    payload = json.loads(latest.read_text(encoding="utf-8"))
+    payload.update(
+        {
+            "schema_version": 3,
+            "diff_fingerprint": {
+                "base_ref": "origin/main",
+                "head_sha": "1" * 40,
+                "diff_files_hash": diff_files_hash,
+                "changed_files": changed_files,
+            },
+            "review_fragments": {
+                "standards": {"status": "pass", "evidence": "standards review completed"},
+                "spec": {"status": "pass", "evidence": "spec review completed"},
+                "security": {"status": "pass", "evidence": "security review completed"},
+            },
+            "external_findings": [],
+            "current_commit_evidence": {
+                "head_sha": "1" * 40,
+                "checks": payload["checks"],
+            },
+        }
+    )
+    latest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+
 class FakeRunner:
     def __init__(
         self,
@@ -1639,6 +1672,43 @@ def test_prepare_migrates_latest_report_to_schema_v3(
     assert set(payload["review_fragments"]) == {"standards", "spec", "security"}
     assert payload["external_findings"] == []
     assert payload["current_commit_evidence"]["head_sha"] == "1" * 40
+
+
+def test_prepare_rejects_stale_schema_v3_diff_fingerprint(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_valid_v3_report(
+        tmp_path,
+        changed_files=["docs/guides/example.md"],
+        diff_files_hash="old-diff",
+    )
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "_discover_changed_files",
+        lambda _root: ["docs/guides/example.md"],
+    )
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["docs/guides/example.md"],
+        },
+    )
+    runner = RecordingRunner()
+
+    code = pr_flow.prepare(repo_root=tmp_path, runner=runner)
+
+    assert code == 1
+    assert "diff_fingerprint diff_files_hash does not match current diff" in capsys.readouterr().err
+    payload = json.loads(
+        (tmp_path / ".local/ai-review/latest.json").read_text(encoding="utf-8")
+    )
+    assert payload["diff_fingerprint"]["diff_files_hash"] == "old-diff"
 
 
 def test_prepare_uses_report_files_for_strategy_checks(
