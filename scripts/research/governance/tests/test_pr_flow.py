@@ -1781,6 +1781,35 @@ def test_sync_updates_existing_pr_block_label_and_codex_comment(
     assert "scripts/research/governance/rules.py" in runner.comments[0]
 
 
+def test_sync_rejects_stale_schema_v3_diff_fingerprint(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_valid_v3_report(
+        tmp_path,
+        changed_files=["docs/guides/example.md"],
+        diff_files_hash="old-diff",
+    )
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["docs/guides/example.md"],
+        },
+    )
+    runner = FakeRunner(existing_pr=True)
+
+    code = pr_flow.sync(repo_root=tmp_path, title="PR 流程自动化", runner=runner)
+
+    assert code == 1
+    assert "diff_fingerprint diff_files_hash does not match current diff" in capsys.readouterr().err
+    assert not any(call[:3] == ["gh", "pr", "edit"] for call in runner.calls)
+
+
 def test_sync_replaces_existing_pr_block_with_windows_path_evidence(
     tmp_path: Path,
 ) -> None:

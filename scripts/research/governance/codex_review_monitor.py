@@ -81,10 +81,6 @@ def build_monitor_report(
     pr_url = str(pr.get("html_url", "")) or f"https://github.com/{repo}/pull/{pr_number}"
     pr_body = str(pr.get("body", ""))
     skip_authorized = official_codex_review_skip_authorized(pr_body)
-    reused_official_evidence = _has_reused_official_evidence(
-        pr_body,
-        head_sha=head_sha,
-    )
     official_required, official_errors = _official_codex_required(
         pr_body,
         changed_files=changed_files,
@@ -192,9 +188,6 @@ def build_monitor_report(
     elif not official_review_required:
         status = "skipped"
         message = "官方 Codex review 按 PR 风险证据无需执行。"
-    elif reused_official_evidence:
-        status = "passed"
-        message = "官方 Codex review evidence reused for current head."
     elif trigger_invalid:
         status = "trigger_invalid"
         message = (

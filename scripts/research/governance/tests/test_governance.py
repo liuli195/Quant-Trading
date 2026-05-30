@@ -2925,6 +2925,29 @@ def test_pr_review_evidence_requires_verify_full_command() -> None:
     assert "review evidence must include verify full command" in report.errors
 
 
+def test_pr_review_evidence_rejects_mismatched_current_head_summary() -> None:
+    body = _valid_codex_review_body().replace(
+        "## P2 保留项",
+        "\n".join(
+            [
+                "## 当前提交与差异摘要",
+                "",
+                "- Base: dd1a6a10077f",
+                "- Head SHA: 222222222222",
+                "- Diff hash: current-diff",
+                "- Changed files: 20",
+                "",
+                "## P2 保留项",
+            ]
+        ),
+    )
+
+    report = validate_pr_body(body, expected_head_sha="1" * 40)
+
+    assert not report.ok
+    assert "current diff summary head SHA must match current PR head" in report.errors
+
+
 def test_low_risk_pr_body_requires_cross_review_and_dispatch_evidence() -> None:
     body = """
 ## AI Review 风险分级
@@ -5757,7 +5780,7 @@ def test_codex_review_monitor_passes_low_risk_without_official_review() -> None:
     assert "无需执行" in render_monitor_comment(report)
 
 
-def test_codex_review_monitor_passes_reused_official_review_evidence() -> None:
+def test_codex_review_monitor_rejects_unverified_reused_official_review_evidence() -> None:
     head_sha = "1" * 40
     report = build_monitor_report(
         repo="liuli195/Quant-Trading",
@@ -5773,9 +5796,9 @@ def test_codex_review_monitor_passes_reused_official_review_evidence() -> None:
         labels=("ai-risk-review",),
     )
 
-    assert report.status == "passed"
+    assert report.status == "waiting_for_trigger"
     assert not report.trigger_found
-    assert "reused" in render_monitor_comment(report)
+    assert "未发现" in render_monitor_comment(report)
 
 
 def test_codex_review_monitor_blocks_unresolved_blocking_threads() -> None:

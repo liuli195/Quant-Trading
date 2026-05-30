@@ -278,7 +278,10 @@ def sync(
     if payload is None:
         print(f"error: AI review report missing or invalid: {latest}", file=sys.stderr)
         return 1
-    result = ai_review_gate.validate_report_file(latest)
+    result = ai_review_gate.validate_report_file(
+        latest,
+        current_diff_fingerprint=ai_review_gate.current_diff_fingerprint(root),
+    )
     if not result.ok:
         for error in result.errors:
             print(f"error: {error}", file=sys.stderr)

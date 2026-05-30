@@ -133,6 +133,13 @@ def validate_pr_body(
     official_codex_required, errors = _official_codex_required(
         body, changed_files=changed_files, labels=labels
     )
+    errors.extend(
+        _current_diff_summary_errors(
+            body,
+            expected_head_sha=expected_head_sha,
+            changed_files=changed_files,
+        )
+    )
     if (
         review_threads is not None
         and unresolved_blocking_codex_thread_count(review_threads) > 0
@@ -239,6 +246,34 @@ def _extract_named_section(body: str, header: str) -> str | None:
             end = index
             break
     return "\n".join(lines[start:end])
+
+
+def _current_diff_summary_errors(
+    body: str,
+    *,
+    expected_head_sha: str | None,
+    changed_files: Sequence[str] | None,
+) -> list[str]:
+    section = _extract_named_section(body, "当前提交与差异摘要")
+    if section is None:
+        return []
+    errors: list[str] = []
+    head_sha = _normalize_value(_read_field(section, "Head SHA"))
+    expected_head = _normalize_value(expected_head_sha or "")
+    if expected_head and head_sha not in {expected_head, expected_head[:12]}:
+        errors.append("current diff summary head SHA must match current PR head")
+    count_text = _normalize_value(_read_field(section, "Changed files"))
+    if changed_files is not None and count_text:
+        try:
+            rendered_count = int(count_text)
+        except ValueError:
+            errors.append("current diff summary changed file count must be numeric")
+        else:
+            if rendered_count != len(changed_files):
+                errors.append(
+                    "current diff summary changed file count must match current PR files"
+                )
+    return errors
 
 
 def _official_codex_required(
