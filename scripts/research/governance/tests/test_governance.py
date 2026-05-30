@@ -2856,6 +2856,8 @@ def _valid_codex_review_body(review_id: int = 4314779358) -> str:
             "- Head SHA: 000000000000",
             "- Diff hash: current-diff",
             "- Changed files: 1",
+            "- Changed file paths:",
+            "  - `scripts/research/governance/pr_review_evidence.py`",
             "",
             "## P2 保留项",
             "",
@@ -2954,6 +2956,8 @@ def test_pr_review_evidence_requires_current_head_summary_when_metadata_availabl
                 "- Head SHA: 000000000000",
                 "- Diff hash: current-diff",
                 "- Changed files: 1",
+                "- Changed file paths:",
+                "  - `scripts/research/governance/pr_review_evidence.py`",
                 "",
             ]
         ),
@@ -3463,6 +3467,39 @@ def test_low_risk_pr_body_with_high_risk_changed_files_requires_codex_review() -
     assert not report.ok
     assert "high-risk changed files require official Codex Review" in report.errors
     assert "PR body missing section: Codex Code Review 结论" in report.errors
+
+
+def test_pr_review_evidence_rejects_matching_count_with_wrong_file_set() -> None:
+    body = _valid_codex_review_body().replace(
+        "scripts/research/governance/pr_review_evidence.py",
+        "scripts/research/governance/rules.py",
+    )
+
+    report = validate_pr_body(
+        body,
+        expected_head_sha="0" * 40,
+        changed_files=["scripts/research/governance/pr_review_evidence.py"],
+    )
+
+    assert not report.ok
+    assert "current diff summary changed files must match current PR files" in report.errors
+
+
+def test_pr_review_evidence_accepts_incremental_review_mode() -> None:
+    body = _valid_codex_review_body().replace(
+        "- 本地 AI review: `.local/ai-review/latest.md`",
+        "- 本地 AI review: `.local/ai-review/latest.md`\n"
+        "- 本地 AI review 模式: incremental",
+    )
+
+    report = validate_pr_body(
+        body,
+        expected_head_sha="0" * 40,
+        changed_files=["scripts/research/governance/pr_review_evidence.py"],
+        labels=["ai-risk-review"],
+    )
+
+    assert "本地 AI review 模式 must be complete or partial" not in report.errors
 
 
 def test_low_risk_pr_body_with_ai_risk_label_requires_codex_review() -> None:

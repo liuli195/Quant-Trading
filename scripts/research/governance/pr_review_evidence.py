@@ -275,6 +275,13 @@ def _current_diff_summary_errors(
                 errors.append(
                     "current diff summary changed file count must match current PR files"
                 )
+    expected_files = _normalized_changed_file_paths(changed_files or ())
+    if expected_files:
+        rendered_files = _current_diff_summary_changed_files(section)
+        if not rendered_files:
+            errors.append("current diff summary changed file paths must be listed")
+        elif rendered_files != expected_files:
+            errors.append("current diff summary changed files must match current PR files")
     return errors
 
 
@@ -400,8 +407,8 @@ def _ai_review_mode_errors(
     value: str, *, partial_review_authorization: str
 ) -> list[str]:
     mode = _normalize_value(value) or "complete"
-    if mode not in {"complete", "partial"}:
-        return [f"{AI_REVIEW_MODE_FIELD} must be complete or partial"]
+    if mode not in {"complete", "partial", "incremental"}:
+        return [f"{AI_REVIEW_MODE_FIELD} must be complete, partial, or incremental"]
     if mode == "partial":
         return _authorization_field_errors(
             partial_review_authorization,
@@ -676,6 +683,46 @@ def _read_field(section: str, field: str) -> str:
     )
     match = pattern.search(section)
     return match.group(1) if match else ""
+
+
+def _current_diff_summary_changed_files(section: str) -> tuple[str, ...]:
+    lines = section.splitlines()
+    collecting = False
+    paths: list[str] = []
+    for raw_line in lines:
+        stripped = raw_line.strip()
+        if re.match(r"^[-*]\s*Changed file paths\s*[:：]\s*$", stripped):
+            collecting = True
+            continue
+        if not collecting:
+            continue
+        if stripped and not raw_line.startswith((" ", "\t")):
+            break
+        match = re.match(r"^\s*[-*]\s*(.+?)\s*$", raw_line)
+        if match:
+            path = _normalize_changed_file_path(match.group(1))
+            if path:
+                paths.append(path)
+    return tuple(sorted(set(paths)))
+
+
+def _normalized_changed_file_paths(paths: Sequence[str]) -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            {
+                normalized
+                for path in paths
+                if (normalized := _normalize_changed_file_path(path))
+            }
+        )
+    )
+
+
+def _normalize_changed_file_path(path: str) -> str:
+    normalized = path.strip().strip("`").replace("\\", "/")
+    if normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized.lstrip("/")
 
 
 def _normalize_value(value: str) -> str:

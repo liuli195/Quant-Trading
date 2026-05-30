@@ -150,7 +150,7 @@ def validate_report(
 
     review_mode = _review_mode(payload)
     if review_mode not in VALID_REVIEW_MODES:
-        errors.append("review_mode must be complete or partial")
+        errors.append("review_mode must be complete, partial, or incremental")
     elif review_mode == "complete":
         errors.extend(
             _complete_review_errors(payload.get("complete_review"), reviewers)
@@ -652,13 +652,82 @@ def current_diff_fingerprint(repo_root: str | Path = ".") -> dict[str, Any] | No
         if discovered_diff_text is None:
             return None
         diff_text = discovered_diff_text
-    hash_source = "\n".join(changed_files) + "\0" + (diff_text or "")
+    unstaged_diff_text = _git_stdout(
+        root,
+        [
+            "git",
+            "-c",
+            "core.quotePath=false",
+            "diff",
+            "--binary",
+            "--no-ext-diff",
+        ],
+    )
+    staged_diff_text = _git_stdout(
+        root,
+        [
+            "git",
+            "-c",
+            "core.quotePath=false",
+            "diff",
+            "--binary",
+            "--no-ext-diff",
+            "--cached",
+        ],
+    )
+    untracked_content = _untracked_content_fingerprint(root)
+    if (
+        unstaged_diff_text is None
+        or staged_diff_text is None
+        or untracked_content is None
+    ):
+        return None
+    hash_source = json.dumps(
+        {
+            "changed_files": changed_files,
+            "base_diff": diff_text or "",
+            "staged_diff": staged_diff_text,
+            "unstaged_diff": unstaged_diff_text,
+            "untracked_content": untracked_content,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
     return {
         "base_ref": base_ref,
         "head_sha": head_sha,
         "diff_files_hash": hashlib.sha256(hash_source.encode("utf-8")).hexdigest(),
         "changed_files": changed_files,
     }
+
+
+def _untracked_content_fingerprint(root: Path) -> str | None:
+    output = _git_stdout(
+        root,
+        ["git", "-c", "core.quotePath=false", "ls-files", "--others", "--exclude-standard"],
+    )
+    if output is None:
+        return None
+    root_resolved = root.resolve()
+    entries: list[str] = []
+    for raw_path in output.splitlines():
+        path = _normalize_repo_path(raw_path)
+        if not path:
+            continue
+        candidate = (root / path).resolve()
+        try:
+            candidate.relative_to(root_resolved)
+        except ValueError:
+            return None
+        if not candidate.is_file():
+            continue
+        try:
+            content = candidate.read_bytes()
+        except OSError:
+            return None
+        digest = hashlib.sha256(content).hexdigest()
+        entries.append(f"{path}\0{len(content)}\0{digest}")
+    return "\n".join(sorted(entries))
 
 
 def _discover_branch_diff_base(root: Path) -> str | None:
@@ -1206,6 +1275,8 @@ def _render_diff_fingerprint_summary(payload: dict[str, Any]) -> list[str]:
         f"- Head SHA: {_short_sha(head_sha)}",
         f"- Diff hash: {diff_hash or 'unknown'}",
         f"- Changed files: {len(changed_files)}",
+        "- Changed file paths:",
+        *(f"  - `{path}`" for path in changed_files),
     ]
 
 

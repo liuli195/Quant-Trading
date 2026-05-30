@@ -306,6 +306,7 @@ def sync(
             for error in migrated_result.errors:
                 print(f"error: {error}", file=sys.stderr)
             return 1
+        result = migrated_result
         _write_ai_review_payload(root, payload)
 
     pr_body = ai_review_gate.render_pr_body(payload)

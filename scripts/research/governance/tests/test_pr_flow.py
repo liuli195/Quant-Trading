@@ -1890,6 +1890,36 @@ def test_sync_migrates_legacy_report_with_current_diff_files(
     assert payload["diff_fingerprint"]["changed_files"] == ["docs/guides/current.md"]
 
 
+def test_sync_uses_migrated_review_scope_for_codex_request(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _write_valid_report(
+        tmp_path,
+        risk_level="high",
+        requires_official=True,
+        changed_files=["scripts/research/governance/rules.py"],
+    )
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["scripts/research/governance/pr_flow.py"],
+        },
+    )
+    runner = FakeRunner(existing_pr=True)
+
+    code = pr_flow.sync(repo_root=tmp_path, title="PR 流程自动化", runner=runner)
+
+    assert code == 0
+    assert runner.comments
+    assert "scripts/research/governance/pr_flow.py" in runner.comments[-1]
+    assert "scripts/research/governance/rules.py" not in runner.comments[-1]
+
+
 def test_sync_replaces_existing_pr_block_with_windows_path_evidence(
     tmp_path: Path,
 ) -> None:

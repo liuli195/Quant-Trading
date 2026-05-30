@@ -373,7 +373,123 @@ def test_pr_body_renders_v3_head_and_diff_summary_without_full_diff() -> None:
     assert "Head SHA: 111111111111" in body
     assert "Diff hash: current-diff" in body
     assert "Changed files: 1" in body
+    assert "Changed file paths:" in body
+    assert "`docs/guides/example.md`" in body
     assert "diff --git" not in body
+
+
+def test_current_diff_fingerprint_hashes_worktree_patch_content(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    unstaged_patch = {"text": "unstaged-v1"}
+
+    monkeypatch.setattr(
+        ai_review_gate,
+        "_discover_changed_files",
+        lambda _root: ["docs/guides/example.md"],
+    )
+    monkeypatch.setattr(
+        ai_review_gate,
+        "_discover_branch_diff_base",
+        lambda _root: "origin/main",
+    )
+
+    def fake_git_stdout(_root: Path, command: list[str]) -> str | None:
+        if command == ["git", "rev-parse", "HEAD"]:
+            return "1" * 40
+        if command == [
+            "git",
+            "-c",
+            "core.quotePath=false",
+            "diff",
+            "--binary",
+            "--no-ext-diff",
+            "origin/main...HEAD",
+        ]:
+            return "base-diff"
+        if command == [
+            "git",
+            "-c",
+            "core.quotePath=false",
+            "diff",
+            "--binary",
+            "--no-ext-diff",
+        ]:
+            return unstaged_patch["text"]
+        if command == [
+            "git",
+            "-c",
+            "core.quotePath=false",
+            "diff",
+            "--binary",
+            "--no-ext-diff",
+            "--cached",
+        ]:
+            return "staged-diff"
+        return None
+
+    monkeypatch.setattr(ai_review_gate, "_git_stdout", fake_git_stdout)
+    monkeypatch.setattr(
+        ai_review_gate,
+        "_untracked_content_fingerprint",
+        lambda _root: "untracked-v1",
+    )
+
+    first = ai_review_gate.current_diff_fingerprint(tmp_path)
+    unstaged_patch["text"] = "unstaged-v2"
+    second = ai_review_gate.current_diff_fingerprint(tmp_path)
+
+    assert first is not None
+    assert second is not None
+    assert first["diff_files_hash"] != second["diff_files_hash"]
+
+
+def test_current_diff_fingerprint_hashes_untracked_content(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    untracked_hash = {"text": "untracked-v1"}
+
+    monkeypatch.setattr(
+        ai_review_gate,
+        "_discover_changed_files",
+        lambda _root: ["docs/guides/new.md"],
+    )
+    monkeypatch.setattr(
+        ai_review_gate,
+        "_discover_branch_diff_base",
+        lambda _root: "origin/main",
+    )
+
+    def fake_git_stdout(_root: Path, command: list[str]) -> str | None:
+        if command == ["git", "rev-parse", "HEAD"]:
+            return "1" * 40
+        if command[:6] == [
+            "git",
+            "-c",
+            "core.quotePath=false",
+            "diff",
+            "--binary",
+            "--no-ext-diff",
+        ]:
+            return ""
+        return None
+
+    monkeypatch.setattr(ai_review_gate, "_git_stdout", fake_git_stdout)
+    monkeypatch.setattr(
+        ai_review_gate,
+        "_untracked_content_fingerprint",
+        lambda _root: untracked_hash["text"],
+    )
+
+    first = ai_review_gate.current_diff_fingerprint(tmp_path)
+    untracked_hash["text"] = "untracked-v2"
+    second = ai_review_gate.current_diff_fingerprint(tmp_path)
+
+    assert first is not None
+    assert second is not None
+    assert first["diff_files_hash"] != second["diff_files_hash"]
 
 
 def test_pr_body_command_renders_accepted_p2_details(
