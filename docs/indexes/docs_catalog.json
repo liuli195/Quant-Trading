@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "catalog_type": "docs",
-  "generated_at": "2026-05-30T11:57:13+00:00",
-  "count": 62,
+  "generated_at": "2026-05-30T17:34:36+00:00",
+  "count": 63,
   "reports": [
     {
       "path": "docs/README.md",
@@ -121,6 +121,18 @@
       "updated_at": "2026-05-29T16:49:17+00:00"
     },
     {
+      "path": "docs/adr/0007-pr-flow-closed-loop-review-evidence.md",
+      "title": "ADR 0007: PR 强闭环状态机与 Review Evidence 边界",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "docs/adr/0006-risk-tiered-pr-review.md"
+      ],
+      "updated_at": "2026-05-30T14:48:16+00:00"
+    },
+    {
       "path": "docs/agents/domain.md",
       "title": "领域文档",
       "category": "docs",
@@ -134,7 +146,7 @@
         "docs/rules",
         "docs/adr"
       ],
-      "updated_at": "2026-05-30T10:26:48+00:00"
+      "updated_at": "2026-05-30T12:19:01+00:00"
     },
     {
       "path": "docs/agents/issue-tracker.md",
@@ -144,7 +156,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-30T10:26:47+00:00"
+      "updated_at": "2026-05-30T12:19:01+00:00"
     },
     {
       "path": "docs/agents/triage-labels.md",
@@ -154,7 +166,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-30T10:26:47+00:00"
+      "updated_at": "2026-05-30T12:19:01+00:00"
     },
     {
       "path": "docs/architecture/research-platform-architecture.md",
@@ -521,7 +533,7 @@
     },
     {
       "path": "docs/problems/2026-05-30-pr25-flow-retrospective.md",
-      "title": "PR #25 流程问题复盘",
+      "title": "PR #25/#26 流程问题复盘",
       "category": "docs",
       "strategy": null,
       "date": "2026-05-30",
@@ -532,10 +544,9 @@
         "docs/rules/governance.md",
         "docs/rules/docs-and-pathref.md",
         "scripts/research/governance/pr_flow.py",
-        "scripts/research/governance/ai_review_gate.py",
-        "repo/.gitignore"
+        "scripts/research/governance/ai_review_gate.py"
       ],
-      "updated_at": "2026-05-30T11:57:04+00:00"
+      "updated_at": "2026-05-30T17:29:27+00:00"
     },
     {
       "path": "docs/reference/joinquant-api.md",
@@ -657,7 +668,7 @@
       "pathrefs": [
         "repo/AGENTS.md"
       ],
-      "updated_at": "2026-05-30T11:57:04+00:00"
+      "updated_at": "2026-05-30T17:29:27+00:00"
     },
     {
       "path": "docs/rules/index.md",
@@ -697,7 +708,7 @@
         "docs/rules/governance.md",
         "docs/rules/review-guidelines.md"
       ],
-      "updated_at": "2026-05-29T19:12:32+00:00"
+      "updated_at": "2026-05-30T17:29:27+00:00"
     },
     {
       "path": "docs/rules/research-workflow.md",
