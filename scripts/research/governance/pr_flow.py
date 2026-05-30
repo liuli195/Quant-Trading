@@ -288,12 +288,20 @@ def sync(
             print(f"error: {error}", file=sys.stderr)
         return 1
     if payload.get("schema_version") != ai_review_gate.CURRENT_SCHEMA_VERSION:
+        current_changed_files = (
+            ai_review_gate._string_list(current_fingerprint.get("changed_files"))
+            if isinstance(current_fingerprint, dict)
+            else ai_review_gate._string_list(payload.get("changed_files"))
+        )
         payload = ai_review_gate.payload_as_schema_v3(
             payload,
             repo_root=root,
-            changed_files=ai_review_gate._string_list(payload.get("changed_files")),
+            changed_files=current_changed_files,
         )
-        migrated_result = ai_review_gate.validate_report(payload)
+        migrated_result = ai_review_gate.validate_report(
+            payload,
+            current_diff_fingerprint=current_fingerprint,
+        )
         if not migrated_result.ok:
             for error in migrated_result.errors:
                 print(f"error: {error}", file=sys.stderr)

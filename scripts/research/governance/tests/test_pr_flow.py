@@ -3,7 +3,18 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from scripts.research.governance import pr_flow
+
+
+@pytest.fixture(autouse=True)
+def _isolate_current_diff_fingerprint(monkeypatch) -> None:
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: None,
+    )
 
 
 def _codex_review_trigger_body(head_sha: str = "1" * 40) -> str:
@@ -1843,6 +1854,40 @@ def test_sync_migrates_legacy_report_to_schema_v3_before_rendering(
     assert payload["schema_version"] == 3
     assert payload["diff_fingerprint"]["diff_files_hash"] == "current-diff"
     assert "## 当前提交与差异摘要" in runner.edited_bodies[-1]
+
+
+def test_sync_migrates_legacy_report_with_current_diff_files(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _write_valid_report(
+        tmp_path,
+        risk_level="low",
+        requires_official=False,
+        changed_files=["docs/guides/stale.md"],
+    )
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["docs/guides/current.md"],
+        },
+    )
+    runner = FakeRunner(existing_pr=True)
+
+    code = pr_flow.sync(repo_root=tmp_path, title="PR 流程自动化", runner=runner)
+
+    assert code == 0
+    payload = json.loads(
+        (tmp_path / ".local" / "ai-review" / "latest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert payload["changed_files"] == ["docs/guides/current.md"]
+    assert payload["diff_fingerprint"]["changed_files"] == ["docs/guides/current.md"]
 
 
 def test_sync_replaces_existing_pr_block_with_windows_path_evidence(
