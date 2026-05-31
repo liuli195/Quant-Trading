@@ -1,0 +1,40 @@
+#!/bin/sh
+set -u
+
+# Best-effort bridge from Git commits to agentmemory commit context.
+# It must never block normal commits.
+find_agentmemory_post_commit() {
+  if [ -n "${AGENTMEMORY_POST_COMMIT_SCRIPT:-}" ] && [ -f "${AGENTMEMORY_POST_COMMIT_SCRIPT}" ]; then
+    printf '%s\n' "${AGENTMEMORY_POST_COMMIT_SCRIPT}"
+    return 0
+  fi
+
+  for root in "${CLAUDE_PLUGIN_ROOT:-}" "${COPILOT_PLUGIN_ROOT:-}" "${CODEX_PLUGIN_ROOT:-}"; do
+    if [ -n "$root" ] && [ -f "$root/scripts/post-commit.mjs" ]; then
+      printf '%s\n' "$root/scripts/post-commit.mjs"
+      return 0
+    fi
+  done
+
+  for base in \
+    "${HOME:-}/.codex/plugins/cache/agentmemory/agentmemory" \
+    "${USERPROFILE:-}/.codex/plugins/cache/agentmemory/agentmemory"
+  do
+    [ -n "$base" ] || continue
+    for candidate in "$base"/*/scripts/post-commit.mjs; do
+      if [ -f "$candidate" ]; then
+        printf '%s\n' "$candidate"
+        return 0
+      fi
+    done
+  done
+
+  return 1
+}
+
+command -v node >/dev/null 2>&1 || exit 0
+
+SCRIPT="$(find_agentmemory_post_commit || true)"
+[ -n "$SCRIPT" ] || exit 0
+
+AGENTMEMORY_CWD="${AGENTMEMORY_CWD:-$(pwd)}" node "$SCRIPT" >/dev/null 2>&1 || true
