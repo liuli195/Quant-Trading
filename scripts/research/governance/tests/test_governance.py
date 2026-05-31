@@ -1380,6 +1380,10 @@ def _write_minimal_repo(root: Path) -> None:
         "sh .githooks/run-python.sh -m scripts.research.governance verify fast --staged\n",
         encoding="utf-8",
     )
+    (root / ".githooks/post-commit").write_text(
+        "sh .githooks/run-python.sh -m scripts.research.governance.pr_flow intent post-commit\n",
+        encoding="utf-8",
+    )
     (root / "Makefile").write_text(
         "ifeq ($(OS),Windows_NT)\n"
         "PYTHON ?= ./.venv/Scripts/python.exe\n"
@@ -2491,6 +2495,48 @@ def test_governance_audit_flags_hooks_that_require_powershell(tmp_path) -> None:
     assert any(
         finding.rule_id == "governance_gate"
         and "pre-commit hook must use run-python.sh" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_missing_post_commit_hook(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/post-commit").unlink()
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and ".githooks/post-commit missing" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_post_commit_without_intent_gate(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/post-commit").write_text(
+        "sh .githooks/run-python.sh -m scripts.research.governance verify fast\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "post-commit hook missing intent post-commit gate" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_post_commit_without_python_wrapper(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/post-commit").write_text(
+        "python -m scripts.research.governance.pr_flow intent post-commit\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "post-commit hook must use run-python.sh" in finding.message
         for finding in report.findings
     )
 

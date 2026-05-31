@@ -563,6 +563,28 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                 )
             )
 
+    post_commit = root / ".githooks" / "post-commit"
+    if not post_commit.is_file():
+        findings.append(
+            AuditFinding("governance_gate", "error", ".githooks/post-commit missing")
+        )
+    else:
+        text = post_commit.read_text(encoding="utf-8", errors="ignore")
+        if "scripts.research.governance.pr_flow intent post-commit" not in text:
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "post-commit hook missing intent post-commit gate",
+                )
+            )
+        if "powershell.exe" in text or ".githooks/run-python.sh" not in text:
+            findings.append(
+                AuditFinding(
+                    "governance_gate", "error", "post-commit hook must use run-python.sh"
+                )
+            )
+
     pre_push = root / ".githooks" / "pre-push"
     if not pre_push.is_file():
         findings.append(
