@@ -506,6 +506,51 @@ def test_branch_intent_coverage_detects_missing_current_commit(
     assert missing in status["blocking_items"]
 
 
+def test_branch_intent_coverage_rejects_stale_commit(
+    tmp_path: Path,
+) -> None:
+    current = "1" * 40
+    stale = "2" * 40
+    runner = FakeIntentRunner(branch_commits=(current,))
+    path = tmp_path / ".local/pr-flow/intents/feature/intent.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "branch": "feature/intent",
+                "commits": [
+                    {
+                        "commit_sha": current,
+                        "issue_policy": "issues",
+                        "issues": [{"number": 55, "role": "closes"}],
+                    },
+                    {
+                        "commit_sha": stale,
+                        "issue_policy": "issues",
+                        "issues": [{"number": 99, "role": "closes"}],
+                    },
+                ],
+                "issues": [
+                    {"number": 55, "role": "closes"},
+                    {"number": 99, "role": "closes"},
+                ],
+                "no_issue_authorizations": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    code = pr_flow.check_branch_intent_coverage(repo_root=tmp_path, runner=runner)
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
+    )
+    assert status["reason_code"] == "BRANCH_INTENT_STALE_COMMITS"
+    assert stale in status["blocking_items"]
+
+
 def _valid_issue_intent_payload() -> dict[str, Any]:
     head_sha = "a" * 40
     return {
@@ -683,6 +728,99 @@ def test_review_payload_derives_spec_ref_from_branch_intent(tmp_path: Path) -> N
     }
     assert updated["issue_intent"]["head_sha"] == "4" * 40
     assert updated["issue_intent"]["commits"][0]["commit_sha"] == "4" * 40
+
+
+def test_review_payload_filters_stale_branch_intent_commits(tmp_path: Path) -> None:
+    current = "4" * 40
+    stale = "5" * 40
+    runner = FakeIntentRunner(head_sha=current, branch_commits=(current,))
+    path = tmp_path / ".local/pr-flow/intents/feature/intent.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "branch": "feature/intent",
+                "commits": [
+                    {
+                        "commit_sha": current,
+                        "issue_policy": "issues",
+                        "issues": [{"number": 55, "role": "closes"}],
+                    },
+                    {
+                        "commit_sha": stale,
+                        "issue_policy": "issues",
+                        "issues": [{"number": 99, "role": "closes"}],
+                    },
+                ],
+                "issues": [
+                    {"number": 55, "role": "closes"},
+                    {"number": 99, "role": "closes"},
+                ],
+                "no_issue_authorizations": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    updated = pr_flow.payload_with_branch_intent(
+        _valid_issue_intent_payload(),
+        repo_root=tmp_path,
+        runner=runner,
+    )
+
+    assert updated["spec_ref"]["issues"] == [{"number": 55, "role": "closes"}]
+    assert [item["commit_sha"] for item in updated["issue_intent"]["commits"]] == [
+        current
+    ]
+
+
+def test_branch_context_applies_intent_before_spec_policy_validation(
+    tmp_path: Path,
+) -> None:
+    head_sha = "a" * 40
+    runner = FakeIntentRunner(
+        head_sha=head_sha,
+        branch_commits=(head_sha,),
+        issue_bodies={55: "- [ ] AC is met\n"},
+    )
+    assert (
+        pr_flow.stage_commit_intent(
+            repo_root=tmp_path,
+            runner=runner,
+            issue_bindings=("55:closes",),
+        )
+        == pr_flow.SUCCESS_EXIT_CODE
+    )
+    assert (
+        pr_flow.record_committed_intent(repo_root=tmp_path, runner=runner)
+        == pr_flow.SUCCESS_EXIT_CODE
+    )
+    payload = _valid_issue_intent_payload()
+    payload["pr_class"] = "governance_functional"
+    payload["spec_ref"] = {"issues": [], "design_docs": [], "adrs": []}
+    payload["issue_refs"] = []
+
+    updated = pr_flow._payload_with_current_branch_context(
+        payload,
+        root=tmp_path,
+        runner=runner,
+        current_diff_fingerprint=payload["diff_fingerprint"],
+    )
+    result = ai_review_gate.validate_report(
+        updated,
+        current_diff_fingerprint=payload["diff_fingerprint"],
+    )
+
+    assert result.ok, result.errors
+    assert updated["spec_ref"]["issues"] == [{"number": 55, "role": "closes"}]
+    assert updated["issue_refs"] == [
+        {
+            "number": 55,
+            "title": "Issue 55",
+            "acceptance_criteria": ["AC is met"],
+        }
+    ]
 
 
 def test_review_payload_carries_ac_review_mode_from_branch_intent(tmp_path: Path) -> None:

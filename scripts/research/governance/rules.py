@@ -522,6 +522,7 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             "PYTHONUTF8",
             "PYTHONIOENCODING",
             "python3.12",
+            ".githooks/post-commit",
         ):
             if token not in text:
                 findings.append(

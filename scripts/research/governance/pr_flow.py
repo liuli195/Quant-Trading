@@ -425,12 +425,20 @@ def check_branch_intent_coverage(
             for item in branch_intent.get("commits", [])
             if isinstance(item, dict) and _single_line_text(item.get("commit_sha"))
         }
+        current = set(commits)
         missing = [sha for sha in commits if sha not in recorded]
         if missing:
             raise CommitIntentError(
                 "branch intent does not cover all current branch commits",
                 reason_code="BRANCH_INTENT_COVERAGE_MISSING",
                 details=missing,
+            )
+        stale = sorted(sha for sha in recorded if sha not in current)
+        if stale:
+            raise CommitIntentError(
+                "branch intent contains commits outside the current branch",
+                reason_code="BRANCH_INTENT_STALE_COMMITS",
+                details=stale,
             )
         return SUCCESS_EXIT_CODE
     except CommitIntentError as exc:
@@ -463,6 +471,22 @@ def payload_with_branch_intent(
     commits = [
         item for item in branch_intent.get("commits", []) if isinstance(item, dict)
     ]
+    current_commits = set(_current_branch_commit_shas(root, runner, base_ref="origin/main"))
+    if current_commits:
+        commits = [
+            item
+            for item in commits
+            if _single_line_text(item.get("commit_sha")) in current_commits
+        ]
+        branch_intent = dict(branch_intent)
+        branch_intent["commits"] = commits
+        branch_intent["issues"] = _aggregate_intent_issues(commits)
+        branch_intent["no_issue_authorizations"] = _no_issue_authorizations(commits)
+        ac_review_mode = _branch_ac_review_mode(commits)
+        if ac_review_mode:
+            branch_intent["ac_review_mode"] = ac_review_mode
+        else:
+            branch_intent.pop("ac_review_mode", None)
     if not commits:
         return dict(payload)
     updated = dict(payload)
@@ -658,12 +682,34 @@ def prepare(
         print("created .local/ai-review/latest.draft.json; fill latest.json before sync")
         return 1
 
-    payload = payload or _read_json_object(latest)
-    validation = ai_review_gate.validate_report_file(
-        latest,
-        current_diff_fingerprint=ai_review_gate.current_diff_fingerprint(root),
+    payload = payload or _read_json_object(latest) or {}
+    current_fingerprint = ai_review_gate.current_diff_fingerprint(root)
+    try:
+        payload = _payload_with_current_branch_context(
+            payload,
+            root=root,
+            runner=runner,
+            current_diff_fingerprint=current_fingerprint,
+            changed_files=check_files,
+        )
+    except GitHubDataUnavailable as exc:
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            str(exc),
+            repo_root=root,
+            reason_code="ISSUE_REFS_UNAVAILABLE",
+            phase="prepare",
+            retryable=exc.retryable,
+            dispatch_target="github",
+            details=exc.details,
+            next_actions=("restore GitHub issue access",),
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    validation = ai_review_gate.validate_report(
+        payload,
+        current_diff_fingerprint=current_fingerprint,
     )
-    if payload is None or not validation.ok:
+    if not validation.ok:
         for error in validation.errors:
             print(f"error: {error}", file=sys.stderr)
         return 1
@@ -725,38 +771,13 @@ def sync(
         print(f"error: AI review report missing or invalid: {latest}", file=sys.stderr)
         return 1
     current_fingerprint = ai_review_gate.current_diff_fingerprint(root)
-    result = ai_review_gate.validate_report_file(
-        latest,
-        current_diff_fingerprint=current_fingerprint,
-    )
-    if not result.ok:
-        for error in result.errors:
-            print(f"error: {error}", file=sys.stderr)
-        return 1
-    if payload.get("schema_version") != ai_review_gate.CURRENT_SCHEMA_VERSION:
-        current_changed_files = (
-            ai_review_gate._string_list(current_fingerprint.get("changed_files"))
-            if isinstance(current_fingerprint, dict)
-            else ai_review_gate._string_list(payload.get("changed_files"))
-        )
-        payload = ai_review_gate.payload_as_schema_v4(
+    try:
+        payload = _payload_with_current_branch_context(
             payload,
-            repo_root=root,
-            changed_files=current_changed_files,
-        )
-        migrated_result = ai_review_gate.validate_report(
-            payload,
+            root=root,
+            runner=runner,
             current_diff_fingerprint=current_fingerprint,
         )
-        if not migrated_result.ok:
-            for error in migrated_result.errors:
-                print(f"error: {error}", file=sys.stderr)
-            return 1
-        result = migrated_result
-        _write_ai_review_payload(root, payload)
-    try:
-        payload = payload_with_branch_intent(payload, repo_root=root, runner=runner)
-        payload = _payload_with_issue_refs(payload, root=root, runner=runner)
     except GitHubDataUnavailable as exc:
         _print_state(
             "EXCEPTION_REQUIRED",
@@ -770,15 +791,14 @@ def sync(
             next_actions=("restore GitHub issue access",),
         )
         return EXCEPTION_REQUIRED_EXIT_CODE
-    refreshed_result = ai_review_gate.validate_report(
+    result = ai_review_gate.validate_report(
         payload,
         current_diff_fingerprint=current_fingerprint,
     )
-    if not refreshed_result.ok:
-        for error in refreshed_result.errors:
+    if not result.ok:
+        for error in result.errors:
             print(f"error: {error}", file=sys.stderr)
         return 1
-    result = refreshed_result
     _write_ai_review_payload(root, payload)
 
     pr_body = ai_review_gate.render_pr_body(payload)
@@ -2017,6 +2037,36 @@ def _strategy_test_dirs(root: Path, changed_files: Sequence[str]) -> set[str]:
     return dirs
 
 
+def _payload_with_current_branch_context(
+    payload: dict[str, Any],
+    *,
+    root: Path,
+    runner: Runner,
+    current_diff_fingerprint: dict[str, Any] | None,
+    changed_files: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    current_changed_files = (
+        ai_review_gate._string_list(current_diff_fingerprint.get("changed_files"))
+        if isinstance(current_diff_fingerprint, dict)
+        else ai_review_gate._string_list(payload.get("changed_files"))
+    )
+    if changed_files is not None:
+        current_changed_files = sorted(
+            {ai_review_gate._normalize_repo_path(path) for path in changed_files if path}
+        )
+    updated = (
+        ai_review_gate.payload_as_schema_v4(
+            payload,
+            repo_root=root,
+            changed_files=current_changed_files,
+        )
+        if payload.get("schema_version") != ai_review_gate.CURRENT_SCHEMA_VERSION
+        else dict(payload)
+    )
+    updated = payload_with_branch_intent(updated, repo_root=root, runner=runner)
+    return _payload_with_issue_refs(updated, root=root, runner=runner)
+
+
 def _payload_with_prepare_evidence(
     payload: dict[str, Any],
     *,
@@ -2053,13 +2103,13 @@ def _payload_with_prepare_evidence(
             merged_checks["pytest strategy tests"] = "passed"
     if merged_checks:
         updated["checks"] = merged_checks
-    updated = ai_review_gate.payload_as_schema_v4(
+    return _payload_with_current_branch_context(
         updated,
-        repo_root=root,
+        root=root,
+        runner=runner,
+        current_diff_fingerprint=ai_review_gate.current_diff_fingerprint(root),
         changed_files=changed_files or updated.get("changed_files"),
     )
-    updated = payload_with_branch_intent(updated, repo_root=root, runner=runner)
-    return _payload_with_issue_refs(updated, root=root, runner=runner)
 
 
 def _payload_with_issue_refs(

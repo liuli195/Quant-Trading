@@ -1420,7 +1420,7 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / ".githooks/setup-python.sh").write_text(
         "python3.12\nrequirements-dev.txt\ngit config core.hooksPath .githooks\n"
-        "PYTHONUTF8\nPYTHONIOENCODING\n",
+        "PYTHONUTF8\nPYTHONIOENCODING\n.githooks/post-commit\n",
         encoding="utf-8",
     )
     (root / ".githooks/pre-push").write_text(
