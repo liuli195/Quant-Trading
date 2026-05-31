@@ -522,6 +522,8 @@ def evaluate_review_pipeline(payload: dict[str, Any]) -> dict[str, Any]:
     fragments = payload.get("review_fragments")
     fragments = fragments if isinstance(fragments, dict) else {}
     first_stage_blocking = [
+        *_non_passing_fragment_status("standards", fragments.get("standards")),
+        *_non_passing_fragment_status("spec", fragments.get("spec")),
         *_open_blocking_fragment_findings(fragments.get("standards")),
         *_open_blocking_fragment_findings(fragments.get("spec")),
     ]
@@ -538,7 +540,10 @@ def evaluate_review_pipeline(payload: dict[str, Any]) -> dict[str, Any]:
             "blocking_findings": missing_ac,
             "ac_evidence": _spec_ac_evidence(payload),
         }
-    security_blocking = _open_blocking_fragment_findings(fragments.get("security"))
+    security_blocking = [
+        *_non_passing_fragment_status("security", fragments.get("security")),
+        *_open_blocking_fragment_findings(fragments.get("security")),
+    ]
     if security_blocking:
         return {
             "status": "blocked",
@@ -2482,6 +2487,15 @@ def _open_blocking_fragment_findings(fragment: Any) -> list[str]:
     return blocking
 
 
+def _non_passing_fragment_status(axis: str, fragment: Any) -> list[str]:
+    if not isinstance(fragment, dict):
+        return []
+    status = _single_line_text(fragment.get("status")).casefold()
+    if not status or status in {"pass", "passed"}:
+        return []
+    return [f"{axis} review fragment status {status}"]
+
+
 def _spec_ac_evidence(payload: dict[str, Any]) -> list[dict[str, Any]]:
     fragments = payload.get("review_fragments")
     if not isinstance(fragments, dict):
@@ -4329,6 +4343,7 @@ def _fallback_required_check_results(
                 root=root,
                 runner=runner,
                 repo=repo,
+                branch=_single_line_text(payload.get("baseRefName")),
             )
         )
     if not required_names:
@@ -4412,14 +4427,15 @@ def _required_status_check_names(
     root: Path,
     runner: Runner,
     repo: str,
+    branch: str,
 ) -> set[str]:
+    names: set[str] = set()
     try:
         rulesets = _gh_api_list(
             root,
             runner,
             f"repos/{repo}/rulesets?includes_parents=true",
         )
-        names: set[str] = set()
         for summary in rulesets:
             ruleset = _ruleset_detail(
                 root=root,
@@ -4444,9 +4460,43 @@ def _required_status_check_names(
                             names.add(name)
                     elif (name := _single_line_text(item)):
                         names.add(name)
-        return names
     except GitHubDataUnavailable:
+        pass
+    names.update(
+        _legacy_required_status_check_names(
+            root=root,
+            runner=runner,
+            repo=repo,
+            branch=branch,
+        )
+    )
+    return names
+
+
+def _legacy_required_status_check_names(
+    *,
+    root: Path,
+    runner: Runner,
+    repo: str,
+    branch: str,
+) -> set[str]:
+    if not branch:
         return set()
+    path = f"repos/{repo}/branches/{branch}/protection/required_status_checks"
+    result = _run_github_read_command(root, runner, ["gh", "api", path])
+    if result.returncode != 0:
+        return set()
+    payload = _json_from_result(result)
+    names = set(ai_review_gate._string_list(payload.get("contexts")))
+    checks = payload.get("checks")
+    if isinstance(checks, list):
+        for item in checks:
+            if not isinstance(item, dict):
+                continue
+            name = _single_line_text(item.get("context") or item.get("name"))
+            if name:
+                names.add(name)
+    return names
 
 
 def _required_check_rank(check: dict[str, Any], index: int) -> tuple[int, str, int, int, int]:

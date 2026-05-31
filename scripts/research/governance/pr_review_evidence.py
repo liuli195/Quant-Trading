@@ -367,6 +367,29 @@ def _issue_intent_machine_errors(
         policy = _single_line_text(item.get("issue_policy"))
         if policy not in {"issues", "no_issue"}:
             errors.append(f"issue intent commits[{index}].issue_policy is invalid")
+        if policy == "issues":
+            commit_issues = item.get("issues")
+            if not isinstance(commit_issues, list) or not commit_issues:
+                errors.append(
+                    f"issue intent commits[{index}].issues must not be empty for issue_policy issues"
+                )
+            else:
+                for issue_index, issue in enumerate(commit_issues):
+                    if not isinstance(issue, dict):
+                        errors.append(
+                            f"issue intent commits[{index}].issues[{issue_index}] must be an object"
+                        )
+                        continue
+                    number = _positive_int(issue.get("number"))
+                    role = _single_line_text(issue.get("role"))
+                    if number is None:
+                        errors.append(
+                            f"issue intent commits[{index}].issues[{issue_index}].number must be a positive integer"
+                        )
+                    if role not in {"reference", "closes"}:
+                        errors.append(
+                            f"issue intent commits[{index}].issues[{issue_index}].role must be reference or closes"
+                        )
         if policy == "no_issue":
             authorization = item.get("no_issue_authorization")
             if not isinstance(authorization, dict):
@@ -828,6 +851,17 @@ def _normalize_value(value: str) -> str:
 
 def _single_line_text(value: object) -> str:
     return " ".join(str(value or "").split())
+
+
+def _positive_int(value: object) -> int | None:
+    text = _single_line_text(value)
+    if not text:
+        return None
+    try:
+        number = int(text)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
 
 
 def _has_nonempty_evidence(section: str) -> bool:

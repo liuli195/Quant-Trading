@@ -694,6 +694,24 @@ def test_pr_review_evidence_rejects_stale_issue_intent_head() -> None:
     assert "issue intent machine data head_sha does not match current PR head" in report.errors
 
 
+def test_pr_review_evidence_rejects_issues_policy_commit_without_issues() -> None:
+    payload = _valid_issue_intent_payload()
+    payload["issue_intent"]["commits"][0].pop("issues")
+    body = ai_review_gate.render_pr_body(payload)
+
+    report = pr_review_evidence.validate_pr_body(
+        body,
+        expected_head_sha="a" * 40,
+        expected_commit_shas=("1" * 40, "2" * 40),
+    )
+
+    assert not report.ok
+    assert (
+        "issue intent commits[0].issues must not be empty for issue_policy issues"
+        in report.errors
+    )
+
+
 def test_review_payload_derives_spec_ref_from_branch_intent(tmp_path: Path) -> None:
     runner = FakeIntentRunner(head_sha="4" * 40)
     assert (
@@ -858,6 +876,16 @@ def test_review_pipeline_skips_security_when_standards_has_open_p1() -> None:
 
     assert decision["status"] == "security_skipped"
     assert decision["blocking_findings"] == ["STD-1"]
+
+
+def test_review_pipeline_blocks_non_passing_first_stage_fragment_status() -> None:
+    payload = _valid_issue_intent_payload()
+    payload["review_fragments"]["standards"]["status"] = "blocked"
+
+    decision = pr_flow.evaluate_review_pipeline(payload)
+
+    assert decision["status"] == "security_skipped"
+    assert "standards review fragment status blocked" in decision["blocking_findings"]
 
 
 def test_review_pipeline_requires_spec_ac_evidence_for_closes_issue() -> None:

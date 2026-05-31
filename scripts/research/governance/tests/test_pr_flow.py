@@ -574,8 +574,13 @@ class PendingRequiredChecksRunner:
 
 
 class RollupFallbackChecksRunner:
-    def __init__(self, rollup_checks: list[dict[str, str]] | None = None) -> None:
+    def __init__(
+        self,
+        rollup_checks: list[dict[str, str]] | None = None,
+        legacy_required_contexts: list[str] | None = None,
+    ) -> None:
         self.calls: list[list[str]] = []
+        self.legacy_required_contexts = legacy_required_contexts or []
         self.rollup_checks = rollup_checks or [
             {
                 "name": "governance",
@@ -676,6 +681,15 @@ class RollupFallbackChecksRunner:
                         ],
                     }
                 ),
+                "",
+            )
+        if (
+            _gh_api_path(command)
+            == "repos/liuli195/Quant-Trading/branches/main/protection/required_status_checks"
+        ):
+            return pr_flow.CommandResult(
+                0,
+                json.dumps({"contexts": self.legacy_required_contexts, "checks": []}),
                 "",
             )
         if command == ["gh", "pr", "checks", "7", "--required"]:
@@ -802,6 +816,11 @@ class DiagnoseRunner:
                 ),
                 "",
             )
+        if (
+            _gh_api_path(command)
+            == "repos/liuli195/Quant-Trading/branches/main/protection/required_status_checks"
+        ):
+            return pr_flow.CommandResult(0, json.dumps({"contexts": [], "checks": []}), "")
         if command == ["git", "rev-parse", "HEAD"]:
             return pr_flow.CommandResult(0, self.local_head + "\n", "")
         if command == [
@@ -1359,6 +1378,53 @@ def test_wait_fallback_blocks_when_mandatory_required_check_is_missing(
     assert "REQUIRED_CHECKS_PENDING" in captured.err
     assert "Research Governance / pr-review-evidence" in captured.err
     assert "Codex Review Monitor" in captured.err
+
+
+def test_wait_fallback_includes_legacy_branch_protection_required_checks(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = RollupFallbackChecksRunner(
+        legacy_required_contexts=["External Policy"],
+        rollup_checks=[
+            {
+                "name": "governance",
+                "workflowName": "Research Governance",
+                "state": "SUCCESS",
+                "detailsUrl": "https://github.com/o/r/actions/runs/30/job/300",
+                "startedAt": "2026-05-28T10:00:00Z",
+                "completedAt": "2026-05-28T10:01:00Z",
+            },
+            {
+                "name": "pr-review-evidence",
+                "workflowName": "Research Governance",
+                "state": "SUCCESS",
+                "detailsUrl": "https://github.com/o/r/actions/runs/31/job/310",
+                "startedAt": "2026-05-28T10:00:00Z",
+                "completedAt": "2026-05-28T10:01:00Z",
+            },
+            {
+                "name": "Codex Review Monitor",
+                "workflowName": "",
+                "state": "SUCCESS",
+                "detailsUrl": "https://github.com/o/r/pull/7#issuecomment-1",
+                "startedAt": "2026-05-28T10:00:00Z",
+                "completedAt": "2026-05-28T10:01:00Z",
+            },
+        ],
+    )
+
+    code = pr_flow.wait(repo_root=tmp_path, pr="7", runner=runner)
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "REQUIRED_CHECKS_PENDING" in captured.err
+    assert "External Policy" in captured.err
+    assert [
+        "gh",
+        "api",
+        "repos/liuli195/Quant-Trading/branches/main/protection/required_status_checks",
+    ] in runner.calls
 
 
 def test_wait_reports_exception_when_required_checks_unavailable(
