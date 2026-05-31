@@ -137,6 +137,34 @@ def _write_valid_v3_report(
     latest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
 
+def _write_valid_v4_issue_report(root: Path, *, issue_number: int = 50) -> None:
+    _write_valid_v3_report(
+        root,
+        changed_files=["docs/guides/example.md"],
+        diff_files_hash="current-diff",
+    )
+    latest = root / ".local" / "ai-review" / "latest.json"
+    payload = json.loads(latest.read_text(encoding="utf-8"))
+    payload = pr_flow.ai_review_gate.payload_as_schema_v4(
+        payload,
+        repo_root=root,
+        changed_files=["docs/guides/example.md"],
+    )
+    payload["spec_ref"] = {
+        "issues": [{"number": issue_number, "role": "closes"}],
+        "design_docs": [],
+        "adrs": [],
+    }
+    payload["issue_refs"] = [
+        {
+            "number": issue_number,
+            "title": f"Issue {issue_number}",
+            "acceptance_criteria": ["first AC"],
+        }
+    ]
+    latest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+
 class FakeRunner:
     def __init__(
         self,
@@ -1651,7 +1679,7 @@ def test_prepare_records_verify_full_evidence(
     assert gate_evidence in body
 
 
-def test_prepare_migrates_latest_report_to_schema_v3(
+def test_prepare_migrates_latest_report_to_schema_v4(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -1678,11 +1706,117 @@ def test_prepare_migrates_latest_report_to_schema_v3(
     payload = json.loads(
         (tmp_path / ".local/ai-review/latest.json").read_text(encoding="utf-8")
     )
-    assert payload["schema_version"] == 3
+    assert payload["schema_version"] == 4
     assert payload["diff_fingerprint"]["diff_files_hash"] == "current-diff"
     assert set(payload["review_fragments"]) == {"standards", "spec", "security"}
     assert payload["external_findings"] == []
     assert payload["current_commit_evidence"]["head_sha"] == "1" * 40
+    assert payload["spec_ref"] == {"issues": [], "design_docs": [], "adrs": []}
+    assert payload["issue_refs"] == []
+
+
+def test_prepare_populates_issue_refs_from_closing_spec_issues(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _write_valid_v3_report(
+        tmp_path,
+        changed_files=["docs/guides/example.md"],
+        diff_files_hash="current-diff",
+    )
+    latest = tmp_path / ".local" / "ai-review" / "latest.json"
+    payload = json.loads(latest.read_text(encoding="utf-8"))
+    payload = pr_flow.ai_review_gate.payload_as_schema_v4(
+        payload,
+        repo_root=tmp_path,
+        changed_files=["docs/guides/example.md"],
+    )
+    payload["spec_ref"] = {
+        "issues": [
+            {"number": 50, "role": "closes"},
+            {"number": 27, "role": "reference"},
+        ],
+        "design_docs": [],
+        "adrs": [],
+    }
+    payload["issue_refs"] = []
+    latest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(pr_flow.ai_review_gate, "_discover_changed_files", lambda _root: [])
+
+    class IssueRunner(RecordingRunner):
+        def run(
+            self,
+            command: list[str],
+            *,
+            cwd: Path | None = None,
+            input_text: str | None = None,
+        ) -> pr_flow.CommandResult:
+            self.calls.append(command)
+            if command == ["gh", "issue", "view", "50", "--json", "title,body"]:
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps(
+                        {
+                            "title": "PR Flow v2：集成 Issue 状态处理",
+                            "body": "- [ ] first AC\n- [x] second AC\n",
+                        }
+                    ),
+                    "",
+                )
+            return pr_flow.CommandResult(0, "", "")
+
+    code = pr_flow.prepare(repo_root=tmp_path, runner=IssueRunner())
+
+    assert code == 0
+    updated = json.loads(latest.read_text(encoding="utf-8"))
+    assert updated["schema_version"] == 4
+    assert updated["issue_refs"] == [
+        {
+            "number": 50,
+            "title": "PR Flow v2：集成 Issue 状态处理",
+            "acceptance_criteria": ["first AC", "second AC"],
+        }
+    ]
+
+
+def test_prepare_keeps_matching_issue_refs_without_refetching(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _write_valid_v3_report(
+        tmp_path,
+        changed_files=["docs/guides/example.md"],
+        diff_files_hash="current-diff",
+    )
+    latest = tmp_path / ".local" / "ai-review" / "latest.json"
+    payload = json.loads(latest.read_text(encoding="utf-8"))
+    payload = pr_flow.ai_review_gate.payload_as_schema_v4(
+        payload,
+        repo_root=tmp_path,
+        changed_files=["docs/guides/example.md"],
+    )
+    payload["spec_ref"] = {
+        "issues": [{"number": 50, "role": "closes"}],
+        "design_docs": [],
+        "adrs": [],
+    }
+    payload["issue_refs"] = [
+        {
+            "number": 50,
+            "title": "Already cached",
+            "acceptance_criteria": ["cached AC"],
+        }
+    ]
+    latest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(pr_flow.ai_review_gate, "_discover_changed_files", lambda _root: [])
+    runner = RecordingRunner()
+
+    code = pr_flow.prepare(repo_root=tmp_path, runner=runner)
+
+    assert code == 0
+    assert ["gh", "issue", "view", "50", "--json", "title,body"] not in runner.calls
+    updated = json.loads(latest.read_text(encoding="utf-8"))
+    assert updated["issue_refs"][0]["title"] == "Already cached"
 
 
 def test_prepare_rejects_stale_schema_v3_diff_fingerprint(
@@ -1821,7 +1955,75 @@ def test_sync_rejects_stale_schema_v3_diff_fingerprint(
     assert not any(call[:3] == ["gh", "pr", "edit"] for call in runner.calls)
 
 
-def test_sync_migrates_legacy_report_to_schema_v3_before_rendering(
+def test_sync_stops_after_pr_body_update_when_issue_ac_is_unchecked(
+    tmp_path: Path,
+) -> None:
+    _write_valid_v4_issue_report(tmp_path, issue_number=50)
+
+    class IssueAcRunner(FakeRunner):
+        def run(
+            self,
+            command: list[str],
+            *,
+            cwd: Path | None = None,
+            input_text: str | None = None,
+        ) -> pr_flow.CommandResult:
+            if command == ["gh", "issue", "view", "50", "--json", "title,body"]:
+                self.calls.append(command)
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps({"title": "Issue 50", "body": "- [ ] first AC\n"}),
+                    "",
+                )
+            return super().run(command, cwd=cwd, input_text=input_text)
+
+    runner = IssueAcRunner(existing_pr=True)
+
+    code = pr_flow.sync(repo_root=tmp_path, title="PR Flow issue gate", runner=runner)
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    assert "Closes #50" in runner.edited_bodies[-1]
+    status = json.loads(
+        (tmp_path / ".local" / "pr-flow" / "last-status.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert status["state"] == "DISPATCH_REQUIRED"
+    assert status["reason_code"] == "ISSUE_ACCEPTANCE_CRITERIA_INCOMPLETE"
+    assert status["blocking_items"] == ["#50 Issue 50: - [ ] first AC"]
+
+
+def test_sync_continues_when_linked_issue_ac_is_checked(
+    tmp_path: Path,
+) -> None:
+    _write_valid_v4_issue_report(tmp_path, issue_number=50)
+
+    class IssueAcRunner(FakeRunner):
+        def run(
+            self,
+            command: list[str],
+            *,
+            cwd: Path | None = None,
+            input_text: str | None = None,
+        ) -> pr_flow.CommandResult:
+            if command == ["gh", "issue", "view", "50", "--json", "title,body"]:
+                self.calls.append(command)
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps({"title": "Issue 50", "body": "- [x] first AC\n"}),
+                    "",
+                )
+            return super().run(command, cwd=cwd, input_text=input_text)
+
+    runner = IssueAcRunner(existing_pr=True)
+
+    code = pr_flow.sync(repo_root=tmp_path, title="PR Flow issue gate", runner=runner)
+
+    assert code == 0
+    assert "Closes #50" in runner.edited_bodies[-1]
+
+
+def test_sync_migrates_legacy_report_to_schema_v4_before_rendering(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -1851,8 +2053,10 @@ def test_sync_migrates_legacy_report_to_schema_v3_before_rendering(
             encoding="utf-8"
         )
     )
-    assert payload["schema_version"] == 3
+    assert payload["schema_version"] == 4
     assert payload["diff_fingerprint"]["diff_files_hash"] == "current-diff"
+    assert payload["spec_ref"] == {"issues": [], "design_docs": [], "adrs": []}
+    assert payload["issue_refs"] == []
     assert "## 当前提交与差异摘要" in runner.edited_bodies[-1]
 
 

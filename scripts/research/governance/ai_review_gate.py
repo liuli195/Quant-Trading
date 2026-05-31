@@ -22,10 +22,12 @@ from .pr_review_evidence import (
 
 BLOCKING_SEVERITIES = {"P0", "P1"}
 LEGACY_SCHEMA_VERSION = 2
-CURRENT_SCHEMA_VERSION = 3
+SCHEMA_V3_VERSION = 3
+CURRENT_SCHEMA_VERSION = 4
 VALID_SEVERITIES = {"P0", "P1", "P2", "P3"}
 VALID_STATUSES = {"open", "fixed", "false_positive", "accepted"}
 VALID_REVIEW_MODES = {"complete", "partial", "incremental"}
+VALID_SPEC_ISSUE_ROLES = {"closes", "reference"}
 REQUIRED_CROSS_REVIEW_SKILLS = (
     "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
     "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
@@ -48,6 +50,9 @@ CODEX_REVIEW_LINK_PATTERN = re.compile(
 )
 CODEX_COMPLETION_COMMENT_LINK_PATTERN = re.compile(
     r"https://github\.com/[^\s`]+/[^\s`]+/(?:pull|issues)/\d+#issuecomment-\d+"
+)
+ISSUE_ACCEPTANCE_CRITERION_PATTERN = re.compile(
+    r"^\s{0,4}- \[(?P<status> |x|X)\]\s*(?P<text>.+?)\s*$"
 )
 
 
@@ -107,9 +112,13 @@ def validate_report(
     risk_level = str(payload.get("risk_level") or "unknown")
     changed_files = _string_list(payload.get("changed_files"))
     findings = payload.get("findings")
-    if schema_version not in {LEGACY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION}:
-        errors.append("schema_version must be 2 or 3")
-    if schema_version == CURRENT_SCHEMA_VERSION:
+    if schema_version not in {
+        LEGACY_SCHEMA_VERSION,
+        SCHEMA_V3_VERSION,
+        CURRENT_SCHEMA_VERSION,
+    }:
+        errors.append("schema_version must be 2, 3, or 4")
+    if schema_version in {SCHEMA_V3_VERSION, CURRENT_SCHEMA_VERSION}:
         errors.extend(
             _schema_v3_errors(
                 payload,
@@ -117,6 +126,8 @@ def validate_report(
                 current_diff_fingerprint=current_diff_fingerprint,
             )
         )
+    if schema_version == CURRENT_SCHEMA_VERSION:
+        errors.extend(_schema_v4_errors(payload))
     tool = str(payload.get("tool") or "")
     if tool not in {"codex", "claude"}:
         errors.append("tool must be codex or claude")
@@ -454,6 +465,11 @@ def render_pr_body(payload: dict[str, Any]) -> str:
         f"- P0/P1 未关闭项: {_blocking_findings_summary(all_findings)}",
         "",
     ]
+    linked_issue_lines = _render_linked_issue_lines(payload)
+    if linked_issue_lines:
+        lines.extend(["## 关联 Issue", ""])
+        lines.extend(linked_issue_lines)
+        lines.append("")
     diff_summary = _render_diff_fingerprint_summary(payload)
     if diff_summary:
         lines.extend(["## 当前提交与差异摘要", ""])
@@ -497,6 +513,8 @@ def draft_review_payload(changed_files: Sequence[str] | None) -> dict[str, Any]:
         "review_fragments": {},
         "external_findings": [],
         "current_commit_evidence": {"head_sha": fingerprint["head_sha"], "checks": {}},
+        "spec_ref": {"issues": [], "design_docs": [], "adrs": []},
+        "issue_refs": [],
         "findings": [],
         "checks": {},
     }
@@ -518,7 +536,7 @@ def payload_as_schema_v3(
     if files:
         fingerprint = dict(fingerprint)
         fingerprint["changed_files"] = files
-    updated["schema_version"] = CURRENT_SCHEMA_VERSION
+    updated["schema_version"] = SCHEMA_V3_VERSION
     updated["changed_files"] = files
     updated["diff_fingerprint"] = fingerprint
     updated["review_fragments"] = _review_fragments_from_payload(payload)
@@ -534,6 +552,33 @@ def payload_as_schema_v3(
     return updated
 
 
+def payload_as_schema_v4(
+    payload: dict[str, Any],
+    *,
+    repo_root: str | Path,
+    changed_files: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    if payload.get("schema_version") == SCHEMA_V3_VERSION:
+        updated = dict(payload)
+    else:
+        updated = payload_as_schema_v3(
+            payload,
+            repo_root=repo_root,
+            changed_files=changed_files,
+        )
+    updated["schema_version"] = CURRENT_SCHEMA_VERSION
+    updated["spec_ref"] = _spec_ref_as_schema_v4(
+        updated.get("spec_ref") or updated.get("issue_ref")
+    )
+    raw_issue_refs = updated.get("issue_refs")
+    updated["issue_refs"] = (
+        [dict(item) for item in raw_issue_refs if isinstance(item, dict)]
+        if isinstance(raw_issue_refs, list)
+        else []
+    )
+    return updated
+
+
 def build_review_wrapper_evidence(
     *,
     standards_summary: str,
@@ -542,6 +587,7 @@ def build_review_wrapper_evidence(
     spec_semantic_change: bool,
     parallel_attempted: bool,
     parallel_blocked_reason: str = "",
+    issue_refs: Sequence[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     parallel = {
         "attempted": parallel_attempted,
@@ -549,6 +595,20 @@ def build_review_wrapper_evidence(
     }
     standards = _single_line_text(standards_summary)
     spec = _single_line_text(spec_summary)
+    spec_fragment: dict[str, Any] = {
+        "status": "pass",
+        "evidence": spec,
+        "semantic_change": spec_semantic_change,
+        "axis": "spec",
+    }
+    raw_spec_summary = spec
+    if issue_refs:
+        spec_issues = _review_wrapper_issue_placeholders(issue_refs)
+        spec_fragment["evidence"] = "Spec axis: per-issue AC review pending"
+        spec_fragment["issues"] = spec_issues
+        issue_count = len(spec_issues)
+        suffix = "issue" if issue_count == 1 else "issues"
+        raw_spec_summary = f"Spec axis matched {issue_count} {suffix}."
     return {
         "review_fragments": {
             "standards": {
@@ -557,19 +617,56 @@ def build_review_wrapper_evidence(
                 "semantic_change": standards_semantic_change,
                 "axis": "standards",
             },
-            "spec": {
-                "status": "pass",
-                "evidence": spec,
-                "semantic_change": spec_semantic_change,
-                "axis": "spec",
-            },
+            "spec": spec_fragment,
         },
         "raw_review_summary": {
             "standards": standards,
-            "spec": spec,
+            "spec": raw_spec_summary,
             "parallel": parallel,
         },
     }
+
+
+def _review_wrapper_issue_placeholders(
+    issue_refs: Sequence[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    issues: list[dict[str, Any]] = []
+    for item in issue_refs:
+        if not isinstance(item, dict):
+            continue
+        criteria = [
+            _single_line_text(criterion)
+            for criterion in _string_list(item.get("acceptance_criteria"))
+        ]
+        issues.append(
+            {
+                "number": _issue_number(item.get("number")) or 0,
+                "title": _single_line_text(item.get("title")),
+                "ac_results": [
+                    {"criteria": criterion, "met": False, "reason": ""}
+                    for criterion in criteria
+                ],
+            }
+        )
+    return issues
+
+
+def extract_issue_acceptance_criteria(body: str) -> list[str]:
+    criteria: list[str] = []
+    for line in body.splitlines():
+        match = ISSUE_ACCEPTANCE_CRITERION_PATTERN.match(line)
+        if match:
+            criteria.append(_single_line_text(match.group("text")))
+    return criteria
+
+
+def unchecked_issue_acceptance_criteria(body: str) -> list[str]:
+    unchecked: list[str] = []
+    for line in body.splitlines():
+        match = ISSUE_ACCEPTANCE_CRITERION_PATTERN.match(line)
+        if match and match.group("status") == " ":
+            unchecked.append(f"- [ ] {_single_line_text(match.group('text'))}")
+    return unchecked
 
 
 def _discover_changed_files(repo_root: str | Path = ".") -> list[str] | None:
@@ -888,6 +985,55 @@ def _schema_v3_errors(
     return errors
 
 
+def _schema_v4_errors(payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    spec_ref = payload.get("spec_ref")
+    spec_issue_numbers: set[int] = set()
+    if not isinstance(spec_ref, dict):
+        errors.append("spec_ref must be an object for schema v4")
+    else:
+        issues = spec_ref.get("issues")
+        if not isinstance(issues, list):
+            errors.append("spec_ref.issues must be a list for schema v4")
+            issues = []
+        for index, item in enumerate(issues):
+            if not isinstance(item, dict):
+                errors.append(f"spec_ref.issues[{index}] must be an object")
+                continue
+            number = _issue_number(item.get("number"))
+            if number is None:
+                errors.append(f"spec_ref.issues[{index}].number must be a positive integer")
+            else:
+                spec_issue_numbers.add(number)
+            role = _single_line_text(item.get("role"))
+            if role not in VALID_SPEC_ISSUE_ROLES:
+                errors.append(
+                    f"spec_ref.issues[{index}].role must be closes or reference"
+                )
+        for field in ("design_docs", "adrs"):
+            if not isinstance(spec_ref.get(field), list):
+                errors.append(f"spec_ref.{field} must be a list for schema v4")
+
+    issue_refs = payload.get("issue_refs")
+    if not isinstance(issue_refs, list):
+        errors.append("issue_refs must be a list for schema v4")
+        return errors
+    for index, item in enumerate(issue_refs):
+        if not isinstance(item, dict):
+            errors.append(f"issue_refs[{index}] must be an object")
+            continue
+        number = _issue_number(item.get("number"))
+        if number is None:
+            errors.append(f"issue_refs[{index}].number must be a positive integer")
+        elif spec_issue_numbers and number not in spec_issue_numbers:
+            errors.append(f"issue_refs[{index}].number must be listed in spec_ref.issues")
+        if not _single_line_text(item.get("title")):
+            errors.append(f"issue_refs[{index}].title must not be empty")
+        if not isinstance(item.get("acceptance_criteria"), list):
+            errors.append(f"issue_refs[{index}].acceptance_criteria must be a list")
+    return errors
+
+
 def _diff_fingerprint_drift_errors(
     recorded: dict[str, Any],
     current: dict[str, Any],
@@ -921,10 +1067,13 @@ def _issue_spec_policy_errors(payload: dict[str, Any]) -> list[str]:
     }:
         return ["pr_class must be feature, governance_functional, governance_wording, or maintenance"]
 
-    has_issue_or_spec = bool(
-        _single_line_text(payload.get("issue_ref"))
-        or _single_line_text(payload.get("spec_ref"))
+    spec_ref = payload.get("spec_ref")
+    has_spec_ref = (
+        _spec_ref_has_content(spec_ref)
+        if isinstance(spec_ref, dict)
+        else bool(_single_line_text(spec_ref))
     )
+    has_issue_or_spec = bool(_single_line_text(payload.get("issue_ref")) or has_spec_ref)
     authorization = payload.get("issue_spec_skip_authorization")
     has_authorization = isinstance(authorization, dict)
     authorization_errors = (
@@ -1037,6 +1186,57 @@ def _incremental_review_errors(
 
 def _normalized_string_list(value: Any) -> list[str]:
     return sorted({_normalize_repo_path(path) for path in _string_list(value)})
+
+
+def _issue_number(value: Any) -> int | None:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
+def _issue_number_from_ref(value: Any) -> int | None:
+    text = _single_line_text(value)
+    if not text:
+        return None
+    direct = _issue_number(text)
+    if direct is not None:
+        return direct
+    match = re.search(r"(?:issues/|#)(\d+)\b", text)
+    return _issue_number(match.group(1)) if match else None
+
+
+def _spec_ref_as_schema_v4(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        issues: list[dict[str, Any]] = []
+        raw_issues = value.get("issues")
+        if isinstance(raw_issues, list):
+            for item in raw_issues:
+                if isinstance(item, dict):
+                    issues.append(dict(item))
+        return {
+            "issues": issues,
+            "design_docs": list(value.get("design_docs") or [])
+            if isinstance(value.get("design_docs"), list)
+            else [],
+            "adrs": list(value.get("adrs") or [])
+            if isinstance(value.get("adrs"), list)
+            else [],
+        }
+    number = _issue_number_from_ref(value)
+    issues = [{"number": number, "role": "closes"}] if number is not None else []
+    return {"issues": issues, "design_docs": [], "adrs": []}
+
+
+def _spec_ref_has_content(value: dict[str, Any]) -> bool:
+    issues = value.get("issues")
+    design_docs = value.get("design_docs")
+    adrs = value.get("adrs")
+    return any(
+        isinstance(item, list) and bool(item)
+        for item in (issues, design_docs, adrs)
+    )
 
 
 def _is_placeholder_reviewer_name(value: str) -> bool:
@@ -1258,6 +1458,26 @@ def _blocking_findings_summary(findings: Sequence[dict[str, Any]]) -> str:
         }:
             open_blockers.append(str(item.get("id") or "<missing-id>"))
     return "无" if not open_blockers else ", ".join(open_blockers)
+
+
+def _render_linked_issue_lines(payload: dict[str, Any]) -> list[str]:
+    issue_refs = payload.get("issue_refs")
+    if not isinstance(issue_refs, list):
+        return []
+    numbers = sorted(
+        {
+            number
+            for number in (
+                _issue_number(item.get("number"))
+                for item in issue_refs
+                if isinstance(item, dict)
+            )
+            if number is not None
+        }
+    )
+    if not numbers:
+        return []
+    return [", ".join(f"Closes #{number}" for number in numbers)]
 
 
 def _render_diff_fingerprint_summary(payload: dict[str, Any]) -> list[str]:

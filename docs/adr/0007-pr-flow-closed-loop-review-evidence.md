@@ -27,8 +27,8 @@ PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pa
 - review coverage 必须绑定当前 diff fingerprint。`base_sha`、`head_sha`、`diff_hash` 或文件集变化后，旧 evidence 失效；允许 delta review，但最终 evidence 必须证明覆盖当前完整 diff。
 - 不修改 `$review` 技能本身；由 `pr_flow review` wrapper 调用 `$review` 的 Standards / Spec 双轴审查，并生成结构化 fragments。Security review 仍单独必需，不能被 `$review` 替代。
 - evidence builder 只读取结构化 fragments、security fragment、external findings、authorizations 和 diff facts；不得从聊天总结或自然语言结论中推断 review 通过。
-- schema v3 写入 change fingerprint、review fragments、external findings 和官方 Codex evidence 状态；过渡期可读 v2，但写出只写 v3。
-- 功能 PR 和治理功能 PR 默认必须有关联 Issue 或 `spec_ref`。治理文字 PR 可无 Issue，但 `$review` 两轴必须确认无语义变更。用户可对当前 PR 一次性授权跳过 Issue/spec 要求。
+- schema v4 写入 change fingerprint、review fragments、external findings、官方 Codex evidence 状态和 Issue 关联信息；过渡期可读 v2/v3，但写出只写 v4。`spec_ref` 支持 issues/design_docs/adrs，`issue_refs` 由 `prepare()` 从 role=`closes` 的 Issue 自动补全。
+- 功能 PR 和治理功能 PR 默认必须有关联 Issue 或 `spec_ref`。治理文字 PR 可无 Issue，但 `$review` 两轴必须确认无语义变更。用户可对当前 PR 一次性授权跳过 Issue/spec 要求。`sync_pr_body` 必须根据 `issue_refs` 写入 `Closes #N`，并在合并前校验 GitHub Issue AC checkbox 全部已勾选。
 - risk classifier 由 builder 最终裁决，review/security 只提供输入。任意满足低风险条件的 PR 可自动判为 `low`；`high` 或 `unknown` 才触发官方 Codex Review。用户可显式把 `high` / `unknown` 降级为 `low`，但不能绕过任何阻断项。
 - P2/P3 accepted findings 不影响 `risk_level`，允许 low-risk PR 带 P2 保留项。P2/P3 必须记录接受理由和处理方式，但不触发官方 Codex Review。
 - 官方 Codex P2/P3 review thread 在 severity 可靠识别时，由 `pr_flow` 用固定模板自动接受、resolve、重新读取确认 resolved，并写入 `external_findings` / PR body P2 保留项。官方 Codex P0/P1 和无 severity thread 阻断；人工 reviewer thread 不自动 resolve。

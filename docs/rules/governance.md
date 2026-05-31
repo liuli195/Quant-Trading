@@ -12,7 +12,7 @@
 - GitHub `main` 必须启用 branch protection 或 ruleset：Require pull request、Require status checks、Require conversation resolution、Block force pushes；approval / Code Owner review 是否阻断以远端实际 ruleset / branch protection 为准，`pr_flow` 不得本地硬编码。
 - required checks 必须包括 `Research Governance / governance`、`Research Governance / pr-review-evidence`、`Codex Review Monitor`。
 - `Research Governance / governance` 通过 `verify full` 汇总静态扫描、类型检查、依赖漏洞扫描、测试、pathref 和 governance gate。
-- `pr-review-evidence` 校验 PR body 的 schema v3 evidence 渲染结果、`AI Review 风险分级`、`review_mode=complete` / `partial` 授权、review wrapper fragments、`security_review` / 独立 security fragment、`codex-security` / `security-guidance`、`external_findings`、`官方 Codex Review 跳过授权`、`官方 Codex Review` / reused evidence、P2 保留、thread summary 和高风险 label。
+- `pr-review-evidence` 校验 PR body 的 schema v4 evidence 渲染结果、`AI Review 风险分级`、`review_mode=complete` / `partial` 授权、review wrapper fragments、`security_review` / 独立 security fragment、`codex-security` / `security-guidance`、`external_findings`、`spec_ref` / `issue_refs`、`Closes #N`、`官方 Codex Review 跳过授权`、`官方 Codex Review` / reused evidence、P2 保留、thread summary 和高风险 label。
 - `Codex Review Monitor` 监听当前 head 的 Codex Review 状态；低风险且无需官方 review 的 PR 可快速通过/空跑；reused official evidence 只有满足 current head、scope impact 和 security impact 约束时才允许通过。
 - `Codex Review Monitor` success 可作为 `pr_flow` 自动采集官方 Codex 通过证据的信号之一，但不能替代 PR body 的 `Codex Code Review 结论`。
 - 只要 GitHub conversation resolution ruleset 要求 resolved conversation，未 resolved 的 review thread 必须阻断，任何跳过授权不得绕过；官方 Codex P2/P3 thread 例外路径只能由 `pr_flow` 写入固定接受模板、`external_findings` 和 PR body P2 保留项后 resolve。

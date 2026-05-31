@@ -237,12 +237,27 @@ def prepare(
         for error in validation.errors:
             print(f"error: {error}", file=sys.stderr)
         return 1
-    payload = _payload_with_prepare_evidence(
-        payload,
-        root=root,
-        changed_files=check_files,
-        passed_checks=passed_checks,
-    )
+    try:
+        payload = _payload_with_prepare_evidence(
+            payload,
+            root=root,
+            runner=runner,
+            changed_files=check_files,
+            passed_checks=passed_checks,
+        )
+    except GitHubDataUnavailable as exc:
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            str(exc),
+            repo_root=root,
+            reason_code="ISSUE_REFS_UNAVAILABLE",
+            phase="prepare",
+            retryable=exc.retryable,
+            dispatch_target="github",
+            details=exc.details,
+            next_actions=("restore GitHub issue access",),
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
     latest.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -293,7 +308,7 @@ def sync(
             if isinstance(current_fingerprint, dict)
             else ai_review_gate._string_list(payload.get("changed_files"))
         )
-        payload = ai_review_gate.payload_as_schema_v3(
+        payload = ai_review_gate.payload_as_schema_v4(
             payload,
             repo_root=root,
             changed_files=current_changed_files,
@@ -411,6 +426,14 @@ def sync(
         if remove.returncode != 0:
             _print_command_failure("gh pr edit --remove-label", remove)
             return remove.returncode
+
+    issue_gate = _check_linked_issue_acceptance_criteria(
+        root=root,
+        runner=runner,
+        payload=payload,
+    )
+    if issue_gate != SUCCESS_EXIT_CODE:
+        return issue_gate
 
     try:
         needs_codex_review_request = (
@@ -1484,6 +1507,7 @@ def _payload_with_prepare_evidence(
     payload: dict[str, Any],
     *,
     root: Path,
+    runner: Runner,
     changed_files: Sequence[str],
     passed_checks: Sequence[str],
 ) -> dict[str, Any]:
@@ -1515,11 +1539,170 @@ def _payload_with_prepare_evidence(
             merged_checks["pytest strategy tests"] = "passed"
     if merged_checks:
         updated["checks"] = merged_checks
-    return ai_review_gate.payload_as_schema_v3(
+    updated = ai_review_gate.payload_as_schema_v4(
         updated,
         repo_root=root,
         changed_files=changed_files or updated.get("changed_files"),
     )
+    return _payload_with_issue_refs(updated, root=root, runner=runner)
+
+
+def _payload_with_issue_refs(
+    payload: dict[str, Any],
+    *,
+    root: Path,
+    runner: Runner,
+) -> dict[str, Any]:
+    closing_numbers = _closing_issue_numbers(payload.get("spec_ref"))
+    updated = dict(payload)
+    if not closing_numbers:
+        updated["issue_refs"] = []
+        return updated
+    issue_refs = payload.get("issue_refs")
+    if _issue_ref_numbers(issue_refs) == closing_numbers:
+        return updated
+    refs: list[dict[str, Any]] = []
+    for number in closing_numbers:
+        command = ["gh", "issue", "view", str(number), "--json", "title,body"]
+        result = _run_github_read_command(root, runner, command)
+        if result.returncode != 0:
+            raise _github_data_unavailable(
+                "GitHub issue details unavailable",
+                "gh issue view " + str(number) + " --json title,body",
+                result,
+            )
+        issue = _json_object_from_result(
+            result,
+            "gh issue view " + str(number) + " --json title,body",
+        )
+        refs.append(
+            {
+                "number": number,
+                "title": _single_line_text(issue.get("title")),
+                "acceptance_criteria": ai_review_gate.extract_issue_acceptance_criteria(
+                    str(issue.get("body") or "")
+                ),
+            }
+        )
+    updated["issue_refs"] = refs
+    return updated
+
+
+def _positive_int_from_payload(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    if number <= 0:
+        return None
+    return number
+
+
+def _closing_issue_numbers(spec_ref: Any) -> tuple[int, ...]:
+    if not isinstance(spec_ref, dict):
+        return ()
+    numbers: list[int] = []
+    issues = spec_ref.get("issues")
+    if not isinstance(issues, list):
+        return ()
+    for item in issues:
+        if not isinstance(item, dict):
+            continue
+        number = _positive_int_from_payload(item.get("number"))
+        if number is not None and _single_line_text(item.get("role")) == "closes":
+            numbers.append(number)
+    return tuple(sorted(dict.fromkeys(numbers)))
+
+
+def _issue_ref_numbers(issue_refs: Any) -> tuple[int, ...]:
+    if not isinstance(issue_refs, list):
+        return ()
+    numbers: list[int] = []
+    for item in issue_refs:
+        if not isinstance(item, dict):
+            continue
+        number = _positive_int_from_payload(item.get("number"))
+        if number is not None:
+            numbers.append(number)
+    return tuple(sorted(dict.fromkeys(numbers)))
+
+
+def _check_linked_issue_acceptance_criteria(
+    *,
+    root: Path,
+    runner: Runner,
+    payload: dict[str, Any],
+) -> int:
+    issue_refs = payload.get("issue_refs")
+    if not isinstance(issue_refs, list) or not issue_refs:
+        return SUCCESS_EXIT_CODE
+    blocking: list[str] = []
+    for item in issue_refs:
+        if not isinstance(item, dict):
+            continue
+        number = _positive_int_from_payload(item.get("number"))
+        if number is None:
+            continue
+        command = ["gh", "issue", "view", str(number), "--json", "title,body"]
+        result = _run_github_read_command(root, runner, command)
+        if result.returncode != 0:
+            exc = _github_data_unavailable(
+                "GitHub issue acceptance criteria unavailable",
+                "gh issue view " + str(number) + " --json title,body",
+                result,
+            )
+            _print_state(
+                "EXCEPTION_REQUIRED",
+                str(exc),
+                repo_root=root,
+                reason_code="ISSUE_ACCEPTANCE_CRITERIA_UNAVAILABLE",
+                phase="sync_pr_body",
+                retryable=exc.retryable,
+                dispatch_target="github",
+                details=exc.details,
+                next_actions=("restore GitHub issue access",),
+            )
+            return EXCEPTION_REQUIRED_EXIT_CODE
+        try:
+            issue = _json_object_from_result(
+                result,
+                "gh issue view " + str(number) + " --json title,body",
+            )
+        except GitHubDataUnavailable as exc:
+            _print_state(
+                "EXCEPTION_REQUIRED",
+                str(exc),
+                repo_root=root,
+                reason_code="ISSUE_ACCEPTANCE_CRITERIA_UNAVAILABLE",
+                phase="sync_pr_body",
+                retryable=exc.retryable,
+                dispatch_target="github",
+                details=exc.details,
+                next_actions=("restore GitHub issue access",),
+            )
+            return EXCEPTION_REQUIRED_EXIT_CODE
+        title = _single_line_text(issue.get("title")) or _single_line_text(
+            item.get("title")
+        )
+        for line in ai_review_gate.unchecked_issue_acceptance_criteria(
+            str(issue.get("body") or "")
+        ):
+            blocking.append(f"#{number} {title}: {line}")
+    if not blocking:
+        return SUCCESS_EXIT_CODE
+    _print_state(
+        "DISPATCH_REQUIRED",
+        "linked issue acceptance criteria incomplete",
+        repo_root=root,
+        reason_code="ISSUE_ACCEPTANCE_CRITERIA_INCOMPLETE",
+        phase="sync_pr_body",
+        dispatch_target="author",
+        details=blocking,
+        next_actions=("check completed acceptance criteria in linked issues",),
+    )
+    return DISPATCH_REQUIRED_EXIT_CODE
 
 
 def _verify_full_evidence_command(root: Path) -> str:
@@ -2028,7 +2211,7 @@ def _payload_with_external_finding(
     finding: dict[str, Any],
 ) -> dict[str, Any]:
     changed_files = ai_review_gate._string_list(payload.get("changed_files"))
-    updated = ai_review_gate.payload_as_schema_v3(
+    updated = ai_review_gate.payload_as_schema_v4(
         payload,
         repo_root=repo_root,
         changed_files=changed_files,
