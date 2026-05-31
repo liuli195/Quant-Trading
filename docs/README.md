@@ -27,3 +27,7 @@
 - 新增说明型文档优先放入 `guides/`、`architecture/`、`design/`、`reference/` 或 `problems/`。
 - 新增或移动文档后运行 `.\.venv\Scripts\python.exe -m scripts.tools.path_tools.refactor check`。
 - 文档和报告索引用 `.\.venv\Scripts\python.exe -m scripts.research.docs index` 重新生成。
+
+## PR Intent Governance
+
+- `commit intent` 和 `PR Issue binding audit` 属于 PR Flow 治理契约，入口见 [rules/pr-workflow.md](rules/pr-workflow.md) <!-- pathref: docs/rules/pr-workflow.md -->、[rules/governance.md](rules/governance.md) <!-- pathref: docs/rules/governance.md --> 和 [ADR 0007](adr/0007-pr-flow-closed-loop-review-evidence.md) <!-- pathref: docs/adr/0007-pr-flow-closed-loop-review-evidence.md -->。

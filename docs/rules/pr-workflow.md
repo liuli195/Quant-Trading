@@ -27,3 +27,10 @@ Review 细则见 [review-guidelines.md](review-guidelines.md) <!-- pathref: docs
 - Review 按 [review-guidelines.md](review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md --> 执行。
 - `pr-ready` / `pr_flow ready` 负责按 Review 规则推进无问题路径；`pr-complete` / `pr_flow complete` 负责在 merge-ready 后继续合并和收尾。只有异常处理、任务分发、问题回复三类情况需要人工或 agents 介入。手工排障先用 `scripts.research.governance.pr_flow diagnose --pr <PR号>` 汇总 head、PR body evidence、merge state、latest required checks、Codex trigger/completion 和 review threads；需要盯 CI 时再单独使用 `gh pr checks <PR号或URL> --required --watch --interval 10` 或 `scripts.research.governance.codex_review_monitor`。
 - 本地 review evidence 使用 schema v4：`diff_fingerprint` 绑定当前 diff，`review_fragments.standards/spec` 来自 review wrapper，`review_fragments.security` 来自独立 security review，`current_commit_evidence` 绑定当前 head，`external_findings` 记录官方 Codex thread 等外部发现，`spec_ref`/`issue_refs` 记录关联 Issue。`sync_pr_body` 会写入 `Closes #N` 并检查关联 Issue AC checkbox 已全部勾选。risk classifier 只根据结构化 evidence、阻断项和授权裁决 risk level；P2/P3 accepted 不触发官方 Codex Review。
+
+## Commit Intent
+
+- 提交顺序固定为 `git add` -> `pr_flow intent stage` -> `git commit`。先 stage 文件，再为当前 staged diff 记录 Issue 绑定或 no-Issue authorization，最后提交。
+- 每个 commit 都需要新的 commit intent；pre-commit 会校验 pending intent 的 branch intent、staged diff fingerprint 和 consumed 状态。
+- post-commit 会写入真实 commit SHA，并把 commit intent 合并到 branch intent；PR readiness 使用 branch intent 校验 rewrite 后的 commit coverage。
+- branch intent 是 PR Issue 绑定来源；PR body 只渲染和校验它，不从分支名、commit message、PR title 或 diff 推断 Issue。

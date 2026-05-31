@@ -2,7 +2,7 @@
 
 | category | strategy | title | path | pathrefs |
 | --- | --- | --- | --- | ---: |
-| docs |  | 文档入口 | `docs/README.md` | 20 |
+| docs |  | 文档入口 | `docs/README.md` | 23 |
 | docs |  | ADR 0001: 规则来源和治理模型 | `docs/adr/0001-rule-source-and-governance-model.md` | 6 |
 | docs |  | ADR 0002: 多 AI Agent 并行工作使用 Git 分支 | `docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md` | 0 |
 | docs |  | ADR 0003: Governance Gate 和主干保护 | `docs/adr/0003-governance-gate-and-main-branch-protection.md` | 0 |

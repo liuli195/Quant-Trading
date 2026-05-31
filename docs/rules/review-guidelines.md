@@ -95,3 +95,10 @@ Review Scope：
   - Codex review 链接：https://github.com/<owner>/<repo>/pull/<number>#pullrequestreview-<id>
   - `.\.venv\Scripts\python.exe -m scripts.research.governance verify full`
 ```
+
+## Issue Intent Review
+
+- Standards reviewer 和 Spec reviewer 先并行运行；`Security-after-Standards/Spec` 是固定顺序，只有两者没有 open P0/P1 后才运行 Security reviewer。
+- `Spec reviewer AC evidence` 必须覆盖每个 `closes` Issue 的 AC，包含 AC text、`met`、evidence references 和 reviewer identity。
+- `Standards/Security veto` 保留阻断权：Standards 可阻断规则、证据或流程问题；Security 可在第二阶段阻断安全问题。
+- P2/P3 accepted findings 继续作为非阻断证据保留，不阻止 Security 或 AC auto-marking。

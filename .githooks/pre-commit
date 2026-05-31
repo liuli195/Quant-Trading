@@ -6,4 +6,7 @@ if command -v pre-commit >/dev/null 2>&1; then
 fi
 
 sh .githooks/run-python.sh \
+  -m scripts.research.governance.pr_flow intent pre-commit
+
+sh .githooks/run-python.sh \
   -m scripts.research.governance verify fast --staged

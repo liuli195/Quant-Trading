@@ -216,6 +216,8 @@ class FakeRunner:
             return pr_flow.CommandResult(0, "feature/pr-flow\n", "")
         if command == ["git", "rev-parse", "HEAD"]:
             return pr_flow.CommandResult(0, "1" * 40 + "\n", "")
+        if command == ["git", "rev-list", "--reverse", "origin/main..HEAD"]:
+            return pr_flow.CommandResult(0, "", "")
         if command == ["git", "ls-remote", "--heads", "origin", "feature/pr-flow"]:
             return pr_flow.CommandResult(
                 0,

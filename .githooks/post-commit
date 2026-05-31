@@ -1,6 +1,9 @@
 #!/bin/sh
 set -u
 
+sh .githooks/run-python.sh \
+  -m scripts.research.governance.pr_flow intent post-commit || exit $?
+
 # Best-effort bridge from Git commits to agentmemory commit context.
 # It must never block normal commits.
 find_agentmemory_post_commit() {

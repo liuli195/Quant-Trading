@@ -54,3 +54,10 @@
 ## MAY
 
 - 过渡期可保留 warning 级检查；MUST 规则不能降级为提醒。
+
+## Commit Intent Gate
+
+- `commit intent hook`: `.githooks/pre-commit` 必须运行 `pr_flow intent pre-commit`，`.githooks/post-commit` 必须运行 `pr_flow intent post-commit`，并继续通过 `.githooks/run-python.sh` 使用项目 `.venv`。
+- PR readiness 必须检查 branch intent coverage，发现 amend、squash、rebase 或 hook bypass 导致的 missing SHA 时停止。
+- `PR body issue-intent machine data` 是 CI 可见审计面，必须覆盖 current head、PR commits、Issue roles 和 no-Issue records；CI 不读取本地 `.local`。
+- `no-Issue authorization audit` 必须记录 reason、authorized_by 和 evidence，并按 commit 保留在 branch intent 和 PR body machine data 中。

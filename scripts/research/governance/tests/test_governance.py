@@ -59,6 +59,49 @@ def test_pathref_scanner_skips_local_workspace_artifacts() -> None:
     assert should_skip(Path(".local/pytest-governance-tmp/example.md"))
 
 
+def test_commit_intent_pr_flow_contract_is_documented() -> None:
+    required_tokens = {
+        Path("docs/adr/0007-pr-flow-closed-loop-review-evidence.md"): [
+            "commit-scoped intent",
+            "branch intent authority",
+            "no branch creation gate",
+            "PR Flow machine verification",
+            "two-stage review",
+            "default AC auto-marking",
+        ],
+        Path("docs/rules/pr-workflow.md"): [
+            "git add",
+            "pr_flow intent stage",
+            "git commit",
+            "branch intent",
+        ],
+        Path("docs/rules/review-guidelines.md"): [
+            "Spec reviewer AC evidence",
+            "Security-after-Standards/Spec",
+            "Standards/Security veto",
+        ],
+        Path("docs/rules/governance.md"): [
+            "commit intent hook",
+            "PR body issue-intent machine data",
+            "no-Issue authorization audit",
+        ],
+        Path("docs/rules/commands.md"): [
+            "pr_flow intent stage",
+            "pr_flow intent pre-commit",
+            "pr_flow intent post-commit",
+            "pr_flow intent check-coverage",
+        ],
+        Path("docs/README.md"): [
+            "commit intent",
+            "PR Issue binding audit",
+        ],
+    }
+    for path, tokens in required_tokens.items():
+        text = path.read_text(encoding="utf-8")
+        missing = [token for token in tokens if token not in text]
+        assert not missing, f"{path} missing: {missing}"
+
+
 def test_gitignore_audit_rejects_broad_data_ignore_patterns(tmp_path: Path) -> None:
     (tmp_path / ".gitignore").write_text(
         "data/\n**/data/\n/data/\n",
@@ -5160,6 +5203,11 @@ def test_pr_review_evidence_main_uses_current_pr_body_over_stale_event_env(
         lambda *, repo, pr_number, token: (
             "scripts/research/governance/pr_review_evidence.py",
         ),
+    )
+    monkeypatch.setattr(
+        pr_review_evidence,
+        "_fetch_pr_commit_shas",
+        lambda *, repo, pr_number, token: (),
     )
     monkeypatch.setattr(
         pr_review_evidence,

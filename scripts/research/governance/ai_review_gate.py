@@ -470,6 +470,13 @@ def render_pr_body(payload: dict[str, Any]) -> str:
         lines.extend(["## 关联 Issue", ""])
         lines.extend(linked_issue_lines)
         lines.append("")
+    issue_intent_lines = _render_issue_intent_summary_lines(payload)
+    if issue_intent_lines:
+        lines.extend(["## Issue 绑定审计", ""])
+        lines.extend(issue_intent_lines)
+        lines.append("")
+        lines.extend(_render_issue_intent_machine_block(payload))
+        lines.append("")
     diff_summary = _render_diff_fingerprint_summary(payload)
     if diff_summary:
         lines.extend(["## 当前提交与差异摘要", ""])
@@ -1478,6 +1485,83 @@ def _render_linked_issue_lines(payload: dict[str, Any]) -> list[str]:
     if not numbers:
         return []
     return [", ".join(f"Closes #{number}" for number in numbers)]
+
+
+def _render_issue_intent_summary_lines(payload: dict[str, Any]) -> list[str]:
+    issue_intent = payload.get("issue_intent")
+    if not isinstance(issue_intent, dict):
+        return []
+    issues = [item for item in issue_intent.get("issues", []) if isinstance(item, dict)]
+    references = _issue_numbers_for_role(issues, "reference")
+    closes = _issue_numbers_for_role(issues, "closes")
+    no_issue_count = len(
+        [
+            item
+            for item in issue_intent.get("no_issue_authorizations", [])
+            if isinstance(item, dict)
+        ]
+    )
+    lines = [
+        f"- References {_format_issue_number_list(references)}",
+        f"- Closes {_format_issue_number_list(closes)}",
+        f"- No-Issue commits: {no_issue_count}",
+    ]
+    commits = issue_intent.get("commits")
+    if isinstance(commits, list):
+        lines.append(f"- Commit intent records: {len(commits)}")
+    return lines
+
+
+def _render_issue_intent_machine_block(payload: dict[str, Any]) -> list[str]:
+    issue_intent = payload.get("issue_intent")
+    if not isinstance(issue_intent, dict):
+        return []
+    data = {
+        "schema_version": 1,
+        "head_sha": _single_line_text(issue_intent.get("head_sha")),
+        "commits": [
+            item for item in issue_intent.get("commits", []) if isinstance(item, dict)
+        ],
+        "issues": [
+            item for item in issue_intent.get("issues", []) if isinstance(item, dict)
+        ],
+        "no_issue_authorizations": [
+            item
+            for item in issue_intent.get("no_issue_authorizations", [])
+            if isinstance(item, dict)
+        ],
+    }
+    return [
+        "<details>",
+        "<summary>PR Flow machine verification</summary>",
+        "",
+        "```json",
+        json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True),
+        "```",
+        "",
+        "</details>",
+    ]
+
+
+def _issue_numbers_for_role(
+    issues: Sequence[dict[str, Any]],
+    role: str,
+) -> list[int]:
+    return sorted(
+        {
+            number
+            for number in (
+                _issue_number(item.get("number"))
+                for item in issues
+                if _single_line_text(item.get("role")) == role
+            )
+            if number is not None
+        }
+    )
+
+
+def _format_issue_number_list(numbers: Sequence[int]) -> str:
+    return ", ".join(f"#{number}" for number in numbers) if numbers else "none"
 
 
 def _render_diff_fingerprint_summary(payload: dict[str, Any]) -> list[str]:

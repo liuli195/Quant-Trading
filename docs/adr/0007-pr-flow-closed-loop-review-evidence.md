@@ -46,3 +46,12 @@ PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pa
 - P2/P3 的仓库语义与 GitHub conversation resolution 规则统一：可以不修复，但必须结构化接受并 resolve thread。
 - high/unknown PR 仍保持官方 Codex Review 质量边界；大型 PR 通过 scope 收窄、delta review 和 evidence 复用提效，而不是绕过 current-head 审查要求。
 - `pr-review-evidence`、`Codex Review Monitor`、PR body renderer、`pr_flow diagnose` 和 governance tests 必须同步升级，避免规则、文档和工具漂移。
+
+## Issue Intent Extension
+
+- `commit-scoped intent`: 每次提交前必须先 `git add`，再声明本次提交的 Issue 绑定或 no-Issue authorization；提交消息、分支名、PR 标题和 diff 内容都不是 intent 权威来源。
+- `branch intent authority`: `.local/pr-flow/intents/<branch>.json` 聚合已消费的 commit intent，并作为 PR review evidence 的 `spec_ref` 权威来源；`closes` 优先于 `reference`，显式降级必须记录 correction reason。
+- `no branch creation gate`: 创建分支不设门禁，门禁前移到每次提交和 PR readiness/CI 覆盖校验。
+- `PR Flow machine verification`: PR body 保留人读 Issue binding 摘要，并把 current head、commit coverage、Issue roles 和 no-Issue records 放入单个折叠机器数据块。
+- `two-stage review`: Standards reviewer 与 Spec reviewer 先并行完成；没有 open P0/P1 后，Security reviewer 再运行。
+- `default AC auto-marking`: Security 通过后，PR Flow 默认根据 Spec reviewer AC evidence 自动勾选 closes Issue 的已满足 AC；user-required 模式会停止等待人工确认。
