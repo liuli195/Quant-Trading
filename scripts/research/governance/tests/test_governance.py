@@ -1377,6 +1377,7 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / ".githooks/pre-commit").write_text(
         "pre-commit run --hook-stage pre-commit\n"
+        "sh .githooks/run-python.sh -m scripts.research.governance.pr_flow intent pre-commit\n"
         "sh .githooks/run-python.sh -m scripts.research.governance verify fast --staged\n",
         encoding="utf-8",
     )
@@ -1770,6 +1771,7 @@ def test_local_review_entrypoints_are_tracked(tmp_path: Path) -> None:
     )
     (tmp_path / ".githooks/pre-commit").write_text(
         "pre-commit run --hook-stage pre-commit\n"
+        "sh .githooks/run-python.sh -m scripts.research.governance.pr_flow intent pre-commit\n"
         "sh .githooks/run-python.sh -m scripts.research.governance verify fast --staged\n",
         encoding="utf-8",
     )
@@ -2495,6 +2497,22 @@ def test_governance_audit_flags_hooks_that_require_powershell(tmp_path) -> None:
     assert any(
         finding.rule_id == "governance_gate"
         and "pre-commit hook must use run-python.sh" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_pre_commit_without_intent_gate(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/pre-commit").write_text(
+        "pre-commit run --hook-stage pre-commit\n"
+        "sh .githooks/run-python.sh -m scripts.research.governance verify fast --staged\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "pre-commit hook missing intent pre-commit gate" in finding.message
         for finding in report.findings
     )
 

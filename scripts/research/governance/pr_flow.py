@@ -4443,6 +4443,8 @@ def _required_status_check_names(
                 repo=repo,
                 summary=summary,
             )
+            if not _ruleset_applies_to_branch(ruleset, branch):
+                continue
             for rule in ruleset.get("rules") or []:
                 if not isinstance(rule, dict):
                     continue

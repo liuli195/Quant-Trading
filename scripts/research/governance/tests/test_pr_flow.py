@@ -412,6 +412,28 @@ def _gh_api_json(command: list[str], payload: object) -> str:
     return json.dumps([payload]) if "--slurp" in command else json.dumps(payload)
 
 
+def _required_status_ruleset(
+    context: str,
+    *,
+    include: list[str],
+    enforcement: str,
+) -> dict[str, object]:
+    return {
+        "id": 1,
+        "target": "branch",
+        "enforcement": enforcement,
+        "conditions": {"ref_name": {"include": include, "exclude": []}},
+        "rules": [
+            {
+                "type": "required_status_checks",
+                "parameters": {
+                    "required_status_checks": [{"context": context}],
+                },
+            }
+        ],
+    }
+
+
 def _graphql_query(command: list[str]) -> str:
     for item in command:
         if item.startswith("query="):
@@ -669,6 +691,14 @@ class RollupFallbackChecksRunner:
                 json.dumps(
                     {
                         "id": 11,
+                        "target": "branch",
+                        "enforcement": "active",
+                        "conditions": {
+                            "ref_name": {
+                                "include": ["refs/heads/main"],
+                                "exclude": [],
+                            }
+                        },
                         "rules": [
                             {
                                 "type": "required_status_checks",
@@ -1425,6 +1455,87 @@ def test_wait_fallback_includes_legacy_branch_protection_required_checks(
         "api",
         "repos/liuli195/Quant-Trading/branches/main/protection/required_status_checks",
     ] in runner.calls
+
+
+def test_required_status_check_names_filters_rulesets_to_base_branch(
+    tmp_path: Path,
+) -> None:
+    class RequiredRulesetRunner:
+        def __init__(self) -> None:
+            self.calls: list[list[str]] = []
+
+        def run(
+            self,
+            command: list[str],
+            *,
+            cwd: Path | None = None,
+            input_text: str | None = None,
+        ) -> pr_flow.CommandResult:
+            self.calls.append(command)
+            path = _gh_api_path(command)
+            if path == "repos/liuli195/Quant-Trading/rulesets?includes_parents=true":
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps(
+                        [
+                            {"id": 11, "name": "main rules"},
+                            {"id": 12, "name": "release rules"},
+                            {"id": 13, "name": "inactive rules"},
+                        ]
+                    ),
+                    "",
+                )
+            if path == "repos/liuli195/Quant-Trading/rulesets/11":
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps(
+                        _required_status_ruleset(
+                            "Main Required",
+                            include=["refs/heads/main"],
+                            enforcement="active",
+                        )
+                    ),
+                    "",
+                )
+            if path == "repos/liuli195/Quant-Trading/rulesets/12":
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps(
+                        _required_status_ruleset(
+                            "Release Only",
+                            include=["refs/heads/release/*"],
+                            enforcement="active",
+                        )
+                    ),
+                    "",
+                )
+            if path == "repos/liuli195/Quant-Trading/rulesets/13":
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps(
+                        _required_status_ruleset(
+                            "Inactive Required",
+                            include=["refs/heads/main"],
+                            enforcement="disabled",
+                        )
+                    ),
+                    "",
+                )
+            if (
+                path
+                == "repos/liuli195/Quant-Trading/branches/main/protection/required_status_checks"
+            ):
+                return pr_flow.CommandResult(0, json.dumps({"contexts": [], "checks": []}), "")
+            raise AssertionError(f"unexpected command: {command}")
+
+    names = pr_flow._required_status_check_names(
+        root=tmp_path,
+        runner=RequiredRulesetRunner(),
+        repo="liuli195/Quant-Trading",
+        branch="main",
+    )
+
+    assert names == {"Main Required"}
 
 
 def test_wait_reports_exception_when_required_checks_unavailable(

@@ -554,6 +554,14 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "governance_gate", "error", "pre-commit hook must use run-python.sh"
                 )
             )
+        if "scripts.research.governance.pr_flow intent pre-commit" not in text:
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "pre-commit hook missing intent pre-commit gate",
+                )
+            )
         if "scripts.research.governance gate --fast" in text:
             findings.append(
                 AuditFinding(
