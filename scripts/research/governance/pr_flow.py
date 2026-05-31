@@ -4603,7 +4603,7 @@ def _diagnose_required_checks(
 
 def _merge_state_requires_attention(merge_state: str) -> bool:
     normalized = merge_state.upper()
-    return bool(normalized and normalized not in {"CLEAN", "HAS_HOOKS"})
+    return bool(normalized and normalized not in {"CLEAN", "HAS_HOOKS", "UNSTABLE"})
 
 
 def _review_decision_allows_merge(

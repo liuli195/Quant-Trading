@@ -1816,6 +1816,47 @@ def test_diagnose_allows_merge_ready_without_remote_approval_requirement(
     assert "next: PR automation state is merge-ready" in captured.out
 
 
+def test_diagnose_allows_unstable_when_explicit_merge_gates_pass(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = DiagnoseRunner(
+        merge_state="UNSTABLE",
+        check_bucket="pass",
+        check_state="SUCCESS",
+        review_decision="REVIEW_REQUIRED",
+        issue_comments=[
+            {
+                "id": 1,
+                "user": {"login": "test-user"},
+                "body": _codex_review_trigger_body(),
+                "created_at": "2026-05-28T09:00:00Z",
+                "updated_at": "2026-05-28T09:00:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 10,
+                "user": {"login": "chatgpt-codex-connector"},
+                "state": "COMMENTED",
+                "commit_id": "1" * 40,
+                "submitted_at": "2026-05-28T10:00:00Z",
+                "body": "Codex Review: Didn't find any major issues.",
+            }
+        ],
+        review_threads=[],
+    )
+
+    code = pr_flow.diagnose(repo_root=tmp_path, pr="7", runner=runner)
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert "mergeStateStatus: UNSTABLE" in captured.out
+    assert "required checks: passed" in captured.out
+    assert "next: inspect branch protection or ruleset blockers" not in captured.out
+    assert "next: PR automation state is merge-ready" in captured.out
+
+
 def test_diagnose_waits_for_pending_checks_before_ruleset_attention(
     tmp_path: Path,
     capsys,
