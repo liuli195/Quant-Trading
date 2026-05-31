@@ -513,6 +513,15 @@ class UnavailableRequiredChecksRunner:
     ) -> pr_flow.CommandResult:
         if command[:4] == ["gh", "pr", "checks", "7"]:
             return pr_flow.CommandResult(1, "", "authentication required")
+        if command == [
+            "gh",
+            "pr",
+            "view",
+            "7",
+            "--json",
+            "url,baseRefName,isDraft,statusCheckRollup",
+        ]:
+            return pr_flow.CommandResult(1, "", "authentication required")
         raise AssertionError(f"unexpected command: {command}")
 
 
@@ -559,6 +568,99 @@ class PendingRequiredChecksRunner:
                 ),
                 "",
             )
+        raise AssertionError(f"unexpected command: {command}")
+
+
+class RollupFallbackChecksRunner:
+    def __init__(self) -> None:
+        self.calls: list[list[str]] = []
+
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        self.calls.append(command)
+        if command == [
+            "gh",
+            "pr",
+            "checks",
+            "7",
+            "--required",
+            "--watch",
+            "--interval",
+            "10",
+        ]:
+            return pr_flow.CommandResult(1, "", "no required checks reported")
+        if command == [
+            "gh",
+            "pr",
+            "checks",
+            "7",
+            "--required",
+            "--json",
+            pr_flow.CHECKS_JSON_FIELDS,
+        ]:
+            return pr_flow.CommandResult(0, "[]", "")
+        if command == [
+            "gh",
+            "pr",
+            "view",
+            "7",
+            "--json",
+            "url,baseRefName,isDraft,statusCheckRollup",
+        ]:
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "url": "https://github.com/liuli195/Quant-Trading/pull/7",
+                        "baseRefName": "main",
+                        "isDraft": False,
+                        "statusCheckRollup": [
+                            {
+                                "name": "governance",
+                                "workflowName": "Research Governance",
+                                "state": "SUCCESS",
+                                "detailsUrl": "https://github.com/o/r/actions/runs/30/job/300",
+                                "startedAt": "2026-05-28T10:00:00Z",
+                                "completedAt": "2026-05-28T10:01:00Z",
+                            }
+                        ],
+                    }
+                ),
+                "",
+            )
+        if _gh_api_path(command) == "repos/liuli195/Quant-Trading/rulesets?includes_parents=true":
+            return pr_flow.CommandResult(
+                0,
+                json.dumps([{"id": 11, "name": "main rules"}]),
+                "",
+            )
+        if _gh_api_path(command) == "repos/liuli195/Quant-Trading/rulesets/11":
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "id": 11,
+                        "rules": [
+                            {
+                                "type": "required_status_checks",
+                                "parameters": {
+                                    "required_status_checks": [
+                                        {"context": "Research Governance / governance"}
+                                    ]
+                                },
+                            }
+                        ],
+                    }
+                ),
+                "",
+            )
+        if command == ["gh", "pr", "checks", "7", "--required"]:
+            return pr_flow.CommandResult(1, "", "no required checks reported")
         raise AssertionError(f"unexpected command: {command}")
 
 
@@ -1194,6 +1296,26 @@ def test_wait_uses_latest_duplicate_non_actions_required_check_timestamp(
     assert "required checks passed" in capsys.readouterr().out
 
 
+def test_wait_falls_back_to_status_check_rollup_when_required_checks_empty(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = RollupFallbackChecksRunner()
+
+    code = pr_flow.wait(repo_root=tmp_path, pr="7", runner=runner)
+
+    assert code == 0
+    assert "required checks passed" in capsys.readouterr().out
+    assert [
+        "gh",
+        "pr",
+        "view",
+        "7",
+        "--json",
+        "url,baseRefName,isDraft,statusCheckRollup",
+    ] in runner.calls
+
+
 def test_wait_reports_exception_when_required_checks_unavailable(
     tmp_path: Path,
     capsys,
@@ -1267,6 +1389,76 @@ def test_diagnose_reports_required_checks_and_unresolved_threads(
     assert "Research Governance / pr-review-evidence" in captured.out
     assert "review threads: unresolved=1" in captured.out
     assert "next: resolve unresolved review threads" in captured.out
+
+
+def test_diagnose_falls_back_to_status_check_rollup_when_required_checks_empty(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    class DiagnoseRollupRunner(DiagnoseRunner):
+        def run(
+            self,
+            command: list[str],
+            *,
+            cwd: Path | None = None,
+            input_text: str | None = None,
+        ) -> pr_flow.CommandResult:
+            if command == [
+                "gh",
+                "pr",
+                "checks",
+                "7",
+                "--required",
+                "--json",
+                pr_flow.CHECKS_JSON_FIELDS,
+            ]:
+                self.calls.append(command)
+                return pr_flow.CommandResult(0, "[]", "")
+            if command == [
+                "gh",
+                "pr",
+                "view",
+                "7",
+                "--json",
+                "url,baseRefName,isDraft,statusCheckRollup",
+            ]:
+                self.calls.append(command)
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps(
+                        {
+                            "url": "https://github.com/liuli195/Quant-Trading/pull/7",
+                            "baseRefName": "main",
+                            "isDraft": False,
+                            "statusCheckRollup": [
+                                {
+                                    "name": "governance",
+                                    "workflowName": "Research Governance",
+                                    "state": "SUCCESS",
+                                    "detailsUrl": "https://github.com/o/r/actions/runs/30/job/300",
+                                }
+                            ],
+                        }
+                    ),
+                    "",
+                )
+            return super().run(command, cwd=cwd, input_text=input_text)
+
+    code = pr_flow.diagnose(
+        repo_root=tmp_path,
+        pr="7",
+        runner=DiagnoseRollupRunner(
+            merge_state="CLEAN",
+            check_bucket="pass",
+            check_state="SUCCESS",
+            review_decision="APPROVED",
+            review_threads=[],
+        ),
+    )
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "required checks: passed" in captured.out
 
 
 def test_diagnose_writes_structured_last_status_for_unresolved_threads(

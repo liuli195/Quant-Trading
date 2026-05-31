@@ -51,6 +51,7 @@ BLOCKING_CODEX_FINDING_PATTERN = re.compile(r"\bP[01]\b|P[01]\s*Badge")
 CODEX_THREAD_SEVERITY_PATTERN = re.compile(r"\bP(?P<level>[0-3])\b")
 ACTIONS_CHECK_URL_PATTERN = re.compile(r"/actions/runs/(?P<run_id>\d+)/job/(?P<job_id>\d+)")
 CHECKS_JSON_FIELDS = "name,state,bucket,link,workflow,startedAt,completedAt"
+STATUS_CHECK_ROLLUP_JSON_FIELDS = "url,baseRefName,isDraft,statusCheckRollup"
 PR_DIAGNOSE_JSON_FIELDS = (
     "number,url,state,isDraft,headRefOid,baseRefName,mergeStateStatus,reviewDecision,body"
 )
@@ -505,9 +506,44 @@ def wait(
         ["gh", "pr", "checks", pr_ref, "--required", "--json", CHECKS_JSON_FIELDS],
     )
     latest_results = _latest_required_check_results(json_summary.stdout)
-    if json_summary.returncode == 0 and latest_results is not None:
+    if json_summary.returncode == 0 and latest_results:
         failing = _failing_json_check_names(latest_results)
         pending = _pending_json_check_names(latest_results)
+        if failing:
+            _print_state(
+                "EXCEPTION_REQUIRED",
+                "failing required checks",
+                repo_root=root,
+                reason_code="REQUIRED_CHECKS_FAILED",
+                phase="wait_required_checks",
+                dispatch_target="github",
+                details=failing,
+                next_actions=("fix or rerun failing required checks",),
+            )
+            return EXCEPTION_REQUIRED_EXIT_CODE
+        if pending:
+            _print_state(
+                "EXCEPTION_REQUIRED",
+                "pending required checks",
+                repo_root=root,
+                reason_code="REQUIRED_CHECKS_PENDING",
+                phase="wait_required_checks",
+                retryable=True,
+                dispatch_target="github",
+                details=pending,
+                next_actions=("wait for pending required checks",),
+            )
+            return EXCEPTION_REQUIRED_EXIT_CODE
+        print("required checks passed")
+        return 0
+    fallback_results = _fallback_required_check_results(root, runner, pr_ref)
+    if fallback_results is not None:
+        latest_fallback = _latest_required_check_results(
+            json.dumps(fallback_results)
+        )
+        checks = latest_fallback or []
+        failing = _failing_json_check_names(checks)
+        pending = _pending_json_check_names(checks)
         if failing:
             _print_state(
                 "EXCEPTION_REQUIRED",
@@ -3227,6 +3263,158 @@ def _latest_required_check_results(output: str) -> list[dict[str, Any]] | None:
     return [latest[key][1] for key in order]
 
 
+def _fallback_required_check_results(
+    root: Path,
+    runner: Runner,
+    pr_number: str,
+) -> list[dict[str, Any]] | None:
+    result = _run_github_read_command(
+        root,
+        runner,
+        [
+            "gh",
+            "pr",
+            "view",
+            pr_number,
+            "--json",
+            STATUS_CHECK_ROLLUP_JSON_FIELDS,
+        ],
+    )
+    if result.returncode != 0:
+        return None
+    payload = _json_from_result(result)
+    if bool(payload.get("isDraft")):
+        return [
+            {
+                "name": "PR is draft",
+                "workflow": "Pull Request",
+                "state": "PENDING",
+                "bucket": "pending",
+            }
+        ]
+    rollup_checks = [
+        check
+        for item in _status_check_rollup_items(payload.get("statusCheckRollup"))
+        if (check := _check_from_status_rollup_item(item)) is not None
+    ]
+    required_names: set[str] = set()
+    pr_info = _github_pr_info_from_url(_single_line_text(payload.get("url")))
+    if pr_info is not None:
+        repo, _ = pr_info
+        required_names = _required_status_check_names(
+            root=root,
+            runner=runner,
+            repo=repo,
+        )
+    if not required_names:
+        return rollup_checks
+    matched = [
+        check
+        for check in rollup_checks
+        if _json_check_display_name(check) in required_names
+        or _single_line_text(check.get("name")) in required_names
+    ]
+    if matched:
+        return matched
+    return [
+        {
+            "name": name,
+            "state": "PENDING",
+            "bucket": "pending",
+            "workflow": "",
+        }
+        for name in sorted(required_names)
+    ]
+
+
+def _status_check_rollup_items(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    if isinstance(value, dict):
+        nodes = value.get("nodes")
+        if isinstance(nodes, list):
+            return [item for item in nodes if isinstance(item, dict)]
+    return []
+
+
+def _check_from_status_rollup_item(item: dict[str, Any]) -> dict[str, Any] | None:
+    name = _single_line_text(item.get("name") or item.get("context"))
+    if not name:
+        return None
+    workflow = item.get("workflow")
+    workflow_name = (
+        _single_line_text(workflow.get("name"))
+        if isinstance(workflow, dict)
+        else _single_line_text(item.get("workflowName"))
+    )
+    state = _single_line_text(
+        item.get("state") or item.get("conclusion") or item.get("status")
+    ).upper()
+    bucket = "pending"
+    if state in {"SUCCESS", "SKIPPED", "NEUTRAL"}:
+        bucket = "pass"
+    elif state in {
+        "ACTION_REQUIRED",
+        "CANCELLED",
+        "ERROR",
+        "FAILURE",
+        "STARTUP_FAILURE",
+        "TIMED_OUT",
+    }:
+        bucket = "fail"
+    return {
+        "name": name,
+        "workflow": workflow_name,
+        "state": state,
+        "bucket": bucket,
+        "link": _single_line_text(item.get("detailsUrl") or item.get("targetUrl")),
+        "startedAt": _single_line_text(item.get("startedAt")),
+        "completedAt": _single_line_text(item.get("completedAt")),
+    }
+
+
+def _required_status_check_names(
+    *,
+    root: Path,
+    runner: Runner,
+    repo: str,
+) -> set[str]:
+    try:
+        rulesets = _gh_api_list(
+            root,
+            runner,
+            f"repos/{repo}/rulesets?includes_parents=true",
+        )
+        names: set[str] = set()
+        for summary in rulesets:
+            ruleset = _ruleset_detail(
+                root=root,
+                runner=runner,
+                repo=repo,
+                summary=summary,
+            )
+            for rule in ruleset.get("rules") or []:
+                if not isinstance(rule, dict):
+                    continue
+                if _single_line_text(rule.get("type")) != "required_status_checks":
+                    continue
+                parameters = rule.get("parameters")
+                if not isinstance(parameters, dict):
+                    continue
+                for item in parameters.get("required_status_checks") or []:
+                    if isinstance(item, dict):
+                        name = _single_line_text(
+                            item.get("context") or item.get("name")
+                        )
+                        if name:
+                            names.add(name)
+                    elif (name := _single_line_text(item)):
+                        names.add(name)
+        return names
+    except GitHubDataUnavailable:
+        return set()
+
+
 def _required_check_rank(check: dict[str, Any], index: int) -> tuple[int, str, int, int, int]:
     timestamp = _single_line_text(check.get("completedAt")) or _single_line_text(
         check.get("startedAt")
@@ -3314,8 +3502,13 @@ def _diagnose_required_checks(
         )
         return "unavailable", details, True
     checks = _latest_required_check_results(result.stdout)
-    if checks is None:
-        return "unavailable", ("required check JSON was invalid",), True
+    if checks is None or not checks:
+        fallback = _fallback_required_check_results(root, runner, pr_number)
+        if fallback is None:
+            return "unavailable", ("required check JSON was invalid",), True
+        checks = _latest_required_check_results(json.dumps(fallback)) or []
+        if not checks:
+            return "none", ("no required checks reported",), False
     failing = tuple(_failing_json_check_names(checks))
     if failing:
         return "failing", failing, False
