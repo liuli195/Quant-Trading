@@ -5,10 +5,9 @@
 ## 开始探索前先读这些文件
 
 - [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->：共享 AI 规则。
-- [indexes.md](../../indexes.md) <!-- pathref: repo/indexes.md -->：根文档索引。
 - [docs/README.md](../README.md) <!-- pathref: docs/README.md -->：docs 入口。
-- [docs/rules](../rules) <!-- pathref: docs/rules -->：受治理约束的流程和编码规则。
-- [docs/adr](../adr) <!-- pathref: docs/adr -->：与任务相关的架构决策记录。
+- [docs/rules/index.md](../rules/index.md) <!-- pathref: docs/rules/index.md -->：受治理约束的流程和编码规则。
+- [docs/adr/index.md](../adr/index.md) <!-- pathref: docs/adr/index.md -->：与任务相关的架构决策记录。
 
 如果后续新增根目录 `CONTEXT.md`，优先读取它。如果后续新增 `CONTEXT-MAP.md`，按它切换为 multi-context 路由。
 

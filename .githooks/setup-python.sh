@@ -58,7 +58,7 @@ fi
 "$VENV_PYTHON" -m pip install --upgrade pip
 "$VENV_PYTHON" -m pip install -r requirements-dev.txt
 
-chmod +x .githooks/pre-commit .githooks/pre-push .githooks/reference-transaction .githooks/run-python.sh .githooks/setup-python.sh 2>/dev/null || true
+chmod +x .githooks/pre-commit .githooks/post-commit .githooks/pre-push .githooks/reference-transaction .githooks/run-python.sh .githooks/setup-python.sh 2>/dev/null || true
 git config core.hooksPath .githooks
 
 printf '%s\n' "Python environment is ready: $VENV_PYTHON"

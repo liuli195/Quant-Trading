@@ -1,7 +1,6 @@
 # Critical governance and strategy paths.
 CLAUDE.md @liuli195
 AGENTS.md @liuli195
-indexes.md @liuli195
 docs/agents/** @liuli195
 docs/rules/** @liuli195
 docs/adr/** @liuli195

@@ -71,3 +71,18 @@ POSIX 示例把 Windows Python 路径替换为 `.venv/bin/python`。
 - [local-python-env.md](../guides/local-python-env.md) <!-- pathref: docs/guides/local-python-env.md -->
 - [jq_automation/README.md](../../scripts/tools/jq_automation/README.md) <!-- pathref: scripts/tools/jq_automation/README.md -->
 - [path_tools/README.md](../../scripts/tools/path_tools/README.md) <!-- pathref: scripts/tools/path_tools/README.md -->
+
+## PR Flow Intent Commands
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow intent stage --issue 54:reference
+.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow intent stage --issue 55:closes --issue 54:reference
+.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow intent stage --issue 60:closes --ac-review-mode user_required
+.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow intent stage --no-issue-reason "<reason>" --no-issue-authorized-by "<user>" --no-issue-evidence "<evidence>"
+.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow intent pre-commit
+.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow intent post-commit
+.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow intent check-coverage
+```
+
+`pr_flow intent stage` 必须在 `git add` 之后、`git commit` 之前运行；`pr_flow intent pre-commit` 和 `pr_flow intent post-commit` 由 hooks 调用；`pr_flow intent check-coverage` 用于 PR readiness/CI 发现 rewritten commits 缺少 branch intent。
+`--ac-review-mode user_required` 表示该 branch intent 要求人工确认 AC，不自动勾选 Issue checkbox。

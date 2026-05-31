@@ -112,7 +112,7 @@ Claude adapter：
 
 `ownership.yaml` 为 Skill ownership 的结构化 SSOT；`docs/rules/skills.md` 只作为人类可读规则说明和汇总索引，不重复维护 ownership 明细。
 
-`ownership.yaml` 代替 `indexes.md` 的机器发现职责；`skills.md` 只保留人类可读汇总。删除 `indexes.md` 前，必须先让治理检查改为读取 `ownership.yaml`，并确认自然语言请求能通过 Skill 触发语义找到规则、命令和脚本 owner。
+`ownership.yaml` 代替旧根索引的机器发现职责；`skills.md` 只保留人类可读汇总。自然语言请求通过 Skill 触发语义找到规则、命令和脚本 owner。
 
 `ownership.yaml` 建议路径为：
 

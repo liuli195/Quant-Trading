@@ -59,7 +59,7 @@ make pr-complete TITLE="<PR标题>" THREADS="PRRT_xxx"
 make pr-resolve-threads THREADS="PRRT_xxx"
 ```
 
-`THREADS` 只接受显式 thread ID；工具不会猜测或批量 resolve 全部未处理 thread。官方 Codex P2/P3 thread 在 severity 可靠识别时由 `pr_flow` 用固定模板接受、resolve，并写入 `external_findings` 和 PR body P2 保留项；官方 P0/P1、无 severity thread、人工 reviewer thread 阻断。
+`THREADS` 只接受显式 thread ID；工具不会猜测或批量 resolve 全部未处理 thread。官方 Codex P2/P3 thread 在 severity 可靠识别时由 `pr_flow` 用固定模板接受、resolve，并写入 `external_findings` 和 PR body P2 保留项；官方 P0/P1、无 severity thread、人工 reviewer thread 阻断。官方 P0/P1 只有结构化 `fixed` / `false_positive` 证据且绑定当前 head/diff/thread ID 时才自动回复并 resolve。
 
 `make pr-complete TITLE="<PR标题>"` 会在 `pr-ready` 到达 `merge-ready` 后继续把 draft PR 标记为 ready、等待新一轮 required checks、用当前 head SHA 锁定合并，并按受控 fast-forward 规则同步本地 `main`、删除已合并的本地和远端分支，最后输出 merge、base sync、分支删除和最终状态摘要。已有 PR 可传 `PR=<PR号>`：
 
@@ -79,7 +79,7 @@ make pr-cleanup PR=<PR号>
 
 它会读取 head、PR body evidence、merge state、review decision、required checks、Codex trigger/completion 和 review threads，并给出下一步机器状态；仓库禁用 auto-merge 时不要把 `--auto` 当作建议路径。
 
-`.local/ai-review/latest.json` 的 `reviewers` 字段必须记录至少两个独立 reviewer，作为子 agent 交叉评审证据；单 reviewer 或重复 reviewer 会被 `make ai-review` 拒绝。schema v3 必须记录 `diff_fingerprint`、`review_fragments.standards/spec/security`、`external_findings` 和 `current_commit_evidence`。review wrapper 负责生成 Standards / Spec fragments；security fragment 必须来自独立安全 review：Codex provider 要求 `tool=codex-security`，Claude provider 要求 `tool=security-guidance`，并填写 `evidence`。`review_mode=complete` 时，`complete_review.iterations` 必须证明每个 reviewer 持续查找更多发现，直到最后一轮 `no_new_findings=true` 且 `new_findings=[]`；`review_mode=partial` 或 `incremental` 必须填写对应授权或覆盖当前 diff。risk classifier 根据结构化 evidence、阻断项和授权最终裁决 risk level；P2/P3 accepted 不触发官方 Codex Review。生成的 `.local/ai-review/latest.md` 会列出交叉评审和安全 review 证据。PR body 的 `子 agent 交叉评审` 字段必须使用 `reviewers: A, B` 写明两个独立 reviewer，还必须说明任务分发情况，未分发时写明具体原因；`本地安全 review` 字段必须写明 `provider`、`tool` 和 `evidence`。high/unknown PR 必须带 `ai-risk-review` label。
+`.local/ai-review/latest.json` 的 `reviewers` 字段必须记录至少两个独立 reviewer，作为子 agent 交叉评审证据；单 reviewer 或重复 reviewer 会被 `make ai-review` 拒绝。schema v4 必须记录 `diff_fingerprint`、`review_fragments.standards/spec/security`、`external_findings`、`current_commit_evidence`、`spec_ref` 和 `issue_refs`；v2/v3 只作为迁移输入。review wrapper 负责生成 Standards / Spec fragments；`issue_refs` 非空时 Spec fragment 必须逐 issue/AC 对照。security fragment 必须来自独立安全 review：Codex provider 要求 `tool=codex-security`，Claude provider 要求 `tool=security-guidance`，并填写 `evidence`。`review_mode=complete` 时，`complete_review.iterations` 必须证明每个 reviewer 持续查找更多发现，直到最后一轮 `no_new_findings=true` 且 `new_findings=[]`；`review_mode=partial` 或 `incremental` 必须填写对应授权或覆盖当前 diff。risk classifier 根据结构化 evidence、阻断项和授权最终裁决 risk level；P2/P3 accepted 不触发官方 Codex Review。生成的 `.local/ai-review/latest.md` 会列出交叉评审和安全 review 证据。PR body 会根据 `issue_refs` 写入 `Closes #N`；`sync_pr_body` 会拉取 GitHub Issue body 并要求 AC checkbox 全部勾选。PR body 的 `子 agent 交叉评审` 字段必须使用 `reviewers: A, B` 写明两个独立 reviewer，还必须说明任务分发情况，未分发时写明具体原因；`本地安全 review` 字段必须写明 `provider`、`tool` 和 `evidence`。high/unknown PR 必须带 `ai-risk-review` label。
 
 `.githooks/pre-push` calls all required push gates before handing off to Git LFS:
 
@@ -188,7 +188,7 @@ $env:GITHUB_TOKEN="<token>"
 
 审计范围：
 
-- 仓库级规则文档 [docs/rules/index.md](../../../docs/rules/index.md) <!-- pathref: docs/rules/index.md --> 是否存在，ADR 目录 [docs/adr](../../../docs/adr) <!-- pathref: docs/adr --> 是否连续编号。
+- 仓库级规则文档 [docs/rules/index.md](../../../docs/rules/index.md) <!-- pathref: docs/rules/index.md --> 是否存在，ADR 索引 [docs/adr/index.md](../../../docs/adr/index.md) <!-- pathref: docs/adr/index.md --> 是否存在，ADR 目录是否连续编号。
 - `.githooks/pre-push` 是否仍调用代码化主干保护门禁、完整 `verify full` 和 Git LFS 转交。
 - Codex Code Review 规则 [review-guidelines.md](../../../docs/rules/review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md --> 是否存在，PR 模板是否要求 Codex 评审结论。
 - Codex Review Monitor workflow 是否监听 PR head 更新、`@codex review`、Codex review 和 inline review comment。
@@ -197,7 +197,7 @@ $env:GITHUB_TOKEN="<token>"
 - 工具是否登记在中央 registry。
 - README、文档入口、测试文件是否存在。
 - 主要 CLI 的 `--help` 是否可运行。
-- `AGENTS.md`、`indexes.md`、`CLAUDE.md` 与 owner Skill / Claude adapter 是否同步到新入口。
+- `AGENTS.md`、`CLAUDE.md` 与 owner Skill / Claude adapter 是否同步到新入口。
 - `research_datasets/catalog.json` 是否和目录一致。
 - `docs/indexes/docs_catalog.json`、`reports_catalog.json`、`datasets_catalog.json`、`variants_catalog.json` 是否存在，并和实际报告文件一致。
 - `scripts/research/workflows/templates/*.json` 是否符合模板 schema。

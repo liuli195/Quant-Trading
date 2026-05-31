@@ -2,15 +2,16 @@
 
 | category | strategy | title | path | pathrefs |
 | --- | --- | --- | --- | ---: |
-| docs |  | 文档入口 | `docs/README.md` | 21 |
+| docs |  | 文档入口 | `docs/README.md` | 23 |
 | docs |  | ADR 0001: 规则来源和治理模型 | `docs/adr/0001-rule-source-and-governance-model.md` | 6 |
 | docs |  | ADR 0002: 多 AI Agent 并行工作使用 Git 分支 | `docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md` | 0 |
 | docs |  | ADR 0003: Governance Gate 和主干保护 | `docs/adr/0003-governance-gate-and-main-branch-protection.md` | 0 |
-| docs |  | ADR 0004: 使用官方 Codex Code Review 作为 PR 评审门禁 | `docs/adr/0004-codex-code-review-governance.md` | 7 |
-| docs |  | ADR 0005: AI 入口采用渐进式披露 | `docs/adr/0005-ai-entry-progressive-disclosure.md` | 8 |
+| docs |  | ADR 0004: 使用官方 Codex Code Review 作为 PR 评审门禁 | `docs/adr/0004-codex-code-review-governance.md` | 8 |
+| docs |  | ADR 0005: AI 入口采用渐进式披露 | `docs/adr/0005-ai-entry-progressive-disclosure.md` | 9 |
 | docs |  | ADR 0006: PR 风险分级评审流程 | `docs/adr/0006-risk-tiered-pr-review.md` | 0 |
 | docs |  | ADR 0007: PR 强闭环状态机与 Review Evidence 边界 | `docs/adr/0007-pr-flow-closed-loop-review-evidence.md` | 1 |
-| docs |  | 领域文档 | `docs/agents/domain.md` | 5 |
+| docs |  | ADR 索引 | `docs/adr/index.md` | 7 |
+| docs |  | 领域文档 | `docs/agents/domain.md` | 4 |
 | docs |  | Issue 跟踪：GitHub | `docs/agents/issue-tracker.md` | 0 |
 | docs |  | Triage 标签 | `docs/agents/triage-labels.md` | 0 |
 | docs |  | 本地研究平台架构 | `docs/architecture/research-platform-architecture.md` | 19 |
@@ -51,7 +52,7 @@
 | docs |  | 文档和 Pathref 规则 | `docs/rules/docs-and-pathref.md` | 0 |
 | docs |  | 本地与聚宽环境差异 | `docs/rules/environments.md` | 0 |
 | docs |  | 治理门禁规则 | `docs/rules/governance.md` | 1 |
-| docs |  | 仓库规则总索引 | `docs/rules/index.md` | 15 |
+| docs |  | 仓库规则总索引 | `docs/rules/index.md` | 14 |
 | docs |  | PR 工作流规则 | `docs/rules/pr-workflow.md` | 3 |
 | docs |  | 研究流程规则 | `docs/rules/research-workflow.md` | 0 |
 | docs |  | PR Review 指南 | `docs/rules/review-guidelines.md` | 11 |

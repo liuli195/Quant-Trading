@@ -128,6 +128,7 @@ TOOL_DEFINITIONS: tuple[ToolDefinition, ...] = (
             "docs/indexes/reports_catalog.json",
             "docs/indexes/datasets_catalog.json",
             "docs/indexes/variants_catalog.json",
+            "docs/adr/index.md",
         ),
     ),
     ToolDefinition(

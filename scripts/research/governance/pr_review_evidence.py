@@ -60,6 +60,11 @@ DISQUALIFIED_CODEX_REVIEW_STATES = {"DISMISSED", "PENDING"}
 MONITOR_STATE_PATTERN = re.compile(
     r"<!--\s*codex-review-monitor-state\s+(?P<payload>\{.*?\})\s*-->", re.DOTALL
 )
+ISSUE_INTENT_MACHINE_BLOCK_PATTERN = re.compile(
+    r"<details>\s*<summary>PR Flow machine verification</summary>\s*"
+    r"```json\s*(?P<payload>\{.*?\})\s*```\s*</details>",
+    re.DOTALL,
+)
 BLOCKING_CODEX_FINDING_PATTERN = re.compile(
     r"(?:P[01] Badge|badge/P[01]-|(?:^|\n)\s*(?:\*\*)?\[P[01]\]\s+)",
     re.IGNORECASE,
@@ -120,6 +125,7 @@ def validate_pr_body(
     *,
     expected_pr_url: str | None = None,
     expected_head_sha: str | None = None,
+    expected_commit_shas: Sequence[str] | None = None,
     expected_head_created_at: str | None = None,
     comments: Sequence[object] | None = None,
     reviews: Sequence[Mapping[str, object]] | None = None,
@@ -138,6 +144,13 @@ def validate_pr_body(
             body,
             expected_head_sha=expected_head_sha,
             changed_files=changed_files,
+        )
+    )
+    errors.extend(
+        _issue_intent_machine_errors(
+            body,
+            expected_head_sha=expected_head_sha,
+            expected_commit_shas=expected_commit_shas,
         )
     )
     if (
@@ -282,6 +295,113 @@ def _current_diff_summary_errors(
             errors.append("current diff summary changed file paths must be listed")
         elif rendered_files != expected_files:
             errors.append("current diff summary changed files must match current PR files")
+    return errors
+
+
+def _issue_intent_machine_errors(
+    body: str,
+    *,
+    expected_head_sha: str | None,
+    expected_commit_shas: Sequence[str] | None,
+) -> list[str]:
+    matches = list(ISSUE_INTENT_MACHINE_BLOCK_PATTERN.finditer(body))
+    if not matches:
+        return (
+            ["PR body missing issue intent machine data"]
+            if expected_commit_shas is not None
+            else []
+        )
+    if len(matches) > 1:
+        return ["PR body must contain exactly one issue intent machine data block"]
+    try:
+        payload = json.loads(matches[0].group("payload"))
+    except json.JSONDecodeError:
+        return ["issue intent machine data must be valid JSON"]
+    if not isinstance(payload, dict):
+        return ["issue intent machine data must be a JSON object"]
+
+    errors: list[str] = []
+    head_sha = _single_line_text(payload.get("head_sha"))
+    if expected_head_sha and head_sha != expected_head_sha:
+        errors.append("issue intent machine data head_sha does not match current PR head")
+
+    commits = payload.get("commits")
+    if not isinstance(commits, list):
+        errors.append("issue intent machine data commits must be a list")
+        commits = []
+    recorded_shas = {
+        _single_line_text(item.get("commit_sha"))
+        for item in commits
+        if isinstance(item, dict) and _single_line_text(item.get("commit_sha"))
+    }
+    if expected_commit_shas is not None:
+        missing = [
+            _single_line_text(sha)
+            for sha in expected_commit_shas
+            if _single_line_text(sha) and _single_line_text(sha) not in recorded_shas
+        ]
+        if missing:
+            errors.append(
+                "issue intent machine data missing commit coverage: "
+                + ", ".join(missing)
+            )
+
+    issues = payload.get("issues")
+    if not isinstance(issues, list):
+        errors.append("issue intent machine data issues must be a list")
+    else:
+        for index, item in enumerate(issues):
+            if not isinstance(item, dict):
+                errors.append(f"issue intent issues[{index}] must be an object")
+                continue
+            role = _single_line_text(item.get("role"))
+            if role not in {"reference", "closes"}:
+                errors.append(
+                    f"issue intent issues[{index}].role must be reference or closes"
+                )
+
+    for index, item in enumerate(commits):
+        if not isinstance(item, dict):
+            errors.append(f"issue intent commits[{index}] must be an object")
+            continue
+        policy = _single_line_text(item.get("issue_policy"))
+        if policy not in {"issues", "no_issue"}:
+            errors.append(f"issue intent commits[{index}].issue_policy is invalid")
+        if policy == "issues":
+            commit_issues = item.get("issues")
+            if not isinstance(commit_issues, list) or not commit_issues:
+                errors.append(
+                    f"issue intent commits[{index}].issues must not be empty for issue_policy issues"
+                )
+            else:
+                for issue_index, issue in enumerate(commit_issues):
+                    if not isinstance(issue, dict):
+                        errors.append(
+                            f"issue intent commits[{index}].issues[{issue_index}] must be an object"
+                        )
+                        continue
+                    number = _positive_int(issue.get("number"))
+                    role = _single_line_text(issue.get("role"))
+                    if number is None:
+                        errors.append(
+                            f"issue intent commits[{index}].issues[{issue_index}].number must be a positive integer"
+                        )
+                    if role not in {"reference", "closes"}:
+                        errors.append(
+                            f"issue intent commits[{index}].issues[{issue_index}].role must be reference or closes"
+                        )
+        if policy == "no_issue":
+            authorization = item.get("no_issue_authorization")
+            if not isinstance(authorization, dict):
+                errors.append(
+                    f"issue intent commits[{index}].no_issue_authorization must be an object"
+                )
+            else:
+                for field in ("reason", "authorized_by", "evidence"):
+                    if not _single_line_text(authorization.get(field)):
+                        errors.append(
+                            f"issue intent commits[{index}].no_issue_authorization.{field} must not be empty"
+                        )
     return errors
 
 
@@ -727,6 +847,21 @@ def _normalize_changed_file_path(path: str) -> str:
 
 def _normalize_value(value: str) -> str:
     return value.strip().strip("`").strip()
+
+
+def _single_line_text(value: object) -> str:
+    return " ".join(str(value or "").split())
+
+
+def _positive_int(value: object) -> int | None:
+    text = _single_line_text(value)
+    if not text:
+        return None
+    try:
+        number = int(text)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
 
 
 def _has_nonempty_evidence(section: str) -> bool:
@@ -1606,6 +1741,19 @@ def _fetch_pr_changed_files(
     )
 
 
+def _fetch_pr_commit_shas(
+    *, repo: str, pr_number: str, token: str
+) -> tuple[str, ...]:
+    payload = _fetch_github_list(
+        repo=repo, path=f"pulls/{pr_number}/commits", token=token
+    )
+    return tuple(
+        str(item.get("sha", ""))
+        for item in payload
+        if isinstance(item, Mapping) and str(item.get("sha", "")).strip()
+    )
+
+
 def _fetch_issue_metadata(
     *, repo: str, pr_number: str, token: str
 ) -> Mapping[str, object]:
@@ -1785,6 +1933,7 @@ def main(argv: list[str] | None = None) -> int:
         _read_optional_file(args.review_threads_file)
     )
     changed_files: Sequence[str] | None = None
+    expected_commit_shas: Sequence[str] | None = None
     labels: Sequence[str] | None = None
     expected_pr_url = _read_env(args.pr_url_env)
     expected_head_sha = _read_env(args.head_sha_env)
@@ -1825,6 +1974,10 @@ def main(argv: list[str] | None = None) -> int:
         changed_files = _fetch_pr_changed_files(
             repo=repo, pr_number=pr_number, token=token
         )
+        fetched_commit_shas = _fetch_pr_commit_shas(
+            repo=repo, pr_number=pr_number, token=token
+        )
+        expected_commit_shas = fetched_commit_shas or None
         labels = _issue_label_names(
             _fetch_issue_metadata(repo=repo, pr_number=pr_number, token=token)
         )
@@ -1839,6 +1992,7 @@ def main(argv: list[str] | None = None) -> int:
         body,
         expected_pr_url=expected_pr_url,
         expected_head_sha=expected_head_sha,
+        expected_commit_shas=expected_commit_shas,
         expected_head_created_at=expected_head_created_at,
         comments=comments,
         reviews=reviews,

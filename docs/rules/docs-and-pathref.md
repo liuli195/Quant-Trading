@@ -6,6 +6,7 @@
 
 - Markdown 内部文件引用使用“可点击链接 + `pathref` 注释”。
 - 新增、移动、重命名文档后运行 `scripts.tools.path_tools.refactor check`。
+- ADR 索引用 `scripts.research.docs index` 生成，必须覆盖所有 `docs/adr/000*.md`。
 - 新报告默认进入文档报告索引。
 - 规则文档和 ADR 必须保持可机器校验的内部链接。
 

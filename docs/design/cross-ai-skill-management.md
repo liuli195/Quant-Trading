@@ -203,7 +203,7 @@ Codex 运行时 / 插件 Skill 盘点：
 
 | Skill | 迁移前层级 | 判定依据 | 后续处理 |
 | --- | --- | --- | --- |
-| `agent-doc-add` | `repo-local` | 依赖本仓库 `AGENTS.md`、`CLAUDE.md`、`indexes.md`、pathref 和治理扫描。 | 暂不直接同步；后续可抽取通用“入口文档新增”方法，作为新的系统级 Skill 候选。 |
+| `agent-doc-add` | `repo-local` | 依赖本仓库 `AGENTS.md`、`CLAUDE.md`、规则索引、ADR 索引、pathref 和治理扫描。 | 暂不直接同步；后续可抽取通用“入口文档新增”方法，作为新的系统级 Skill 候选。 |
 | `agent-doc-refactor` | `repo-local` | 依赖本仓库入口分层、规则文档、索引和治理检查。 | 暂不直接同步；后续可抽取通用“入口文档重构”方法，作为新的系统级 Skill 候选。 |
 | `jq-ab-test` | `repo-local` | 依赖策略变体库、JoinQuant 云端额度、`jq-run` 和本仓库 A/B 报告结构。 | 不纳入系统级同步。 |
 | `jq-analyze` | `repo-local` | 依赖本仓库回测产物、报告模板、`tabs_raw` 和 JoinQuant 数据结构。 | 不纳入系统级同步。 |

@@ -137,6 +137,34 @@ def _write_valid_v3_report(
     latest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
 
+def _write_valid_v4_issue_report(root: Path, *, issue_number: int = 50) -> None:
+    _write_valid_v3_report(
+        root,
+        changed_files=["docs/guides/example.md"],
+        diff_files_hash="current-diff",
+    )
+    latest = root / ".local" / "ai-review" / "latest.json"
+    payload = json.loads(latest.read_text(encoding="utf-8"))
+    payload = pr_flow.ai_review_gate.payload_as_schema_v4(
+        payload,
+        repo_root=root,
+        changed_files=["docs/guides/example.md"],
+    )
+    payload["spec_ref"] = {
+        "issues": [{"number": issue_number, "role": "closes"}],
+        "design_docs": [],
+        "adrs": [],
+    }
+    payload["issue_refs"] = [
+        {
+            "number": issue_number,
+            "title": f"Issue {issue_number}",
+            "acceptance_criteria": ["first AC"],
+        }
+    ]
+    latest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+
 class FakeRunner:
     def __init__(
         self,
@@ -188,6 +216,8 @@ class FakeRunner:
             return pr_flow.CommandResult(0, "feature/pr-flow\n", "")
         if command == ["git", "rev-parse", "HEAD"]:
             return pr_flow.CommandResult(0, "1" * 40 + "\n", "")
+        if command == ["git", "rev-list", "--reverse", "origin/main..HEAD"]:
+            return pr_flow.CommandResult(0, "", "")
         if command == ["git", "ls-remote", "--heads", "origin", "feature/pr-flow"]:
             return pr_flow.CommandResult(
                 0,
@@ -382,6 +412,28 @@ def _gh_api_json(command: list[str], payload: object) -> str:
     return json.dumps([payload]) if "--slurp" in command else json.dumps(payload)
 
 
+def _required_status_ruleset(
+    context: str,
+    *,
+    include: list[str],
+    enforcement: str,
+) -> dict[str, object]:
+    return {
+        "id": 1,
+        "target": "branch",
+        "enforcement": enforcement,
+        "conditions": {"ref_name": {"include": include, "exclude": []}},
+        "rules": [
+            {
+                "type": "required_status_checks",
+                "parameters": {
+                    "required_status_checks": [{"context": context}],
+                },
+            }
+        ],
+    }
+
+
 def _graphql_query(command: list[str]) -> str:
     for item in command:
         if item.startswith("query="):
@@ -485,6 +537,15 @@ class UnavailableRequiredChecksRunner:
     ) -> pr_flow.CommandResult:
         if command[:4] == ["gh", "pr", "checks", "7"]:
             return pr_flow.CommandResult(1, "", "authentication required")
+        if command == [
+            "gh",
+            "pr",
+            "view",
+            "7",
+            "--json",
+            "url,baseRefName,isDraft,statusCheckRollup",
+        ]:
+            return pr_flow.CommandResult(1, "", "authentication required")
         raise AssertionError(f"unexpected command: {command}")
 
 
@@ -531,6 +592,138 @@ class PendingRequiredChecksRunner:
                 ),
                 "",
             )
+        raise AssertionError(f"unexpected command: {command}")
+
+
+class RollupFallbackChecksRunner:
+    def __init__(
+        self,
+        rollup_checks: list[dict[str, str]] | None = None,
+        legacy_required_contexts: list[str] | None = None,
+    ) -> None:
+        self.calls: list[list[str]] = []
+        self.legacy_required_contexts = legacy_required_contexts or []
+        self.rollup_checks = rollup_checks or [
+            {
+                "name": "governance",
+                "workflowName": "Research Governance",
+                "state": "SUCCESS",
+                "detailsUrl": "https://github.com/o/r/actions/runs/30/job/300",
+                "startedAt": "2026-05-28T10:00:00Z",
+                "completedAt": "2026-05-28T10:01:00Z",
+            },
+            {
+                "name": "pr-review-evidence",
+                "workflowName": "Research Governance",
+                "state": "SUCCESS",
+                "detailsUrl": "https://github.com/o/r/actions/runs/31/job/310",
+                "startedAt": "2026-05-28T10:00:00Z",
+                "completedAt": "2026-05-28T10:01:00Z",
+            },
+            {
+                "name": "Codex Review Monitor",
+                "workflowName": "",
+                "state": "SUCCESS",
+                "detailsUrl": "https://github.com/o/r/pull/7#issuecomment-1",
+                "startedAt": "2026-05-28T10:00:00Z",
+                "completedAt": "2026-05-28T10:01:00Z",
+            },
+        ]
+
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        self.calls.append(command)
+        if command == [
+            "gh",
+            "pr",
+            "checks",
+            "7",
+            "--required",
+            "--watch",
+            "--interval",
+            "10",
+        ]:
+            return pr_flow.CommandResult(1, "", "no required checks reported")
+        if command == [
+            "gh",
+            "pr",
+            "checks",
+            "7",
+            "--required",
+            "--json",
+            pr_flow.CHECKS_JSON_FIELDS,
+        ]:
+            return pr_flow.CommandResult(0, "[]", "")
+        if command == [
+            "gh",
+            "pr",
+            "view",
+            "7",
+            "--json",
+            "url,baseRefName,isDraft,statusCheckRollup",
+        ]:
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "url": "https://github.com/liuli195/Quant-Trading/pull/7",
+                        "baseRefName": "main",
+                        "isDraft": False,
+                        "statusCheckRollup": self.rollup_checks,
+                    }
+                ),
+                "",
+            )
+        if _gh_api_path(command) == "repos/liuli195/Quant-Trading/rulesets?includes_parents=true":
+            return pr_flow.CommandResult(
+                0,
+                json.dumps([{"id": 11, "name": "main rules"}]),
+                "",
+            )
+        if _gh_api_path(command) == "repos/liuli195/Quant-Trading/rulesets/11":
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "id": 11,
+                        "target": "branch",
+                        "enforcement": "active",
+                        "conditions": {
+                            "ref_name": {
+                                "include": ["refs/heads/main"],
+                                "exclude": [],
+                            }
+                        },
+                        "rules": [
+                            {
+                                "type": "required_status_checks",
+                                "parameters": {
+                                    "required_status_checks": [
+                                        {"context": "Research Governance / governance"}
+                                    ]
+                                },
+                            }
+                        ],
+                    }
+                ),
+                "",
+            )
+        if (
+            _gh_api_path(command)
+            == "repos/liuli195/Quant-Trading/branches/main/protection/required_status_checks"
+        ):
+            return pr_flow.CommandResult(
+                0,
+                json.dumps({"contexts": self.legacy_required_contexts, "checks": []}),
+                "",
+            )
+        if command == ["gh", "pr", "checks", "7", "--required"]:
+            return pr_flow.CommandResult(1, "", "no required checks reported")
         raise AssertionError(f"unexpected command: {command}")
 
 
@@ -653,6 +846,11 @@ class DiagnoseRunner:
                 ),
                 "",
             )
+        if (
+            _gh_api_path(command)
+            == "repos/liuli195/Quant-Trading/branches/main/protection/required_status_checks"
+        ):
+            return pr_flow.CommandResult(0, json.dumps({"contexts": [], "checks": []}), "")
         if command == ["git", "rev-parse", "HEAD"]:
             return pr_flow.CommandResult(0, self.local_head + "\n", "")
         if command == [
@@ -1166,6 +1364,180 @@ def test_wait_uses_latest_duplicate_non_actions_required_check_timestamp(
     assert "required checks passed" in capsys.readouterr().out
 
 
+def test_wait_falls_back_to_status_check_rollup_when_required_checks_empty(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = RollupFallbackChecksRunner()
+
+    code = pr_flow.wait(repo_root=tmp_path, pr="7", runner=runner)
+
+    assert code == 0
+    assert "required checks passed" in capsys.readouterr().out
+    assert [
+        "gh",
+        "pr",
+        "view",
+        "7",
+        "--json",
+        "url,baseRefName,isDraft,statusCheckRollup",
+    ] in runner.calls
+
+
+def test_wait_fallback_blocks_when_mandatory_required_check_is_missing(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = RollupFallbackChecksRunner(
+        rollup_checks=[
+            {
+                "name": "governance",
+                "workflowName": "Research Governance",
+                "state": "SUCCESS",
+                "detailsUrl": "https://github.com/o/r/actions/runs/30/job/300",
+                "startedAt": "2026-05-28T10:00:00Z",
+                "completedAt": "2026-05-28T10:01:00Z",
+            }
+        ]
+    )
+
+    code = pr_flow.wait(repo_root=tmp_path, pr="7", runner=runner)
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "REQUIRED_CHECKS_PENDING" in captured.err
+    assert "Research Governance / pr-review-evidence" in captured.err
+    assert "Codex Review Monitor" in captured.err
+
+
+def test_wait_fallback_includes_legacy_branch_protection_required_checks(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = RollupFallbackChecksRunner(
+        legacy_required_contexts=["External Policy"],
+        rollup_checks=[
+            {
+                "name": "governance",
+                "workflowName": "Research Governance",
+                "state": "SUCCESS",
+                "detailsUrl": "https://github.com/o/r/actions/runs/30/job/300",
+                "startedAt": "2026-05-28T10:00:00Z",
+                "completedAt": "2026-05-28T10:01:00Z",
+            },
+            {
+                "name": "pr-review-evidence",
+                "workflowName": "Research Governance",
+                "state": "SUCCESS",
+                "detailsUrl": "https://github.com/o/r/actions/runs/31/job/310",
+                "startedAt": "2026-05-28T10:00:00Z",
+                "completedAt": "2026-05-28T10:01:00Z",
+            },
+            {
+                "name": "Codex Review Monitor",
+                "workflowName": "",
+                "state": "SUCCESS",
+                "detailsUrl": "https://github.com/o/r/pull/7#issuecomment-1",
+                "startedAt": "2026-05-28T10:00:00Z",
+                "completedAt": "2026-05-28T10:01:00Z",
+            },
+        ],
+    )
+
+    code = pr_flow.wait(repo_root=tmp_path, pr="7", runner=runner)
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "REQUIRED_CHECKS_PENDING" in captured.err
+    assert "External Policy" in captured.err
+    assert [
+        "gh",
+        "api",
+        "repos/liuli195/Quant-Trading/branches/main/protection/required_status_checks",
+    ] in runner.calls
+
+
+def test_required_status_check_names_filters_rulesets_to_base_branch(
+    tmp_path: Path,
+) -> None:
+    class RequiredRulesetRunner:
+        def __init__(self) -> None:
+            self.calls: list[list[str]] = []
+
+        def run(
+            self,
+            command: list[str],
+            *,
+            cwd: Path | None = None,
+            input_text: str | None = None,
+        ) -> pr_flow.CommandResult:
+            self.calls.append(command)
+            path = _gh_api_path(command)
+            if path == "repos/liuli195/Quant-Trading/rulesets?includes_parents=true":
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps(
+                        [
+                            {"id": 11, "name": "main rules"},
+                            {"id": 12, "name": "release rules"},
+                            {"id": 13, "name": "inactive rules"},
+                        ]
+                    ),
+                    "",
+                )
+            if path == "repos/liuli195/Quant-Trading/rulesets/11":
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps(
+                        _required_status_ruleset(
+                            "Main Required",
+                            include=["refs/heads/main"],
+                            enforcement="active",
+                        )
+                    ),
+                    "",
+                )
+            if path == "repos/liuli195/Quant-Trading/rulesets/12":
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps(
+                        _required_status_ruleset(
+                            "Release Only",
+                            include=["refs/heads/release/*"],
+                            enforcement="active",
+                        )
+                    ),
+                    "",
+                )
+            if path == "repos/liuli195/Quant-Trading/rulesets/13":
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps(
+                        _required_status_ruleset(
+                            "Inactive Required",
+                            include=["refs/heads/main"],
+                            enforcement="disabled",
+                        )
+                    ),
+                    "",
+                )
+            if (
+                path
+                == "repos/liuli195/Quant-Trading/branches/main/protection/required_status_checks"
+            ):
+                return pr_flow.CommandResult(0, json.dumps({"contexts": [], "checks": []}), "")
+            raise AssertionError(f"unexpected command: {command}")
+
+    names = pr_flow._required_status_check_names(
+        root=tmp_path,
+        runner=RequiredRulesetRunner(),
+        repo="liuli195/Quant-Trading",
+        branch="main",
+    )
+
+    assert names == {"Main Required"}
+
+
 def test_wait_reports_exception_when_required_checks_unavailable(
     tmp_path: Path,
     capsys,
@@ -1239,6 +1611,174 @@ def test_diagnose_reports_required_checks_and_unresolved_threads(
     assert "Research Governance / pr-review-evidence" in captured.out
     assert "review threads: unresolved=1" in captured.out
     assert "next: resolve unresolved review threads" in captured.out
+
+
+def test_diagnose_falls_back_to_status_check_rollup_when_required_checks_empty(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    class DiagnoseRollupRunner(DiagnoseRunner):
+        def run(
+            self,
+            command: list[str],
+            *,
+            cwd: Path | None = None,
+            input_text: str | None = None,
+        ) -> pr_flow.CommandResult:
+            if command == [
+                "gh",
+                "pr",
+                "checks",
+                "7",
+                "--required",
+                "--json",
+                pr_flow.CHECKS_JSON_FIELDS,
+            ]:
+                self.calls.append(command)
+                return pr_flow.CommandResult(0, "[]", "")
+            if command == [
+                "gh",
+                "pr",
+                "view",
+                "7",
+                "--json",
+                "url,baseRefName,isDraft,statusCheckRollup",
+            ]:
+                self.calls.append(command)
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps(
+                        {
+                            "url": "https://github.com/liuli195/Quant-Trading/pull/7",
+                            "baseRefName": "main",
+                            "isDraft": False,
+                                "statusCheckRollup": [
+                                    {
+                                        "name": "governance",
+                                        "workflowName": "Research Governance",
+                                        "state": "SUCCESS",
+                                        "detailsUrl": "https://github.com/o/r/actions/runs/30/job/300",
+                                    },
+                                    {
+                                        "name": "pr-review-evidence",
+                                        "workflowName": "Research Governance",
+                                        "state": "SUCCESS",
+                                        "detailsUrl": "https://github.com/o/r/actions/runs/31/job/310",
+                                    },
+                                    {
+                                        "name": "Codex Review Monitor",
+                                        "workflowName": "",
+                                        "state": "SUCCESS",
+                                        "detailsUrl": "https://github.com/o/r/pull/7#issuecomment-1",
+                                    }
+                                ],
+                            }
+                        ),
+                    "",
+                )
+            return super().run(command, cwd=cwd, input_text=input_text)
+
+    code = pr_flow.diagnose(
+        repo_root=tmp_path,
+        pr="7",
+        runner=DiagnoseRollupRunner(
+            merge_state="CLEAN",
+            check_bucket="pass",
+            check_state="SUCCESS",
+            review_decision="APPROVED",
+            review_threads=[],
+        ),
+    )
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "required checks: passed" in captured.out
+
+
+def test_diagnose_falls_back_when_required_checks_command_reports_none(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    class DiagnoseRollupRunner(DiagnoseRunner):
+        def run(
+            self,
+            command: list[str],
+            *,
+            cwd: Path | None = None,
+            input_text: str | None = None,
+        ) -> pr_flow.CommandResult:
+            if command == [
+                "gh",
+                "pr",
+                "checks",
+                "7",
+                "--required",
+                "--json",
+                pr_flow.CHECKS_JSON_FIELDS,
+            ]:
+                self.calls.append(command)
+                return pr_flow.CommandResult(
+                    1,
+                    "",
+                    "no required checks reported on the branch",
+                )
+            if command == [
+                "gh",
+                "pr",
+                "view",
+                "7",
+                "--json",
+                "url,baseRefName,isDraft,statusCheckRollup",
+            ]:
+                self.calls.append(command)
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps(
+                        {
+                            "url": "https://github.com/liuli195/Quant-Trading/pull/7",
+                            "baseRefName": "main",
+                            "isDraft": False,
+                            "statusCheckRollup": [
+                                {
+                                    "name": "governance",
+                                    "workflowName": "Research Governance",
+                                    "state": "SUCCESS",
+                                    "detailsUrl": "https://github.com/o/r/actions/runs/30/job/300",
+                                },
+                                {
+                                    "name": "pr-review-evidence",
+                                    "workflowName": "Research Governance",
+                                    "state": "SUCCESS",
+                                    "detailsUrl": "https://github.com/o/r/actions/runs/31/job/310",
+                                },
+                                {
+                                    "name": "Codex Review Monitor",
+                                    "workflowName": "",
+                                    "state": "SUCCESS",
+                                    "detailsUrl": "https://github.com/o/r/pull/7#issuecomment-1",
+                                },
+                            ],
+                        }
+                    ),
+                    "",
+                )
+            return super().run(command, cwd=cwd, input_text=input_text)
+
+    code = pr_flow.diagnose(
+        repo_root=tmp_path,
+        pr="7",
+        runner=DiagnoseRollupRunner(
+            merge_state="CLEAN",
+            check_bucket="pass",
+            check_state="SUCCESS",
+            review_decision="APPROVED",
+            review_threads=[],
+        ),
+    )
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "required checks: passed" in captured.out
 
 
 def test_diagnose_writes_structured_last_status_for_unresolved_threads(
@@ -1384,6 +1924,47 @@ def test_diagnose_allows_merge_ready_without_remote_approval_requirement(
     assert code == pr_flow.SUCCESS_EXIT_CODE
     assert "reviewDecision: REVIEW_REQUIRED" in captured.out
     assert "next: wait for approved review required by remote rules" not in captured.out
+    assert "next: PR automation state is merge-ready" in captured.out
+
+
+def test_diagnose_allows_unstable_when_explicit_merge_gates_pass(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = DiagnoseRunner(
+        merge_state="UNSTABLE",
+        check_bucket="pass",
+        check_state="SUCCESS",
+        review_decision="REVIEW_REQUIRED",
+        issue_comments=[
+            {
+                "id": 1,
+                "user": {"login": "test-user"},
+                "body": _codex_review_trigger_body(),
+                "created_at": "2026-05-28T09:00:00Z",
+                "updated_at": "2026-05-28T09:00:00Z",
+            }
+        ],
+        reviews=[
+            {
+                "id": 10,
+                "user": {"login": "chatgpt-codex-connector"},
+                "state": "COMMENTED",
+                "commit_id": "1" * 40,
+                "submitted_at": "2026-05-28T10:00:00Z",
+                "body": "Codex Review: Didn't find any major issues.",
+            }
+        ],
+        review_threads=[],
+    )
+
+    code = pr_flow.diagnose(repo_root=tmp_path, pr="7", runner=runner)
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert "mergeStateStatus: UNSTABLE" in captured.out
+    assert "required checks: passed" in captured.out
+    assert "next: inspect branch protection or ruleset blockers" not in captured.out
     assert "next: PR automation state is merge-ready" in captured.out
 
 
@@ -1651,7 +2232,7 @@ def test_prepare_records_verify_full_evidence(
     assert gate_evidence in body
 
 
-def test_prepare_migrates_latest_report_to_schema_v3(
+def test_prepare_migrates_latest_report_to_schema_v4(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -1678,11 +2259,117 @@ def test_prepare_migrates_latest_report_to_schema_v3(
     payload = json.loads(
         (tmp_path / ".local/ai-review/latest.json").read_text(encoding="utf-8")
     )
-    assert payload["schema_version"] == 3
+    assert payload["schema_version"] == 4
     assert payload["diff_fingerprint"]["diff_files_hash"] == "current-diff"
     assert set(payload["review_fragments"]) == {"standards", "spec", "security"}
     assert payload["external_findings"] == []
     assert payload["current_commit_evidence"]["head_sha"] == "1" * 40
+    assert payload["spec_ref"] == {"issues": [], "design_docs": [], "adrs": []}
+    assert payload["issue_refs"] == []
+
+
+def test_prepare_populates_issue_refs_from_closing_spec_issues(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _write_valid_v3_report(
+        tmp_path,
+        changed_files=["docs/guides/example.md"],
+        diff_files_hash="current-diff",
+    )
+    latest = tmp_path / ".local" / "ai-review" / "latest.json"
+    payload = json.loads(latest.read_text(encoding="utf-8"))
+    payload = pr_flow.ai_review_gate.payload_as_schema_v4(
+        payload,
+        repo_root=tmp_path,
+        changed_files=["docs/guides/example.md"],
+    )
+    payload["spec_ref"] = {
+        "issues": [
+            {"number": 50, "role": "closes"},
+            {"number": 27, "role": "reference"},
+        ],
+        "design_docs": [],
+        "adrs": [],
+    }
+    payload["issue_refs"] = []
+    latest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(pr_flow.ai_review_gate, "_discover_changed_files", lambda _root: [])
+
+    class IssueRunner(RecordingRunner):
+        def run(
+            self,
+            command: list[str],
+            *,
+            cwd: Path | None = None,
+            input_text: str | None = None,
+        ) -> pr_flow.CommandResult:
+            self.calls.append(command)
+            if command == ["gh", "issue", "view", "50", "--json", "title,body"]:
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps(
+                        {
+                            "title": "PR Flow v2：集成 Issue 状态处理",
+                            "body": "- [ ] first AC\n- [x] second AC\n",
+                        }
+                    ),
+                    "",
+                )
+            return pr_flow.CommandResult(0, "", "")
+
+    code = pr_flow.prepare(repo_root=tmp_path, runner=IssueRunner())
+
+    assert code == 0
+    updated = json.loads(latest.read_text(encoding="utf-8"))
+    assert updated["schema_version"] == 4
+    assert updated["issue_refs"] == [
+        {
+            "number": 50,
+            "title": "PR Flow v2：集成 Issue 状态处理",
+            "acceptance_criteria": ["first AC", "second AC"],
+        }
+    ]
+
+
+def test_prepare_keeps_matching_issue_refs_without_refetching(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _write_valid_v3_report(
+        tmp_path,
+        changed_files=["docs/guides/example.md"],
+        diff_files_hash="current-diff",
+    )
+    latest = tmp_path / ".local" / "ai-review" / "latest.json"
+    payload = json.loads(latest.read_text(encoding="utf-8"))
+    payload = pr_flow.ai_review_gate.payload_as_schema_v4(
+        payload,
+        repo_root=tmp_path,
+        changed_files=["docs/guides/example.md"],
+    )
+    payload["spec_ref"] = {
+        "issues": [{"number": 50, "role": "closes"}],
+        "design_docs": [],
+        "adrs": [],
+    }
+    payload["issue_refs"] = [
+        {
+            "number": 50,
+            "title": "Already cached",
+            "acceptance_criteria": ["cached AC"],
+        }
+    ]
+    latest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(pr_flow.ai_review_gate, "_discover_changed_files", lambda _root: [])
+    runner = RecordingRunner()
+
+    code = pr_flow.prepare(repo_root=tmp_path, runner=runner)
+
+    assert code == 0
+    assert ["gh", "issue", "view", "50", "--json", "title,body"] not in runner.calls
+    updated = json.loads(latest.read_text(encoding="utf-8"))
+    assert updated["issue_refs"][0]["title"] == "Already cached"
 
 
 def test_prepare_rejects_stale_schema_v3_diff_fingerprint(
@@ -1821,7 +2508,156 @@ def test_sync_rejects_stale_schema_v3_diff_fingerprint(
     assert not any(call[:3] == ["gh", "pr", "edit"] for call in runner.calls)
 
 
-def test_sync_migrates_legacy_report_to_schema_v3_before_rendering(
+def test_sync_stops_after_pr_body_update_when_issue_ac_is_unchecked(
+    tmp_path: Path,
+) -> None:
+    _write_valid_v4_issue_report(tmp_path, issue_number=50)
+
+    class IssueAcRunner(FakeRunner):
+        def run(
+            self,
+            command: list[str],
+            *,
+            cwd: Path | None = None,
+            input_text: str | None = None,
+        ) -> pr_flow.CommandResult:
+            if command == ["gh", "issue", "view", "50", "--json", "title,body"]:
+                self.calls.append(command)
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps({"title": "Issue 50", "body": "- [ ] first AC\n"}),
+                    "",
+                )
+            return super().run(command, cwd=cwd, input_text=input_text)
+
+    runner = IssueAcRunner(existing_pr=True)
+
+    code = pr_flow.sync(repo_root=tmp_path, title="PR Flow issue gate", runner=runner)
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    assert "Closes #50" in runner.edited_bodies[-1]
+    status = json.loads(
+        (tmp_path / ".local" / "pr-flow" / "last-status.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert status["state"] == "DISPATCH_REQUIRED"
+    assert status["reason_code"] == "ISSUE_ACCEPTANCE_CRITERIA_INCOMPLETE"
+    assert status["blocking_items"] == ["#50 Issue 50: - [ ] first AC"]
+
+
+def test_sync_continues_when_linked_issue_ac_is_checked(
+    tmp_path: Path,
+) -> None:
+    _write_valid_v4_issue_report(tmp_path, issue_number=50)
+
+    class IssueAcRunner(FakeRunner):
+        def run(
+            self,
+            command: list[str],
+            *,
+            cwd: Path | None = None,
+            input_text: str | None = None,
+        ) -> pr_flow.CommandResult:
+            if command == ["gh", "issue", "view", "50", "--json", "title,body"]:
+                self.calls.append(command)
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps({"title": "Issue 50", "body": "- [x] first AC\n"}),
+                    "",
+                )
+            return super().run(command, cwd=cwd, input_text=input_text)
+
+    runner = IssueAcRunner(existing_pr=True)
+
+    code = pr_flow.sync(repo_root=tmp_path, title="PR Flow issue gate", runner=runner)
+
+    assert code == 0
+    assert "Closes #50" in runner.edited_bodies[-1]
+
+
+def test_ready_auto_marks_ac_before_final_issue_gate(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _write_valid_v4_issue_report(tmp_path, issue_number=50)
+    latest = tmp_path / ".local" / "ai-review" / "latest.json"
+    payload = json.loads(latest.read_text(encoding="utf-8"))
+    payload["review_fragments"]["spec"]["ac_evidence"] = [
+        {
+            "issue": 50,
+            "criteria": "first AC",
+            "met": True,
+            "evidence": ["test_ready_auto_marks_ac_before_final_issue_gate"],
+            "reviewer": "spec-review-subagent",
+        }
+    ]
+    latest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    intent = {
+        "schema_version": 1,
+        "branch": "feature/pr-flow",
+        "updated_at": "2026-06-01T08:00:00Z",
+        "commits": [
+            {
+                "issue_policy": "issues",
+                "issues": [
+                    {"number": 50, "role": "closes", "title": "Issue 50"}
+                ],
+                "commit_sha": "1" * 40,
+                "consumed": True,
+            }
+        ],
+        "issues": [{"number": 50, "role": "closes", "title": "Issue 50"}],
+        "no_issue_authorizations": [],
+    }
+    intent_path = tmp_path / ".local" / "pr-flow" / "intents" / "feature" / "pr-flow.json"
+    intent_path.parent.mkdir(parents=True, exist_ok=True)
+    intent_path.write_text(json.dumps(intent, ensure_ascii=False), encoding="utf-8")
+
+    class IssueAcRunner(FakeRunner):
+        def __init__(self) -> None:
+            super().__init__(existing_pr=True)
+            self.issue_body = "- [ ] first AC\n"
+            self.issue_comments: list[str] = []
+
+        def run(
+            self,
+            command: list[str],
+            *,
+            cwd: Path | None = None,
+            input_text: str | None = None,
+        ) -> pr_flow.CommandResult:
+            if command == ["gh", "issue", "view", "50", "--json", "title,body"]:
+                self.calls.append(command)
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps({"title": "Issue 50", "body": self.issue_body}),
+                    "",
+                )
+            if command[:3] == ["gh", "issue", "edit"] and "--body-file" in command:
+                self.calls.append(command)
+                body_file = Path(command[command.index("--body-file") + 1])
+                self.issue_body = body_file.read_text(encoding="utf-8")
+                return pr_flow.CommandResult(0, "", "")
+            if command[:3] == ["gh", "issue", "comment"] and "--body-file" in command:
+                self.calls.append(command)
+                body_file = Path(command[command.index("--body-file") + 1])
+                self.issue_comments.append(body_file.read_text(encoding="utf-8"))
+                return pr_flow.CommandResult(0, "", "")
+            return super().run(command, cwd=cwd, input_text=input_text)
+
+    runner = IssueAcRunner()
+    monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+
+    code = pr_flow.ready(repo_root=tmp_path, title="PR Flow issue gate", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert "- [x] first AC" in runner.issue_body
+    assert runner.issue_comments
+    assert len(runner.edited_bodies) >= 2
+
+
+def test_sync_migrates_legacy_report_to_schema_v4_before_rendering(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -1851,8 +2687,10 @@ def test_sync_migrates_legacy_report_to_schema_v3_before_rendering(
             encoding="utf-8"
         )
     )
-    assert payload["schema_version"] == 3
+    assert payload["schema_version"] == 4
     assert payload["diff_fingerprint"]["diff_files_hash"] == "current-diff"
+    assert payload["spec_ref"] == {"issues": [], "design_docs": [], "adrs": []}
+    assert payload["issue_refs"] == []
     assert "## 当前提交与差异摘要" in runner.edited_bodies[-1]
 
 
@@ -3251,6 +4089,10 @@ def test_ready_auto_closes_outdated_p1_thread_with_structured_evidence(
             "path": "scripts/research/governance/pr_flow.py",
             "status": "fixed",
             "evidence": "fixed by current diff and verified locally",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "fix_commit": "1" * 40,
+            "verification_command": ".\\.venv\\Scripts\\python.exe -m pytest scripts\\research\\governance\\tests\\test_pr_flow.py -q",
             "handling": "outdated finding fixed; close stale thread",
         }
     ]
@@ -3297,6 +4139,153 @@ def test_ready_auto_closes_outdated_p1_thread_with_structured_evidence(
     assert "closed official Codex review thread: PRRT_p1" in capsys.readouterr().out
     assert runner.thread_replies
     assert "status: `fixed`" in runner.thread_replies[-1]["body"]
+
+
+def test_ready_auto_closes_current_p1_thread_with_structured_evidence(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_valid_report(
+        tmp_path,
+        risk_level="low",
+        requires_official=False,
+        changed_files=["docs/guides/example.md"],
+    )
+    latest = tmp_path / ".local" / "ai-review" / "latest.json"
+    payload = json.loads(latest.read_text(encoding="utf-8"))
+    payload["external_findings"] = [
+        {
+            "id": "EXT-CODEX-THREAD-PRRT_p1",
+            "source": "official_codex_review_thread",
+            "thread_id": "PRRT_p1",
+            "severity": "P1",
+            "title": "Current blocker",
+            "path": "scripts/research/governance/pr_flow.py",
+            "status": "fixed",
+            "evidence": "fixed by current head and verified locally",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "fix_commit": "1" * 40,
+            "verification_command": ".\\.venv\\Scripts\\python.exe -m pytest scripts\\research\\governance\\tests\\test_pr_flow.py -q",
+        }
+    ]
+    latest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    runner = FakeRunner(
+        existing_pr=True,
+        api_review_threads=[
+            {
+                "id": "PRRT_p1",
+                "isResolved": False,
+                "isOutdated": False,
+                "comments": {
+                    "nodes": [
+                        {
+                            "body": "P1 Badge: current blocker fixed by follow-up.",
+                            "author": {"login": "chatgpt-codex-connector"},
+                        }
+                    ]
+                },
+            }
+        ],
+    )
+    monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["docs/guides/example.md"],
+        },
+    )
+
+    code = pr_flow.ready(
+        repo_root=tmp_path,
+        title="governance automation",
+        runner=runner,
+        codex_review_timeout_seconds=0,
+        codex_review_poll_seconds=0,
+    )
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert "closed official Codex review thread: PRRT_p1" in capsys.readouterr().out
+    assert runner.thread_replies
+    assert "status: `fixed`" in runner.thread_replies[-1]["body"]
+    assert "thread_id: `PRRT_p1`" in runner.thread_replies[-1]["body"]
+    assert "fix_commit: `" in runner.thread_replies[-1]["body"]
+    assert "current_head: `" in runner.thread_replies[-1]["body"]
+    assert "verification: `" in runner.thread_replies[-1]["body"]
+
+
+def test_ready_blocks_p1_thread_when_closed_evidence_lacks_current_binding(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_valid_report(
+        tmp_path,
+        risk_level="low",
+        requires_official=False,
+        changed_files=["docs/guides/example.md"],
+    )
+    latest = tmp_path / ".local" / "ai-review" / "latest.json"
+    payload = json.loads(latest.read_text(encoding="utf-8"))
+    payload["external_findings"] = [
+        {
+            "id": "EXT-CODEX-THREAD-PRRT_p1",
+            "source": "official_codex_review_thread",
+            "thread_id": "PRRT_p1",
+            "severity": "P1",
+            "title": "Current blocker",
+            "path": "scripts/research/governance/pr_flow.py",
+            "status": "fixed",
+            "evidence": "fixed but not bound to current diff",
+        }
+    ]
+    latest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    runner = FakeRunner(
+        existing_pr=True,
+        api_review_threads=[
+            {
+                "id": "PRRT_p1",
+                "isResolved": False,
+                "isOutdated": False,
+                "comments": {
+                    "nodes": [
+                        {
+                            "body": "P1 Badge: current blocker fixed by follow-up.",
+                            "author": {"login": "chatgpt-codex-connector"},
+                        }
+                    ]
+                },
+            }
+        ],
+    )
+    monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["docs/guides/example.md"],
+        },
+    )
+
+    code = pr_flow.ready(
+        repo_root=tmp_path,
+        title="governance automation",
+        runner=runner,
+        codex_review_timeout_seconds=0,
+        codex_review_poll_seconds=0,
+    )
+
+    assert code == pr_flow.REPLY_OR_FIX_REQUIRED_EXIT_CODE
+    assert "REPLY_OR_FIX_REQUIRED" in capsys.readouterr().err
+    assert not runner.thread_replies
 
 
 def test_ready_ignores_resolved_codex_review_thread(

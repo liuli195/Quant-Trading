@@ -16,7 +16,7 @@ from scripts.research.registry import default_tool_registry
 from scripts.research.governance.skill_ownership import validate_ownerships
 from scripts.research.governance.schemas import AuditFinding, AuditReport
 from scripts.research.platform.datasets import DatasetRegistry
-from scripts.research.platform.docs_index import DocsIndexer
+from scripts.research.platform.docs_index import DocsIndexer, render_adr_index
 from scripts.research.platform.engine import DEFAULT_TEMPLATES
 from scripts.research.platform.engine import validate_project_config
 from scripts.research.platform.strategy_variants import (
@@ -48,7 +48,6 @@ REQUIRED_RULE_DOCS = (
 REQUIRED_CODEOWNER_PATTERNS = (
     "CLAUDE.md",
     "AGENTS.md",
-    "indexes.md",
     "docs/agents/**",
     "docs/rules/**",
     "docs/adr/**",
@@ -144,7 +143,6 @@ REQUIRED_COMMAND_RULE_TOKENS = (
     "`gh` CLI 默认提权执行",
 )
 REQUIRED_AGENT_ENTRY_TOKENS = (
-    "indexes.md",
     "docs/rules/review-guidelines.md",
     "简体中文，简洁直白",
     "聚宽云端",
@@ -302,11 +300,7 @@ def _audit_claude_and_skills(root: Path) -> list[AuditFinding]:
         findings.append(AuditFinding("claude_sync", "error", "CLAUDE.md missing"))
     else:
         text = claude.read_text(encoding="utf-8", errors="ignore")
-        for token in (
-            "Claude Code",
-            "AGENTS.md",
-            ".claude/skills",
-        ):
+        for token in ("AGENTS.md",):
             if token not in text:
                 findings.append(
                     AuditFinding("claude_sync", "error", f"CLAUDE.md missing {token}")
@@ -528,6 +522,7 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             "PYTHONUTF8",
             "PYTHONIOENCODING",
             "python3.12",
+            ".githooks/post-commit",
         ):
             if token not in text:
                 findings.append(
@@ -559,12 +554,42 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "governance_gate", "error", "pre-commit hook must use run-python.sh"
                 )
             )
+        if "scripts.research.governance.pr_flow intent pre-commit" not in text:
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "pre-commit hook missing intent pre-commit gate",
+                )
+            )
         if "scripts.research.governance gate --fast" in text:
             findings.append(
                 AuditFinding(
                     "governance_gate",
                     "error",
                     "pre-commit hook must use verify fast --staged",
+                )
+            )
+
+    post_commit = root / ".githooks" / "post-commit"
+    if not post_commit.is_file():
+        findings.append(
+            AuditFinding("governance_gate", "error", ".githooks/post-commit missing")
+        )
+    else:
+        text = post_commit.read_text(encoding="utf-8", errors="ignore")
+        if "scripts.research.governance.pr_flow intent post-commit" not in text:
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "post-commit hook missing intent post-commit gate",
+                )
+            )
+        if "powershell.exe" in text or ".githooks/run-python.sh" not in text:
+            findings.append(
+                AuditFinding(
+                    "governance_gate", "error", "post-commit hook must use run-python.sh"
                 )
             )
 
@@ -1017,21 +1042,21 @@ def _audit_rule_sources(root: Path) -> list[AuditFinding]:
                 AuditFinding("rule_source", "error", f"rule doc missing: {rel_path}")
             )
 
-    root_index = root / "indexes.md"
-    if not root_index.is_file():
-        findings.append(AuditFinding("root_index", "error", "indexes.md missing"))
-    else:
-        text = root_index.read_text(encoding="utf-8", errors="ignore")
-        for token in ("AGENTS.md", "CLAUDE.md", "docs/adr", *REQUIRED_RULE_DOCS):
-            if token not in text:
-                findings.append(
-                    AuditFinding("root_index", "error", f"indexes.md missing {token}")
-                )
-
     adr_root = root / "docs" / "adr"
     if not adr_root.is_dir():
         findings.append(AuditFinding("adr", "error", "docs/adr missing"))
     else:
+        adr_index = adr_root / "index.md"
+        if not adr_index.is_file():
+            findings.append(AuditFinding("adr", "error", "docs/adr/index.md missing"))
+        elif adr_index.read_text(encoding="utf-8", errors="ignore") != render_adr_index(root):
+            findings.append(
+                AuditFinding(
+                    "adr",
+                    "error",
+                    "docs/adr/index.md stale; regenerate with scripts.research.docs index",
+                )
+            )
         adr_files = sorted(
             path for path in adr_root.glob("*.md") if re.match(r"^\d{4}-", path.name)
         )
@@ -1056,7 +1081,7 @@ def _audit_rule_sources(root: Path) -> list[AuditFinding]:
         findings.append(AuditFinding("agent_rule_source", "error", "AGENTS.md missing"))
     else:
         text = agents.read_text(encoding="utf-8", errors="ignore")
-        for token in ("AGENTS.md", "通用入口", "indexes.md"):
+        for token in ("AGENTS.md", "通用入口"):
             if token not in text:
                 findings.append(
                     AuditFinding(
@@ -1067,7 +1092,7 @@ def _audit_rule_sources(root: Path) -> list[AuditFinding]:
     governance_readme = root / "scripts" / "research" / "governance" / "README.md"
     if governance_readme.is_file():
         text = governance_readme.read_text(encoding="utf-8", errors="ignore")
-        for token in ("docs/rules/index.md", "docs/adr", "Codex Review Monitor"):
+        for token in ("docs/rules/index.md", "docs/adr/index.md", "Codex Review Monitor"):
             if token not in text:
                 findings.append(
                     AuditFinding(

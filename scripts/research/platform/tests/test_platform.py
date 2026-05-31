@@ -736,6 +736,19 @@ def test_docs_indexer_writes_report_catalog(tmp_path) -> None:
     assert (tmp_path / "docs" / "indexes" / "variants_catalog.json").is_file()
 
 
+def test_docs_indexer_writes_adr_index(tmp_path) -> None:
+    adr_dir = tmp_path / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    (adr_dir / "0001-demo.md").write_text("# ADR 0001: 示例决策\n", encoding="utf-8")
+    (adr_dir / "0002-next.md").write_text("# ADR 0002：后续决策\n", encoding="utf-8")
+
+    DocsIndexer(tmp_path).write()
+
+    text = (adr_dir / "index.md").read_text(encoding="utf-8")
+    assert "| [0001](0001-demo.md) <!-- pathref: docs/adr/0001-demo.md --> | 示例决策 |" in text
+    assert "| [0002](0002-next.md) <!-- pathref: docs/adr/0002-next.md --> | 后续决策 |" in text
+
+
 def test_docs_indexer_identifies_stale_report_entries(tmp_path) -> None:
     report_dir = tmp_path / "strategies" / "demo" / "reports" / "research" / "topic"
     report_dir.mkdir(parents=True)

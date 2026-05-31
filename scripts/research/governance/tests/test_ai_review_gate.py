@@ -278,7 +278,7 @@ def test_draft_command_writes_high_risk_defaults(
 
     assert code == 0
     payload = json.loads(output.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 3
+    assert payload["schema_version"] == 4
     assert payload["tool"] == "codex"
     assert payload["review_mode"] == "complete"
     assert payload["risk_level"] == "high"
@@ -290,6 +290,8 @@ def test_draft_command_writes_high_risk_defaults(
     assert payload["review_fragments"] == {}
     assert payload["external_findings"] == []
     assert payload["current_commit_evidence"]["head_sha"] == "unknown"
+    assert payload["spec_ref"] == {"issues": [], "design_docs": [], "adrs": []}
+    assert payload["issue_refs"] == []
     assert payload["findings"] == []
     assert payload["checks"] == {}
     assert "security_review" not in payload
@@ -376,6 +378,44 @@ def test_pr_body_renders_v3_head_and_diff_summary_without_full_diff() -> None:
     assert "Changed file paths:" in body
     assert "`docs/guides/example.md`" in body
     assert "diff --git" not in body
+
+
+def test_pr_body_renders_linked_issue_closes_section() -> None:
+    payload = _valid_v3_payload(
+        changed_files=["docs/guides/example.md"],
+        diff_files_hash="current-diff",
+    )
+    payload["schema_version"] = 4
+    payload["spec_ref"] = {
+        "issues": [
+            {"number": 50, "role": "closes"},
+            {"number": 34, "role": "closes"},
+        ],
+        "design_docs": [],
+        "adrs": [],
+    }
+    payload["issue_refs"] = [
+        {"number": 50, "title": "Issue 50", "acceptance_criteria": []},
+        {"number": 34, "title": "Issue 34", "acceptance_criteria": []},
+    ]
+
+    body = ai_review_gate.render_pr_body(payload)
+
+    assert "## 关联 Issue" in body
+    assert "Closes #34, Closes #50" in body
+    assert body.index("## 关联 Issue") < body.index("Head SHA:")
+
+
+def test_pr_body_omits_linked_issue_section_when_issue_refs_empty() -> None:
+    payload = _valid_v3_payload()
+    payload["schema_version"] = 4
+    payload["spec_ref"] = {"issues": [], "design_docs": [], "adrs": []}
+    payload["issue_refs"] = []
+
+    body = ai_review_gate.render_pr_body(payload)
+
+    assert "## 关联 Issue" not in body
+    assert "Closes #" not in body
 
 
 def test_current_diff_fingerprint_hashes_worktree_patch_content(
@@ -776,6 +816,159 @@ def test_schema_v3_accepts_matching_diff_fingerprint() -> None:
     assert result.ok, result.errors
 
 
+def test_schema_v4_accepts_structured_spec_ref_and_issue_refs_subset() -> None:
+    payload = _valid_v3_payload(
+        changed_files=["docs/guides/example.md"],
+        diff_files_hash="current-diff",
+    )
+    payload["schema_version"] = 4
+    payload["pr_class"] = "feature"
+    payload["spec_ref"] = {
+        "issues": [
+            {"number": 50, "role": "closes"},
+            {"number": 27, "role": "reference"},
+        ],
+        "design_docs": [],
+        "adrs": [],
+    }
+    payload["issue_refs"] = [
+        {
+            "number": 50,
+            "title": "PR Flow v2：集成 Issue 状态处理",
+            "acceptance_criteria": ["PR 合并后自动关闭关联 issue"],
+        }
+    ]
+    current = _diff_fingerprint(
+        changed_files=["docs/guides/example.md"],
+        diff_files_hash="current-diff",
+    )
+
+    result = ai_review_gate.validate_report(
+        payload,
+        current_diff_fingerprint=current,
+    )
+
+    assert result.ok, result.errors
+
+
+def test_schema_v4_rejects_issue_refs_outside_spec_ref() -> None:
+    payload = _valid_v3_payload()
+    payload["schema_version"] = 4
+    payload["spec_ref"] = {
+        "issues": [{"number": 50, "role": "closes"}],
+        "design_docs": [],
+        "adrs": [],
+    }
+    payload["issue_refs"] = [
+        {
+            "number": 51,
+            "title": "Unexpected issue",
+            "acceptance_criteria": [],
+        }
+    ]
+
+    result = ai_review_gate.validate_report(payload)
+
+    assert not result.ok
+    assert "issue_refs[0].number must be listed in spec_ref.issues" in result.errors
+
+
+def test_schema_v4_rejects_issue_refs_for_reference_issue() -> None:
+    payload = _valid_v3_payload()
+    payload["schema_version"] = 4
+    payload["spec_ref"] = {
+        "issues": [{"number": 50, "role": "reference"}],
+        "design_docs": [],
+        "adrs": [],
+    }
+    payload["issue_refs"] = [
+        {
+            "number": 50,
+            "title": "Reference issue",
+            "acceptance_criteria": [],
+        }
+    ]
+
+    result = ai_review_gate.validate_report(payload)
+
+    assert not result.ok
+    assert "issue_refs[0].number must reference a closes spec_ref issue" in result.errors
+
+
+def test_schema_v4_rejects_issue_refs_when_spec_ref_has_no_closes_issues() -> None:
+    payload = _valid_v3_payload()
+    payload["schema_version"] = 4
+    payload["spec_ref"] = {"issues": [], "design_docs": [], "adrs": []}
+    payload["issue_refs"] = [
+        {
+            "number": 50,
+            "title": "Unexpected issue",
+            "acceptance_criteria": [],
+        }
+    ]
+
+    result = ai_review_gate.validate_report(payload)
+
+    assert not result.ok
+    assert "issue_refs[0].number must reference a closes spec_ref issue" in result.errors
+
+
+def test_extract_issue_acceptance_criteria_reads_markdown_checkboxes() -> None:
+    body = "\n".join(
+        [
+            "## Acceptance criteria",
+            "- [ ] first item",
+            "- [x] done item",
+            "    - [ ] nested item",
+            "- plain bullet ignored",
+            "not a list",
+        ]
+    )
+
+    assert ai_review_gate.extract_issue_acceptance_criteria(body) == [
+        "first item",
+        "done item",
+        "nested item",
+    ]
+
+
+def test_unchecked_issue_acceptance_criteria_returns_raw_unchecked_lines() -> None:
+    body = "\n".join(
+        [
+            "- [ ] first item",
+            "- [x] done item",
+            "    - [ ] nested item",
+            "- plain bullet ignored",
+        ]
+    )
+
+    assert ai_review_gate.unchecked_issue_acceptance_criteria(body) == [
+        "- [ ] first item",
+        "- [ ] nested item",
+    ]
+
+
+def test_payload_as_schema_v4_migrates_v3_spec_ref_url_to_issue_object(
+    tmp_path: Path,
+) -> None:
+    payload = _valid_v3_payload()
+    payload["spec_ref"] = "https://github.com/liuli195/Quant-Trading/issues/27"
+
+    updated = ai_review_gate.payload_as_schema_v4(
+        payload,
+        repo_root=tmp_path,
+        changed_files=["docs/guides/example.md"],
+    )
+
+    assert updated["schema_version"] == 4
+    assert updated["spec_ref"] == {
+        "issues": [{"number": 27, "role": "closes"}],
+        "design_docs": [],
+        "adrs": [],
+    }
+    assert updated["issue_refs"] == []
+
+
 def test_schema_v3_rejects_changed_file_drift() -> None:
     payload = _valid_v3_payload(
         changed_files=["docs/guides/example.md"],
@@ -873,6 +1066,37 @@ def test_review_wrapper_builds_standards_spec_fragments_and_raw_summary() -> Non
     assert evidence["raw_review_summary"]["standards"] == "Standards axis passed."
     assert evidence["raw_review_summary"]["spec"] == "Spec axis matched issue #27."
     assert evidence["raw_review_summary"]["parallel"]["attempted"] is True
+
+
+def test_review_wrapper_builds_per_issue_ac_placeholders() -> None:
+    evidence = ai_review_gate.build_review_wrapper_evidence(
+        standards_summary="Standards axis passed.",
+        spec_summary="Spec axis matched linked issues.",
+        standards_semantic_change=True,
+        spec_semantic_change=True,
+        parallel_attempted=True,
+        issue_refs=[
+            {
+                "number": 50,
+                "title": "PR Flow v2：集成 Issue 状态处理",
+                "acceptance_criteria": ["Closes line generated", "AC gate enforced"],
+            }
+        ],
+    )
+
+    spec = evidence["review_fragments"]["spec"]
+    assert spec["evidence"] == "Spec axis: per-issue AC review pending"
+    assert spec["issues"] == [
+        {
+            "number": 50,
+            "title": "PR Flow v2：集成 Issue 状态处理",
+            "ac_results": [
+                {"criteria": "Closes line generated", "met": False, "reason": ""},
+                {"criteria": "AC gate enforced", "met": False, "reason": ""},
+            ],
+        }
+    ]
+    assert evidence["raw_review_summary"]["spec"] == "Spec axis matched 1 issue."
 
 
 def test_schema_v3_accepts_feature_pr_with_spec_ref() -> None:
