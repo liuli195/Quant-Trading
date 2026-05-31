@@ -21,13 +21,13 @@ def test_docs_files_map_to_pathref_changed_files() -> None:
 
 
 def test_root_markdown_files_map_to_pathref_changed_files() -> None:
-    plan = plan_checks(["AGENTS.md", "indexes.md"])
+    plan = plan_checks(["AGENTS.md", "CLAUDE.md"])
 
     assert [check.check_id for check in plan.checked] == [
         "pathref.changed-files",
         "governance.full",
     ]
-    assert plan.checked[0].inputs == ("AGENTS.md", "indexes.md")
+    assert plan.checked[0].inputs == ("AGENTS.md", "CLAUDE.md")
 
 
 def test_skill_files_map_to_skill_ownership_scoped() -> None:

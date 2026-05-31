@@ -22,6 +22,7 @@ REPORT_ROOT_PATTERNS = (
 PATHREF_RE = re.compile(r"<!--\s*pathref:\s*(?P<pathref>[^>]+?)\s*-->")
 DATE_RE = re.compile(r"(?P<date>20\d{2}-\d{2}-\d{2})")
 TAGS_RE = re.compile(r"^\s*tags\s*:\s*(?P<tags>.+)$", re.IGNORECASE | re.MULTILINE)
+ADR_FILE_RE = re.compile(r"^(?P<number>\d{4})-.+\.md$")
 
 
 @dataclass(frozen=True)
@@ -70,6 +71,8 @@ class DocsIndexer:
         return [records[key] for key in sorted(records)]
 
     def write(self, output_dir: str | Path = "docs/indexes") -> dict[str, Any]:
+        if scan_adr_records(self.repo_root):
+            write_adr_index(self.repo_root)
         records = self.scan()
         docs = [record for record in records if record.category == "docs"]
         reports = [record for record in records if record.category != "docs"]
@@ -202,12 +205,78 @@ class PathrefValidator:
         return int(result.returncode)
 
 
+@dataclass(frozen=True)
+class AdrRecord:
+    """One numbered ADR document."""
+
+    number: str
+    filename: str
+    title: str
+
+
+def scan_adr_records(repo_root: str | Path = ".") -> list[AdrRecord]:
+    root = Path(repo_root).resolve()
+    adr_root = root / "docs" / "adr"
+    records: list[AdrRecord] = []
+    if not adr_root.is_dir():
+        return records
+    for path in sorted(adr_root.glob("*.md")):
+        match = ADR_FILE_RE.match(path.name)
+        if not match:
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        records.append(
+            AdrRecord(
+                number=match.group("number"),
+                filename=path.name,
+                title=_adr_title(_first_heading(text), path.stem),
+            )
+        )
+    return records
+
+
+def render_adr_index(repo_root: str | Path = ".") -> str:
+    lines = [
+        "# ADR 索引",
+        "",
+        "本目录记录重大规则、架构和治理决策。阅读当前入口规则时优先看状态仍有效或被后续 ADR 更新的记录。",
+        "",
+        "| ADR | 标题 |",
+        "| --- | --- |",
+    ]
+    for record in scan_adr_records(repo_root):
+        lines.append(
+            f"| [{record.number}]({record.filename}) <!-- pathref: docs/adr/{record.filename} --> | {record.title} |"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def write_adr_index(
+    repo_root: str | Path = ".",
+    index_path: str | Path = "docs/adr/index.md",
+) -> Path:
+    root = Path(repo_root).resolve()
+    path = root / index_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_adr_index(root), encoding="utf-8")
+    return path
+
+
 def _first_heading(text: str) -> str:
     for line in text.splitlines():
         stripped = line.strip()
         if stripped.startswith("# "):
             return stripped[2:].strip()
     return ""
+
+
+def _adr_title(heading: str, fallback: str) -> str:
+    if not heading:
+        return fallback
+    match = re.match(r"ADR\s+\d{4}\s*[:：]\s*(?P<title>.+)", heading)
+    if match:
+        return match.group("title").strip()
+    return heading
 
 
 def _date_for(text: str, path: str) -> str | None:

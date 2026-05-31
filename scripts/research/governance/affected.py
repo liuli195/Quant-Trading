@@ -382,7 +382,7 @@ def _requires_full_pathref(paths: Sequence[str]) -> bool:
 
 
 def _requires_full_governance(paths: Sequence[str]) -> bool:
-    exact = {"AGENTS.md", "CLAUDE.md", "indexes.md", "Makefile", "path_aliases.json"}
+    exact = {"AGENTS.md", "CLAUDE.md", "Makefile", "path_aliases.json"}
     prefixes = (
         ".githooks/",
         ".github/workflows/",
@@ -402,7 +402,6 @@ def _full_governance_inputs() -> tuple[str, ...]:
     return (
         "AGENTS.md",
         "CLAUDE.md",
-        "indexes.md",
         "docs/rules",
         "docs/adr",
         ".codex/skills",

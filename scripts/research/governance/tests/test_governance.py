@@ -32,6 +32,7 @@ from scripts.research.governance.pr_review_evidence import (
     validate_pr_body,
 )
 from scripts.research.governance.rules import run_audit
+from scripts.research.platform.docs_index import write_adr_index
 from scripts.research.registry import default_tool_registry
 from scripts.tools.path_tools import refactor as path_refactor
 from scripts.tools.path_tools.refactor import should_skip
@@ -1212,6 +1213,7 @@ def _write_minimal_repo(root: Path) -> None:
         "docs/rules/collaboration.md",
         "docs/rules/code-style.md",
         "docs/rules/docs-and-pathref.md",
+        "docs/adr/index.md",
         "docs/adr/0001-rule-source-and-governance-model.md",
         "docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md",
         "docs/adr/0003-governance-gate-and-main-branch-protection.md",
@@ -1235,14 +1237,16 @@ def _write_minimal_repo(root: Path) -> None:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text("placeholder\n", encoding="utf-8")
 
+    write_adr_index(root)
+
     (root / "CLAUDE.md").write_text(
-        "Claude Code 专用指针。先读 AGENTS.md；Claude Code 专属内容见 .claude/skills。",
+        "先读 AGENTS.md。",
         encoding="utf-8",
     )
     (root / "AGENTS.md").write_text(
         "所有 AI 编码助手统一以 AGENTS.md 为通用入口。\n\n"
         "本仓库是基于 Python 的 A 股/场内基金量化策略仓库。\n\n"
-        "规则索引见 indexes.md。所有回答和输出使用简体中文，简洁直白。"
+        "所有回答和输出使用简体中文，简洁直白。"
         "策略代码仅在聚宽云端运行。"
         "默认必须提权使用项目 `.venv`，不改用系统 Python。"
         "命令参考 docs/rules/commands.md。"
@@ -1256,15 +1260,6 @@ def _write_minimal_repo(root: Path) -> None:
         "## Review 指南\n\n"
         "Review 前必须先阅读并遵守 docs/rules/review-guidelines.md。"
         "如果无法访问该文件，视为 review 被阻塞。\n",
-        encoding="utf-8",
-    )
-    (root / "indexes.md").write_text(
-        "AGENTS.md CLAUDE.md docs/rules/index.md docs/rules/commands.md "
-        "docs/rules/skills.md "
-        "docs/rules/review-guidelines.md docs/rules/pr-workflow.md docs/rules/governance.md "
-        "docs/rules/environments.md docs/rules/code-style.md "
-        "docs/rules/research-workflow.md docs/rules/collaboration.md "
-        "docs/rules/docs-and-pathref.md docs/adr",
         encoding="utf-8",
     )
     (root / "docs/rules/commands.md").write_text(
@@ -1433,7 +1428,7 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     (root / "scripts/research/governance/README.md").write_text(
-        "docs/rules/index.md docs/adr scripts.research.governance gate Codex Review Monitor "
+        "docs/rules/index.md docs/adr/index.md scripts.research.governance gate Codex Review Monitor "
         "git fetch origin main git merge --ff-only origin/main "
         "git branch -d <branch> git push origin --delete <branch>\n",
         encoding="utf-8",
@@ -1464,7 +1459,6 @@ def _write_minimal_repo(root: Path) -> None:
             [
                 "CLAUDE.md @research-platform",
                 "AGENTS.md @research-platform",
-                "indexes.md @research-platform",
                 "docs/agents/** @research-platform",
                 "docs/rules/** @research-platform",
                 "docs/adr/** @research-platform",
@@ -2263,6 +2257,28 @@ def test_governance_audit_flags_adr_number_gap(tmp_path) -> None:
     )
 
 
+def test_governance_audit_flags_missing_adr_index(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / "docs/adr/index.md").unlink()
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "adr" and "docs/adr/index.md missing" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_stale_adr_index(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / "docs/adr/index.md").write_text("# ADR 索引\n\nstale\n", encoding="utf-8")
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "adr" and "docs/adr/index.md stale" in finding.message
+        for finding in report.findings
+    )
+
+
 def test_governance_audit_flags_missing_pre_push_branch_protection(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / ".githooks/pre-push").unlink()
@@ -2526,7 +2542,7 @@ def test_governance_audit_flags_agents_with_detailed_rule_duplication(tmp_path) 
     _write_minimal_repo(tmp_path)
     (tmp_path / "AGENTS.md").write_text(
         "所有 AI 编码助手统一以 AGENTS.md 为通用入口。\n\n"
-        "规则索引见 indexes.md。scripts.research.cli git fetch origin main\n\n"
+        "scripts.research.cli git fetch origin main\n\n"
         "## Review guidelines\n\n"
         "Before reviewing, read and apply docs/rules/review-guidelines.md. "
         "If you cannot access that file, treat the review as blocked.\n",
@@ -2568,7 +2584,7 @@ def test_governance_audit_flags_agents_without_python_venv_rule(
     _write_minimal_repo(tmp_path)
     (tmp_path / "AGENTS.md").write_text(
         "所有 AI 编码助手统一以 AGENTS.md 为通用入口。\n\n"
-        "规则索引见 indexes.md。所有回答和输出使用简体中文。\n\n"
+        "所有回答和输出使用简体中文。\n\n"
         "## Review guidelines\n\n"
         "Before reviewing, read and apply docs/rules/review-guidelines.md. "
         "If you cannot access that file, treat the review as blocked.\n",
@@ -2606,7 +2622,7 @@ def test_governance_audit_flags_agents_without_gh_cli_escalation_rule(
 def test_governance_audit_flags_claude_with_codex_or_review_rules(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / "CLAUDE.md").write_text(
-        "Claude Code 专用指针。先读 AGENTS.md；Claude Code 专属内容见 .claude/skills。"
+        "先读 AGENTS.md。"
         "遇到沙箱/权限阻断时申请提权。Claude Code 不能用自审替代官方 Codex Code Review。",
         encoding="utf-8",
     )
@@ -2617,14 +2633,6 @@ def test_governance_audit_flags_claude_with_codex_or_review_rules(tmp_path) -> N
         and "Codex-only or standard review rules" in finding.message
         for finding in report.findings
     )
-
-
-def test_governance_audit_flags_missing_root_indexes(tmp_path) -> None:
-    _write_minimal_repo(tmp_path)
-    (tmp_path / "indexes.md").unlink()
-    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
-    assert not report.ok
-    assert any(finding.rule_id == "root_index" for finding in report.findings)
 
 
 def test_governance_audit_flags_missing_pr_cleanup_workflow_tokens(tmp_path) -> None:

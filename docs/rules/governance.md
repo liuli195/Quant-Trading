@@ -34,7 +34,6 @@
 
 - `AGENTS.md`
 - `CLAUDE.md`
-- `indexes.md`
 - `docs/agents/**`
 - `docs/rules/**`
 - `docs/adr/**`

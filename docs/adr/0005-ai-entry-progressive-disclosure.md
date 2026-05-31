@@ -11,12 +11,12 @@ Accepted
 ## 决策
 
 - [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 是所有 AI 编码助手的通用入口。
-- [indexes.md](../../indexes.md) <!-- pathref: repo/indexes.md --> 是根文档索引，只放 markdown 链接。
-- [CLAUDE.md](../../CLAUDE.md) <!-- pathref: repo/CLAUDE.md --> 只保留 Claude Code 专属指针，必须引用 `AGENTS.md`。
+- 根目录不再保留重复文档索引；规则索引归 [docs/rules/index.md](../rules/index.md) <!-- pathref: docs/rules/index.md -->，ADR 入口归 [docs/adr/index.md](index.md) <!-- pathref: docs/adr/index.md -->。
+- [CLAUDE.md](../../CLAUDE.md) <!-- pathref: repo/CLAUDE.md --> 只保留到 `AGENTS.md` 的入口指针。
 - 仓库级规则正文继续放在 [docs/rules](../rules) <!-- pathref: docs/rules -->。
 - 命令和本地环境规则独立为 [commands.md](../rules/commands.md) <!-- pathref: docs/rules/commands.md -->。
 - 沙箱/权限提权规则暂时上提到 [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->，不放入 `CLAUDE.md`。
-- `scripts.research.governance gate` 必须检查新的入口模型，避免 `AGENTS.md`、`indexes.md`、`CLAUDE.md`、规则正文和 review 入口漂移。
+- `scripts.research.governance gate` 必须检查新的入口模型，避免 `AGENTS.md`、`CLAUDE.md`、规则正文、ADR 索引和 review 入口漂移。
 
 ## 删除或合并的指令
 

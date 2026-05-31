@@ -1,13 +1,13 @@
 # 文档入口
 
-`docs/` 根目录只保留文档入口。具体文档按用途放入子目录；AI 助手通用入口以 [AGENTS.md](../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 为准，根文档索引见 [indexes.md](../indexes.md) <!-- pathref: repo/indexes.md -->。
+`docs/` 根目录只保留文档入口。具体文档按用途放入子目录；AI 助手通用入口以 [AGENTS.md](../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 为准。
 
 ## 目录分层
 
 | 目录 | 内容 | 入口 |
 | --- | --- | --- |
 | [rules](rules) <!-- pathref: docs/rules --> | 仓库级规则正文 | [rules/index.md](rules/index.md) <!-- pathref: docs/rules/index.md --> |
-| [adr](adr) <!-- pathref: docs/adr --> | 重大治理和架构决策记录 | [0001-rule-source-and-governance-model.md](adr/0001-rule-source-and-governance-model.md) <!-- pathref: docs/adr/0001-rule-source-and-governance-model.md --> |
+| [adr/index.md](adr/index.md) <!-- pathref: docs/adr/index.md --> | 重大治理和架构决策记录 | [0001-rule-source-and-governance-model.md](adr/0001-rule-source-and-governance-model.md) <!-- pathref: docs/adr/0001-rule-source-and-governance-model.md --> |
 | [guides](guides) <!-- pathref: docs/guides --> | 日常操作、研究流程、环境说明 | [research-workflow.md](guides/research-workflow.md) <!-- pathref: docs/guides/research-workflow.md --> |
 | [architecture](architecture) <!-- pathref: docs/architecture --> | 平台结构和长期架构说明 | [research-platform-architecture.md](architecture/research-platform-architecture.md) <!-- pathref: docs/architecture/research-platform-architecture.md --> |
 | [design](design) <!-- pathref: docs/design --> | 实施方案、重构方案、治理方案草案 | [本地研究平台重构技术实施方案.md](design/本地研究平台重构技术实施方案.md) <!-- pathref: docs/design/本地研究平台重构技术实施方案.md --> |

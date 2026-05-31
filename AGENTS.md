@@ -4,20 +4,17 @@
 
 ## 通用入口
 
-本文件是所有 AI 编码助手的通用入口；根文档索引见 [indexes.md](indexes.md) <!-- pathref: repo/indexes.md -->。
-
-Claude Code 专属补充见 [CLAUDE.md](CLAUDE.md) <!-- pathref: repo/CLAUDE.md -->。
+本仓库按 single-context 处理：[规则文档](docs/rules/index.md) <!-- pathref: docs/rules/index.md --> 和 [ADR 索引](docs/adr/index.md) <!-- pathref: docs/adr/index.md --> 共同作为领域上下文。详见 [domain.md](docs/agents/domain.md) <!-- pathref: docs/agents/domain.md -->。
 
 ## 核心规则
 - **规则优先**：仓库规则最优先是元规则。任何与规则冲突的改动、对规则本身的改动都必须显式获得授权，否则不得执行。
 
 ## 通用规则
 
-### Agent skills
+### 决策跟踪器
 
 - **Issue 跟踪**：Issue 和 PRD 统一记录在 GitHub Issues：`liuli195/Quant-Trading`。详见 [issue-tracker.md](docs/agents/issue-tracker.md) <!-- pathref: docs/agents/issue-tracker.md -->。
 - **Triage 标签**：使用默认五类 triage 标签。详见 [triage-labels.md](docs/agents/triage-labels.md) <!-- pathref: docs/agents/triage-labels.md -->。
-- **领域文档**：本仓库按 single-context 处理：根文档、规则文档和 `docs/adr/` 共同作为领域上下文。详见 [domain.md](docs/agents/domain.md) <!-- pathref: docs/agents/domain.md -->。
 
 ### 环境与工具
 
