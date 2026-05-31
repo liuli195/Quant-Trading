@@ -873,6 +873,46 @@ def test_schema_v4_rejects_issue_refs_outside_spec_ref() -> None:
     assert "issue_refs[0].number must be listed in spec_ref.issues" in result.errors
 
 
+def test_schema_v4_rejects_issue_refs_for_reference_issue() -> None:
+    payload = _valid_v3_payload()
+    payload["schema_version"] = 4
+    payload["spec_ref"] = {
+        "issues": [{"number": 50, "role": "reference"}],
+        "design_docs": [],
+        "adrs": [],
+    }
+    payload["issue_refs"] = [
+        {
+            "number": 50,
+            "title": "Reference issue",
+            "acceptance_criteria": [],
+        }
+    ]
+
+    result = ai_review_gate.validate_report(payload)
+
+    assert not result.ok
+    assert "issue_refs[0].number must reference a closes spec_ref issue" in result.errors
+
+
+def test_schema_v4_rejects_issue_refs_when_spec_ref_has_no_closes_issues() -> None:
+    payload = _valid_v3_payload()
+    payload["schema_version"] = 4
+    payload["spec_ref"] = {"issues": [], "design_docs": [], "adrs": []}
+    payload["issue_refs"] = [
+        {
+            "number": 50,
+            "title": "Unexpected issue",
+            "acceptance_criteria": [],
+        }
+    ]
+
+    result = ai_review_gate.validate_report(payload)
+
+    assert not result.ok
+    assert "issue_refs[0].number must reference a closes spec_ref issue" in result.errors
+
+
 def test_extract_issue_acceptance_criteria_reads_markdown_checkboxes() -> None:
     body = "\n".join(
         [

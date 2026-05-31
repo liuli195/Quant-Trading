@@ -996,6 +996,7 @@ def _schema_v4_errors(payload: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     spec_ref = payload.get("spec_ref")
     spec_issue_numbers: set[int] = set()
+    spec_closing_issue_numbers: set[int] = set()
     if not isinstance(spec_ref, dict):
         errors.append("spec_ref must be an object for schema v4")
     else:
@@ -1017,6 +1018,8 @@ def _schema_v4_errors(payload: dict[str, Any]) -> list[str]:
                 errors.append(
                     f"spec_ref.issues[{index}].role must be closes or reference"
                 )
+            elif number is not None and role == "closes":
+                spec_closing_issue_numbers.add(number)
         for field in ("design_docs", "adrs"):
             if not isinstance(spec_ref.get(field), list):
                 errors.append(f"spec_ref.{field} must be a list for schema v4")
@@ -1034,6 +1037,10 @@ def _schema_v4_errors(payload: dict[str, Any]) -> list[str]:
             errors.append(f"issue_refs[{index}].number must be a positive integer")
         elif spec_issue_numbers and number not in spec_issue_numbers:
             errors.append(f"issue_refs[{index}].number must be listed in spec_ref.issues")
+        elif number not in spec_closing_issue_numbers:
+            errors.append(
+                f"issue_refs[{index}].number must reference a closes spec_ref issue"
+            )
         if not _single_line_text(item.get("title")):
             errors.append(f"issue_refs[{index}].title must not be empty")
         if not isinstance(item.get("acceptance_criteria"), list):

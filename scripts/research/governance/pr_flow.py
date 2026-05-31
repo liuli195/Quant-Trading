@@ -53,6 +53,11 @@ CODEX_THREAD_SEVERITY_PATTERN = re.compile(r"\bP(?P<level>[0-3])\b")
 ACTIONS_CHECK_URL_PATTERN = re.compile(r"/actions/runs/(?P<run_id>\d+)/job/(?P<job_id>\d+)")
 CHECKS_JSON_FIELDS = "name,state,bucket,link,workflow,startedAt,completedAt"
 STATUS_CHECK_ROLLUP_JSON_FIELDS = "url,baseRefName,isDraft,statusCheckRollup"
+REQUIRED_STATUS_CHECK_NAMES = {
+    "Research Governance / governance",
+    "Research Governance / pr-review-evidence",
+    "Codex Review Monitor",
+}
 PR_DIAGNOSE_JSON_FIELDS = (
     "number,url,state,isDraft,headRefOid,baseRefName,mergeStateStatus,reviewDecision,body"
 )
@@ -219,6 +224,7 @@ def stage_commit_intent(
     no_issue_authorized_by: str | None = None,
     no_issue_evidence: str | None = None,
     correction_reason: str | None = None,
+    ac_review_mode: str | None = None,
     now: str | None = None,
 ) -> int:
     root = Path(repo_root).resolve()
@@ -242,6 +248,9 @@ def stage_commit_intent(
             correction = _single_line_text(correction_reason)
             if correction:
                 intent["correction_reason"] = correction
+            ac_mode = _validated_ac_review_mode(ac_review_mode)
+            if ac_mode:
+                intent["ac_review_mode"] = ac_mode
         else:
             reason = _single_line_text(no_issue_reason)
             authorized_by = _single_line_text(no_issue_authorized_by)
@@ -270,6 +279,9 @@ def stage_commit_intent(
                 "created_by": created_by,
                 "consumed": False,
             }
+            ac_mode = _validated_ac_review_mode(ac_review_mode)
+            if ac_mode:
+                intent["ac_review_mode"] = ac_mode
         path = _pending_intent_path(root)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(intent, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -461,7 +473,7 @@ def payload_with_branch_intent(
     spec_ref.setdefault("adrs", [])
     updated["spec_ref"] = spec_ref
     head_sha = _command_stdout(runner.run(["git", "rev-parse", "HEAD"], cwd=root))
-    updated["issue_intent"] = {
+    issue_intent = {
         "schema_version": 1,
         "head_sha": head_sha,
         "branch": _single_line_text(branch_intent.get("branch")) or branch,
@@ -475,6 +487,10 @@ def payload_with_branch_intent(
             if isinstance(item, dict)
         ],
     }
+    ac_review_mode = _single_line_text(branch_intent.get("ac_review_mode"))
+    if ac_review_mode:
+        issue_intent["ac_review_mode"] = ac_review_mode
+    updated["issue_intent"] = issue_intent
     return updated
 
 
@@ -698,6 +714,7 @@ def sync(
     title: str | None = None,
     runner: Runner | None = None,
     existing_labels: Sequence[str] | None = None,
+    check_issue_acceptance_criteria: bool = True,
 ) -> int:
     root = Path(repo_root).resolve()
     runner = runner or CommandRunner()
@@ -867,13 +884,14 @@ def sync(
             _print_command_failure("gh pr edit --remove-label", remove)
             return remove.returncode
 
-    issue_gate = _check_linked_issue_acceptance_criteria(
-        root=root,
-        runner=runner,
-        payload=payload,
-    )
-    if issue_gate != SUCCESS_EXIT_CODE:
-        return issue_gate
+    if check_issue_acceptance_criteria:
+        issue_gate = _check_linked_issue_acceptance_criteria(
+            root=root,
+            runner=runner,
+            payload=payload,
+        )
+        if issue_gate != SUCCESS_EXIT_CODE:
+            return issue_gate
 
     try:
         needs_codex_review_request = (
@@ -1455,7 +1473,12 @@ def ready(
         )
         return DISPATCH_REQUIRED_EXIT_CODE
     _record_pr_ready_phase(root, completed_phases, "build_evidence")
-    code = sync(repo_root=root, title=title, runner=runner)
+    code = sync(
+        repo_root=root,
+        title=title,
+        runner=runner,
+        check_issue_acceptance_criteria=False,
+    )
     if code != 0:
         if code == EXCEPTION_REQUIRED_EXIT_CODE:
             return code
@@ -1470,6 +1493,9 @@ def ready(
             next_actions=("inspect PR sync failure",),
         )
         return EXCEPTION_REQUIRED_EXIT_CODE
+    synced_payload = _read_json_object(latest)
+    if isinstance(synced_payload, dict):
+        payload = synced_payload
 
     try:
         metadata = _current_pr_metadata(root, runner, required=True)
@@ -2222,6 +2248,19 @@ def _parse_intent_issue_binding(binding: str) -> tuple[int, str]:
     return number, role
 
 
+def _validated_ac_review_mode(value: str | None) -> str:
+    mode = _single_line_text(value)
+    if not mode or mode == "auto":
+        return ""
+    if mode != "user_required":
+        raise CommitIntentError(
+            "AC review mode must be auto or user_required",
+            reason_code="COMMIT_INTENT_AC_REVIEW_MODE_INVALID",
+            details=(mode,),
+        )
+    return mode
+
+
 def _pending_intent(root: Path) -> dict[str, Any]:
     path = _pending_intent_path(root)
     payload = _read_json_object(path)
@@ -2292,7 +2331,7 @@ def _branch_intent_with_commit(
         and _single_line_text(item.get("commit_sha")) != commit_sha
     ] if isinstance(existing_commits, list) else []
     commits.append(dict(commit_intent))
-    return {
+    payload = {
         "schema_version": 1,
         "branch": branch,
         "updated_at": updated_at,
@@ -2300,6 +2339,10 @@ def _branch_intent_with_commit(
         "issues": _aggregate_intent_issues(commits),
         "no_issue_authorizations": _no_issue_authorizations(commits),
     }
+    ac_review_mode = _branch_ac_review_mode(commits)
+    if ac_review_mode:
+        payload["ac_review_mode"] = ac_review_mode
+    return payload
 
 
 def _aggregate_intent_issues(commits: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -2348,6 +2391,13 @@ def _no_issue_authorizations(commits: Sequence[dict[str, Any]]) -> list[dict[str
         entry["commit_sha"] = _single_line_text(commit.get("commit_sha"))
         authorizations.append(entry)
     return authorizations
+
+
+def _branch_ac_review_mode(commits: Sequence[dict[str, Any]]) -> str:
+    for commit in commits:
+        if _single_line_text(commit.get("ac_review_mode")) == "user_required":
+            return "user_required"
+    return ""
 
 
 def _spec_issues_from_branch_intent(
@@ -3236,17 +3286,22 @@ def _closed_external_finding_for_thread(
         if not _single_line_text(item.get("evidence")):
             continue
         fingerprint = payload.get("diff_fingerprint")
-        if isinstance(fingerprint, dict):
-            finding_head = _single_line_text(item.get("head_sha"))
-            if finding_head and finding_head != _single_line_text(
-                fingerprint.get("head_sha")
-            ):
-                continue
-            finding_diff = _single_line_text(item.get("diff_files_hash"))
-            if finding_diff and finding_diff != _single_line_text(
-                fingerprint.get("diff_files_hash")
-            ):
-                continue
+        if not isinstance(fingerprint, dict):
+            continue
+        finding_head = _single_line_text(item.get("head_sha"))
+        current_head = _single_line_text(fingerprint.get("head_sha"))
+        if not finding_head or finding_head != current_head:
+            continue
+        finding_diff = _single_line_text(item.get("diff_files_hash"))
+        current_diff = _single_line_text(fingerprint.get("diff_files_hash"))
+        if not finding_diff or finding_diff != current_diff:
+            continue
+        if not _single_line_text(item.get("fix_commit") or item.get("commit_sha")):
+            continue
+        if not _single_line_text(
+            item.get("verification_command") or item.get("verification")
+        ):
+            continue
         closed = dict(item)
         closed.setdefault(
             "handling",
@@ -3269,11 +3324,19 @@ def _accepted_review_thread_reply(finding: dict[str, Any]) -> str:
 
 
 def _closed_review_thread_reply(finding: dict[str, Any]) -> str:
+    fix_commit = _single_line_text(finding.get("fix_commit") or finding.get("commit_sha"))
+    verification = _single_line_text(
+        finding.get("verification_command") or finding.get("verification")
+    )
     return (
         "已按 PR review 规则关闭过期官方 Codex 阻断项。\n\n"
         f"- finding: `{_single_line_text(finding.get('id'))}`\n"
+        f"- thread_id: `{_single_line_text(finding.get('thread_id'))}`\n"
         f"- severity: `{_single_line_text(finding.get('severity'))}`\n"
         f"- status: `{_single_line_text(finding.get('status'))}`\n"
+        f"- fix_commit: `{fix_commit}`\n"
+        f"- current_head: `{_single_line_text(finding.get('head_sha'))}`\n"
+        f"- verification: `{verification}`\n"
         f"- evidence: {_single_line_text(finding.get('evidence'))}\n"
         f"- handling: {_single_line_text(finding.get('handling'))}\n"
     )
@@ -4207,14 +4270,16 @@ def _fallback_required_check_results(
         for item in _status_check_rollup_items(payload.get("statusCheckRollup"))
         if (check := _check_from_status_rollup_item(item)) is not None
     ]
-    required_names: set[str] = set()
+    required_names: set[str] = set(REQUIRED_STATUS_CHECK_NAMES)
     pr_info = _github_pr_info_from_url(_single_line_text(payload.get("url")))
     if pr_info is not None:
         repo, _ = pr_info
-        required_names = _required_status_check_names(
-            root=root,
-            runner=runner,
-            repo=repo,
+        required_names.update(
+            _required_status_check_names(
+                root=root,
+                runner=runner,
+                repo=repo,
+            )
         )
     if not required_names:
         return rollup_checks
@@ -4224,17 +4289,26 @@ def _fallback_required_check_results(
         if _json_check_display_name(check) in required_names
         or _single_line_text(check.get("name")) in required_names
     ]
-    if matched:
-        return matched
-    return [
+    matched_names = {
+        name
+        for check in matched
+        for name in (
+            _json_check_display_name(check),
+            _single_line_text(check.get("name")),
+        )
+        if name
+    }
+    missing = sorted(name for name in required_names if name not in matched_names)
+    missing_checks = [
         {
             "name": name,
             "state": "PENDING",
             "bucket": "pending",
             "workflow": "",
         }
-        for name in sorted(required_names)
+        for name in missing
     ]
+    return [*matched, *missing_checks]
 
 
 def _status_check_rollup_items(value: Any) -> list[dict[str, Any]]:
@@ -4715,6 +4789,10 @@ def build_parser() -> argparse.ArgumentParser:
     intent_stage_parser.add_argument("--no-issue-authorized-by")
     intent_stage_parser.add_argument("--no-issue-evidence")
     intent_stage_parser.add_argument("--correction-reason")
+    intent_stage_parser.add_argument(
+        "--ac-review-mode",
+        choices=("auto", "user_required"),
+    )
     intent_subparsers.add_parser("pre-commit")
     intent_subparsers.add_parser("post-commit")
     coverage_parser = intent_subparsers.add_parser("check-coverage")
@@ -4779,6 +4857,7 @@ def main(argv: list[str] | None = None) -> int:
                 no_issue_authorized_by=args.no_issue_authorized_by,
                 no_issue_evidence=args.no_issue_evidence,
                 correction_reason=args.correction_reason,
+                ac_review_mode=args.ac_review_mode,
             )
         if args.intent_command == "pre-commit":
             return validate_pending_commit_intent(repo_root=args.repo_root)

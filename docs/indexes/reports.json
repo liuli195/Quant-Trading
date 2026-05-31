@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "catalog_type": "documents",
-  "generated_at": "2026-05-31T16:48:57+00:00",
+  "generated_at": "2026-05-31T17:32:46+00:00",
   "count": 445,
   "reports": [
     {
@@ -152,7 +152,7 @@
         "docs/adr/0006-risk-tiered-pr-review.md",
         "docs/adr/0007-pr-flow-closed-loop-review-evidence.md"
       ],
-      "updated_at": "2026-05-31T16:48:56+00:00"
+      "updated_at": "2026-05-31T17:32:46+00:00"
     },
     {
       "path": "docs/agents/domain.md",
@@ -657,7 +657,7 @@
         "scripts/tools/jq_automation/README.md",
         "scripts/tools/path_tools/README.md"
       ],
-      "updated_at": "2026-05-31T16:44:42+00:00"
+      "updated_at": "2026-05-31T17:31:24+00:00"
     },
     {
       "path": "docs/rules/docs-and-pathref.md",

@@ -118,6 +118,24 @@ def test_intent_stage_records_multi_issue_pending_intent(tmp_path: Path) -> None
     assert pending["consumed"] is False
 
 
+def test_intent_stage_records_user_required_ac_review_mode(tmp_path: Path) -> None:
+    runner = FakeIntentRunner()
+
+    code = pr_flow.stage_commit_intent(
+        repo_root=tmp_path,
+        runner=runner,
+        issue_bindings=("55:closes",),
+        ac_review_mode="user_required",
+        now="2026-06-01T08:00:00Z",
+    )
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    pending = json.loads(
+        (tmp_path / ".local/pr-flow/pending-intent.json").read_text(encoding="utf-8")
+    )
+    assert pending["ac_review_mode"] == "user_required"
+
+
 def test_intent_stage_records_no_issue_authorization(tmp_path: Path) -> None:
     runner = FakeIntentRunner()
 
@@ -430,6 +448,31 @@ def test_branch_intent_preserves_no_issue_authorizations(tmp_path: Path) -> None
     ]
 
 
+def test_branch_intent_preserves_user_required_ac_review_mode(tmp_path: Path) -> None:
+    runner = FakeIntentRunner(head_sha="3" * 40)
+    assert (
+        pr_flow.stage_commit_intent(
+            repo_root=tmp_path,
+            runner=runner,
+            issue_bindings=("55:closes",),
+            ac_review_mode="user_required",
+        )
+        == pr_flow.SUCCESS_EXIT_CODE
+    )
+
+    assert (
+        pr_flow.record_committed_intent(repo_root=tmp_path, runner=runner)
+        == pr_flow.SUCCESS_EXIT_CODE
+    )
+
+    branch_intent = json.loads(
+        (tmp_path / ".local/pr-flow/intents/feature/intent.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert branch_intent["ac_review_mode"] == "user_required"
+
+
 def test_branch_intent_coverage_detects_missing_current_commit(
     tmp_path: Path,
 ) -> None:
@@ -642,6 +685,31 @@ def test_review_payload_derives_spec_ref_from_branch_intent(tmp_path: Path) -> N
     assert updated["issue_intent"]["commits"][0]["commit_sha"] == "4" * 40
 
 
+def test_review_payload_carries_ac_review_mode_from_branch_intent(tmp_path: Path) -> None:
+    runner = FakeIntentRunner(head_sha="4" * 40)
+    assert (
+        pr_flow.stage_commit_intent(
+            repo_root=tmp_path,
+            runner=runner,
+            issue_bindings=("55:closes",),
+            ac_review_mode="user_required",
+        )
+        == pr_flow.SUCCESS_EXIT_CODE
+    )
+    assert (
+        pr_flow.record_committed_intent(repo_root=tmp_path, runner=runner)
+        == pr_flow.SUCCESS_EXIT_CODE
+    )
+
+    updated = pr_flow.payload_with_branch_intent(
+        _valid_issue_intent_payload(),
+        repo_root=tmp_path,
+        runner=runner,
+    )
+
+    assert updated["issue_intent"]["ac_review_mode"] == "user_required"
+
+
 def test_review_pipeline_skips_security_when_standards_has_open_p1() -> None:
     payload = _valid_issue_intent_payload()
     payload["review_fragments"]["standards"]["findings"] = [
@@ -763,6 +831,8 @@ def test_intent_cli_parser_accepts_stage_command() -> None:
             "55:closes",
             "--correction-reason",
             "fix role",
+            "--ac-review-mode",
+            "user_required",
         ]
     )
 
@@ -770,6 +840,7 @@ def test_intent_cli_parser_accepts_stage_command() -> None:
     assert args.intent_command == "stage"
     assert args.issue == ["55:closes"]
     assert args.correction_reason == "fix role"
+    assert args.ac_review_mode == "user_required"
 
 
 def test_git_hooks_call_commit_intent_gate() -> None:
