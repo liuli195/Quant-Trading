@@ -1518,6 +1518,92 @@ def test_diagnose_falls_back_to_status_check_rollup_when_required_checks_empty(
     assert "required checks: passed" in captured.out
 
 
+def test_diagnose_falls_back_when_required_checks_command_reports_none(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    class DiagnoseRollupRunner(DiagnoseRunner):
+        def run(
+            self,
+            command: list[str],
+            *,
+            cwd: Path | None = None,
+            input_text: str | None = None,
+        ) -> pr_flow.CommandResult:
+            if command == [
+                "gh",
+                "pr",
+                "checks",
+                "7",
+                "--required",
+                "--json",
+                pr_flow.CHECKS_JSON_FIELDS,
+            ]:
+                self.calls.append(command)
+                return pr_flow.CommandResult(
+                    1,
+                    "",
+                    "no required checks reported on the branch",
+                )
+            if command == [
+                "gh",
+                "pr",
+                "view",
+                "7",
+                "--json",
+                "url,baseRefName,isDraft,statusCheckRollup",
+            ]:
+                self.calls.append(command)
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps(
+                        {
+                            "url": "https://github.com/liuli195/Quant-Trading/pull/7",
+                            "baseRefName": "main",
+                            "isDraft": False,
+                            "statusCheckRollup": [
+                                {
+                                    "name": "governance",
+                                    "workflowName": "Research Governance",
+                                    "state": "SUCCESS",
+                                    "detailsUrl": "https://github.com/o/r/actions/runs/30/job/300",
+                                },
+                                {
+                                    "name": "pr-review-evidence",
+                                    "workflowName": "Research Governance",
+                                    "state": "SUCCESS",
+                                    "detailsUrl": "https://github.com/o/r/actions/runs/31/job/310",
+                                },
+                                {
+                                    "name": "Codex Review Monitor",
+                                    "workflowName": "",
+                                    "state": "SUCCESS",
+                                    "detailsUrl": "https://github.com/o/r/pull/7#issuecomment-1",
+                                },
+                            ],
+                        }
+                    ),
+                    "",
+                )
+            return super().run(command, cwd=cwd, input_text=input_text)
+
+    code = pr_flow.diagnose(
+        repo_root=tmp_path,
+        pr="7",
+        runner=DiagnoseRollupRunner(
+            merge_state="CLEAN",
+            check_bucket="pass",
+            check_state="SUCCESS",
+            review_decision="APPROVED",
+            review_threads=[],
+        ),
+    )
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "required checks: passed" in captured.out
+
+
 def test_diagnose_writes_structured_last_status_for_unresolved_threads(
     tmp_path: Path,
     capsys,

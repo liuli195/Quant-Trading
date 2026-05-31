@@ -4525,21 +4525,20 @@ def _diagnose_required_checks(
         ["gh", "pr", "checks", pr_number, "--required", "--json", CHECKS_JSON_FIELDS],
         cwd=root,
     )
-    if result.returncode != 0:
-        details = tuple(
-            detail
-            for detail in (
-                _single_line_text(result.stderr),
-                _single_line_text(result.stdout),
-            )
-            if detail
-        )
-        return "unavailable", details, True
     checks = _latest_required_check_results(result.stdout)
-    if checks is None or not checks:
+    if result.returncode != 0 or checks is None or not checks:
         fallback = _fallback_required_check_results(root, runner, pr_number)
         if fallback is None:
-            return "unavailable", ("required check JSON was invalid",), True
+            details = tuple(
+                detail
+                for detail in (
+                    _single_line_text(result.stderr),
+                    _single_line_text(result.stdout),
+                    "required check JSON was invalid",
+                )
+                if detail
+            )
+            return "unavailable", details, True
         checks = _latest_required_check_results(json.dumps(fallback)) or []
         if not checks:
             return "none", ("no required checks reported",), False
