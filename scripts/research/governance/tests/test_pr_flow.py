@@ -3695,6 +3695,78 @@ def test_ready_auto_closes_outdated_p1_thread_with_structured_evidence(
     assert "status: `fixed`" in runner.thread_replies[-1]["body"]
 
 
+def test_ready_auto_closes_current_p1_thread_with_structured_evidence(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_valid_report(
+        tmp_path,
+        risk_level="low",
+        requires_official=False,
+        changed_files=["docs/guides/example.md"],
+    )
+    latest = tmp_path / ".local" / "ai-review" / "latest.json"
+    payload = json.loads(latest.read_text(encoding="utf-8"))
+    payload["external_findings"] = [
+        {
+            "id": "EXT-CODEX-THREAD-PRRT_p1",
+            "source": "official_codex_review_thread",
+            "thread_id": "PRRT_p1",
+            "severity": "P1",
+            "title": "Current blocker",
+            "path": "scripts/research/governance/pr_flow.py",
+            "status": "fixed",
+            "evidence": "fixed by current head and verified locally",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+        }
+    ]
+    latest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    runner = FakeRunner(
+        existing_pr=True,
+        api_review_threads=[
+            {
+                "id": "PRRT_p1",
+                "isResolved": False,
+                "isOutdated": False,
+                "comments": {
+                    "nodes": [
+                        {
+                            "body": "P1 Badge: current blocker fixed by follow-up.",
+                            "author": {"login": "chatgpt-codex-connector"},
+                        }
+                    ]
+                },
+            }
+        ],
+    )
+    monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["docs/guides/example.md"],
+        },
+    )
+
+    code = pr_flow.ready(
+        repo_root=tmp_path,
+        title="governance automation",
+        runner=runner,
+        codex_review_timeout_seconds=0,
+        codex_review_poll_seconds=0,
+    )
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert "closed official Codex review thread: PRRT_p1" in capsys.readouterr().out
+    assert runner.thread_replies
+    assert "status: `fixed`" in runner.thread_replies[-1]["body"]
+
+
 def test_ready_ignores_resolved_codex_review_thread(
     monkeypatch,
     tmp_path: Path,

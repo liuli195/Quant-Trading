@@ -2190,7 +2190,6 @@ def _auto_review_thread_action(
         return "accept"
     if (
         severity in {"P0", "P1"}
-        and _thread_is_outdated(thread)
         and _closed_external_finding_for_thread(payload, thread) is not None
     ):
         return "close"
@@ -2329,6 +2328,8 @@ def _closed_external_finding_for_thread(
     for item in payload.get("external_findings") or []:
         if not isinstance(item, dict):
             continue
+        if _single_line_text(item.get("source")) != "official_codex_review_thread":
+            continue
         if _single_line_text(item.get("thread_id")) != thread_id:
             continue
         if _single_line_text(item.get("severity")) not in {"P0", "P1"}:
@@ -2337,6 +2338,18 @@ def _closed_external_finding_for_thread(
             continue
         if not _single_line_text(item.get("evidence")):
             continue
+        fingerprint = payload.get("diff_fingerprint")
+        if isinstance(fingerprint, dict):
+            finding_head = _single_line_text(item.get("head_sha"))
+            if finding_head and finding_head != _single_line_text(
+                fingerprint.get("head_sha")
+            ):
+                continue
+            finding_diff = _single_line_text(item.get("diff_files_hash"))
+            if finding_diff and finding_diff != _single_line_text(
+                fingerprint.get("diff_files_hash")
+            ):
+                continue
         closed = dict(item)
         closed.setdefault(
             "handling",

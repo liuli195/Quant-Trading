@@ -16,7 +16,7 @@
 - `Codex Review Monitor` 监听当前 head 的 Codex Review 状态；低风险且无需官方 review 的 PR 可快速通过/空跑；reused official evidence 只有满足 current head、scope impact 和 security impact 约束时才允许通过。
 - `Codex Review Monitor` success 可作为 `pr_flow` 自动采集官方 Codex 通过证据的信号之一，但不能替代 PR body 的 `Codex Code Review 结论`。
 - 只要 GitHub conversation resolution ruleset 要求 resolved conversation，未 resolved 的 review thread 必须阻断，任何跳过授权不得绕过；官方 Codex P2/P3 thread 例外路径只能由 `pr_flow` 写入固定接受模板、`external_findings` 和 PR body P2 保留项后 resolve。
-- 修复后的 review thread 只能由 `pr_flow resolve-threads` 或 `pr-ready` / `pr-complete --resolve-thread <thread-id>` resolve，且必须显式传入 thread ID；不得猜测或批量 resolve 全部未处理 thread。官方 P0/P1、无 severity thread、人工 reviewer thread 阻断；过期 P0/P1 只有结构化 `fixed` / `false_positive` 证据时才可自动关闭。
+- 修复后的 review thread 只能由 `pr_flow resolve-threads` 或 `pr-ready` / `pr-complete --resolve-thread <thread-id>` resolve，且必须显式传入 thread ID；不得猜测或批量 resolve 全部未处理 thread。官方 P0/P1、无 severity thread、人工 reviewer thread 阻断；官方 P0/P1 只有结构化 `fixed` / `false_positive` 证据且绑定当前 head/diff/thread ID 时才可自动关闭。
 - 本地仓库必须设置 `git config core.hooksPath .githooks`。
 - `.githooks/pre-commit`、`.githooks/pre-push`、`.githooks/reference-transaction` 必须通过 `.githooks/run-python.sh` 选择项目虚拟环境，不硬编码单一平台解释器。
 - `.githooks/pre-push` 必须调用 `scripts.research.governance.branch_protection pre-push` 和 `scripts.research.governance verify full`，并保留 Git LFS pre-push 转交。

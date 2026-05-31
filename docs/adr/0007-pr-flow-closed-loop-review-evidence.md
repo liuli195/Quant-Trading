@@ -31,7 +31,7 @@ PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pa
 - 功能 PR 和治理功能 PR 默认必须有关联 Issue 或 `spec_ref`。治理文字 PR 可无 Issue，但 `$review` 两轴必须确认无语义变更。用户可对当前 PR 一次性授权跳过 Issue/spec 要求。`sync_pr_body` 必须根据 `issue_refs` 写入 `Closes #N`，并在合并前校验 GitHub Issue AC checkbox 全部已勾选。
 - risk classifier 由 builder 最终裁决，review/security 只提供输入。任意满足低风险条件的 PR 可自动判为 `low`；`high` 或 `unknown` 才触发官方 Codex Review。用户可显式把 `high` / `unknown` 降级为 `low`，但不能绕过任何阻断项。
 - P2/P3 accepted findings 不影响 `risk_level`，允许 low-risk PR 带 P2 保留项。P2/P3 必须记录接受理由和处理方式，但不触发官方 Codex Review。
-- 官方 Codex P2/P3 review thread 在 severity 可靠识别时，由 `pr_flow` 用固定模板自动接受、resolve、重新读取确认 resolved，并写入 `external_findings` / PR body P2 保留项。官方 Codex P0/P1 和无 severity thread 阻断；人工 reviewer thread 不自动 resolve。
+- 官方 Codex P2/P3 review thread 在 severity 可靠识别时，由 `pr_flow` 用固定模板自动接受、resolve、重新读取确认 resolved，并写入 `external_findings` / PR body P2 保留项。官方 Codex P0/P1 在缺少结构化 `fixed` / `false_positive` evidence 时阻断；有绑定当前 head/diff/thread ID 的证据时可由 `pr_flow` 自动回复并 resolve。无 severity thread 和人工 reviewer thread 不自动 resolve。
 - 官方 Codex Review evidence 可在安全前提下复用：必须由 `$review` 证明 `official_scope_impact=false`，由 security review 证明 `security_impact=false`，并由 builder 最终裁决。复用状态和原因必须写入 PR body，并由 `Codex Review Monitor` 复核。
 - PR body 继续作为 CI 可见 evidence surface；CI 不读取 `.local`。CI 通过 PR body 和 GitHub API 校验 current head、review evidence、thread 状态和 required checks。
 - `pr_flow` 顶层停止状态保持三类：`DISPATCH_REQUIRED`、`REPLY_OR_FIX_REQUIRED`、`EXCEPTION_REQUIRED`。所有非 0 退出必须输出 `reason_code`、phase、retryable、dispatch target、blocking items、evidence refs 和 next actions。

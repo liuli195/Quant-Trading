@@ -59,7 +59,7 @@ make pr-complete TITLE="<PR标题>" THREADS="PRRT_xxx"
 make pr-resolve-threads THREADS="PRRT_xxx"
 ```
 
-`THREADS` 只接受显式 thread ID；工具不会猜测或批量 resolve 全部未处理 thread。官方 Codex P2/P3 thread 在 severity 可靠识别时由 `pr_flow` 用固定模板接受、resolve，并写入 `external_findings` 和 PR body P2 保留项；官方 P0/P1、无 severity thread、人工 reviewer thread 阻断。
+`THREADS` 只接受显式 thread ID；工具不会猜测或批量 resolve 全部未处理 thread。官方 Codex P2/P3 thread 在 severity 可靠识别时由 `pr_flow` 用固定模板接受、resolve，并写入 `external_findings` 和 PR body P2 保留项；官方 P0/P1、无 severity thread、人工 reviewer thread 阻断。官方 P0/P1 只有结构化 `fixed` / `false_positive` 证据且绑定当前 head/diff/thread ID 时才自动回复并 resolve。
 
 `make pr-complete TITLE="<PR标题>"` 会在 `pr-ready` 到达 `merge-ready` 后继续把 draft PR 标记为 ready、等待新一轮 required checks、用当前 head SHA 锁定合并，并按受控 fast-forward 规则同步本地 `main`、删除已合并的本地和远端分支，最后输出 merge、base sync、分支删除和最终状态摘要。已有 PR 可传 `PR=<PR号>`：
 
