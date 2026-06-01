@@ -1,0 +1,31 @@
+skill: strategy-experiment
+group: Strategy Research
+owned_rules:
+  - docs/rules/research-workflow.md#experiments
+owned_commands:
+  - .\.venv\Scripts\python.exe -m scripts.research.variants
+  - jq-auto ab expand
+  - jq-auto ab report
+owned_scripts:
+  - scripts/research/variants.py
+  - scripts/research/platform/strategy_variants.py
+  - scripts/tools/jq_automation/abtest.py
+uses:
+  - research-local-first
+  - research-report-analysis
+  - joinquant-cloud-run
+tools:
+  - claude-code
+  - codex
+trigger_phrases:
+  - 策略参数 A/B 实验
+  - 参数扫描
+  - 控制变量
+  - delta 归因
+  - variant registry
+read_rules:
+  - docs/rules/research-workflow.md
+recommended_commands:
+  - .\.venv\Scripts\python.exe -m scripts.research.variants
+  - .\.venv\Scripts\python.exe -m scripts.research.governance gate
+status: active

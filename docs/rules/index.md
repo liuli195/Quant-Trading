@@ -15,7 +15,7 @@
 | 文档 | 规则范围 |
 | --- | --- |
 | [commands.md](commands.md) <!-- pathref: docs/rules/commands.md --> | `.venv`、常用命令 |
-| [skills.md](skills.md) <!-- pathref: docs/rules/skills.md --> | Skill owner、adapter、自然语言发现和 ownership 治理 |
+| [skills.md](skills.md) <!-- pathref: docs/rules/skills.md --> | Skill 单一来源、Junction、自然语言发现和 ownership 治理 |
 | [environments.md](environments.md) <!-- pathref: docs/rules/environments.md --> | 本地、聚宽回测/模拟/研究环境边界 |
 | [code-style.md](code-style.md) <!-- pathref: docs/rules/code-style.md --> | 策略代码、测试、注释、兼容写法 |
 | [research-workflow.md](research-workflow.md) <!-- pathref: docs/rules/research-workflow.md --> | 本地研究、云端确认、数据和报告 |

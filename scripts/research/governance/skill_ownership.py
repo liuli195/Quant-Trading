@@ -15,7 +15,7 @@ from scripts.research.registry import default_tool_registry
 
 
 REQUIRED_OWNER_SKILLS = (
-    "skill-system",
+    "repo-skill-governance",
     "repo-python-env",
     "repo-docs-pathref",
     "repo-pr-governance",
@@ -33,7 +33,7 @@ REQUIRED_FIELDS = (
     "owned_commands",
     "owned_scripts",
     "uses",
-    "adapters",
+    "tools",
     "trigger_phrases",
     "read_rules",
     "recommended_commands",
@@ -45,6 +45,7 @@ VALID_COMMAND_PREFIXES = (
     "make ",
     "jq-auto ",
 )
+VALID_TOOLS = ("claude-code", "codex")
 OWNED_LOCAL_SCRIPT_PREFIXES = (".\\.githooks\\", ".githooks/")
 VALID_PYTHON_OWNED_ARGS = {
     "scripts.research.docs": ((), ("index",)),
@@ -93,18 +94,7 @@ VALID_JQ_AUTO_COMMANDS = {
     "batch": (),
     "ab": ((), ("expand",), ("run",), ("report",)),
 }
-LEGACY_SKILL_DIRS = (
-    ".claude/skills/agent-doc-add",
-    ".claude/skills/agent-doc-refactor",
-    ".claude/skills/jq-ab-test",
-    ".claude/skills/jq-analyze",
-    ".claude/skills/jq-fix",
-    ".claude/skills/jq-param-scan",
-    ".claude/skills/jq-research",
-    ".claude/skills/jq-run",
-    ".codex/skills/quant-pr-workflow",
-    ".codex/skills/quant-research-workflow",
-)
+LEGACY_SKILL_DIRS = (".codex/skills",)
 SKILLS_DOC_FORBIDDEN_DETAIL_TOKENS = (
     "owned_rules:",
     "owned_commands:",
@@ -122,7 +112,7 @@ class SkillOwnership:
     owned_commands: tuple[str, ...]
     owned_scripts: tuple[str, ...]
     uses: tuple[str, ...]
-    adapters: tuple[str, ...]
+    tools: tuple[str, ...]
     trigger_phrases: tuple[str, ...]
     read_rules: tuple[str, ...]
     recommended_commands: tuple[str, ...]
@@ -392,7 +382,7 @@ def _frontmatter(path: Path) -> dict[str, object]:
 
 
 def _ownership_paths(root: Path) -> tuple[Path, ...]:
-    return tuple(sorted((root / ".codex" / "skills").glob("*/references/ownership.yaml")))
+    return tuple(sorted((root / ".agents" / "skills").glob("*/references/ownership.yaml")))
 
 
 def _load_ownership(path: Path, root: Path) -> SkillOwnership:
@@ -409,7 +399,7 @@ def _load_ownership(path: Path, root: Path) -> SkillOwnership:
         owned_commands=_tuple(data.get("owned_commands")),
         owned_scripts=_tuple(data.get("owned_scripts")),
         uses=_tuple(data.get("uses")),
-        adapters=_tuple(data.get("adapters")),
+        tools=_tuple(data.get("tools")),
         trigger_phrases=_tuple(data.get("trigger_phrases")),
         read_rules=_tuple(data.get("read_rules")),
         recommended_commands=_tuple(data.get("recommended_commands")),
@@ -418,8 +408,21 @@ def _load_ownership(path: Path, root: Path) -> SkillOwnership:
     )
 
 
+def _is_expected_skills_junction(root: Path) -> bool:
+    claude_skills = root / ".claude" / "skills"
+    agents_skills = root / ".agents" / "skills"
+    if not claude_skills.exists() or not agents_skills.is_dir():
+        return False
+    if not (claude_skills.is_symlink() or getattr(claude_skills, "is_junction", lambda: False)()):
+        return False
+    try:
+        return claude_skills.resolve() == agents_skills.resolve()
+    except OSError:
+        return False
+
+
 def load_ownerships(repo_root: str | Path = ".") -> tuple[SkillOwnership, ...]:
-    """Load all ownership records from `.codex/skills/*/references/ownership.yaml`."""
+    """Load all ownership records from `.agents/skills/*/references/ownership.yaml`."""
 
     root = Path(repo_root).resolve()
     return tuple(_load_ownership(path, root) for path in _ownership_paths(root))
@@ -439,7 +442,7 @@ def _discover_owner_from_ownerships(
 
 
 def discover_owner(repo_root: str | Path, query: str) -> DiscoveryResult:
-    """Return active owner skills whose name or trigger phrases match the query."""
+    """Return active skills whose name or trigger phrases match the query."""
 
     return _discover_owner_from_ownerships(load_ownerships(repo_root), query)
 
@@ -515,7 +518,7 @@ def validate_ownerships(repo_root: str | Path = ".") -> list[str]:
             continue
         if ownership.skill in seen_records:
             errors.append(
-                f"duplicate owner skill record for {ownership.skill}: "
+                f"duplicate skill record for {ownership.skill}: "
                 f"{seen_records[ownership.skill]} and {ownership.source_path}"
             )
             continue
@@ -524,29 +527,29 @@ def validate_ownerships(repo_root: str | Path = ".") -> list[str]:
 
     by_skill = {item.skill: item for item in ownerships}
     for ownership in ownerships:
-        expected_source = f".codex/skills/{ownership.skill}/references/ownership.yaml"
+        expected_source = f".agents/skills/{ownership.skill}/references/ownership.yaml"
         if ownership.source_path != expected_source:
             errors.append(
-                f"owner skill {ownership.skill} has mismatched ownership path: {ownership.source_path}"
+                f"skill {ownership.skill} has mismatched ownership path: {ownership.source_path}"
             )
 
-    for owner_path in sorted((root / ".codex" / "skills").glob("*/SKILL.md")):
-        skill = owner_path.parent.name
+    for skill_path in sorted((root / ".agents" / "skills").glob("*/SKILL.md")):
+        skill = skill_path.parent.name
         if skill not in seen_records:
-            owner_rel = owner_path.relative_to(root).as_posix()
-            errors.append(f"unowned Codex owner skill: {owner_rel}")
+            skill_rel = skill_path.relative_to(root).as_posix()
+            errors.append(f"unowned skill: {skill_rel}")
 
     for skill in REQUIRED_OWNER_SKILLS:
         required_ownership = by_skill.get(skill)
         if required_ownership is None:
-            errors.append(f"missing owner skill: {skill}")
+            errors.append(f"missing skill: {skill}")
             continue
         if required_ownership.status != "active":
-            errors.append(f"required owner skill must be active: {skill}")
-        if not (root / ".codex" / "skills" / skill / "SKILL.md").is_file():
-            errors.append(f"missing Codex owner SKILL.md: {skill}")
-        if not (root / ".codex" / "skills" / skill / "agents" / "openai.yaml").is_file():
-            errors.append(f"missing Codex owner openai agent manifest: {skill}")
+            errors.append(f"required skill must be active: {skill}")
+        if not (root / ".agents" / "skills" / skill / "SKILL.md").is_file():
+            errors.append(f"missing SKILL.md: {skill}")
+        if not (root / ".agents" / "skills" / skill / "agents" / "openai.yaml").is_file():
+            errors.append(f"missing openai agent manifest: {skill}")
 
     for legacy_dir in LEGACY_SKILL_DIRS:
         if (root / legacy_dir).exists():
@@ -554,9 +557,8 @@ def validate_ownerships(repo_root: str | Path = ".") -> list[str]:
 
     seen_owned: dict[tuple[str, str], str] = {}
     seen_triggers: dict[str, str] = {}
-    declared_adapters = {
-        adapter for ownership in ownerships for adapter in ownership.adapters
-    }
+    if any("claude-code" in ownership.tools for ownership in ownerships) and not _is_expected_skills_junction(root):
+        errors.append(".claude/skills must be a Junction to .agents/skills when tools includes claude-code")
     owned_rule_paths = {
         _base_rule_path(rule)
         for ownership in ownerships
@@ -587,11 +589,9 @@ def validate_ownerships(repo_root: str | Path = ".") -> list[str]:
         for rule in ownership.owned_rules:
             errors.extend(_path_reference_errors(root, ownership, rule, "owned rule"))
 
-        expected_adapter = f".claude/skills/{ownership.skill}/SKILL.md"
-        if expected_adapter not in ownership.adapters:
-            errors.append(
-                f"owner skill {ownership.skill} missing same-name Claude adapter: {expected_adapter}"
-            )
+        for tool in ownership.tools:
+            if tool not in VALID_TOOLS:
+                errors.append(f"unsupported tool for {ownership.skill}: {tool}")
 
         if ownership.status == "active":
             for phrase in ownership.trigger_phrases:
@@ -629,29 +629,29 @@ def validate_ownerships(repo_root: str | Path = ".") -> list[str]:
         for rule in ownership.read_rules:
             errors.extend(_path_reference_errors(root, ownership, rule, "read rule"))
 
-        owner_path = root / ".codex" / "skills" / ownership.skill / "SKILL.md"
-        owner_text = ""
-        owner_meta: dict[str, object] = {}
-        if owner_path.is_file():
-            owner_text = owner_path.read_text(encoding="utf-8", errors="ignore")
-            owner_meta = _frontmatter(owner_path)
-        owner_name = str(owner_meta.get("name", "")).strip()
-        if not owner_name:
-            errors.append(f"owner SKILL.md missing frontmatter name for {ownership.skill}")
-        elif owner_name != ownership.skill:
-            errors.append(f"owner SKILL.md name mismatch for {ownership.skill}")
-        owner_description = str(owner_meta.get("description", "")).strip()
-        if not owner_description:
+        skill_path = root / ".agents" / "skills" / ownership.skill / "SKILL.md"
+        skill_text = ""
+        skill_meta: dict[str, object] = {}
+        if skill_path.is_file():
+            skill_text = skill_path.read_text(encoding="utf-8", errors="ignore")
+            skill_meta = _frontmatter(skill_path)
+        skill_name = str(skill_meta.get("name", "")).strip()
+        if not skill_name:
+            errors.append(f"SKILL.md missing frontmatter name for {ownership.skill}")
+        elif skill_name != ownership.skill:
+            errors.append(f"SKILL.md name mismatch for {ownership.skill}")
+        skill_description = str(skill_meta.get("description", "")).strip()
+        if not skill_description:
             errors.append(
-                f"owner SKILL.md missing frontmatter description for {ownership.skill}"
+                f"SKILL.md missing frontmatter description for {ownership.skill}"
             )
         for rule in ownership.read_rules:
-            if owner_text and rule not in owner_text:
-                errors.append(f"owner SKILL.md missing read rule for {ownership.skill}: {rule}")
+            if skill_text and rule not in skill_text:
+                errors.append(f"SKILL.md missing read rule for {ownership.skill}: {rule}")
         for command in ownership.recommended_commands:
-            if owner_text and command not in owner_text:
+            if skill_text and command not in skill_text:
                 errors.append(
-                    f"owner SKILL.md missing recommended command for {ownership.skill}: {command}"
+                    f"SKILL.md missing recommended command for {ownership.skill}: {command}"
                 )
         for phrase in ownership.trigger_phrases:
             result = _discover_owner_from_ownerships(ownerships, phrase)
@@ -661,58 +661,12 @@ def validate_ownerships(repo_root: str | Path = ".") -> list[str]:
                     f'trigger phrase "{phrase}" is ambiguous for {ownership.skill}: '
                     + ", ".join(matched_skills or ("no match",))
                 )
-            if owner_description and not _description_covers_phrase(
-                owner_description, phrase
+            if skill_description and not _description_covers_phrase(
+                skill_description, phrase
             ):
                 errors.append(
-                    f"trigger phrase not covered by owner description for {ownership.skill}: {phrase}"
+                    f"trigger phrase not covered by skill description for {ownership.skill}: {phrase}"
                 )
-
-        for adapter in ownership.adapters:
-            adapter_path = root / adapter
-            if not adapter_path.is_file():
-                errors.append(f"missing adapter for {ownership.skill}: {adapter}")
-                continue
-            adapter_text = adapter_path.read_text(encoding="utf-8", errors="ignore")
-            for forbidden in ("owned_rules", "owned_commands", "owned_scripts"):
-                if forbidden in adapter_text:
-                    errors.append(f"adapter {adapter} must not declare {forbidden}")
-            for rule in ownership.read_rules:
-                if rule not in adapter_text:
-                    errors.append(f"adapter {adapter} missing read rule: {rule}")
-            for command in ownership.recommended_commands:
-                if command not in adapter_text:
-                    errors.append(
-                        f"adapter {adapter} missing recommended command: {command}"
-                    )
-            adapter_meta = _frontmatter(adapter_path)
-            adapter_name = str(adapter_meta.get("name", "")).strip()
-            if not adapter_name:
-                errors.append(f"adapter {adapter} missing frontmatter name")
-            elif adapter_name != ownership.skill:
-                errors.append(f"adapter {adapter} name does not match {ownership.skill}")
-            adapter_description = str(adapter_meta.get("description", "")).strip()
-            if not adapter_description:
-                errors.append(f"adapter {adapter} missing frontmatter description")
-            elif owner_description and not (
-                owner_description in adapter_description
-                or adapter_description in owner_description
-            ):
-                errors.append(
-                    f"adapter {adapter} description is not equivalent to {ownership.skill}"
-                )
-            for phrase in ownership.trigger_phrases:
-                if adapter_description and not _description_covers_phrase(
-                    adapter_description, phrase
-                ):
-                    errors.append(
-                        f"trigger phrase not covered by adapter description for {ownership.skill}: {phrase}"
-                    )
-
-    for adapter_path in sorted((root / ".claude" / "skills").glob("*/SKILL.md")):
-        adapter_rel = adapter_path.relative_to(root).as_posix()
-        if adapter_rel not in declared_adapters:
-            errors.append(f"unowned Claude skill adapter: {adapter_rel}")
 
     for path in sorted((root / "docs" / "rules").glob("*.md")):
         rel_path = path.relative_to(root).as_posix()
@@ -726,11 +680,11 @@ def validate_ownerships(repo_root: str | Path = ".") -> list[str]:
     skills_doc = root / "docs" / "rules" / "skills.md"
     if skills_doc.is_file():
         text = skills_doc.read_text(encoding="utf-8", errors="ignore")
-        if "## Owner Skill 汇总" not in text:
-            errors.append("skills.md missing owner skill summary")
+        if "## Skill 汇总" not in text:
+            errors.append("skills.md missing skill summary")
         for skill in REQUIRED_OWNER_SKILLS:
             if f"`{skill}`" not in text:
-                errors.append(f"skills.md missing owner skill summary entry: {skill}")
+                errors.append(f"skills.md missing skill summary entry: {skill}")
         for token in SKILLS_DOC_FORBIDDEN_DETAIL_TOKENS:
             if token in text:
                 errors.append(f"skills.md must not duplicate ownership detail: {token}")

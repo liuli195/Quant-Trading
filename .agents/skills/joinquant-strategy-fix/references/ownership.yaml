@@ -1,0 +1,28 @@
+skill: joinquant-strategy-fix
+group: JoinQuant Automation
+owned_rules:
+  - docs/rules/environments.md#joinquant-compat
+  - docs/rules/code-style.md#joinquant-strategy
+owned_commands:
+  - .\.venv\Scripts\python.exe -m scripts.tools.jq_automation compile-check
+  - .\.venv\Scripts\python.exe -m py_compile
+owned_scripts:
+  - scripts/tools/jq_automation/cli.py#compile-check
+  - scripts/tools/jq_automation/snippets/compile.js
+uses:
+  - repo-python-env
+tools:
+  - claude-code
+  - codex
+trigger_phrases:
+  - JoinQuant 云端策略编译报错
+  - 本地定位兼容问题
+  - compile-check
+  - 策略本地修复
+read_rules:
+  - docs/rules/environments.md
+  - docs/rules/code-style.md
+recommended_commands:
+  - .\.venv\Scripts\python.exe -m scripts.tools.jq_automation compile-check <策略文件>
+  - .\.venv\Scripts\python.exe -m py_compile <策略文件>
+status: active

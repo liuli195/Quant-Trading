@@ -77,4 +77,6 @@ if (-not (Test-Path -LiteralPath $Requirements)) {
 
 git config core.hooksPath .githooks
 
+& (Join-Path $PSScriptRoot "ensure-skill-junction.ps1")
+
 Write-Output "Python environment is ready: $VenvPython"

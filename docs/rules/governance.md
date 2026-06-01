@@ -37,8 +37,9 @@
 - `docs/agents/**`
 - `docs/rules/**`
 - `docs/adr/**`
-- `.codex/skills/**`
-- `.claude/skills/**`
+- `.agents/skills/**`
+- `.claude/settings.json`
+- `.claude/settings.local.json`
 - `.github/workflows/**`
 - `.githooks/**`
 - `scripts/research/governance/**`

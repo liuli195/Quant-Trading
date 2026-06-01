@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 import json
+import os
 from pathlib import Path
+import subprocess
 
 import pytest
 import yaml
@@ -39,7 +41,7 @@ from scripts.tools.path_tools.refactor import should_skip
 
 
 SKILL_DISCOVERY_CASES = (
-    ("新增或修改一个 owner Skill，并同步 Claude adapter。", "skill-system"),
+    ("新增或修改一个仓库 Skill，并同步 .agents/skills。", "repo-skill-governance"),
     ("这个仓库本地 Python 应该怎么跑，为什么不能用系统 Python？", "repo-python-env"),
     ("我移动了文档和报告链接，怎么检查 pathref 和索引？", "repo-docs-pathref"),
     (
@@ -174,9 +176,9 @@ def test_pathref_scoped_check_rejects_non_markdown_files(
 
 SKILL_FIXTURES = (
     {
-        "skill": "skill-system",
+        "skill": "repo-skill-governance",
         "group": "Skill System",
-        "description": "创建、修改、验证 Codex owner Skill、Claude adapter、触发语义、ownership 索引和 Skill 发现治理时使用。",
+        "description": "创建、修改、验证 Codex 仓库 Skill、.agents/skills、触发语义、ownership 索引和 Skill 发现治理时使用。",
         "owned_rules": ["docs/rules/skills.md"],
         "owned_commands": [
             ".\\.venv\\Scripts\\python.exe -m scripts.research.governance.skill_ownership check",
@@ -189,7 +191,7 @@ SKILL_FIXTURES = (
             ".\\.venv\\Scripts\\python.exe -m scripts.research.governance.skill_ownership check",
             ".\\.venv\\Scripts\\python.exe -m scripts.research.governance gate",
         ],
-        "trigger_phrases": ["新增或修改一个 owner Skill", "同步 Claude adapter"],
+        "trigger_phrases": ["新增或修改一个 仓库 Skill", "同步 .agents/skills"],
     },
     {
         "skill": "repo-python-env",
@@ -394,16 +396,48 @@ def _fixture_list(fixture: Mapping[str, object], key: str) -> list[str]:
     return [str(value)]
 
 
+def _write_skill_junction(root: Path) -> None:
+    agents = root / ".agents" / "skills"
+    claude = root / ".claude" / "skills"
+    claude.parent.mkdir(parents=True, exist_ok=True)
+    if claude.exists() or claude.is_symlink():
+        return
+    if os.name == "nt":
+        subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(claude), str(agents)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    else:
+        claude.symlink_to(agents, target_is_directory=True)
+
+
+def _remove_skill_junction(root: Path) -> None:
+    claude = root / ".claude" / "skills"
+    if not claude.exists() and not claude.is_symlink():
+        return
+    if os.name == "nt" and getattr(claude, "is_junction", lambda: False)():
+        subprocess.run(
+            ["cmd", "/c", "rmdir", str(claude)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    elif claude.is_symlink():
+        claude.unlink()
+    else:
+        raise AssertionError(f"expected generated skills link, got {claude}")
+
+
 def _write_owner_skill(root: Path, fixture: Mapping[str, object]) -> None:
     skill = str(fixture["skill"])
     description = str(fixture["description"])
     read_rules = _fixture_list(fixture, "read_rules")
     recommended_commands = _fixture_list(fixture, "recommended_commands")
-    owner_root = root / ".codex" / "skills" / skill
-    adapter_root = root / ".claude" / "skills" / skill
+    owner_root = root / ".agents" / "skills" / skill
     (owner_root / "agents").mkdir(parents=True, exist_ok=True)
     (owner_root / "references").mkdir(parents=True, exist_ok=True)
-    adapter_root.mkdir(parents=True, exist_ok=True)
     skill_text = (
         "---\n"
         f"name: {skill}\n"
@@ -417,7 +451,6 @@ def _write_owner_skill(root: Path, fixture: Mapping[str, object]) -> None:
         + "\n"
     )
     (owner_root / "SKILL.md").write_text(skill_text, encoding="utf-8")
-    (adapter_root / "SKILL.md").write_text(skill_text, encoding="utf-8")
     (owner_root / "agents" / "openai.yaml").write_text(
         f"interface:\n  display_name: {skill}\n",
         encoding="utf-8",
@@ -429,7 +462,7 @@ def _write_owner_skill(root: Path, fixture: Mapping[str, object]) -> None:
         "owned_commands": _fixture_list(fixture, "owned_commands"),
         "owned_scripts": _fixture_list(fixture, "owned_scripts"),
         "uses": _fixture_list(fixture, "uses"),
-        "adapters": [f".claude/skills/{skill}/SKILL.md"],
+        "tools": ["claude-code", "codex"],
         "trigger_phrases": _fixture_list(fixture, "trigger_phrases"),
         "read_rules": read_rules,
         "recommended_commands": recommended_commands,
@@ -446,38 +479,37 @@ def _write_all_owner_skills(root: Path) -> None:
         _write_owner_skill(root, fixture)
 
 
-def test_skill_ownership_discovers_skill_system_owner(tmp_path: Path) -> None:
-    skill_root = tmp_path / ".codex" / "skills" / "skill-system" / "references"
-    skill_root.mkdir(parents=True)
-    (tmp_path / ".claude" / "skills" / "skill-system").mkdir(parents=True)
-    (tmp_path / ".codex" / "skills" / "skill-system" / "SKILL.md").write_text(
+def test_skill_ownership_discovers_agents_ssot_skill(tmp_path: Path) -> None:
+    skill_root = tmp_path / ".agents" / "skills" / "repo-skill-governance"
+    (skill_root / "agents").mkdir(parents=True)
+    (skill_root / "references").mkdir(parents=True)
+    (skill_root / "SKILL.md").write_text(
         "---\n"
-        "name: skill-system\n"
-        "description: 创建、修改、验证 owner Skill 与 Claude adapter。\n"
-        "---\n",
+        "name: repo-skill-governance\n"
+        "description: Maintain repo skill governance from .agents/skills/.\n"
+        "---\n\n"
+        "# repo-skill-governance\n",
         encoding="utf-8",
     )
-    (tmp_path / ".claude" / "skills" / "skill-system" / "SKILL.md").write_text(
-        "---\n"
-        "name: skill-system\n"
-        "description: 创建、修改、验证 owner Skill 与 Claude adapter。\n"
-        "---\n",
+    (skill_root / "agents" / "openai.yaml").write_text(
+        "interface:\n  display_name: Repo Skill Governance\n",
         encoding="utf-8",
     )
-    (skill_root / "ownership.yaml").write_text(
-        "skill: skill-system\n"
+    (skill_root / "references" / "ownership.yaml").write_text(
+        "skill: repo-skill-governance\n"
         "group: Skill System\n"
         "owned_rules:\n"
         "  - docs/rules/skills.md\n"
         "owned_commands:\n"
-        "  - scripts.research.governance.skill_ownership\n"
+        "  - .\\.venv\\Scripts\\python.exe -m scripts.research.governance.skill_ownership check\n"
         "owned_scripts:\n"
         "  - scripts/research/governance/skill_ownership.py\n"
         "uses: []\n"
-        "adapters:\n"
-        "  - .claude/skills/skill-system/SKILL.md\n"
+        "tools:\n"
+        "  - claude-code\n"
+        "  - codex\n"
         "trigger_phrases:\n"
-        "  - 新增或修改一个 owner Skill\n"
+        "  - repo skill governance\n"
         "read_rules:\n"
         "  - docs/rules/skills.md\n"
         "recommended_commands:\n"
@@ -488,13 +520,50 @@ def test_skill_ownership_discovers_skill_system_owner(tmp_path: Path) -> None:
 
     from scripts.research.governance.skill_ownership import discover_owner
 
-    result = discover_owner(
-        tmp_path, "新增或修改一个 owner Skill，并同步 Claude adapter。"
+    result = discover_owner(tmp_path, "repo skill governance")
+
+    assert [match.skill for match in result.matches] == ["repo-skill-governance"]
+    assert result.matches[0].tools == ("claude-code", "codex")
+
+
+def test_skill_ownership_discovers_repo_skill_governance(tmp_path: Path) -> None:
+    skill_root = tmp_path / ".agents" / "skills" / "repo-skill-governance"
+    (skill_root / "references").mkdir(parents=True)
+    (skill_root / "SKILL.md").write_text(
+        "---\n"
+        "name: repo-skill-governance\n"
+        "description: 创建、修改、验证仓库 Skill 与 .agents/skills。\n"
+        "---\n",
+        encoding="utf-8",
+    )
+    (skill_root / "references" / "ownership.yaml").write_text(
+        "skill: repo-skill-governance\n"
+        "group: Skill System\n"
+        "owned_rules:\n"
+        "  - docs/rules/skills.md\n"
+        "owned_commands:\n"
+        "  - .\\.venv\\Scripts\\python.exe -m scripts.research.governance.skill_ownership check\n"
+        "owned_scripts:\n"
+        "  - scripts/research/governance/skill_ownership.py\n"
+        "uses: []\n"
+        "tools:\n"
+        "  - codex\n"
+        "trigger_phrases:\n"
+        "  - 新增或修改一个仓库 Skill\n"
+        "read_rules:\n"
+        "  - docs/rules/skills.md\n"
+        "recommended_commands:\n"
+        "  - .\\.venv\\Scripts\\python.exe -m scripts.research.governance.skill_ownership check\n"
+        "status: active\n",
+        encoding="utf-8",
     )
 
-    assert [match.skill for match in result.matches] == ["skill-system"]
-    assert result.matches[0].read_rules == ("docs/rules/skills.md",)
+    from scripts.research.governance.skill_ownership import discover_owner
 
+    result = discover_owner(tmp_path, "新增或修改一个仓库 Skill")
+
+    assert [match.skill for match in result.matches] == ["repo-skill-governance"]
+    assert result.matches[0].read_rules == ("docs/rules/skills.md",)
 
 def test_skill_ownership_discovers_all_owner_examples() -> None:
     from scripts.research.governance.skill_ownership import discover_owner
@@ -522,8 +591,8 @@ def test_skill_ownership_rejects_duplicate_owned_rule(tmp_path: Path) -> None:
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    first = tmp_path / ".codex/skills/skill-system/references/ownership.yaml"
-    second = tmp_path / ".codex/skills/repo-python-env/references/ownership.yaml"
+    first = tmp_path / ".agents/skills/repo-skill-governance/references/ownership.yaml"
+    second = tmp_path / ".agents/skills/repo-python-env/references/ownership.yaml"
     first_data = yaml.safe_load(first.read_text(encoding="utf-8"))
     second_data = yaml.safe_load(second.read_text(encoding="utf-8"))
     first_data["owned_rules"] = ["docs/rules/commands.md"]
@@ -545,21 +614,21 @@ def test_skill_ownership_rejects_duplicate_owned_rule(tmp_path: Path) -> None:
     )
 
 
-def test_skill_ownership_rejects_unowned_codex_owner_skill(tmp_path: Path) -> None:
+def test_skill_ownership_rejects_unowned_skill(tmp_path: Path) -> None:
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    owner = tmp_path / ".codex/skills/unowned/SKILL.md"
+    owner = tmp_path / ".agents/skills/unowned/SKILL.md"
     owner.parent.mkdir(parents=True)
     owner.write_text(
-        "---\nname: unowned\ndescription: 未登记 owner。\n---\n",
+            "---\nname: unowned\ndescription: 未登记 Skill。\n---\n",
         encoding="utf-8",
     )
 
     errors = validate_ownerships(tmp_path)
 
     assert any(
-        "unowned Codex owner skill: .codex/skills/unowned/SKILL.md" in error
+        "unowned skill: .agents/skills/unowned/SKILL.md" in error
         for error in errors
     )
 
@@ -568,7 +637,7 @@ def test_skill_ownership_rejects_missing_owned_script_path(tmp_path: Path) -> No
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    path = tmp_path / ".codex/skills/skill-system/references/ownership.yaml"
+    path = tmp_path / ".agents/skills/repo-skill-governance/references/ownership.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     data["owned_scripts"] = ["scripts/research/governance/missing.py"]
     path.write_text(
@@ -579,7 +648,7 @@ def test_skill_ownership_rejects_missing_owned_script_path(tmp_path: Path) -> No
     errors = validate_ownerships(tmp_path)
 
     assert any(
-        "missing owned script for skill-system: scripts/research/governance/missing.py"
+        "missing owned script for repo-skill-governance: scripts/research/governance/missing.py"
         in error
         for error in errors
     )
@@ -591,7 +660,7 @@ def test_skill_ownership_reports_invalid_records_without_discovery_crash(
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    path = tmp_path / ".codex/skills/repo-python-env/references/ownership.yaml"
+    path = tmp_path / ".agents/skills/repo-python-env/references/ownership.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     data.pop("trigger_phrases")
     path.write_text(
@@ -608,7 +677,7 @@ def test_skill_ownership_rejects_missing_owned_rule_anchor(tmp_path: Path) -> No
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    path = tmp_path / ".codex/skills/skill-system/references/ownership.yaml"
+    path = tmp_path / ".agents/skills/repo-skill-governance/references/ownership.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     data["owned_rules"] = ["docs/rules/skills.md#missing-anchor"]
     path.write_text(
@@ -619,38 +688,33 @@ def test_skill_ownership_rejects_missing_owned_rule_anchor(tmp_path: Path) -> No
     errors = validate_ownerships(tmp_path)
 
     assert any(
-        "missing markdown anchor in owned rule for skill-system: docs/rules/skills.md#missing-anchor"
+        "missing markdown anchor in owned rule for repo-skill-governance: docs/rules/skills.md#missing-anchor"
         in error
         for error in errors
     )
 
 
-def test_skill_ownership_rejects_adapter_description_mismatch(tmp_path: Path) -> None:
+def test_skill_ownership_rejects_missing_claude_junction(tmp_path: Path) -> None:
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    adapter = tmp_path / ".claude/skills/skill-system/SKILL.md"
-    adapter.write_text(
-        "---\nname: skill-system\ndescription: 完全不同的用途。\n---\n",
-        encoding="utf-8",
-    )
+    _remove_skill_junction(tmp_path)
 
     errors = validate_ownerships(tmp_path)
 
     assert any(
-        "adapter .claude/skills/skill-system/SKILL.md description is not equivalent"
-        in error
+        ".claude/skills must be a Junction to .agents/skills" in error
         for error in errors
     )
 
 
-def test_skill_ownership_rejects_missing_same_name_adapter(tmp_path: Path) -> None:
+def test_skill_ownership_rejects_unknown_tool(tmp_path: Path) -> None:
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    path = tmp_path / ".codex/skills/skill-system/references/ownership.yaml"
+    path = tmp_path / ".agents/skills/repo-skill-governance/references/ownership.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    data["adapters"] = [".claude/skills/renamed/SKILL.md"]
+    data["tools"] = ["claude-code", "codex", "unknown-tool"]
     path.write_text(
         yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
         encoding="utf-8",
@@ -659,7 +723,7 @@ def test_skill_ownership_rejects_missing_same_name_adapter(tmp_path: Path) -> No
     errors = validate_ownerships(tmp_path)
 
     assert any(
-        "owner skill skill-system missing same-name Claude adapter" in error
+        "unsupported tool for repo-skill-governance: unknown-tool" in error
         for error in errors
     )
 
@@ -670,31 +734,23 @@ def test_skill_ownership_rejects_missing_frontmatter_name_or_description(
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    owner = tmp_path / ".codex/skills/skill-system/SKILL.md"
-    owner.write_text("---\ndescription: 创建 Skill。\n---\n", encoding="utf-8")
-    adapter = tmp_path / ".claude/skills/skill-system/SKILL.md"
-    adapter.write_text("---\nname: skill-system\n---\n", encoding="utf-8")
+    skill = tmp_path / ".agents/skills/repo-skill-governance/SKILL.md"
+    skill.write_text("---\ndescription: 创建 Skill。\n---\n", encoding="utf-8")
 
     errors = validate_ownerships(tmp_path)
 
     assert any(
-        "owner SKILL.md missing frontmatter name for skill-system" in error
+        "SKILL.md missing frontmatter name for repo-skill-governance" in error
         for error in errors
     )
-    assert any(
-        "adapter .claude/skills/skill-system/SKILL.md missing frontmatter description"
-        in error
-        for error in errors
-    )
-
 
 def test_skill_ownership_rejects_duplicate_trigger_phrase(tmp_path: Path) -> None:
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    path = tmp_path / ".codex/skills/repo-python-env/references/ownership.yaml"
+    path = tmp_path / ".agents/skills/repo-python-env/references/ownership.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    data["trigger_phrases"] = ["新增或修改一个 owner Skill"]
+    data["trigger_phrases"] = ["新增或修改一个 仓库 Skill"]
     path.write_text(
         yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
         encoding="utf-8",
@@ -703,7 +759,7 @@ def test_skill_ownership_rejects_duplicate_trigger_phrase(tmp_path: Path) -> Non
     errors = validate_ownerships(tmp_path)
 
     assert any(
-        'duplicate trigger phrase "新增或修改一个 owner Skill"' in error
+        'duplicate trigger phrase "新增或修改一个 仓库 Skill"' in error
         for error in errors
     )
 
@@ -712,7 +768,7 @@ def test_skill_ownership_rejects_non_active_required_owner(tmp_path: Path) -> No
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    path = tmp_path / ".codex/skills/skill-system/references/ownership.yaml"
+    path = tmp_path / ".agents/skills/repo-skill-governance/references/ownership.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     data["status"] = "draft"
     path.write_text(
@@ -723,7 +779,7 @@ def test_skill_ownership_rejects_non_active_required_owner(tmp_path: Path) -> No
     errors = validate_ownerships(tmp_path)
 
     assert any(
-        "required owner skill must be active: skill-system" in error for error in errors
+        "required skill must be active: repo-skill-governance" in error for error in errors
     )
 
 
@@ -733,7 +789,7 @@ def test_skill_ownership_rejects_unsupported_recommended_command(
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    path = tmp_path / ".codex/skills/skill-system/references/ownership.yaml"
+    path = tmp_path / ".agents/skills/repo-skill-governance/references/ownership.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     data["recommended_commands"] = ["python -m scripts.research.governance gate"]
     path.write_text(
@@ -744,7 +800,7 @@ def test_skill_ownership_rejects_unsupported_recommended_command(
     errors = validate_ownerships(tmp_path)
 
     assert any(
-        "unsupported recommended command for skill-system" in error for error in errors
+        "unsupported recommended command for repo-skill-governance" in error for error in errors
     )
 
 
@@ -754,7 +810,7 @@ def test_skill_ownership_rejects_unsupported_owned_command_prefix(
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    path = tmp_path / ".codex/skills/skill-system/references/ownership.yaml"
+    path = tmp_path / ".agents/skills/repo-skill-governance/references/ownership.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     data["owned_commands"] = ["python -m not.real.module"]
     path.write_text(
@@ -765,7 +821,7 @@ def test_skill_ownership_rejects_unsupported_owned_command_prefix(
     errors = validate_ownerships(tmp_path)
 
     assert any(
-        "unsupported owned command for skill-system: python -m not.real.module" in error
+        "unsupported owned command for repo-skill-governance: python -m not.real.module" in error
         for error in errors
     )
 
@@ -776,10 +832,10 @@ def test_skill_ownership_rejects_owner_missing_read_rule_and_command(
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    owner = tmp_path / ".codex/skills/skill-system/SKILL.md"
+    owner = tmp_path / ".agents/skills/repo-skill-governance/SKILL.md"
     owner.write_text(
         "---\n"
-        "name: skill-system\n"
+        "name: repo-skill-governance\n"
         f"description: {SKILL_FIXTURES[0]['description']}\n"
         "---\n"
         "docs/rules/skills.md\n",
@@ -789,12 +845,12 @@ def test_skill_ownership_rejects_owner_missing_read_rule_and_command(
     errors = validate_ownerships(tmp_path)
 
     assert any(
-        "owner SKILL.md missing read rule for skill-system: docs/rules/governance.md"
+        "SKILL.md missing read rule for repo-skill-governance: docs/rules/governance.md"
         in error
         for error in errors
     )
     assert any(
-        "owner SKILL.md missing recommended command for skill-system" in error
+        "SKILL.md missing recommended command for repo-skill-governance" in error
         for error in errors
     )
 
@@ -805,7 +861,7 @@ def test_skill_ownership_rejects_unknown_python_module_command(
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    path = tmp_path / ".codex/skills/skill-system/references/ownership.yaml"
+    path = tmp_path / ".agents/skills/repo-skill-governance/references/ownership.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     data["recommended_commands"] = [".\\.venv\\Scripts\\python.exe -m not.real.module"]
     path.write_text(
@@ -816,7 +872,7 @@ def test_skill_ownership_rejects_unknown_python_module_command(
     errors = validate_ownerships(tmp_path)
 
     assert any(
-        "unknown python module in recommended command for skill-system: not.real.module"
+        "unknown python module in recommended command for repo-skill-governance: not.real.module"
         in error
         for error in errors
     )
@@ -851,7 +907,7 @@ def test_skill_ownership_rejects_owned_command_runtime_options(
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    path = tmp_path / ".codex/skills/research-report-analysis/references/ownership.yaml"
+    path = tmp_path / ".agents/skills/research-report-analysis/references/ownership.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     data["owned_commands"] = [
         ".\\.venv\\Scripts\\python.exe -m scripts.research.docs index --reports"
@@ -875,7 +931,7 @@ def test_skill_ownership_rejects_unknown_owned_command_subcommand(
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    path = tmp_path / ".codex/skills/research-local-first/references/ownership.yaml"
+    path = tmp_path / ".agents/skills/research-local-first/references/ownership.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     data["owned_commands"] = [
         ".\\.venv\\Scripts\\python.exe -m scripts.research.cli typo"
@@ -900,7 +956,7 @@ def test_skill_ownership_rejects_extra_owned_command_position_args(
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    path = tmp_path / ".codex/skills/repo-docs-pathref/references/ownership.yaml"
+    path = tmp_path / ".agents/skills/repo-docs-pathref/references/ownership.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     data["owned_commands"] = [
         ".\\.venv\\Scripts\\python.exe -m scripts.research.docs index bogus"
@@ -925,7 +981,7 @@ def test_skill_ownership_rejects_unknown_jq_auto_subcommand(
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    path = tmp_path / ".codex/skills/strategy-experiment/references/ownership.yaml"
+    path = tmp_path / ".agents/skills/strategy-experiment/references/ownership.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     data["owned_commands"] = ["jq-auto ab bogus"]
     path.write_text(
@@ -942,69 +998,18 @@ def test_skill_ownership_rejects_unknown_jq_auto_subcommand(
     )
 
 
-def test_skill_ownership_rejects_unowned_claude_adapter(
-    tmp_path: Path,
-) -> None:
-    from scripts.research.governance.skill_ownership import validate_ownerships
-
-    _write_minimal_repo(tmp_path)
-    adapter = tmp_path / ".claude/skills/unowned/SKILL.md"
-    adapter.parent.mkdir(parents=True)
-    adapter.write_text(
-        "---\nname: unowned\ndescription: 未登记 adapter。\n---\n",
-        encoding="utf-8",
-    )
-
-    errors = validate_ownerships(tmp_path)
-
-    assert any(
-        "unowned Claude skill adapter: .claude/skills/unowned/SKILL.md" in error
-        for error in errors
-    )
-
-
-def test_skill_ownership_rejects_adapter_missing_read_rule_and_command(
-    tmp_path: Path,
-) -> None:
-    from scripts.research.governance.skill_ownership import validate_ownerships
-
-    _write_minimal_repo(tmp_path)
-    adapter = tmp_path / ".claude/skills/skill-system/SKILL.md"
-    adapter.write_text(
-        "---\n"
-        "name: skill-system\n"
-        f"description: {SKILL_FIXTURES[0]['description']}\n"
-        "---\n"
-        "docs/rules/skills.md\n",
-        encoding="utf-8",
-    )
-
-    errors = validate_ownerships(tmp_path)
-
-    assert any(
-        "adapter .claude/skills/skill-system/SKILL.md missing recommended command"
-        in error
-        for error in errors
-    )
-
-
 def test_skill_ownership_rejects_legacy_active_skill_directories(
     tmp_path: Path,
 ) -> None:
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    legacy = tmp_path / ".claude/skills/jq-run"
+    legacy = tmp_path / ".codex/skills"
     legacy.mkdir(parents=True)
-    (legacy / "SKILL.md").write_text(
-        "---\nname: jq-run\ndescription: 旧云端运行入口。\n---\n",
-        encoding="utf-8",
-    )
-
     errors = validate_ownerships(tmp_path)
 
     assert any(
-        "legacy skill directory must be removed: .claude/skills/jq-run" in error
+        "legacy skill directory must be removed: .codex/skills" in error
         for error in errors
     )
 
@@ -1045,7 +1050,7 @@ def test_skill_ownership_rejects_trigger_phrase_not_covered_by_description(
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    path = tmp_path / ".codex/skills/skill-system/references/ownership.yaml"
+    path = tmp_path / ".agents/skills/repo-skill-governance/references/ownership.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     data["trigger_phrases"] = ["苹果香蕉梨子"]
     path.write_text(
@@ -1056,7 +1061,7 @@ def test_skill_ownership_rejects_trigger_phrase_not_covered_by_description(
     errors = validate_ownerships(tmp_path)
 
     assert any(
-        "trigger phrase not covered by owner description for skill-system" in error
+        "trigger phrase not covered by skill description for repo-skill-governance" in error
         for error in errors
     )
 
@@ -1067,9 +1072,9 @@ def test_skill_ownership_rejects_trigger_phrase_ambiguous_discovery(
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    path = tmp_path / ".codex/skills/repo-python-env/references/ownership.yaml"
+    path = tmp_path / ".agents/skills/repo-python-env/references/ownership.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    data["trigger_phrases"] = ["owner Skill"]
+    data["trigger_phrases"] = ["仓库 Skill"]
     path.write_text(
         yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
         encoding="utf-8",
@@ -1077,7 +1082,7 @@ def test_skill_ownership_rejects_trigger_phrase_ambiguous_discovery(
 
     errors = validate_ownerships(tmp_path)
 
-    assert any('trigger phrase "owner Skill" is ambiguous' in error for error in errors)
+    assert any('trigger phrase "仓库 Skill" is ambiguous' in error for error in errors)
 
 
 def test_skill_ownership_rejects_skills_doc_without_human_summary(
@@ -1093,19 +1098,19 @@ def test_skill_ownership_rejects_skills_doc_without_human_summary(
 
     errors = validate_ownerships(tmp_path)
 
-    assert any("skills.md missing owner skill summary" in error for error in errors)
+    assert any("skills.md missing skill summary" in error for error in errors)
 
 
 def test_governance_audit_flags_missing_owner_skill(tmp_path: Path) -> None:
     _write_minimal_repo(tmp_path)
-    (tmp_path / ".codex/skills/skill-system/references/ownership.yaml").unlink()
+    (tmp_path / ".agents/skills/repo-skill-governance/references/ownership.yaml").unlink()
 
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
 
     assert not report.ok
     assert any(
         finding.rule_id == "skill_ownership"
-        and "missing owner skill: skill-system" in finding.message
+        and "missing skill: repo-skill-governance" in finding.message
         for finding in report.findings
     )
 
@@ -1354,10 +1359,10 @@ def _write_minimal_repo(root: Path) -> None:
     (root / "docs/rules/skills.md").write_text(
         "# Skill 规则\n\n"
         "ownership.yaml 是机器可读 SSOT；本文只保留人类可读汇总。\n\n"
-        "## Owner Skill 汇总\n\n"
+        "## Skill 汇总\n\n"
         "| Skill | 范围 |\n"
         "| --- | --- |\n"
-        "| `skill-system` | Skill 创建、adapter 和 ownership 治理 |\n"
+        "| `repo-skill-governance` | Skill 创建、单一来源和 ownership 治理 |\n"
         "| `repo-python-env` | Python 环境和本地/云端边界 |\n"
         "| `repo-docs-pathref` | 文档链接、pathref 和索引 |\n"
         "| `repo-pr-governance` | PR、review 证据和主干保护 |\n"
@@ -1510,8 +1515,9 @@ def _write_minimal_repo(root: Path) -> None:
                 "docs/agents/** @research-platform",
                 "docs/rules/** @research-platform",
                 "docs/adr/** @research-platform",
-                ".codex/skills/** @research-platform",
-                ".claude/skills/** @research-platform",
+                ".agents/skills/** @research-platform",
+                ".claude/settings.json @research-platform",
+                ".claude/settings.local.json @research-platform",
                 ".github/workflows/** @research-platform",
                 ".githooks/** @research-platform",
                 "scripts/research/governance/** @research-platform",
@@ -1584,6 +1590,7 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     _write_all_owner_skills(root)
+    _write_skill_junction(root)
     (root / "path_aliases.json").write_text(
         json.dumps(
             {

@@ -84,7 +84,7 @@ MCP 注册
 
 #### 第 1 步产出：现状盘点
 
-执行范围：只读盘点，不执行 `cc-switch skills sync`，不写入各工具用户级目录，也不修改 [.claude/skills](../../.claude/skills) <!-- pathref: repo/.claude/skills -->。
+执行范围：只读盘点，不执行 `cc-switch skills sync`，不写入各工具用户级目录，也不修改 [.agents/skills](../../.agents/skills) <!-- pathref: repo/.agents/skills -->。
 
 命令结果：
 
@@ -182,7 +182,7 @@ Codex 运行时 / 插件 Skill 盘点：
 | `cc-switch-global` | `cc-switch` SSOT，例如 `~/.cc-switch/skills/` | 通过 `cc-switch skills install/enable/sync` 管理 | 当前为空；只接收已经显式安装到 SSOT、带元数据、可跨至少两个工具复用的 Skill。 |
 | `claude-runtime/plugin-managed` | Claude Code 用户目录或插件目录 | 由 Claude Code 用户配置或插件安装状态管理 | 不自动导入 `cc-switch`；只作为只读盘点对象。 |
 | `codex-runtime/plugin-managed` | Codex 系统 Skill 或插件缓存 | 由 Codex 运行时或插件安装状态管理 | 不自动导入 `cc-switch`；只作为只读盘点对象。 |
-| `repo-local` | 本仓库 [.codex/skills](../../.codex/skills) <!-- pathref: repo/.codex/skills --> 与 [.claude/skills](../../.claude/skills) <!-- pathref: repo/.claude/skills --> | 通过 Git、PR、CODEOWNERS 和治理门禁管理 | 当前 owner Skill 与 adapter 全部保持在此层，不允许被用户级 `cc-switch skills sync` 自动覆盖。 |
+| `repo-local` | 本仓库 [.agents/skills](../../.agents/skills) <!-- pathref: repo/.agents/skills --> | 通过 Git、PR、CODEOWNERS 和治理门禁管理 | 当前仓库 Skill 全部保持在此层，不允许被用户级 `cc-switch skills sync` 自动覆盖。 |
 
 `cc-switch-global` 准入规则：
 

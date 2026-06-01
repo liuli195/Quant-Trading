@@ -10,13 +10,14 @@
 | docs |  | ADR 0005: AI 入口采用渐进式披露 | `docs/adr/0005-ai-entry-progressive-disclosure.md` | 9 |
 | docs |  | ADR 0006: PR 风险分级评审流程 | `docs/adr/0006-risk-tiered-pr-review.md` | 0 |
 | docs |  | ADR 0007: PR 强闭环状态机与 Review Evidence 边界 | `docs/adr/0007-pr-flow-closed-loop-review-evidence.md` | 1 |
-| docs |  | ADR 索引 | `docs/adr/index.md` | 7 |
+| docs |  | ADR 0008: Skill 使用 `.agents/skills/` 单一来源 | `docs/adr/0008-skill-single-source-agents.md` | 0 |
+| docs |  | ADR 索引 | `docs/adr/index.md` | 8 |
 | docs |  | 领域文档 | `docs/agents/domain.md` | 4 |
 | docs |  | Issue 跟踪：GitHub | `docs/agents/issue-tracker.md` | 0 |
 | docs |  | Triage 标签 | `docs/agents/triage-labels.md` | 0 |
 | docs |  | 本地研究平台架构 | `docs/architecture/research-platform-architecture.md` | 19 |
 | docs |  | CC-Switch CLI | `docs/design/cc-switch-cli.md` | 0 |
-| docs |  | 跨 AI 工具 Skill 管理实施计划 | `docs/design/cross-ai-skill-management.md` | 13 |
+| docs |  | 跨 AI 工具 Skill 管理实施计划 | `docs/design/cross-ai-skill-management.md` | 12 |
 | docs |  | Skill 系统迁移审查 | `docs/design/skill-system-migration-review.md` | 0 |
 | docs |  | Skill 系统精简重构方案 | `docs/design/skill-system-refactor.md` | 0 |
 | docs |  | 日常增量验证提速方案设计 | `docs/design/日常增量验证提速方案设计.md` | 0 |

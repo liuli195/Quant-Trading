@@ -154,14 +154,14 @@ def plan_checks(changed_files: Sequence[str | Path], *, repo_root: str | Path = 
     skills = tuple(
         path
         for path in normalized
-        if path.startswith(".codex/skills/") or path.startswith(".claude/skills/")
+        if path.startswith(".agents/skills/")
     )
     if skills:
         checked.append(
             CheckSpec(
                 "skill-ownership.scoped",
                 ("python", "-m", "scripts.research.governance.skill_ownership", "check"),
-                inputs=(".codex/skills", ".claude/skills", "docs/rules/skills.md"),
+                inputs=(".agents/skills", ".claude/settings.json", "docs/rules/skills.md"),
                 subjects=_skill_names(skills),
             )
         )
@@ -368,7 +368,7 @@ def _skill_names(paths: Sequence[str]) -> tuple[str, ...]:
     names: list[str] = []
     for path in paths:
         parts = path.split("/")
-        if len(parts) >= 3 and parts[0] in {".codex", ".claude"} and parts[1] == "skills":
+        if len(parts) >= 3 and parts[0] == ".agents" and parts[1] == "skills":
             names.append(parts[2])
     return tuple(sorted(dict.fromkeys(names)))
 
@@ -386,8 +386,9 @@ def _requires_full_governance(paths: Sequence[str]) -> bool:
     prefixes = (
         ".githooks/",
         ".github/workflows/",
-        ".codex/skills/",
-        ".claude/skills/",
+        ".agents/skills/",
+        ".claude/settings.json",
+        ".claude/settings.local.json",
         "docs/adr/",
         "docs/rules/",
         "scripts/research/governance/",
@@ -404,8 +405,9 @@ def _full_governance_inputs() -> tuple[str, ...]:
         "CLAUDE.md",
         "docs/rules",
         "docs/adr",
-        ".codex/skills",
-        ".claude/skills",
+        ".agents/skills",
+        ".claude/settings.json",
+        ".claude/settings.local.json",
         ".githooks",
         ".github/workflows",
         "scripts/research/governance",
