@@ -51,8 +51,10 @@ REQUIRED_CODEOWNER_PATTERNS = (
     "docs/agents/**",
     "docs/rules/**",
     "docs/adr/**",
-    ".codex/skills/**",
-    ".claude/skills/**",
+    ".agents/skills/**",
+    ".codex/environments/**",
+    ".claude/settings.json",
+    ".claude/settings.local.json",
     ".github/workflows/**",
     ".githooks/**",
     "scripts/research/governance/**",
@@ -497,6 +499,7 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             "PYTHONUTF8",
             "PYTHONIOENCODING",
             "3.12",
+            "ensure-skill-junction.ps1",
         ):
             if token not in text:
                 findings.append(
@@ -530,6 +533,30 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                         "governance_gate",
                         "error",
                         f"setup-python.sh missing {token}",
+                    )
+                )
+
+    codex_environment = root / ".codex" / "environments" / "environment.toml"
+    if not codex_environment.is_file():
+        findings.append(
+            AuditFinding(
+                "governance_gate",
+                "error",
+                ".codex/environments/environment.toml missing",
+            )
+        )
+    else:
+        text = codex_environment.read_text(encoding="utf-8", errors="ignore")
+        for token in (
+            ".\\.githooks\\setup-python.ps1",
+            ".\\.githooks\\ensure-skill-junction.ps1",
+        ):
+            if token not in text:
+                findings.append(
+                    AuditFinding(
+                        "governance_gate",
+                        "error",
+                        f"environment.toml missing {token}",
                     )
                 )
 
@@ -704,6 +731,18 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             findings.append(
                 AuditFinding(
                     "governance_gate", "error", "CI workflow missing verify full entrypoint"
+                )
+            )
+        junction_setup_index = text.find("ensure-skill-junction.ps1")
+        verify_full_index = text.find("scripts.research.governance verify full")
+        if junction_setup_index < 0 or (
+            verify_full_index >= 0 and junction_setup_index > verify_full_index
+        ):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "CI workflow must create .claude/skills Junction before verify full",
                 )
             )
         if "scripts.research.governance verify fast" in text:

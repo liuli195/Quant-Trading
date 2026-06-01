@@ -112,7 +112,8 @@ $RECYCLE.BIN/
 # ========================
 # Codex App 本地配置
 # ========================
-.codex/environments/
+.codex/environments/*
+!.codex/environments/environment.toml
 
 # ========================
 # 日志
@@ -170,6 +171,9 @@ FeishuRelayTools.local.py
 scripts/joinquant_tools/FeishuRelayTools.private.py
 scripts/joinquant_tools/FeishuRelayTools.local.py
 feishu_relay_outbox/
+
+# Claude Code reads repository skills through a generated Junction.
+.claude/skills/
 
 # ========================
 # Jupyter

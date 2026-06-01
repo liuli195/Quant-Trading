@@ -1,0 +1,28 @@
+skill: repo-skill-governance
+group: Skill System
+owned_rules:
+  - docs/rules/skills.md
+owned_commands:
+  - .\.venv\Scripts\python.exe -m scripts.research.governance.skill_ownership check
+  - .\.venv\Scripts\python.exe -m scripts.research.governance.skill_ownership discover
+  - .\.venv\Scripts\python.exe -m scripts.research.registry.tool_registry
+owned_scripts:
+  - scripts/research/governance/skill_ownership.py
+uses:
+  - repo-docs-pathref
+  - repo-pr-governance
+tools:
+  - claude-code
+  - codex
+trigger_phrases:
+  - 新增或修改一个仓库 Skill
+  - .agents/skills 单一来源
+  - 优化 Skill description
+  - 校验 Skill 发现
+read_rules:
+  - docs/rules/skills.md
+  - docs/rules/governance.md
+recommended_commands:
+  - .\.venv\Scripts\python.exe -m scripts.research.governance.skill_ownership check
+  - .\.venv\Scripts\python.exe -m scripts.research.governance gate
+status: active

@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "catalog_type": "documents",
-  "generated_at": "2026-05-31T17:32:46+00:00",
-  "count": 445,
+  "generated_at": "2026-06-01T08:49:10+00:00",
+  "count": 446,
   "reports": [
     {
       "path": "docs/README.md",
@@ -36,7 +36,7 @@
         "docs/rules/governance.md",
         "docs/adr/0007-pr-flow-closed-loop-review-evidence.md"
       ],
-      "updated_at": "2026-05-31T16:44:49+00:00"
+      "updated_at": "2026-05-31T20:57:02+00:00"
     },
     {
       "path": "docs/adr/0001-rule-source-and-governance-model.md",
@@ -53,7 +53,7 @@
         "docs/rules",
         "docs/adr/index.md"
       ],
-      "updated_at": "2026-05-31T13:38:34+00:00"
+      "updated_at": "2026-05-31T20:57:02+00:00"
     },
     {
       "path": "docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md",
@@ -92,7 +92,7 @@
         "repo/CLAUDE.md",
         "docs/adr/0005-ai-entry-progressive-disclosure.md"
       ],
-      "updated_at": "2026-05-31T13:38:34+00:00"
+      "updated_at": "2026-05-31T20:57:02+00:00"
     },
     {
       "path": "docs/adr/0005-ai-entry-progressive-disclosure.md",
@@ -112,7 +112,7 @@
         "docs/rules/commands.md",
         "docs/rules/index.md"
       ],
-      "updated_at": "2026-05-31T13:38:34+00:00"
+      "updated_at": "2026-05-31T20:57:02+00:00"
     },
     {
       "path": "docs/adr/0006-risk-tiered-pr-review.md",
@@ -134,7 +134,17 @@
       "pathrefs": [
         "docs/adr/0006-risk-tiered-pr-review.md"
       ],
-      "updated_at": "2026-05-31T16:44:08+00:00"
+      "updated_at": "2026-05-31T20:57:02+00:00"
+    },
+    {
+      "path": "docs/adr/0008-skill-single-source-agents.md",
+      "title": "ADR 0008: Skill 使用 `.agents/skills/` 单一来源",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-06-01T07:58:53+00:00"
     },
     {
       "path": "docs/adr/index.md",
@@ -150,9 +160,10 @@
         "docs/adr/0004-codex-code-review-governance.md",
         "docs/adr/0005-ai-entry-progressive-disclosure.md",
         "docs/adr/0006-risk-tiered-pr-review.md",
-        "docs/adr/0007-pr-flow-closed-loop-review-evidence.md"
+        "docs/adr/0007-pr-flow-closed-loop-review-evidence.md",
+        "docs/adr/0008-skill-single-source-agents.md"
       ],
-      "updated_at": "2026-05-31T17:32:46+00:00"
+      "updated_at": "2026-06-01T08:49:10+00:00"
     },
     {
       "path": "docs/agents/domain.md",
@@ -167,7 +178,7 @@
         "docs/rules/index.md",
         "docs/adr/index.md"
       ],
-      "updated_at": "2026-05-31T13:37:31+00:00"
+      "updated_at": "2026-05-31T20:57:02+00:00"
     },
     {
       "path": "docs/agents/issue-tracker.md",
@@ -217,7 +228,7 @@
         "docs/indexes/reports.md",
         "scripts/research/layers"
       ],
-      "updated_at": "2026-05-31T13:38:34+00:00"
+      "updated_at": "2026-06-01T08:48:36+00:00"
     },
     {
       "path": "docs/design/cc-switch-cli.md",
@@ -243,15 +254,14 @@
         "docs/adr/0005-ai-entry-progressive-disclosure.md",
         "docs/rules/governance.md",
         "docs/rules/docs-and-pathref.md",
-        "repo/.claude/skills",
+        "repo/.agents/skills",
         "repo/AGENTS.md",
         "repo/CLAUDE.md",
-        "repo/.codex/skills",
-        "repo/.claude/skills",
+        "repo/.agents/skills",
         "repo/AGENTS.md",
         "repo/CLAUDE.md"
       ],
-      "updated_at": "2026-05-31T13:39:39+00:00"
+      "updated_at": "2026-06-01T08:02:57+00:00"
     },
     {
       "path": "docs/design/skill-system-migration-review.md",
@@ -271,7 +281,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-31T13:38:35+00:00"
+      "updated_at": "2026-05-31T20:57:02+00:00"
     },
     {
       "path": "docs/design/日常增量验证提速方案设计.md",
@@ -327,7 +337,7 @@
         "docs/exceptions/active-waivers.yaml",
         "scripts/research/governance"
       ],
-      "updated_at": "2026-05-31T13:38:35+00:00"
+      "updated_at": "2026-05-31T20:57:02+00:00"
     },
     {
       "path": "docs/guides/feishu-relay-tools.md",
@@ -657,7 +667,7 @@
         "scripts/tools/jq_automation/README.md",
         "scripts/tools/path_tools/README.md"
       ],
-      "updated_at": "2026-05-31T17:31:24+00:00"
+      "updated_at": "2026-05-31T20:57:02+00:00"
     },
     {
       "path": "docs/rules/docs-and-pathref.md",
@@ -667,7 +677,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-31T13:50:45+00:00"
+      "updated_at": "2026-05-31T20:57:02+00:00"
     },
     {
       "path": "docs/rules/environments.md",
@@ -689,7 +699,7 @@
       "pathrefs": [
         "repo/AGENTS.md"
       ],
-      "updated_at": "2026-05-31T16:44:33+00:00"
+      "updated_at": "2026-06-01T08:48:29+00:00"
     },
     {
       "path": "docs/rules/index.md",
@@ -714,7 +724,7 @@
         "docs/rules/governance.md",
         "docs/adr/index.md"
       ],
-      "updated_at": "2026-05-31T13:37:31+00:00"
+      "updated_at": "2026-06-01T07:59:45+00:00"
     },
     {
       "path": "docs/rules/pr-workflow.md",
@@ -728,7 +738,7 @@
         "docs/rules/governance.md",
         "docs/rules/review-guidelines.md"
       ],
-      "updated_at": "2026-05-31T16:44:20+00:00"
+      "updated_at": "2026-05-31T20:57:02+00:00"
     },
     {
       "path": "docs/rules/research-workflow.md",
@@ -760,7 +770,7 @@
         "docs/rules/governance.md",
         "docs/rules/review-guidelines.md"
       ],
-      "updated_at": "2026-05-31T16:44:27+00:00"
+      "updated_at": "2026-05-31T20:57:02+00:00"
     },
     {
       "path": "docs/rules/skills.md",
@@ -773,7 +783,7 @@
         "repo/AGENTS.md",
         "docs/rules/index.md"
       ],
-      "updated_at": "2026-05-29T12:26:17+00:00"
+      "updated_at": "2026-06-01T07:57:40+00:00"
     },
     {
       "path": "docs/superpowers/plans/2026-05-20-backtest-data-redundancy-compaction.md",

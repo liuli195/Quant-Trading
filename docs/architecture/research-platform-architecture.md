@@ -96,7 +96,7 @@ init -> run --mode fast -> promote -> full review -> handoff-cloud -> cloud conf
 .\.venv\Scripts\python.exe -m scripts.research.governance gate
 ```
 
-审计覆盖工具登记、README/文档/测试锚点、CLI help、workflow template schema、`AGENTS.md`、`CLAUDE.md`、owner Skill / Claude adapter、数据 catalog、报告 catalog 和 pathref。`gate` 是本地 hook 和 CI 使用的门禁入口，会同时运行治理审计和 pathref 校验。
+审计覆盖工具登记、README/文档/测试锚点、CLI help、workflow template schema、`AGENTS.md`、`CLAUDE.md`、.agents/skills 单一来源、.claude/skills Junction、Codex environment setup、数据 catalog、报告 catalog 和 pathref。`gate` 是本地 hook 和 CI 使用的门禁入口，会同时运行治理审计和 pathref 校验。
 
 ## 工具注册结构
 

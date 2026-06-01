@@ -33,8 +33,7 @@ def test_root_markdown_files_map_to_pathref_changed_files() -> None:
 def test_skill_files_map_to_skill_ownership_scoped() -> None:
     plan = plan_checks(
         [
-            ".codex/skills/repo-python-env/SKILL.md",
-            ".claude/skills/repo-python-env/SKILL.md",
+            ".agents/skills/repo-python-env/SKILL.md",
         ]
     )
 
@@ -372,8 +371,8 @@ def test_skill_fast_runs_skill_ownership_and_full_gate(
     capsys,
     tmp_path: Path,
 ) -> None:
-    (tmp_path / ".codex/skills/repo-python-env").mkdir(parents=True)
-    skill_file = tmp_path / ".codex/skills/repo-python-env/SKILL.md"
+    (tmp_path / ".agents/skills/repo-python-env").mkdir(parents=True)
+    skill_file = tmp_path / ".agents/skills/repo-python-env/SKILL.md"
     skill_file.write_text("# Skill\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     calls: list[list[str]] = []
@@ -388,7 +387,7 @@ def test_skill_fast_runs_skill_ownership_and_full_gate(
         [
             "fast",
             "--files",
-            ".codex/skills/repo-python-env/SKILL.md",
+            ".agents/skills/repo-python-env/SKILL.md",
             "--format",
             "json",
         ]

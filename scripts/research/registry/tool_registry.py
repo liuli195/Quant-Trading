@@ -170,7 +170,14 @@ TOOL_DEFINITIONS: tuple[ToolDefinition, ...] = (
         readme_path="scripts/research/governance/README.md",
         docs_path="docs/architecture/research-platform-architecture.md",
         tests=("scripts/research/governance/tests/test_governance.py",),
-        inputs=("tool registry", "CLAUDE.md", ".claude/skills", "catalogs"),
+        inputs=(
+            "tool registry",
+            "CLAUDE.md",
+            ".agents/skills",
+            ".claude/skills Junction",
+            ".codex/environments",
+            "catalogs",
+        ),
         outputs=("audit result JSON/stdout", "gate result JSON/stdout"),
     ),
     ToolDefinition(

@@ -4,6 +4,7 @@
 
 # Hooks must stay LF so Git for Windows can execute the shebang scripts.
 .githooks/* text eol=lf
+*.md text eol=lf
 
 # 数据文件（行情数据、回测结果等）
 *.csv filter=lfs diff=lfs merge=lfs -text
