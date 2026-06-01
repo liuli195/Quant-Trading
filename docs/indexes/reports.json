@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "catalog_type": "documents",
-  "generated_at": "2026-06-01T08:03:21+00:00",
+  "generated_at": "2026-06-01T08:49:10+00:00",
   "count": 446,
   "reports": [
     {
@@ -163,7 +163,7 @@
         "docs/adr/0007-pr-flow-closed-loop-review-evidence.md",
         "docs/adr/0008-skill-single-source-agents.md"
       ],
-      "updated_at": "2026-06-01T08:03:21+00:00"
+      "updated_at": "2026-06-01T08:49:10+00:00"
     },
     {
       "path": "docs/agents/domain.md",
@@ -228,7 +228,7 @@
         "docs/indexes/reports.md",
         "scripts/research/layers"
       ],
-      "updated_at": "2026-06-01T07:59:28+00:00"
+      "updated_at": "2026-06-01T08:48:36+00:00"
     },
     {
       "path": "docs/design/cc-switch-cli.md",
@@ -699,7 +699,7 @@
       "pathrefs": [
         "repo/AGENTS.md"
       ],
-      "updated_at": "2026-06-01T07:58:36+00:00"
+      "updated_at": "2026-06-01T08:48:29+00:00"
     },
     {
       "path": "docs/rules/index.md",

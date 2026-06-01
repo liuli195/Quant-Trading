@@ -112,7 +112,8 @@ $RECYCLE.BIN/
 # ========================
 # Codex App 本地配置
 # ========================
-.codex/environments/
+.codex/environments/*
+!.codex/environments/environment.toml
 
 # ========================
 # 日志

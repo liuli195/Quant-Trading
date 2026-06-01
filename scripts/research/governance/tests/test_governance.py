@@ -1425,7 +1425,7 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / ".githooks/setup-python.ps1").write_text(
         "3.12\nrequirements-dev.txt\ngit config core.hooksPath .githooks\n"
-        "PYTHONUTF8\nPYTHONIOENCODING\n",
+        "PYTHONUTF8\nPYTHONIOENCODING\nensure-skill-junction.ps1\n",
         encoding="utf-8",
     )
     (root / ".githooks/setup-python.sh").write_text(
@@ -1466,6 +1466,7 @@ def _write_minimal_repo(root: Path) -> None:
         "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
         "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
         "steps:\n"
+        "  - run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\ensure-skill-junction.ps1\n"
         "  - run: python -m scripts.research.governance verify full\n"
         "  - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
         encoding="utf-8",
@@ -1478,6 +1479,12 @@ def _write_minimal_repo(root: Path) -> None:
         "    types: [created, edited, deleted]\n"
         "permissions:\n  statuses: write\nsteps:\n"
         "  - run: python -m scripts.research.governance.codex_review_monitor --sync-comment --sync-status\n",
+        encoding="utf-8",
+    )
+    (root / ".codex/environments").mkdir(parents=True, exist_ok=True)
+    (root / ".codex/environments/environment.toml").write_text(
+        ".\\.githooks\\setup-python.ps1\n"
+        ".\\.githooks\\ensure-skill-junction.ps1\n",
         encoding="utf-8",
     )
     (root / "scripts/research/governance/README.md").write_text(
@@ -1516,6 +1523,7 @@ def _write_minimal_repo(root: Path) -> None:
                 "docs/rules/** @research-platform",
                 "docs/adr/** @research-platform",
                 ".agents/skills/** @research-platform",
+                ".codex/environments/** @research-platform",
                 ".claude/settings.json @research-platform",
                 ".claude/settings.local.json @research-platform",
                 ".github/workflows/** @research-platform",
@@ -2115,6 +2123,7 @@ def test_governance_workflow_uses_single_verify_full_entrypoint(tmp_path: Path) 
         "jobs:\n"
         "  governance:\n"
         "    steps:\n"
+        "      - run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\ensure-skill-junction.ps1\n"
         "      - run: python -m scripts.research.governance verify full\n"
         "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
         encoding="utf-8",
@@ -2153,6 +2162,36 @@ def test_governance_audit_flags_workflow_without_pr_review_evidence_gate(
     )
 
 
+def test_governance_audit_flags_workflow_without_skill_junction_setup(
+    tmp_path: Path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    workflow = tmp_path / ".github/workflows/research-governance.yml"
+    workflow.write_text(
+        "name: Research Governance\n"
+        "on:\n"
+        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
+        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
+        "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
+        "  schedule:\n    - cron: '0 2 * * 1'\n"
+        "jobs:\n"
+        "  governance:\n"
+        "    steps:\n"
+        "      - run: python -m scripts.research.governance verify full\n"
+        "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        "CI workflow must create .claude/skills Junction before verify full"
+        in finding.message
+        for finding in report.findings
+    )
+
+
 def test_governance_audit_flags_pr_review_evidence_job_level_if(
     tmp_path: Path,
 ) -> None:
@@ -2169,6 +2208,7 @@ def test_governance_audit_flags_pr_review_evidence_job_level_if(
         "jobs:\n"
         "  governance:\n"
         "    steps:\n"
+        "      - run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\ensure-skill-junction.ps1\n"
         "      - run: python -m scripts.research.governance verify full\n"
         "  pr-review-evidence:\n"
         "    if: github.event_name == 'pull_request'\n"
@@ -2371,6 +2411,26 @@ def test_governance_audit_flags_missing_python_setup_scripts(tmp_path) -> None:
     assert any(
         finding.rule_id == "governance_gate"
         and ".githooks/setup-python.sh missing" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_codex_environment_without_skill_junction(
+    tmp_path: Path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".codex/environments/environment.toml").write_text(
+        ".\\.githooks\\setup-python.ps1\n",
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "environment.toml missing .\\.githooks\\ensure-skill-junction.ps1"
+        in finding.message
         for finding in report.findings
     )
 

@@ -5,6 +5,7 @@ docs/agents/** @liuli195
 docs/rules/** @liuli195
 docs/adr/** @liuli195
 .agents/skills/** @liuli195
+.codex/environments/** @liuli195
 .claude/settings.json @liuli195
 .claude/settings.local.json @liuli195
 .github/workflows/** @liuli195
