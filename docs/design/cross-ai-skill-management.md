@@ -35,11 +35,11 @@
   ~/.config/opencode/...
 
 仓库级 Skill 源
-  .claude/skills/
+  .agents/skills/
         |
         | Git + PR + governance gate
         v
-本仓库 Claude Code 专属工作流
+本仓库 Claude Code Junction 与 Codex 仓库级 Skill
 
 MCP 注册
   cc-switch mcp list/enable/sync
@@ -73,7 +73,7 @@ MCP 注册
 
 - 运行 `cc-switch skills scan-unmanaged`，盘点各工具目录中的未管理 Skill。
 - 运行 `cc-switch skills list`，确认 `cc-switch` SSOT 中已有 Skill。
-- 读取 `.claude/skills/`，把本仓库 Skill 先标记为 `repo-local`。
+- 读取 `.agents/skills/`，把本仓库 Skill 先标记为 `repo-local`；`.claude/skills` 只作为生成后的 Junction。
 - 输出一份盘点表，列出 Skill 名称、来源、目标工具、是否依赖 MCP、是否适合系统级复用。
 
 验收标准：
@@ -150,9 +150,9 @@ Codex 运行时 / 插件 Skill 盘点：
 - `cc-switch-global` 当前为空：`cc-switch` 没有已安装系统级 Skill，也没有发现它能管理的未管理 Skill。
 - `claude-runtime/plugin-managed` 不为空：Claude Code 用户目录中有 3 个用户级 Skill，已安装插件 `chrome-devtools-mcp` 1.0.1 带 6 个 Skill；marketplace 还有 34 个可用 Skill，但不代表已安装。
 - `codex-runtime/plugin-managed` 不为空：Codex 系统目录和插件缓存中存在多组 Skill，但它们由 Codex 运行时或插件安装状态管理，不属于 `cc-switch` SSOT。
-- `repo-local` 当前为仓库内 `.codex/skills` owner Skill 与 `.claude/skills` adapter，权威源仍在仓库 Git。
+- `repo-local` 当前为仓库内 `.agents/skills` SSOT，`.claude/skills` 是生成后的 Junction，权威源仍在仓库 Git。
 - 当前仓库级 Skill 均未声明 MCP 依赖；`jq-run` 明确使用 Playwright CLI，不再使用 MCP Chrome DevTools。
-- 第二步应使用四层分类：`cc-switch-global`、`claude-runtime/plugin-managed`、`codex-runtime/plugin-managed`、`repo-local`。旧仓库 Skill 已迁移为 repo-local owner Skill / adapter，再单独讨论 `agent-doc-add` 和 `agent-doc-refactor` 是否能抽取出系统级通用版本。
+- 第二步应使用四层分类：`cc-switch-global`、`claude-runtime/plugin-managed`、`codex-runtime/plugin-managed`、`repo-local`。旧仓库 Skill 已迁移为 `.agents/skills` SSOT 与 `.claude/skills` Junction，再单独讨论 `agent-doc-add` 和 `agent-doc-refactor` 是否能抽取出系统级通用版本。
 
 ### 第 2 步：定义 Skill 分层规则
 
@@ -195,7 +195,7 @@ Codex 运行时 / 插件 Skill 盘点：
 `repo-local` 保留规则：
 
 - 依赖本仓库路径、脚本、策略代码、报告模板、研究平台、JoinQuant 云端额度或治理审计的 Skill 必须留在 `repo-local`。
-- `repo-local` 的权威文件是 `.codex/skills/**/SKILL.md` 和同目录 `references/ownership.yaml`；`.claude/skills/<同名>/SKILL.md` 只保留同名 adapter，变更必须走仓库 Git diff 和 PR 流程。
+- `repo-local` 的权威文件是 `.agents/skills/**/SKILL.md` 和同目录 `references/ownership.yaml`；`.claude/skills/<同名>/SKILL.md` 只作为 Junction 输出，变更必须先改 `.agents/skills` 并走仓库 Git diff 和 PR 流程。
 - `repo-local` 未来若要跨工具复用，只能先做只读导入或显式导出副本；不得从用户级目录写回仓库。
 - 入口文件继续按 ADR 0005 分层：[AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 只保留通用入口，[CLAUDE.md](../../CLAUDE.md) <!-- pathref: repo/CLAUDE.md --> 只保留 Claude Code 专属指针。
 
@@ -215,7 +215,7 @@ Codex 运行时 / 插件 Skill 盘点：
 第二步结论：
 
 - 当前没有任何现有 Skill 被提升为 `cc-switch-global`。
-- 当前 owner Skill 与 adapter 全部明确归为 `repo-local`。
+- 当前 `.agents/skills` SSOT 与 `.claude/skills` Junction 全部明确归为 `repo-local`。
 - `agent-doc-add` 和 `agent-doc-refactor` 只有方法论可抽取为系统级候选，旧 Skill 文件已迁移并删除。
 - Claude / Codex 运行时和插件 Skill 均不自动导入 SSOT，后续若要复用必须先做元数据、依赖和授权评估。
 - 验收标准已满足：每个现有仓库 Skill 已有明确层级；入口文件不需要新增大段 Skill 细节；`CLAUDE.md` 继续只保留 Claude 专属指针。
@@ -345,7 +345,7 @@ cc-switch skills sync
 
 ```powershell
 git status --short
-# 在仓库内通过 PR 修改 .claude/skills/<skill>/SKILL.md
+# 在仓库内通过 PR 修改 .agents/skills/<skill>/SKILL.md
 # 修改后运行治理门禁和 pathref 检查
 ```
 
@@ -362,8 +362,8 @@ git status --short
 建议新增检查：
 
 - `AGENTS.md` 只保留通用入口，不复制工具专属 Skill 细节。
-- `CLAUDE.md` 只保留 Claude Code 专属指针，并继续引用 `.claude/skills`。
-- `.codex/skills/**/SKILL.md` 与 `references/ownership.yaml` 是仓库级 Skill 的权威文件；`.claude/skills/**/SKILL.md` 只作为同名 adapter。
+- `CLAUDE.md` 只保留 Claude Code 专属指针，并继续引用 `.claude/skills` Junction。
+- `.agents/skills/**/SKILL.md` 与 `references/ownership.yaml` 是仓库级 Skill 的权威文件；`.claude/skills/**/SKILL.md` 只作为 Junction 输出。
 - `repo-local` Skill 不应出现在系统级自动同步白名单。
 - 声明 `requires_mcp` 的 Skill 必须能在 MCP 注册表中找到依赖。
 - Skill 元数据必须包含 `owner`、`lifecycle`、`scope`、`target_apps`。
@@ -396,7 +396,7 @@ git status --short
 验收标准：
 
 - 两个工具中的系统级 Skill 内容一致。
-- 仓库 `.claude/skills/` 无变化。
+- 仓库 `.agents/skills/` 与 `.claude/skills` Junction 无变化。
 - 可通过 `cc-switch skills disable <skill_id>` 回滚启用状态。
 
 ### 第 7 步：再试点一个 MCP 依赖 Skill
@@ -470,4 +470,4 @@ git status --short
 - 第三步已确认：插件 Skill 的主要风险不是 MCP，而是 CLI、连接器、插件运行时、Agent 能力和远端权限依赖。
 - 当前重点评估的 30 个 Skill 均不直接进入 `cc-switch-global`；`playwright` 可作为无 MCP 试点候选，Superpowers 可作为 bundle 候选。
 - 仓库级 Skill 目前不建议通过 `cc-switch` 自动同步，应继续由仓库 Git 流程管理。
-- 第二步已确认：当前 8 个 `.claude/skills` Skill 全部为 `repo-local`，暂不提升为 `cc-switch-global`。
+- 第二步已确认：当前仓库级 `.agents/skills` Skill 全部为 `repo-local`，暂不提升为 `cc-switch-global`。
