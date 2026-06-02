@@ -2121,14 +2121,24 @@ def _submit_wait_required_checks(
         if not pending:
             return failures
         if time.monotonic() >= deadline:
-            return [
-                pr_flow_contract.SubmitFailure(
-                    check=failure.check,
-                    source=failure.source,
-                    detail="required check timed out while pending",
-                )
-                for failure in pending
-            ]
+            failure_by_check = {failure.check: failure for failure in failures}
+            pending_by_check = {failure.check: failure for failure in pending}
+            timed_out: list[pr_flow_contract.SubmitFailure] = []
+            for name in contract.required_checks:
+                failure = failure_by_check.get(name)
+                if failure is not None:
+                    timed_out.append(failure)
+                    continue
+                pending_failure = pending_by_check.get(name)
+                if pending_failure is not None:
+                    timed_out.append(
+                        pr_flow_contract.SubmitFailure(
+                            check=pending_failure.check,
+                            source=pending_failure.source,
+                            detail="required check timed out while pending",
+                        )
+                    )
+            return timed_out
         time.sleep(max(poll_seconds, 0))
 
 
@@ -2191,9 +2201,7 @@ def _submit_required_check_failures(
                     detail="required check is pending",
                 )
             )
-    if pending:
-        return [], pending
-    return failures, []
+    return failures, pending
 
 
 def _submit_complete_lifecycle(

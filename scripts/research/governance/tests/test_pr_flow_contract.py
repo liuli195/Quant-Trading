@@ -629,6 +629,55 @@ class SubmitFailingChecksRunner(SubmitCreatePrRunner):
         return super().run(command, cwd=cwd, input_text=input_text)
 
 
+class SubmitMixedFailingPendingChecksRunner(SubmitCreatePrRunner):
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        if command == [
+            "gh",
+            "pr",
+            "checks",
+            "88",
+            "--required",
+            "--json",
+            pr_flow.CHECKS_JSON_FIELDS,
+        ]:
+            return pr_flow.CommandResult(
+                8,
+                json.dumps(
+                    [
+                        {
+                            "name": "PR Flow / review-status",
+                            "workflow": "",
+                            "state": "SUCCESS",
+                            "bucket": "pass",
+                            "link": "https://github.com/runs/review",
+                        },
+                        {
+                            "name": "verify-full",
+                            "workflow": "Research Governance",
+                            "state": "FAILURE",
+                            "bucket": "fail",
+                            "link": "https://github.com/runs/verify",
+                        },
+                        {
+                            "name": "evidence",
+                            "workflow": "PR Flow",
+                            "state": "PENDING",
+                            "bucket": "pending",
+                            "link": "https://github.com/runs/evidence",
+                        },
+                    ]
+                ),
+                "",
+            )
+        return super().run(command, cwd=cwd, input_text=input_text)
+
+
 class SubmitOfficialCodexRetainedRunner(SubmitCreatePrRunner):
     def __init__(self, *, diff_text: str) -> None:
         super().__init__(diff_text=diff_text)
@@ -1414,6 +1463,43 @@ def test_submit_writes_required_check_failures_in_contract_order(
         "https://github.com/runs/review",
         "https://github.com/runs/verify",
         "https://github.com/runs/evidence",
+    ]
+
+
+def test_submit_writes_failed_and_timed_out_required_checks_in_contract_order(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitMixedFailingPendingChecksRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(
+        repo_root=tmp_path,
+        title="PR automation",
+        runner=runner,
+        watch_timeout_seconds=0,
+        watch_poll_seconds=0,
+    )
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"] == [
+        {
+            "check": "Research Governance / verify-full",
+            "source": "https://github.com/runs/verify",
+            "detail": "Research Governance / verify-full https://github.com/runs/verify",
+        },
+        {
+            "check": "PR Flow / evidence",
+            "source": "https://github.com/runs/evidence",
+            "detail": "required check timed out while pending",
+        },
     ]
 
 
