@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -126,6 +127,7 @@ def validate_pr_body(
     *,
     expected_pr_url: str | None = None,
     expected_head_sha: str | None = None,
+    expected_diff_hash: str | None = None,
     expected_commit_shas: Sequence[str] | None = None,
     expected_head_created_at: str | None = None,
     comments: Sequence[object] | None = None,
@@ -146,9 +148,15 @@ def validate_pr_body(
                     body,
                     contract_payload,
                     expected_head_sha=expected_head_sha,
+                    expected_diff_hash=expected_diff_hash,
                     expected_commit_shas=expected_commit_shas,
                 )
             )
+        if (
+            review_threads is not None
+            and unresolved_blocking_codex_thread_count(review_threads) > 0
+        ):
+            errors.append("Codex review must not have unresolved review threads")
         return EvidenceReport(not errors, tuple(errors))
 
     official_codex_required, errors = _official_codex_required(
@@ -276,6 +284,7 @@ def _contract_v1_evidence_errors(
     payload: dict[str, object],
     *,
     expected_head_sha: str | None,
+    expected_diff_hash: str | None,
     expected_commit_shas: Sequence[str] | None,
 ) -> list[str]:
     contract = pr_flow_contract.load_contract(Path("."))
@@ -288,6 +297,8 @@ def _contract_v1_evidence_errors(
     diff = _single_line_text(payload.get("diff"))
     if expected_head_sha and head != expected_head_sha:
         errors.append("PR Evidence JSON head does not match current PR head")
+    if expected_diff_hash and diff != expected_diff_hash:
+        errors.append("PR Evidence JSON diff does not match current PR diff")
     if ISSUE_INTENT_MACHINE_BLOCK_PATTERN.search(body):
         errors.append("PR body must not contain legacy Issue intent machine block")
     errors.extend(_contract_v1_review_errors(payload.get("reviews"), head=head, diff=diff))
@@ -1776,6 +1787,21 @@ def _fetch_github_json(*, repo: str, path: str, token: str) -> object:
     return payload
 
 
+def _fetch_github_text(
+    *, repo: str, path: str, token: str, accept: str = "application/vnd.github+json"
+) -> str:
+    request = urllib.request.Request(
+        _github_api_url(repo=repo, path=path),
+        headers={
+            "Accept": accept,
+            "Authorization": f"Bearer {token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return response.read().decode("utf-8")
+
+
 def _fetch_github_graphql(
     *, query: str, variables: Mapping[str, object], token: str
 ) -> Mapping[str, object]:
@@ -1906,6 +1932,16 @@ def _fetch_pr_changed_files(
         for item in payload
         if isinstance(item, Mapping) and str(item.get("filename", "")).strip()
     )
+
+
+def _fetch_pr_diff_hash(*, repo: str, pr_number: str, token: str) -> str:
+    diff_text = _fetch_github_text(
+        repo=repo,
+        path=f"pulls/{pr_number}",
+        token=token,
+        accept="application/vnd.github.v3.diff",
+    )
+    return hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
 
 
 def _fetch_pr_commit_shas(
@@ -2100,6 +2136,7 @@ def main(argv: list[str] | None = None) -> int:
         _read_optional_file(args.review_threads_file)
     )
     changed_files: Sequence[str] | None = None
+    expected_diff_hash: str | None = None
     expected_commit_shas: Sequence[str] | None = None
     labels: Sequence[str] | None = None
     expected_pr_url = _read_env(args.pr_url_env)
@@ -2141,6 +2178,9 @@ def main(argv: list[str] | None = None) -> int:
         changed_files = _fetch_pr_changed_files(
             repo=repo, pr_number=pr_number, token=token
         )
+        expected_diff_hash = _fetch_pr_diff_hash(
+            repo=repo, pr_number=pr_number, token=token
+        )
         fetched_commit_shas = _fetch_pr_commit_shas(
             repo=repo, pr_number=pr_number, token=token
         )
@@ -2159,6 +2199,7 @@ def main(argv: list[str] | None = None) -> int:
         body,
         expected_pr_url=expected_pr_url,
         expected_head_sha=expected_head_sha,
+        expected_diff_hash=expected_diff_hash,
         expected_commit_shas=expected_commit_shas,
         expected_head_created_at=expected_head_created_at,
         comments=comments,

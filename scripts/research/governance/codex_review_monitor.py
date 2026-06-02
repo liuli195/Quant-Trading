@@ -22,6 +22,7 @@ from scripts.research.governance.pr_review_evidence import (
     CODEX_CONTEXT_INVALID_PATTERN,
     CONTEXT_HOSTILE_TRIGGER_PATTERN,
     CODEX_REVIEW_AUTHORS,
+    _extract_contract_v1_evidence,
     _fetch_pr_review_threads,
     _fetch_issue_metadata,
     _fetch_pr_changed_files,
@@ -82,11 +83,16 @@ def build_monitor_report(
     pr_url = str(pr.get("html_url", "")) or f"https://github.com/{repo}/pull/{pr_number}"
     pr_body = str(pr.get("body", ""))
     skip_authorized = official_codex_review_skip_authorized(pr_body)
-    official_required, official_errors = _official_codex_required(
-        pr_body,
-        changed_files=changed_files,
-        labels=labels,
-    )
+    contract_payload, contract_errors = _extract_contract_v1_evidence(pr_body)
+    if contract_payload is not None or contract_errors:
+        official_required = contract_payload is not None
+        official_errors = list(contract_errors)
+    else:
+        official_required, official_errors = _official_codex_required(
+            pr_body,
+            changed_files=changed_files,
+            labels=labels,
+        )
     if not pr_body.strip() and changed_files is None and labels is None:
         official_errors = []
     official_review_required = official_required or bool(official_errors)

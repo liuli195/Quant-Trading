@@ -103,11 +103,34 @@ class SubmitPreflightRunner:
 
 
 class SubmitCreatePrRunner(SubmitPreflightRunner):
-    def __init__(self, *, diff_text: str, checks_bucket: str = "pass") -> None:
+    def __init__(
+        self,
+        *,
+        diff_text: str,
+        checks_bucket: str = "pass",
+        checks_returncode: int = 0,
+        existing_pr: bool = False,
+        existing_state: str = "OPEN",
+        existing_body: str = "",
+        preexisting_comments: list[dict[str, object]] | None = None,
+        merge_returncode: int = 0,
+        merge_stdout: str = "auto-merge enabled\n",
+        merge_stderr: str = "",
+    ) -> None:
         super().__init__(valid_contract=True)
         self.diff_text = diff_text
         self.checks_bucket = checks_bucket
+        self.checks_returncode = checks_returncode
+        self.existing_pr = existing_pr
+        self.existing_state = existing_state
+        self.existing_body = existing_body
+        self.preexisting_comments = preexisting_comments or []
+        self.merge_returncode = merge_returncode
+        self.merge_stdout = merge_stdout
+        self.merge_stderr = merge_stderr
+        self.auto_merge_requested = existing_state.upper() == "MERGED"
         self.created_bodies: list[str] = []
+        self.edited_bodies: list[str] = []
         self.comments: list[str] = []
         self.lifecycle_calls: list[list[str]] = []
 
@@ -139,7 +162,26 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
                 "",
             )
         if command == ["gh", "pr", "view", "--json", "number,url,state,isDraft"]:
-            return pr_flow.CommandResult(1, "", "no pull request")
+            if not self.existing_pr:
+                return pr_flow.CommandResult(1, "", "no pull request")
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "number": 88,
+                        "url": "https://github.com/liuli195/Quant-Trading/pull/88",
+                        "state": self.existing_state,
+                        "isDraft": self.existing_state.upper() != "MERGED",
+                    }
+                ),
+                "",
+            )
+        if command == ["gh", "pr", "view", "--json", "body"]:
+            return pr_flow.CommandResult(0, json.dumps({"body": self.existing_body}), "")
+        if command[:4] == ["gh", "pr", "edit", "88"]:
+            body_file = Path(command[command.index("--body-file") + 1])
+            self.edited_bodies.append(body_file.read_text(encoding="utf-8"))
+            return pr_flow.CommandResult(0, "", "")
         if command == [
             "git",
             "ls-remote",
@@ -166,6 +208,14 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             return pr_flow.CommandResult(0, "", "")
         if command == [
             "gh",
+            "api",
+            "--paginate",
+            "--slurp",
+            "repos/liuli195/Quant-Trading/issues/88/comments?per_page=100",
+        ]:
+            return pr_flow.CommandResult(0, json.dumps([self.preexisting_comments]), "")
+        if command == [
+            "gh",
             "pr",
             "checks",
             "88",
@@ -174,7 +224,7 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             pr_flow.CHECKS_JSON_FIELDS,
         ]:
             return pr_flow.CommandResult(
-                0,
+                self.checks_returncode,
                 json.dumps(
                     [
                         {
@@ -218,7 +268,12 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             "1" * 40,
         ]:
             self.lifecycle_calls.append(command)
-            return pr_flow.CommandResult(0, "auto-merge enabled\n", "")
+            self.auto_merge_requested = True
+            return pr_flow.CommandResult(
+                self.merge_returncode,
+                self.merge_stdout,
+                self.merge_stderr,
+            )
         if command == [
             "gh",
             "pr",
@@ -228,13 +283,16 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             "number,state,mergedAt,headRefName,baseRefName,isCrossRepository",
         ]:
             self.lifecycle_calls.append(command)
+            state = "MERGED" if self.auto_merge_requested else "OPEN"
             return pr_flow.CommandResult(
                 0,
                 json.dumps(
                     {
                         "number": 88,
-                        "state": "MERGED",
-                        "mergedAt": "2026-06-01T10:00:00Z",
+                        "state": state,
+                        "mergedAt": "2026-06-01T10:00:00Z"
+                        if state == "MERGED"
+                        else None,
                         "headRefName": "feature/contract",
                         "baseRefName": "main",
                         "isCrossRepository": False,
@@ -249,6 +307,25 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             ["git", "branch", "-d", "feature/contract"],
         ):
             self.lifecycle_calls.append(command)
+            return pr_flow.CommandResult(0, "", "")
+        return super().run(command, cwd=cwd, input_text=input_text)
+
+
+class MissingSubmitRemoteHeadRunner(SubmitCreatePrRunner):
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        if command == [
+            "git",
+            "ls-remote",
+            "--heads",
+            "origin",
+            "feature/contract",
+        ]:
             return pr_flow.CommandResult(0, "", "")
         return super().run(command, cwd=cwd, input_text=input_text)
 
@@ -388,53 +465,45 @@ def test_submit_aggregates_first_stage_blockers_before_security(tmp_path: Path) 
 
 
 def test_pr_review_evidence_accepts_contract_v1_managed_json() -> None:
-    body = _managed_evidence_body(
-        {
-            "schema": 1,
-            "head": "a" * 40,
-            "diff": "diff-hash",
-            "reviews": {
-                "standards": {"head": "a" * 40, "diff": "diff-hash"},
-                "spec": {"head": "a" * 40, "diff": "diff-hash"},
-                "security": {"head": "a" * 40, "diff": "diff-hash"},
-            },
-            "issues": {
-                "commits": [
-                    {
-                        "sha": "1" * 40,
-                        "issues": [{"number": 66, "role": "closes"}],
-                    },
-                    {"sha": "2" * 40, "no_issue": True},
-                ],
-                "refs": [
-                    {
-                        "number": 65,
-                        "role": "reference",
-                    },
-                    {
-                        "number": 66,
-                        "role": "closes",
-                        "ac_checked": True,
-                    },
-                ],
-            },
-            "retained": [
-                {
-                    "severity": "P2",
-                    "source": "security",
-                    "detail": "accepted follow-up",
-                }
-            ],
-        }
-    )
+    body = _managed_evidence_body(_contract_evidence_payload())
 
     report = pr_review_evidence.validate_pr_body(
         body,
         expected_head_sha="a" * 40,
+        expected_diff_hash="diff-hash",
         expected_commit_shas=("1" * 40, "2" * 40),
     )
 
     assert report.ok, report.errors
+
+
+def test_pr_review_evidence_rejects_contract_v1_diff_mismatch() -> None:
+    body = _managed_evidence_body(_contract_evidence_payload())
+
+    report = pr_review_evidence.validate_pr_body(
+        body,
+        expected_head_sha="a" * 40,
+        expected_diff_hash="current-diff",
+        expected_commit_shas=("1" * 40, "2" * 40),
+    )
+
+    assert not report.ok
+    assert "PR Evidence JSON diff does not match current PR diff" in report.errors
+
+
+def test_pr_review_evidence_rejects_contract_v1_unresolved_threads() -> None:
+    body = _managed_evidence_body(_contract_evidence_payload())
+
+    report = pr_review_evidence.validate_pr_body(
+        body,
+        expected_head_sha="a" * 40,
+        expected_diff_hash="diff-hash",
+        expected_commit_shas=("1" * 40, "2" * 40),
+        review_threads=[{"isResolved": False}],
+    )
+
+    assert not report.ok
+    assert "Codex review must not have unresolved review threads" in report.errors
 
 
 def test_submit_creates_draft_pr_with_contract_evidence_json(tmp_path: Path) -> None:
@@ -514,7 +583,11 @@ def test_submit_rejects_missing_commit_intent_before_creating_pr(
 def test_submit_waits_on_pending_required_checks_until_timeout(tmp_path: Path) -> None:
     diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
     diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
-    runner = SubmitCreatePrRunner(diff_text=diff_text, checks_bucket="pending")
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        checks_bucket="pending",
+        checks_returncode=8,
+    )
     _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
     _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
     _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
@@ -539,6 +612,101 @@ def test_submit_waits_on_pending_required_checks_until_timeout(tmp_path: Path) -
             "detail": "required check timed out while pending",
         }
     ]
+
+
+def test_submit_reuses_existing_current_head_trigger_without_duplicate_comment(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        checks_bucket="pending",
+        checks_returncode=8,
+        existing_pr=True,
+        preexisting_comments=[_current_head_trigger_comment()],
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(
+        repo_root=tmp_path,
+        title="PR 自动化",
+        runner=runner,
+        watch_timeout_seconds=0,
+        watch_poll_seconds=0,
+    )
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert runner.comments == []
+    assert not any(call[:3] == ["gh", "pr", "comment"] for call in runner.calls)
+
+
+def test_submit_reports_exception_when_remote_head_is_missing(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = MissingSubmitRemoteHeadRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR 自动化", runner=runner)
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "EXCEPTION_REQUIRED" in captured.err
+    assert "PUSH_REQUIRED" not in captured.err
+    assert "git push -u origin feature/contract" in captured.err
+    assert runner.created_bodies == []
+
+
+def test_submit_treats_auto_merge_already_enabled_as_wait_state(tmp_path: Path) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        merge_returncode=1,
+        merge_stdout="",
+        merge_stderr="GraphQL: auto-merge is already enabled",
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR 自动化", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert ["git", "branch", "-d", "feature/contract"] in runner.lifecycle_calls
+
+
+def test_submit_short_circuits_already_merged_pr_to_cleanup(tmp_path: Path) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        existing_pr=True,
+        existing_state="MERGED",
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR 自动化", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert runner.comments == []
+    assert not any(call[:3] == ["gh", "pr", "comment"] for call in runner.calls)
+    assert ["gh", "pr", "ready", "88"] not in runner.lifecycle_calls
+    assert not any(call[:3] == ["gh", "pr", "merge"] for call in runner.lifecycle_calls)
+    assert ["git", "branch", "-d", "feature/contract"] in runner.lifecycle_calls
 
 
 def test_submit_completes_head_locked_auto_merge_and_local_cleanup(
@@ -569,6 +737,24 @@ def test_submit_completes_head_locked_auto_merge_and_local_cleanup(
     assert ["git", "merge", "--ff-only", "origin/main"] in runner.lifecycle_calls
     assert ["git", "branch", "-d", "feature/contract"] in runner.lifecycle_calls
     assert not any(call[:3] == ["git", "push", "origin"] for call in runner.lifecycle_calls)
+
+
+def test_codex_review_monitor_waits_for_trigger_with_contract_v1_evidence() -> None:
+    report = codex_review_monitor.build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="88",
+        pr={
+            "head": {"sha": "a" * 40},
+            "body": _managed_evidence_body(_contract_evidence_payload()),
+        },
+        issue_comments=[],
+        reviews=[],
+        review_comments=[],
+        changed_files=("scripts/research/governance/pr_flow.py",),
+        labels=("ai-risk-review",),
+    )
+
+    assert report.status == "waiting_for_trigger"
 
 
 def test_codex_review_status_uses_contract_context_and_pending(monkeypatch) -> None:
@@ -634,6 +820,60 @@ def _managed_evidence_body(payload: dict[str, object]) -> str:
         "```\n"
         "<!-- pr-flow:end -->\n"
     )
+
+
+def _contract_evidence_payload() -> dict[str, object]:
+    return {
+        "schema": 1,
+        "head": "a" * 40,
+        "diff": "diff-hash",
+        "reviews": {
+            "standards": {"head": "a" * 40, "diff": "diff-hash"},
+            "spec": {"head": "a" * 40, "diff": "diff-hash"},
+            "security": {"head": "a" * 40, "diff": "diff-hash"},
+        },
+        "issues": {
+            "commits": [
+                {
+                    "sha": "1" * 40,
+                    "issues": [{"number": 66, "role": "closes"}],
+                },
+                {"sha": "2" * 40, "no_issue": True},
+            ],
+            "refs": [
+                {
+                    "number": 65,
+                    "role": "reference",
+                },
+                {
+                    "number": 66,
+                    "role": "closes",
+                    "ac_checked": True,
+                },
+            ],
+        },
+        "retained": [
+            {
+                "severity": "P2",
+                "source": "security",
+                "detail": "accepted follow-up",
+            }
+        ],
+    }
+
+
+def _current_head_trigger_comment() -> dict[str, object]:
+    return {
+        "id": 1,
+        "body": pr_flow.render_codex_review_request(
+            pr_url="https://github.com/liuli195/Quant-Trading/pull/88",
+            head_sha="1" * 40,
+            review_scope=(),
+        ),
+        "created_at": "2026-06-01T10:00:00Z",
+        "updated_at": "2026-06-01T10:00:00Z",
+        "user": {"login": "liuli195"},
+    }
 
 
 def _payload_from_managed_body(body: str) -> dict[str, object]:

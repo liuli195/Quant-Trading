@@ -1266,6 +1266,17 @@ def submit(
         return EXCEPTION_REQUIRED_EXIT_CODE
     if sync_code != SUCCESS_EXIT_CODE:
         return sync_code
+    merged_metadata = _submit_merged_pr_metadata(
+        root=root,
+        runner=runner,
+        pr_number=pr or pr_number,
+    )
+    if merged_metadata is not None:
+        return _submit_cleanup_merged_pr(
+            root=root,
+            runner=runner,
+            metadata=merged_metadata,
+        )
     request_code = _submit_request_codex_review(
         root=root,
         runner=runner,
@@ -1776,10 +1787,15 @@ def _sync_submit_pr_evidence(
     remote_head = runner.run(["git", "ls-remote", "--heads", "origin", branch], cwd=root)
     if remote_head.returncode != 0 or not _command_stdout(remote_head):
         _print_state(
-            "PUSH_REQUIRED",
+            "EXCEPTION_REQUIRED",
             "remote branch missing for PR creation",
             repo_root=root,
+            reason_code="REMOTE_BRANCH_MISSING",
+            phase="submit_sync_pr",
+            retryable=True,
+            dispatch_target="operator",
             details=[f"git push -u origin {branch}"],
+            next_actions=(f"git push -u origin {branch}",),
         )
         return EXCEPTION_REQUIRED_EXIT_CODE, "", ""
     body_file = _write_managed_body_file(local, _pr_template_body(root), managed_body)
@@ -1813,6 +1829,17 @@ def _submit_request_codex_review(
     pr_url: str,
     head_sha: str,
 ) -> int:
+    try:
+        if _current_head_codex_trigger_exists(
+            pr_url=pr_url,
+            head_sha=head_sha,
+            root=root,
+            runner=runner,
+        ):
+            return SUCCESS_EXIT_CODE
+    except GitHubDataUnavailable as exc:
+        _print_github_data_unavailable(exc)
+        return EXCEPTION_REQUIRED_EXIT_CODE
     local = root / ".local" / "pr-flow"
     local.mkdir(parents=True, exist_ok=True)
     body = render_codex_review_request(
@@ -1883,7 +1910,8 @@ def _submit_required_check_failures(
         ],
         cwd=root,
     )
-    if result.returncode != 0:
+    latest = _latest_required_check_results(result.stdout) or []
+    if result.returncode != 0 and not latest:
         return [
             pr_flow_contract.SubmitFailure(
                 check="required-checks",
@@ -1891,7 +1919,6 @@ def _submit_required_check_failures(
                 detail="required checks unavailable",
             )
         ], []
-    latest = _latest_required_check_results(result.stdout) or []
     by_name = {_json_check_display_name(check): check for check in latest}
     failures: list[pr_flow_contract.SubmitFailure] = []
     pending: list[pr_flow_contract.SubmitFailure] = []
@@ -1938,7 +1965,7 @@ def _submit_complete_lifecycle(
     poll_seconds: float,
 ) -> int:
     ready = runner.run(["gh", "pr", "ready", pr_number], cwd=root)
-    if ready.returncode != 0:
+    if ready.returncode != 0 and not _pr_ready_already_ready(ready):
         _print_command_failure("gh pr ready", ready)
         return EXCEPTION_REQUIRED_EXIT_CODE
     merge = runner.run(
@@ -1954,7 +1981,7 @@ def _submit_complete_lifecycle(
         ],
         cwd=root,
     )
-    if merge.returncode != 0:
+    if merge.returncode != 0 and not _auto_merge_already_enabled(merge):
         _print_command_failure("gh pr merge --auto", merge)
         return EXCEPTION_REQUIRED_EXIT_CODE
     metadata = _submit_wait_for_merged_pr(
@@ -1980,6 +2007,34 @@ def _submit_complete_lifecycle(
     return _submit_cleanup_merged_pr(root=root, runner=runner, metadata=metadata)
 
 
+def _submit_merged_pr_metadata(
+    *,
+    root: Path,
+    runner: Runner,
+    pr_number: str,
+) -> dict[str, Any] | None:
+    view = runner.run(
+        [
+            "gh",
+            "pr",
+            "view",
+            pr_number,
+            "--json",
+            "number,state,mergedAt,headRefName,baseRefName,isCrossRepository",
+        ],
+        cwd=root,
+    )
+    if view.returncode != 0:
+        return None
+    metadata = _json_object_from_result(
+        view,
+        "gh pr view --json number,state,mergedAt,headRefName,baseRefName,isCrossRepository",
+    )
+    if _single_line_text(metadata.get("state")).upper() == "MERGED":
+        return metadata
+    return None
+
+
 def _submit_wait_for_merged_pr(
     *,
     root: Path,
@@ -1990,27 +2045,26 @@ def _submit_wait_for_merged_pr(
 ) -> dict[str, Any] | None:
     deadline = time.monotonic() + max(timeout_seconds, 0)
     while True:
-        view = runner.run(
-            [
-                "gh",
-                "pr",
-                "view",
-                pr_number,
-                "--json",
-                "number,state,mergedAt,headRefName,baseRefName,isCrossRepository",
-            ],
-            cwd=root,
+        metadata = _submit_merged_pr_metadata(
+            root=root,
+            runner=runner,
+            pr_number=pr_number,
         )
-        if view.returncode == 0:
-            metadata = _json_object_from_result(
-                view,
-                "gh pr view --json number,state,mergedAt,headRefName,baseRefName,isCrossRepository",
-            )
-            if _single_line_text(metadata.get("state")).upper() == "MERGED":
-                return metadata
+        if metadata is not None:
+            return metadata
         if time.monotonic() >= deadline:
             return None
         time.sleep(max(poll_seconds, 0))
+
+
+def _pr_ready_already_ready(result: CommandResult) -> bool:
+    text = f"{result.stdout}\n{result.stderr}".casefold()
+    return ("already" in text and "ready" in text) or "not a draft" in text
+
+
+def _auto_merge_already_enabled(result: CommandResult) -> bool:
+    text = f"{result.stdout}\n{result.stderr}".casefold()
+    return "already" in text and ("auto-merge" in text or "auto merge" in text)
 
 
 def _submit_cleanup_merged_pr(

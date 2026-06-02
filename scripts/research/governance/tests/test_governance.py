@@ -5362,6 +5362,11 @@ def test_pr_review_evidence_main_uses_current_pr_body_over_stale_event_env(
     )
     monkeypatch.setattr(
         pr_review_evidence,
+        "_fetch_pr_diff_hash",
+        lambda *, repo, pr_number, token: "",
+    )
+    monkeypatch.setattr(
+        pr_review_evidence,
         "_fetch_pr_commit_shas",
         lambda *, repo, pr_number, token: (),
     )
