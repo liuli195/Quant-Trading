@@ -1364,6 +1364,78 @@ def test_wait_uses_latest_duplicate_non_actions_required_check_timestamp(
     assert "required checks passed" in capsys.readouterr().out
 
 
+def test_wait_allows_skipped_review_status_required_check(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = DuplicateRequiredChecksRunner(
+        [
+            {
+                "name": "PR Flow / review-status",
+                "state": "SKIPPED",
+                "bucket": "skipping",
+                "workflow": "",
+                "link": "https://github.com/o/r/pull/7#issuecomment-1",
+            },
+            {
+                "name": "verify-full",
+                "state": "SUCCESS",
+                "bucket": "pass",
+                "workflow": "Research Governance",
+                "link": "https://github.com/o/r/actions/runs/20/job/200",
+            },
+            {
+                "name": "evidence",
+                "state": "SUCCESS",
+                "bucket": "pass",
+                "workflow": "PR Flow",
+                "link": "https://github.com/o/r/actions/runs/21/job/210",
+            },
+        ]
+    )
+
+    code = pr_flow.wait(repo_root=tmp_path, pr="7", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert "required checks passed" in capsys.readouterr().out
+
+
+def test_wait_blocks_skipped_non_review_status_required_check(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = DuplicateRequiredChecksRunner(
+        [
+            {
+                "name": "PR Flow / review-status",
+                "state": "SUCCESS",
+                "bucket": "pass",
+                "workflow": "",
+                "link": "https://github.com/o/r/pull/7#issuecomment-1",
+            },
+            {
+                "name": "verify-full",
+                "state": "SKIPPED",
+                "bucket": "pass",
+                "workflow": "Research Governance",
+                "link": "https://github.com/o/r/actions/runs/20/job/200",
+            },
+            {
+                "name": "evidence",
+                "state": "SUCCESS",
+                "bucket": "pass",
+                "workflow": "PR Flow",
+                "link": "https://github.com/o/r/actions/runs/21/job/210",
+            },
+        ]
+    )
+
+    code = pr_flow.wait(repo_root=tmp_path, pr="7", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "Research Governance / verify-full" in capsys.readouterr().err
+
+
 def test_wait_falls_back_to_status_check_rollup_when_required_checks_empty(
     tmp_path: Path,
     capsys,

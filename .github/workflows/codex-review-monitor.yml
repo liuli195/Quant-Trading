@@ -17,7 +17,7 @@ on:
 
 permissions:
   contents: read
-  issues: write
+  issues: read
   pull-requests: read
   statuses: write
 
@@ -45,7 +45,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Update Codex review monitor comment
+      - name: Update Codex review status
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number || github.event.issue.number }}
@@ -53,5 +53,4 @@ jobs:
         run: >-
           python -m scripts.research.governance.codex_review_monitor
           --head-updated-at-env PR_HEAD_UPDATED_AT
-          --sync-comment
           --sync-status

@@ -823,7 +823,6 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             "pull_request_review_comment",
             "statuses: write",
             "scripts.research.governance.codex_review_monitor",
-            "--sync-comment",
             "--sync-status",
         ):
             if token not in text:
@@ -834,6 +833,14 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                         f"monitor workflow missing {token}",
                     )
                 )
+        if "--sync-comment" in text:
+            findings.append(
+                AuditFinding(
+                    "codex_review_monitor",
+                    "error",
+                    "monitor workflow must not sync PR Flow status comments",
+                )
+            )
         if not re.search(
             r"pull_request_review_comment:\s*\n\s*types:\s*\[[^\]]*deleted", text
         ):

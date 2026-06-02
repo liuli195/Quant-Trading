@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -1488,7 +1489,7 @@ def _write_minimal_repo(root: Path) -> None:
         "  pull_request_review_comment:\n"
         "    types: [created, edited, deleted]\n"
         "permissions:\n  statuses: write\nsteps:\n"
-        "  - run: python -m scripts.research.governance.codex_review_monitor --sync-comment --sync-status\n",
+        "  - run: python -m scripts.research.governance.codex_review_monitor --sync-status\n",
         encoding="utf-8",
     )
     (root / ".codex/environments").mkdir(parents=True, exist_ok=True)
@@ -2281,7 +2282,7 @@ def test_governance_audit_flags_monitor_without_inline_comment_deleted_event(
         "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
         "  pull_request_review_comment:\n    types: [created, edited]\n"
         "permissions:\n  statuses: write\nsteps:\n"
-        "  - run: python -m scripts.research.governance.codex_review_monitor --sync-comment --sync-status\n",
+        "  - run: python -m scripts.research.governance.codex_review_monitor --sync-status\n",
         encoding="utf-8",
     )
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
@@ -2289,6 +2290,28 @@ def test_governance_audit_flags_monitor_without_inline_comment_deleted_event(
     assert any(
         finding.rule_id == "codex_review_monitor"
         and "deleted inline review comments" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_monitor_status_comment_sync(
+    tmp_path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".github/workflows/codex-review-monitor.yml").write_text(
+        "on:\n  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
+        "  issue_comment:\n    types: [created, edited, deleted]\n"
+        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
+        "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
+        "permissions:\n  statuses: write\nsteps:\n"
+        "  - run: python -m scripts.research.governance.codex_review_monitor --sync-comment --sync-status\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "codex_review_monitor"
+        and "status comments" in finding.message
         for finding in report.findings
     )
 
@@ -2303,7 +2326,7 @@ def test_governance_audit_flags_monitor_without_review_dismissed_event(
         "  pull_request_review:\n    types: [submitted, edited]\n"
         "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
         "permissions:\n  statuses: write\nsteps:\n"
-        "  - run: python -m scripts.research.governance.codex_review_monitor --sync-comment --sync-status\n",
+        "  - run: python -m scripts.research.governance.codex_review_monitor --sync-status\n",
         encoding="utf-8",
     )
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
@@ -2323,7 +2346,7 @@ def test_governance_audit_flags_monitor_without_label_events(tmp_path) -> None:
         "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
         "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
         "permissions:\n  statuses: write\nsteps:\n"
-        "  - run: python -m scripts.research.governance.codex_review_monitor --sync-comment --sync-status\n",
+        "  - run: python -m scripts.research.governance.codex_review_monitor --sync-status\n",
         encoding="utf-8",
     )
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
@@ -5549,6 +5572,43 @@ def test_pr_review_evidence_rejects_completion_before_latest_required_trigger() 
         "Codex completion comment must match the latest required @codex review trigger"
         in report.errors
     )
+
+
+def test_pr_review_evidence_fetches_expected_diff_hash_from_local_git(
+    monkeypatch,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    calls: list[list[str]] = []
+
+    class Result:
+        returncode = 0
+        stdout = diff_text
+        stderr = ""
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        return Result()
+
+    monkeypatch.setattr(pr_review_evidence.subprocess, "run", fake_run)
+
+    diff_hash = pr_review_evidence._fetch_pr_diff_hash(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        token="token",
+    )
+
+    assert diff_hash == hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    assert calls == [
+        [
+            "git",
+            "-c",
+            "core.quotePath=false",
+            "diff",
+            "--binary",
+            "--no-ext-diff",
+            "origin/main...HEAD",
+        ]
+    ]
 
 
 def test_pr_review_evidence_reads_monitor_head_state_for_head_cutoff() -> None:

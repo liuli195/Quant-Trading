@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 import urllib.request
 from collections.abc import Mapping, Sequence
@@ -1934,14 +1935,35 @@ def _fetch_pr_changed_files(
     )
 
 
-def _fetch_pr_diff_hash(*, repo: str, pr_number: str, token: str) -> str:
-    diff_text = _fetch_github_text(
-        repo=repo,
-        path=f"pulls/{pr_number}",
-        token=token,
-        accept="application/vnd.github.v3.diff",
+def _local_pr_diff_hash(repo_root: Path | None = None) -> str:
+    result = subprocess.run(
+        [
+            "git",
+            "-c",
+            "core.quotePath=false",
+            "diff",
+            "--binary",
+            "--no-ext-diff",
+            "origin/main...HEAD",
+        ],
+        cwd=repo_root or Path.cwd(),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
     )
-    return hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    if result.returncode != 0:
+        detail = _single_line_text(result.stderr or result.stdout)
+        raise RuntimeError(
+            "git diff --binary origin/main...HEAD failed"
+            + (f": {detail}" if detail else "")
+        )
+    return hashlib.sha256(result.stdout.encode("utf-8")).hexdigest()
+
+
+def _fetch_pr_diff_hash(*, repo: str, pr_number: str, token: str) -> str:
+    return _local_pr_diff_hash()
 
 
 def _fetch_pr_commit_shas(

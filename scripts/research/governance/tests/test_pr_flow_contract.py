@@ -5,6 +5,7 @@ import hashlib
 from pathlib import Path
 
 from scripts.research.governance import (
+    ai_review_gate,
     codex_review_monitor,
     pr_flow,
     pr_flow_contract,
@@ -130,6 +131,7 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
         merge_returncode: int = 0,
         merge_stdout: str = "auto-merge enabled\n",
         merge_stderr: str = "",
+        changed_files_output: str = "docs/guides/example.md\n",
     ) -> None:
         super().__init__(valid_contract=True)
         self.diff_text = diff_text
@@ -142,6 +144,7 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
         self.merge_returncode = merge_returncode
         self.merge_stdout = merge_stdout
         self.merge_stderr = merge_stderr
+        self.changed_files_output = changed_files_output
         self.auto_merge_requested = existing_state.upper() == "MERGED"
         self.created_bodies: list[str] = []
         self.edited_bodies: list[str] = []
@@ -165,6 +168,15 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             "origin/main...HEAD",
         ]:
             return pr_flow.CommandResult(0, self.diff_text, "")
+        if command == [
+            "git",
+            "-c",
+            "core.quotePath=false",
+            "diff",
+            "--name-only",
+            "origin/main...HEAD",
+        ]:
+            return pr_flow.CommandResult(0, self.changed_files_output, "")
         if command == ["git", "branch", "--show-current"]:
             return pr_flow.CommandResult(0, "feature/contract\n", "")
         if command == ["git", "rev-list", "--reverse", "origin/main..HEAD"]:
@@ -738,6 +750,56 @@ def test_submit_creates_draft_pr_with_contract_evidence_json(tmp_path: Path) -> 
     assert "1" * 40 in runner.comments[-1]
 
 
+def test_submit_skips_official_codex_request_for_low_risk_report(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/docs/guides/example.md b/docs/guides/example.md\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+    _write_ai_review_report(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert runner.comments == []
+    assert not any(call[:3] == ["gh", "pr", "comment"] for call in runner.calls)
+
+
+def test_submit_skips_official_codex_request_with_user_authorization(
+    tmp_path: Path,
+) -> None:
+    diff_text = (
+        "diff --git a/scripts/research/governance/pr_flow.py "
+        "b/scripts/research/governance/pr_flow.py\n+hello\n"
+    )
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        changed_files_output="scripts/research/governance/pr_flow.py\n",
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+    _write_ai_review_report(
+        tmp_path,
+        risk_level="high",
+        requires_official=True,
+        changed_files=["scripts/research/governance/pr_flow.py"],
+        skip_official=True,
+    )
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert runner.comments == []
+    assert not any(call[:3] == ["gh", "pr", "comment"] for call in runner.calls)
+
+
 def test_submit_accepts_official_codex_p2_thread_into_retained(
     tmp_path: Path,
 ) -> None:
@@ -968,6 +1030,28 @@ def test_codex_review_monitor_waits_for_trigger_with_contract_v1_evidence() -> N
     assert report.status == "waiting_for_trigger"
 
 
+def test_codex_review_monitor_skips_low_risk_contract_v1_without_official_review() -> (
+    None
+):
+    body = (
+        _managed_evidence_body(_contract_evidence_payload())
+        + "\n"
+        + ai_review_gate.render_pr_body(_ai_review_payload())
+    )
+    report = codex_review_monitor.build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="88",
+        pr={"head": {"sha": "a" * 40}, "body": body},
+        issue_comments=[],
+        reviews=[],
+        review_comments=[],
+        changed_files=("docs/guides/example.md",),
+        labels=(),
+    )
+
+    assert report.status == "skipped"
+
+
 def test_codex_review_status_uses_contract_context_and_pending(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
@@ -1021,6 +1105,84 @@ def _write_fragment(
         ),
         encoding="utf-8",
     )
+
+
+def _write_ai_review_report(
+    root: Path,
+    *,
+    risk_level: str = "low",
+    requires_official: bool = False,
+    changed_files: list[str] | None = None,
+    skip_official: bool = False,
+) -> None:
+    payload = _ai_review_payload(
+        risk_level=risk_level,
+        requires_official=requires_official,
+        changed_files=changed_files,
+        skip_official=skip_official,
+    )
+    local = root / ".local" / "ai-review"
+    local.mkdir(parents=True, exist_ok=True)
+    (local / "latest.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _ai_review_payload(
+    *,
+    risk_level: str = "low",
+    requires_official: bool = False,
+    changed_files: list[str] | None = None,
+    skip_official: bool = False,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "schema_version": 2,
+        "tool": "codex",
+        "reviewers": ["standards-reviewer", "spec-reviewer"],
+        "risk_level": risk_level,
+        "requires_official_codex_review": requires_official,
+        "security_review": {
+            "tool": "codex-security",
+            "evidence": "local security review completed",
+        },
+        "cross_review": {
+            "delegated_to_subagents": True,
+            "review_skills": [
+                "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
+                "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
+            ],
+            "evidence": "standards and spec reviewers completed",
+        },
+        "complete_review": {
+            "evidence": "reviewers reached no new findings",
+            "iterations": [
+                {
+                    "reviewer": "standards-reviewer",
+                    "round": 1,
+                    "new_findings": [],
+                    "no_new_findings": True,
+                },
+                {
+                    "reviewer": "spec-reviewer",
+                    "round": 1,
+                    "new_findings": [],
+                    "no_new_findings": True,
+                },
+            ],
+        },
+        "changed_files": changed_files or ["docs/guides/example.md"],
+        "findings": [],
+        "checks": {},
+    }
+    if skip_official:
+        payload["skip_official_codex_review"] = True
+        payload["official_codex_review_skip_authorization"] = {
+            "authorized_by": "liuli195",
+            "reason": "current PR official review cost is higher than risk",
+            "evidence": "user explicitly authorized skipping official review",
+        }
+    return payload
 
 
 def _managed_evidence_body(payload: dict[str, object]) -> str:

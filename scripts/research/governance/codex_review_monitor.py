@@ -18,6 +18,7 @@ from scripts.research.governance.codex_review_contract import (
     is_codex_review_request,
 )
 from scripts.research.governance.pr_review_evidence import (
+    AI_REVIEW_SECTION_HEADER,
     BLOCKING_CODEX_FINDING_PATTERN,
     CODEX_CONTEXT_INVALID_PATTERN,
     CONTEXT_HOSTILE_TRIGGER_PATTERN,
@@ -85,8 +86,12 @@ def build_monitor_report(
     skip_authorized = official_codex_review_skip_authorized(pr_body)
     contract_payload, contract_errors = _extract_contract_v1_evidence(pr_body)
     if contract_payload is not None or contract_errors:
-        official_required = contract_payload is not None
-        official_errors = list(contract_errors)
+        official_required, official_errors = _contract_v1_official_codex_requirement(
+            pr_body,
+            contract_errors=contract_errors,
+            changed_files=changed_files,
+            labels=labels,
+        )
     else:
         official_required, official_errors = _official_codex_required(
             pr_body,
@@ -225,6 +230,32 @@ def build_monitor_report(
         context_invalid_reviews=context_invalid_reviews,
         trigger_invalid=trigger_invalid,
     )
+
+
+def _contract_v1_official_codex_requirement(
+    body: str,
+    *,
+    contract_errors: Sequence[str],
+    changed_files: Sequence[str] | None,
+    labels: Sequence[str] | None,
+) -> tuple[bool, list[str]]:
+    errors = list(contract_errors)
+    if errors:
+        return True, errors
+    required, body_errors = _official_codex_required(
+        body,
+        changed_files=changed_files,
+        labels=labels,
+    )
+    missing_ai_review = f"PR body missing section: {AI_REVIEW_SECTION_HEADER}"
+    if body_errors == [missing_ai_review]:
+        return True, []
+    body_errors = [
+        error
+        for error in body_errors
+        if error != "local check evidence must include verify full command"
+    ]
+    return required, body_errors
 
 
 def render_monitor_comment(report: MonitorReport) -> str:

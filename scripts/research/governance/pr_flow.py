@@ -139,6 +139,7 @@ class StopStatus:
 class SubmitReviewState:
     reviews: dict[str, dict[str, str]]
     retained: list[dict[str, str]]
+    requires_official_codex_review: bool
 
 
 class GitHubDataUnavailable(RuntimeError):
@@ -1224,6 +1225,7 @@ def submit(
     try:
         review_state, failures = _submit_review_state(
             root=root,
+            runner=runner,
             contract=contract,
             head_sha=head_sha,
             diff_hash=diff_hash,
@@ -1297,15 +1299,16 @@ def submit(
             runner=runner,
             metadata=merged_metadata,
         )
-    request_code = _submit_request_codex_review(
-        root=root,
-        runner=runner,
-        pr_number=pr or pr_number,
-        pr_url=pr_url,
-        head_sha=head_sha,
-    )
-    if request_code != SUCCESS_EXIT_CODE:
-        return request_code
+    if review_state.requires_official_codex_review:
+        request_code = _submit_request_codex_review(
+            root=root,
+            runner=runner,
+            pr_number=pr or pr_number,
+            pr_url=pr_url,
+            head_sha=head_sha,
+        )
+        if request_code != SUCCESS_EXIT_CODE:
+            return request_code
     watch_failures = _submit_wait_required_checks(
         root=root,
         runner=runner,
@@ -1645,6 +1648,7 @@ def _submit_current_diff_hash(root: Path, runner: Runner) -> str:
 def _submit_review_state(
     *,
     root: Path,
+    runner: Runner,
     contract: pr_flow_contract.PRFlowContract,
     head_sha: str,
     diff_hash: str,
@@ -1694,7 +1698,47 @@ def _submit_review_state(
                     ),
                 }
             )
-    return SubmitReviewState(reviews=reviews, retained=retained), failures
+    return (
+        SubmitReviewState(
+            reviews=reviews,
+            retained=retained,
+            requires_official_codex_review=_submit_requires_official_codex_review(
+                root=root,
+                runner=runner,
+            ),
+        ),
+        failures,
+    )
+
+
+def _submit_requires_official_codex_review(*, root: Path, runner: Runner) -> bool:
+    payload = _read_json_object(root / ".local" / "ai-review" / "latest.json")
+    if not isinstance(payload, dict):
+        return True
+    changed_files = _submit_current_changed_files(root, runner)
+    if changed_files is not None:
+        payload = {**payload, "changed_files": list(changed_files)}
+    result = ai_review_gate.validate_report(payload)
+    if not result.ok:
+        return True
+    return result.requires_official_codex_review
+
+
+def _submit_current_changed_files(root: Path, runner: Runner) -> tuple[str, ...] | None:
+    result = runner.run(
+        [
+            "git",
+            "-c",
+            "core.quotePath=false",
+            "diff",
+            "--name-only",
+            "origin/main...HEAD",
+        ],
+        cwd=root,
+    )
+    if result.returncode != 0:
+        return None
+    return tuple(line.strip() for line in result.stdout.splitlines() if line.strip())
 
 
 def _submit_pr_evidence(
@@ -5834,6 +5878,8 @@ def _json_check_failure_detail(check: dict[str, Any]) -> str:
 def _json_check_failed(check: dict[str, Any]) -> bool:
     bucket = _single_line_text(check.get("bucket")).casefold()
     state = _single_line_text(check.get("state")).casefold()
+    if _json_check_has_skipped_state(check):
+        return not _json_check_allows_skipped_success(check)
     return bucket == "fail" or state in {
         "action_required",
         "cancelled",
@@ -5847,7 +5893,19 @@ def _json_check_failed(check: dict[str, Any]) -> bool:
 def _json_check_passed(check: dict[str, Any]) -> bool:
     bucket = _single_line_text(check.get("bucket")).casefold()
     state = _single_line_text(check.get("state")).casefold()
-    return bucket in {"pass", "skipping"} or state in {"neutral", "skipped", "success"}
+    if _json_check_has_skipped_state(check):
+        return _json_check_allows_skipped_success(check)
+    return bucket == "pass" or state == "success"
+
+
+def _json_check_has_skipped_state(check: dict[str, Any]) -> bool:
+    bucket = _single_line_text(check.get("bucket")).casefold()
+    state = _single_line_text(check.get("state")).casefold()
+    return bucket == "skipping" or state in {"neutral", "skipped"}
+
+
+def _json_check_allows_skipped_success(check: dict[str, Any]) -> bool:
+    return _json_check_display_name(check) == "PR Flow / review-status"
 
 
 def _diagnose_required_checks(
