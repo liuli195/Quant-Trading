@@ -52,6 +52,7 @@ VALID_PYTHON_OWNED_ARGS = {
     "scripts.research.governance": ((), ("audit",)),
     "scripts.research.governance.pr_flow": (
         (),
+        ("submit",),
         ("ready",),
         ("diagnose",),
         ("resolve-threads",),

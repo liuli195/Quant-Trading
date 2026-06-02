@@ -1,4 +1,4 @@
-name: Codex Review Monitor
+name: PR Flow Review Status
 
 on:
   pull_request:

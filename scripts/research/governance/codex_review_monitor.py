@@ -13,6 +13,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from scripts.research.governance import pr_flow_contract
 from scripts.research.governance.codex_review_contract import (
     is_codex_review_request,
 )
@@ -286,7 +287,7 @@ def sync_commit_status(
     *, repo: str, pr: Mapping[str, object], token: str, report: MonitorReport
 ) -> None:
     state = {
-        "waiting_for_trigger": "failure",
+        "waiting_for_trigger": "pending",
         "waiting_for_codex": "pending",
         "trigger_invalid": "failure",
         "context_invalid": "failure",
@@ -318,9 +319,13 @@ def sync_commit_status(
             "state": state,
             "target_url": target_url,
             "description": description[:140],
-            "context": "Codex Review Monitor",
+            "context": _review_status_context(),
         },
     )
+
+
+def _review_status_context() -> str:
+    return pr_flow_contract.load_contract(Path(".")).required_checks[0]
 
 
 def _has_required_trigger_comment(

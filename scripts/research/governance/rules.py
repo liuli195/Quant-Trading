@@ -36,6 +36,7 @@ REQUIRED_RULE_DOCS = (
     "docs/rules/index.md",
     "docs/rules/pr-workflow.md",
     "docs/rules/governance.md",
+    "docs/rules/pr-flow-interface-contract.yaml",
     "docs/rules/skills.md",
     "docs/rules/review-guidelines.md",
     "docs/rules/commands.md",
@@ -68,49 +69,20 @@ LEGACY_FAST_GATE_SURFACES = (
     ".githooks/pre-push",
     ".github/workflows/research-governance.yml",
 )
-_OLD_PR_TEMPLATE_TOKENS = (
-    "改动目标",
-    "影响范围",
-    "规则同步",
-    "已运行检查",
-    "子 agent 交叉评审",
-    "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
-    "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
-    "reviewers:",
-    "任务分发说明",
-    "high/unknown PR label",
-    "官方 Codex Review 跳过授权",
-    "本地 AI review 模式",
-    "本地安全 review",
-    "codex-security",
-    "security-guidance",
-    "不完全 Review 模式授权",
-    "Codex Code Review 结论",
-    "Codex",
+PR_TEMPLATE_TOKENS = (
     "pr-flow:start",
-    ".\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full",
-    "waiver",
-    "证据",
-)
-_SIMPLIFIED_PR_TEMPLATE_TOKENS = (
-    "改动目标",
-    "影响范围",
-    "pr-flow:start",
+    "```json",
     "pr-flow:end",
-    "make pr-ready",
-    "人工补充",
-    "额外证据链接",
-    "waiver",
 )
-PR_TEMPLATE_TOKENS = _SIMPLIFIED_PR_TEMPLATE_TOKENS
 REQUIRED_REVIEW_GUIDELINES_TOKENS = (
     "Codex Code Review",
     "@codex review",
     "AGENTS.md",
     "docs/rules/review-guidelines.md",
     "P0/P1",
-    ".\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full",
-    "Codex Review Monitor",
+    "PR Flow / review-status",
+    "PR Flow / evidence",
+    "PR Evidence JSON",
     "至少两个独立 reviewer",
     "子 agent 交叉评审",
     "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
@@ -118,14 +90,9 @@ REQUIRED_REVIEW_GUIDELINES_TOKENS = (
     "reviewers:",
     "review_mode=complete",
     "review_mode=partial",
-    "security_review",
-    "本地安全 review",
     "codex-security",
     "security-guidance",
-    "官方 Codex Review 跳过授权",
-    "Codex Code Review 结论",
-    "结论: 通过",
-    "阻断问题: 无",
+    "retained",
 )
 REQUIRED_COMMAND_RULE_TOKENS = (
     "scripts.research.cli",
@@ -759,22 +726,6 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "CI workflow must use verify full as the single governance entrypoint",
                 )
             )
-        if "scripts.research.governance.pr_review_evidence" not in text:
-            findings.append(
-                AuditFinding(
-                    "governance_gate",
-                    "error",
-                    "CI workflow missing PR review evidence gate",
-                )
-            )
-        if re.search(r"pr-review-evidence:\s*\n\s*if:", text):
-            findings.append(
-                AuditFinding(
-                    "governance_gate",
-                    "error",
-                    "required PR review evidence job must not use job-level if",
-                )
-            )
         for token in (
             "python -m ruff check",
             "python -m bandit",
@@ -798,6 +749,30 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "CI workflow missing scheduled drift audit",
                 )
             )
+    pr_flow_workflow = root / ".github" / "workflows" / "pr-flow.yml"
+    if not pr_flow_workflow.is_file():
+        findings.append(
+            AuditFinding("governance_gate", "error", ".github/workflows/pr-flow.yml missing")
+        )
+    else:
+        text = pr_flow_workflow.read_text(encoding="utf-8", errors="ignore")
+        for token in ("name: PR Flow", "evidence:", "scripts.research.governance.pr_review_evidence"):
+            if token not in text:
+                findings.append(
+                    AuditFinding(
+                        "governance_gate",
+                        "error",
+                        f"PR Flow evidence workflow missing {token}",
+                    )
+                )
+        if re.search(r"evidence:\s*\n\s*if:", text):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "required PR Flow evidence job must not use job-level if",
+                )
+            )
         if not re.search(
             r"pull_request_review_comment:\s*\n\s*types:\s*\[[^\]]*deleted", text
         ):
@@ -805,7 +780,7 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                 AuditFinding(
                     "governance_gate",
                     "error",
-                    "PR review evidence workflow must listen to deleted inline review comments",
+                    "PR Flow evidence workflow must listen to deleted inline review comments",
                 )
             )
         if not _workflow_event_types_include(
@@ -815,27 +790,17 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                 AuditFinding(
                     "governance_gate",
                     "error",
-                    "PR review evidence workflow must listen to Codex review submitted, edited, and dismissed events",
+                    "PR Flow evidence workflow must listen to Codex review submitted, edited, and dismissed events",
                 )
             )
         if not _workflow_event_types_include(
-            text,
-            "pull_request",
-            (
-                "opened",
-                "synchronize",
-                "reopened",
-                "edited",
-                "ready_for_review",
-                "labeled",
-                "unlabeled",
-            ),
+            text, "pull_request", ("labeled", "unlabeled")
         ):
             findings.append(
                 AuditFinding(
                     "governance_gate",
                     "error",
-                    "PR review evidence workflow must listen to pull_request labeled and unlabeled events",
+                    "PR Flow evidence workflow must listen to pull_request labeled and unlabeled events",
                 )
             )
 
@@ -912,7 +877,7 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             "git fetch origin main",
             "git merge --ff-only origin/main",
             "git branch -d <branch>",
-            "git push origin --delete <branch>",
+            "远端分支删除交给 GitHub",
         ):
             if token not in text:
                 findings.append(
@@ -951,12 +916,11 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             "MAIN_REF_UPDATE_REASON",
             "ALLOW_DIRECT_MAIN_WRITE",
             "DIRECT_MAIN_WRITE_REASON",
-            "Codex Review Monitor",
-            "review_mode=complete",
-            "security_review",
-            "codex-security",
-            "security-guidance",
-            "官方 Codex Review 跳过授权",
+            "PR Flow / review-status",
+            "Research Governance / verify-full",
+            "PR Flow / evidence",
+            "PR Evidence JSON issues",
+            "no-Issue authorization audit",
         ):
             if token not in text:
                 findings.append(
@@ -980,7 +944,7 @@ def _audit_local_review_entrypoints(root: Path) -> list[AuditFinding]:
         "verify-full",
         "ai-review",
         "risk-check",
-        "pr-ready",
+        "pr-submit",
         "scripts.research.governance verify fast --staged",
         "scripts.research.governance verify full",
         "scripts.research.governance.ai_review_gate",
@@ -1131,7 +1095,7 @@ def _audit_rule_sources(root: Path) -> list[AuditFinding]:
     governance_readme = root / "scripts" / "research" / "governance" / "README.md"
     if governance_readme.is_file():
         text = governance_readme.read_text(encoding="utf-8", errors="ignore")
-        for token in ("docs/rules/index.md", "docs/adr/index.md", "Codex Review Monitor"):
+        for token in ("docs/rules/index.md", "docs/adr/index.md", "PR Flow / review-status"):
             if token not in text:
                 findings.append(
                     AuditFinding(

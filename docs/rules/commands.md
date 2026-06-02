@@ -41,11 +41,9 @@ Windows 示例：
 .\.venv\Scripts\python.exe -m scripts.research.governance verify explain --files docs\rules\commands.md
 .\.venv\Scripts\python.exe -m scripts.research.governance verify fast --files docs\rules\commands.md
 .\.venv\Scripts\python.exe -m scripts.research.governance verify full
-.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow ready --title "<PR标题>"
+.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow submit --title "<PR标题>"
 .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow diagnose --pr <PR号>
 .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow resolve-threads <thread-id> [<thread-id>...]
-.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow complete --title "<PR标题>" --pr <PR号>
-.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow complete --title "<PR标题>" --resolve-thread <thread-id>
 gh pr checks <PR号或URL> --required --watch --interval 10
 gh pr checks <PR号或URL> --required
 ```
@@ -62,7 +60,7 @@ gh pr checks <PR号或URL> --required
 | `scripts.research.variants` | `list`、`register`、`materialize`、`branch-plan`、`branch-create`、`merge-plan`、`merge-apply` |
 | `scripts.research.registry.tool_registry` | `list`、`validate` |
 | `scripts.research.governance` | `audit`、`gate`、`verify explain/fast/full` |
-| `scripts.research.governance.pr_flow` | `prepare`、`sync`、`wait`、`ready`、`diagnose`、`resolve-threads`、`ready-for-review`、`merge`、`cleanup`、`complete` |
+| `scripts.research.governance.pr_flow` | `submit`、`diagnose`、`resolve-threads`、`intent`；`ready`、`ready-for-review`、`merge`、`cleanup`、`complete` 仅作内部恢复/调试 |
 
 POSIX 示例把 Windows Python 路径替换为 `.venv/bin/python`。
 

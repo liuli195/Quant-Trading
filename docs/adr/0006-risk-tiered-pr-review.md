@@ -21,12 +21,12 @@ Accepted
 - P2 问题可以保留，但必须记录不修原因、风险接受理由和处理方式。
 - 低风险 PR 不强制触发官方 Codex Code Review。
 - 高风险或 unknown PR 必须加 `ai-risk-review` label，并默认触发官方 Codex Code Review；用户显式授权时可以跳过，但必须记录授权人、原因和证据。
-- `Codex Review Monitor` 保持 GitHub `main` 全局 required status check；低风险且无需官方 review 的 PR 可快速通过/空跑。
+- `PR Flow / review-status` 保持 GitHub `main` 全局 required status check；官方 Codex review 未返回时保持 pending。
 - 大型 PR 的官方 Codex Review 必须使用定向 scope，只审高风险目录和高风险命中改动的 P0/P1 逻辑风险。
 
 ## Consequences
 
-- 官方 Codex Review 从全量必跑变成高风险复核；`Codex Review Monitor` 仍是全局 required check。
+- 官方 Codex Review 从全量必跑变成高风险复核；`PR Flow / review-status` 仍是全局 required check。
 - 本地 AI review 和 CI gate 承担低风险 PR 的主要自动化检查责任。
 - 本地 AI review 报告 schema 需要机器校验至少两个独立 reviewer、两个 Superpowers 评审模板、安全 review provider/tool/evidence、完全 review 终止条件和不完全模式授权；PR 模板需要用 `reviewers: A, B` 记录子 agent 交叉评审，并记录任务分发和本地安全 review 说明。
 - 官方 Codex Review 跳过授权只影响是否等待官方 review，不影响未 resolved review thread 的阻断。

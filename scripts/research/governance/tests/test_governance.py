@@ -67,7 +67,7 @@ def test_commit_intent_pr_flow_contract_is_documented() -> None:
             "commit-scoped intent",
             "branch intent authority",
             "no branch creation gate",
-            "PR Flow machine verification",
+            "PR Evidence JSON issues",
             "two-stage review",
             "default AC auto-marking",
         ],
@@ -84,7 +84,7 @@ def test_commit_intent_pr_flow_contract_is_documented() -> None:
         ],
         Path("docs/rules/governance.md"): [
             "commit intent hook",
-            "PR body issue-intent machine data",
+            "PR Evidence JSON issues",
             "no-Issue authorization audit",
         ],
         Path("docs/rules/commands.md"): [
@@ -249,11 +249,11 @@ SKILL_FIXTURES = (
             "make pre-pr",
             "make verify-fast",
             "make verify-full",
-            "make pr-ready",
+            "make pr-submit",
             "make ai-review",
             "make risk-check",
             ".\\.venv\\Scripts\\python.exe -m scripts.research.governance",
-            ".\\.venv\\Scripts\\python.exe -m scripts.research.governance.pr_flow ready",
+            ".\\.venv\\Scripts\\python.exe -m scripts.research.governance.pr_flow submit",
         ],
         "owned_scripts": ["scripts/research/governance"],
         "read_rules": [
@@ -261,7 +261,7 @@ SKILL_FIXTURES = (
             "docs/rules/review-guidelines.md",
             "docs/rules/governance.md",
         ],
-        "recommended_commands": ['make pr-ready TITLE="<PR标题>"'],
+        "recommended_commands": ['make pr-submit TITLE="<PR标题>"'],
         "trigger_phrases": ["进入主干的 PR", "review 证据", "required checks"],
     },
     {
@@ -1253,6 +1253,7 @@ def _write_minimal_repo(root: Path) -> None:
         "docs/rules/index.md",
         "docs/rules/pr-workflow.md",
         "docs/rules/governance.md",
+        "docs/rules/pr-flow-interface-contract.yaml",
         "docs/rules/skills.md",
         "docs/rules/review-guidelines.md",
         "docs/rules/commands.md",
@@ -1401,7 +1402,7 @@ def _write_minimal_repo(root: Path) -> None:
         "pre-pr:\n\t$(PYTHON) -m pre_commit run --all-files\n\t$(MAKE) verify-full\n"
         "ai-review:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate validate --report .local/ai-review/latest.json\n"
         "risk-check:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate risk --report .local/ai-review/latest.json\n"
-        'pr-ready:\n\t$(PYTHON) -m scripts.research.governance.pr_flow ready --title "$(TITLE)"\n',
+        'pr-submit:\n\t$(PYTHON) -m scripts.research.governance.pr_flow submit --title "$(TITLE)"\n',
         encoding="utf-8",
     )
     (root / ".pre-commit-config.yaml").write_text(
@@ -1467,8 +1468,19 @@ def _write_minimal_repo(root: Path) -> None:
         "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
         "steps:\n"
         "  - run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\ensure-skill-junction.ps1\n"
-        "  - run: python -m scripts.research.governance verify full\n"
-        "  - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
+        "  - run: python -m scripts.research.governance verify full\n",
+        encoding="utf-8",
+    )
+    (root / ".github/workflows/pr-flow.yml").write_text(
+        "name: PR Flow\n"
+        "on:\n"
+        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
+        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
+        "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
+        "jobs:\n"
+        "  evidence:\n"
+        "    steps:\n"
+        "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
         encoding="utf-8",
     )
     (root / ".github/workflows/codex-review-monitor.yml").write_text(
@@ -1488,16 +1500,16 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     (root / "scripts/research/governance/README.md").write_text(
-        "docs/rules/index.md docs/adr/index.md scripts.research.governance gate Codex Review Monitor "
+        "docs/rules/index.md docs/adr/index.md scripts.research.governance gate PR Flow / review-status "
         "git fetch origin main git merge --ff-only origin/main "
-        "git branch -d <branch> git push origin --delete <branch>\n",
+        "git branch -d <branch> remote branch deletion by GitHub\n",
         encoding="utf-8",
     )
     (root / "docs/rules/pr-workflow.md").write_text(
         "所有进入主干的改动必须通过 PR\n直写主干 ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON\n"
         "禁止把功能分支本地合入\n"
         "git fetch origin main\ngit merge --ff-only origin/main\n"
-        "git branch -d <branch>\ngit push origin --delete <branch>\n",
+        "git branch -d <branch>\n远端分支删除交给 GitHub\n",
         encoding="utf-8",
     )
     (root / "docs/rules/collaboration.md").write_text(
@@ -1507,11 +1519,13 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / "docs/rules/governance.md").write_text(
         ".githooks/reference-transaction ALLOW_MAIN_REF_UPDATE MAIN_REF_UPDATE_REASON "
-        "ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON Codex Review Monitor "
+        "ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON PR Flow / review-status "
+        "Research Governance / verify-full PR Flow / evidence PR Evidence JSON issues "
+        "no-Issue authorization audit "
         "review_mode=complete 官方 Codex Review 跳过授权 "
         "security_review 本地安全 review codex-security security-guidance "
         "git fetch origin main git merge --ff-only origin/main "
-        "git branch -d <branch> git push origin --delete <branch> force delete\n",
+        "git branch -d <branch> 远端分支删除交给 GitHub force delete\n",
         encoding="utf-8",
     )
     (root / "CODEOWNERS").write_text(
@@ -1556,7 +1570,10 @@ def _write_minimal_repo(root: Path) -> None:
         "## 影响范围\n\n"
         "-\n\n"
         "<!-- pr-flow:start -->\n"
-        '运行 `make pr-ready TITLE="<PR标题>"` 后由脚本更新本区块。\n'
+        "```json\n"
+        "{}\n"
+        "```\n"
+        '运行 `make pr-submit TITLE="<PR标题>"` 后由脚本更新本区块。\n'
         "<!-- pr-flow:end -->\n\n"
         "## 人工补充\n\n"
         "- 额外证据链接：\n"
@@ -1573,7 +1590,9 @@ def _write_minimal_repo(root: Path) -> None:
                 "docs/rules/review-guidelines.md",
                 "P0/P1",
                 ".\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full",
-                "Codex Review Monitor",
+                "PR Flow / review-status",
+                "PR Flow / evidence",
+                "PR Evidence JSON",
                 "至少两个独立 reviewer",
                 "子 agent 交叉评审",
                 "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
@@ -1585,6 +1604,7 @@ def _write_minimal_repo(root: Path) -> None:
                 "本地安全 review",
                 "codex-security",
                 "security-guidance",
+                "retained",
                 "官方 Codex Review 跳过授权",
                 "Codex Code Review 结论",
                 "结论: 通过",
@@ -1770,7 +1790,7 @@ def test_local_review_entrypoints_are_tracked(tmp_path: Path) -> None:
         "pre-pr:\n\t$(PYTHON) -m pre_commit run --all-files\n\t$(MAKE) verify-full\n"
         "ai-review:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate validate --report .local/ai-review/latest.json\n"
         "risk-check:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate risk --report .local/ai-review/latest.json\n"
-        'pr-ready:\n\t$(PYTHON) -m scripts.research.governance.pr_flow ready --title "$(TITLE)"\n',
+        'pr-submit:\n\t$(PYTHON) -m scripts.research.governance.pr_flow submit --title "$(TITLE)"\n',
         encoding="utf-8",
     )
     (tmp_path / ".pre-commit-config.yaml").write_text(
@@ -1796,12 +1816,12 @@ def test_local_review_entrypoints_are_tracked(tmp_path: Path) -> None:
     assert report.ok, [finding.message for finding in report.findings]
 
 
-def test_local_review_entrypoints_require_pr_ready(tmp_path: Path) -> None:
+def test_local_review_entrypoints_require_pr_submit(tmp_path: Path) -> None:
     _write_minimal_repo(tmp_path)
     makefile = tmp_path / "Makefile"
     makefile.write_text(
         makefile.read_text(encoding="utf-8").replace(
-            'pr-ready:\n\t$(PYTHON) -m scripts.research.governance.pr_flow ready --title "$(TITLE)"\n',
+            'pr-submit:\n\t$(PYTHON) -m scripts.research.governance.pr_flow submit --title "$(TITLE)"\n',
             "",
         ),
         encoding="utf-8",
@@ -1812,7 +1832,7 @@ def test_local_review_entrypoints_require_pr_ready(tmp_path: Path) -> None:
     assert not report.ok
     assert any(
         finding.rule_id == "local_review"
-        and "Makefile missing pr-ready" in finding.message
+        and "Makefile missing pr-submit" in finding.message
         for finding in report.findings
     )
 
@@ -1839,7 +1859,7 @@ def test_tool_registry_registers_pr_flow_cli() -> None:
     tool = default_tool_registry().get("research.pr_flow")
 
     assert tool.entry_module == "scripts.research.governance.pr_flow"
-    assert "ready" in (tool.cli or "")
+    assert "submit" in (tool.cli or "")
 
 
 def test_tool_registry_registers_governance_verify_cli() -> None:
@@ -2034,15 +2054,15 @@ def test_governance_audit_flags_missing_review_guidelines(tmp_path) -> None:
 
 def test_governance_audit_flags_workflow_without_review_evidence_gate(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
-    (tmp_path / ".github/workflows/research-governance.yml").write_text(
-        "on:\n  schedule:\n    - cron: '0 2 * * 1'\nsteps:\n"
-        "  - run: python -m scripts.research.governance gate\n",
+    (tmp_path / ".github/workflows/pr-flow.yml").write_text(
+        "name: PR Flow\non:\n  pull_request:\n    types: [opened, synchronize, reopened]\n"
+        "jobs:\n  evidence:\n    steps:\n      - run: echo missing\n",
         encoding="utf-8",
     )
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "governance_gate" and "PR review evidence" in finding.message
+        finding.rule_id == "governance_gate" and "PR Flow evidence" in finding.message
         for finding in report.findings
     )
 
@@ -2051,12 +2071,16 @@ def test_governance_audit_flags_review_evidence_without_inline_comment_deleted_e
     tmp_path,
 ) -> None:
     _write_minimal_repo(tmp_path)
-    (tmp_path / ".github/workflows/research-governance.yml").write_text(
-        "on:\n  schedule:\n    - cron: '0 2 * * 1'\n"
+    (tmp_path / ".github/workflows/pr-flow.yml").write_text(
+        "name: PR Flow\n"
+        "on:\n"
+        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
         "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
-        "  pull_request_review_comment:\n    types: [created, edited]\nsteps:\n"
-        "  - run: python -m scripts.research.governance gate\n"
-        "  - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
+        "  pull_request_review_comment:\n    types: [created, edited]\n"
+        "jobs:\n"
+        "  evidence:\n"
+        "    steps:\n"
+        "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
         encoding="utf-8",
     )
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
@@ -2072,12 +2096,16 @@ def test_governance_audit_flags_review_evidence_without_review_dismissed_event(
     tmp_path,
 ) -> None:
     _write_minimal_repo(tmp_path)
-    (tmp_path / ".github/workflows/research-governance.yml").write_text(
-        "on:\n  schedule:\n    - cron: '0 2 * * 1'\n"
+    (tmp_path / ".github/workflows/pr-flow.yml").write_text(
+        "name: PR Flow\n"
+        "on:\n"
+        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
         "  pull_request_review:\n    types: [submitted, edited]\n"
-        "  pull_request_review_comment:\n    types: [created, edited, deleted]\nsteps:\n"
-        "  - run: python -m scripts.research.governance gate\n"
-        "  - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
+        "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
+        "jobs:\n"
+        "  evidence:\n"
+        "    steps:\n"
+        "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
         encoding="utf-8",
     )
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
@@ -2092,13 +2120,16 @@ def test_governance_audit_flags_review_evidence_without_label_events(
     tmp_path,
 ) -> None:
     _write_minimal_repo(tmp_path)
-    (tmp_path / ".github/workflows/research-governance.yml").write_text(
-        "on:\n  schedule:\n    - cron: '0 2 * * 1'\n"
+    (tmp_path / ".github/workflows/pr-flow.yml").write_text(
+        "name: PR Flow\n"
+        "on:\n"
         "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review]\n"
         "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
-        "  pull_request_review_comment:\n    types: [created, edited, deleted]\nsteps:\n"
-        "  - run: python -m scripts.research.governance gate\n"
-        "  - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
+        "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
+        "jobs:\n"
+        "  evidence:\n"
+        "    steps:\n"
+        "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
         encoding="utf-8",
     )
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
@@ -2121,11 +2152,10 @@ def test_governance_workflow_uses_single_verify_full_entrypoint(tmp_path: Path) 
         "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
         "  schedule:\n    - cron: '0 2 * * 1'\n"
         "jobs:\n"
-        "  governance:\n"
+        "  verify-full:\n"
         "    steps:\n"
         "      - run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\ensure-skill-junction.ps1\n"
-        "      - run: python -m scripts.research.governance verify full\n"
-        "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
+        "      - run: python -m scripts.research.governance verify full\n",
         encoding="utf-8",
     )
 
@@ -2138,18 +2168,17 @@ def test_governance_audit_flags_workflow_without_pr_review_evidence_gate(
     tmp_path: Path,
 ) -> None:
     _write_minimal_repo(tmp_path)
-    workflow = tmp_path / ".github/workflows/research-governance.yml"
+    workflow = tmp_path / ".github/workflows/pr-flow.yml"
     workflow.write_text(
-        "name: Research Governance\n"
+        "name: PR Flow\n"
         "on:\n"
         "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
         "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
         "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
-        "  schedule:\n    - cron: '0 2 * * 1'\n"
         "jobs:\n"
-        "  governance:\n"
+        "  evidence:\n"
         "    steps:\n"
-        "      - run: python -m scripts.research.governance gate\n",
+        "      - run: echo missing\n",
         encoding="utf-8",
     )
 
@@ -2157,7 +2186,8 @@ def test_governance_audit_flags_workflow_without_pr_review_evidence_gate(
 
     assert not report.ok
     assert any(
-        "CI workflow missing PR review evidence gate" in finding.message
+        "PR Flow evidence workflow missing scripts.research.governance.pr_review_evidence"
+        in finding.message
         for finding in report.findings
     )
 
@@ -2196,21 +2226,16 @@ def test_governance_audit_flags_pr_review_evidence_job_level_if(
     tmp_path: Path,
 ) -> None:
     _write_minimal_repo(tmp_path)
-    workflow = tmp_path / ".github/workflows/research-governance.yml"
+    workflow = tmp_path / ".github/workflows/pr-flow.yml"
     workflow.write_text(
-        "name: Research Governance\n"
+        "name: PR Flow\n"
         "on:\n"
         "  push:\n"
         "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
         "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
         "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
-        "  schedule:\n    - cron: '0 2 * * 1'\n"
         "jobs:\n"
-        "  governance:\n"
-        "    steps:\n"
-        "      - run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\ensure-skill-junction.ps1\n"
-        "      - run: python -m scripts.research.governance verify full\n"
-        "  pr-review-evidence:\n"
+        "  evidence:\n"
         "    if: github.event_name == 'pull_request'\n"
         "    steps:\n"
         "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
@@ -2221,7 +2246,7 @@ def test_governance_audit_flags_pr_review_evidence_job_level_if(
 
     assert not report.ok
     assert any(
-        "required PR review evidence job must not use job-level if" in finding.message
+        "required PR Flow evidence job must not use job-level if" in finding.message
         for finding in report.findings
     )
 
@@ -2246,7 +2271,7 @@ def test_governance_audit_flags_governance_docs_without_required_monitor_status(
     assert not report.ok
     assert any(
         finding.rule_id == "governance_gate"
-        and "Codex Review Monitor" in finding.message
+        and "PR Flow / review-status" in finding.message
         for finding in report.findings
     )
 
@@ -2821,7 +2846,7 @@ def test_governance_audit_flags_missing_pr_cleanup_workflow_tokens(tmp_path) -> 
     assert not report.ok
     assert any(
         finding.rule_id == "governance_gate"
-        and "git push origin --delete <branch>" in finding.message
+        and "远端分支删除交给 GitHub" in finding.message
         for finding in report.findings
     )
 

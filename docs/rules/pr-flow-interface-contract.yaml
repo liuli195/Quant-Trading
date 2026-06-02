@@ -1,0 +1,81 @@
+version: 1
+encoding: utf-8
+
+json:
+  indent: 2
+  ensure_ascii: false
+
+github:
+  required_settings:
+    allow_auto_merge: true
+    delete_branch_on_merge: true
+
+required_checks:
+  - PR Flow / review-status
+  - Research Governance / verify-full
+  - PR Flow / evidence
+
+artifacts:
+  reviewer_fragments:
+    standards: .local/ai-review/fragments/standards.json
+    spec: .local/ai-review/fragments/spec.json
+    security: .local/ai-review/fragments/security.json
+  submit_status: .local/pr-flow/status.json
+
+pr_evidence:
+  marker_start: "<!-- pr-flow:start -->"
+  marker_end: "<!-- pr-flow:end -->"
+  fenced_language: json
+  fields:
+    - schema
+    - head
+    - diff
+    - reviews
+    - issues
+    - retained
+
+fragment:
+  fields:
+    - schema
+    - head
+    - diff
+    - findings
+  finding_fields:
+    - severity
+    - detail
+
+submit_status:
+  fields:
+    - schema
+    - head
+    - failures
+  failure_fields:
+    - check
+    - source
+    - detail
+
+severity:
+  blocking:
+    - P0
+    - P1
+  retained:
+    - P2
+    - P3
+
+sources:
+  retained:
+    - standards
+    - spec
+    - security
+    - official_codex
+
+detail:
+  max_chars: 200
+  single_line: true
+
+official_codex_request:
+  command: "@codex review"
+  fields:
+    - pr
+    - head
+    - scope

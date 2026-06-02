@@ -12,6 +12,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from scripts.research.governance import pr_flow_contract
 from scripts.research.governance.codex_review_contract import (
     is_codex_review_request,
 )
@@ -136,6 +137,20 @@ def validate_pr_body(
 ) -> EvidenceReport:
     """Return whether a PR body contains merge-blocking review evidence."""
 
+    contract_payload, contract_errors = _extract_contract_v1_evidence(body)
+    if contract_payload is not None or contract_errors:
+        errors = list(contract_errors)
+        if contract_payload is not None:
+            errors.extend(
+                _contract_v1_evidence_errors(
+                    body,
+                    contract_payload,
+                    expected_head_sha=expected_head_sha,
+                    expected_commit_shas=expected_commit_shas,
+                )
+            )
+        return EvidenceReport(not errors, tuple(errors))
+
     official_codex_required, errors = _official_codex_required(
         body, changed_files=changed_files, labels=labels
     )
@@ -229,6 +244,158 @@ def validate_pr_body(
         errors.append("review evidence must include verify full command")
 
     return EvidenceReport(not errors, tuple(errors))
+
+
+def _extract_contract_v1_evidence(
+    body: str,
+) -> tuple[dict[str, object] | None, tuple[str, ...]]:
+    contract = pr_flow_contract.load_contract(Path("."))
+    if contract.marker_start not in body:
+        return None, ()
+    pattern = re.compile(
+        rf"{re.escape(contract.marker_start)}\s*"
+        rf"```{re.escape(contract.fenced_language)}\s*"
+        r"(?P<payload>\{.*?\})\s*```\s*"
+        rf"{re.escape(contract.marker_end)}",
+        re.DOTALL,
+    )
+    match = pattern.search(body)
+    if match is None:
+        return None, ("PR Flow evidence block must contain fenced JSON",)
+    try:
+        payload = json.loads(match.group("payload"))
+    except json.JSONDecodeError:
+        return None, ("PR Flow evidence JSON must be valid JSON",)
+    if not isinstance(payload, dict):
+        return None, ("PR Flow evidence JSON must be an object",)
+    return payload, ()
+
+
+def _contract_v1_evidence_errors(
+    body: str,
+    payload: dict[str, object],
+    *,
+    expected_head_sha: str | None,
+    expected_commit_shas: Sequence[str] | None,
+) -> list[str]:
+    contract = pr_flow_contract.load_contract(Path("."))
+    errors: list[str] = []
+    if tuple(payload) != contract.pr_evidence_fields:
+        errors.append("PR Evidence JSON fields must be schema/head/diff/reviews/issues/retained")
+    if payload.get("schema") != contract.version:
+        errors.append("PR Evidence JSON schema must be 1")
+    head = _single_line_text(payload.get("head"))
+    diff = _single_line_text(payload.get("diff"))
+    if expected_head_sha and head != expected_head_sha:
+        errors.append("PR Evidence JSON head does not match current PR head")
+    if ISSUE_INTENT_MACHINE_BLOCK_PATTERN.search(body):
+        errors.append("PR body must not contain legacy Issue intent machine block")
+    errors.extend(_contract_v1_review_errors(payload.get("reviews"), head=head, diff=diff))
+    errors.extend(
+        _contract_v1_issue_errors(
+            payload.get("issues"),
+            expected_commit_shas=expected_commit_shas,
+        )
+    )
+    errors.extend(_contract_v1_retained_errors(payload.get("retained"), contract))
+    return errors
+
+
+def _contract_v1_review_errors(
+    reviews: object,
+    *,
+    head: str,
+    diff: str,
+) -> list[str]:
+    if not isinstance(reviews, Mapping):
+        return ["PR Evidence reviews must be an object"]
+    errors: list[str] = []
+    for role in ("standards", "spec", "security"):
+        item = reviews.get(role)
+        if not isinstance(item, Mapping):
+            errors.append(f"PR Evidence reviews.{role} must be an object")
+            continue
+        if _single_line_text(item.get("head")) != head:
+            errors.append(f"PR Evidence reviews.{role}.head must match head")
+        if _single_line_text(item.get("diff")) != diff:
+            errors.append(f"PR Evidence reviews.{role}.diff must match diff")
+    return errors
+
+
+def _contract_v1_issue_errors(
+    issues: object,
+    *,
+    expected_commit_shas: Sequence[str] | None,
+) -> list[str]:
+    if not isinstance(issues, Mapping):
+        return ["PR Evidence issues must be an object"]
+    errors: list[str] = []
+    commits = issues.get("commits")
+    if not isinstance(commits, list):
+        errors.append("PR Evidence issues.commits must be a list")
+        commits = []
+    recorded = {
+        _single_line_text(item.get("sha"))
+        for item in commits
+        if isinstance(item, Mapping) and _single_line_text(item.get("sha"))
+    }
+    if expected_commit_shas is not None:
+        missing = [
+            _single_line_text(sha)
+            for sha in expected_commit_shas
+            if _single_line_text(sha) and _single_line_text(sha) not in recorded
+        ]
+        if missing:
+            errors.append("PR Evidence issues.commits missing coverage: " + ", ".join(missing))
+    for index, item in enumerate(commits):
+        if not isinstance(item, Mapping):
+            errors.append(f"PR Evidence issues.commits[{index}] must be an object")
+            continue
+        has_issue = isinstance(item.get("issues"), list) and bool(item.get("issues"))
+        has_no_issue = bool(item.get("no_issue"))
+        if has_issue == has_no_issue:
+            errors.append(
+                f"PR Evidence issues.commits[{index}] must have issues or no_issue"
+            )
+    refs = issues.get("refs")
+    if not isinstance(refs, list):
+        errors.append("PR Evidence issues.refs must be a list")
+        return errors
+    for index, item in enumerate(refs):
+        if not isinstance(item, Mapping):
+            errors.append(f"PR Evidence issues.refs[{index}] must be an object")
+            continue
+        role = _single_line_text(item.get("role"))
+        if role not in {"reference", "closes"}:
+            errors.append(f"PR Evidence issues.refs[{index}].role is invalid")
+        if role == "closes" and not bool(item.get("ac_checked")):
+            errors.append(f"PR Evidence closes issue #{item.get('number')} AC is not checked")
+    return errors
+
+
+def _contract_v1_retained_errors(
+    retained: object,
+    contract: pr_flow_contract.PRFlowContract,
+) -> list[str]:
+    if not isinstance(retained, list):
+        return ["PR Evidence retained must be a list"]
+    errors: list[str] = []
+    for index, item in enumerate(retained):
+        if not isinstance(item, Mapping):
+            errors.append(f"PR Evidence retained[{index}] must be an object")
+            continue
+        severity = _single_line_text(item.get("severity"))
+        source = _single_line_text(item.get("source"))
+        detail = _single_line_text(item.get("detail"))
+        if severity not in contract.retained_severities:
+            errors.append(f"PR Evidence retained[{index}].severity must be P2 or P3")
+        if source not in contract.retained_sources:
+            errors.append(f"PR Evidence retained[{index}].source is invalid")
+        if not detail:
+            errors.append(f"PR Evidence retained[{index}].detail is required")
+        if "\n" in detail or len(detail) > contract.detail_max_chars:
+            errors.append(f"PR Evidence retained[{index}].detail must be one short line")
+    return errors
 
 
 def _extract_section(body: str) -> str | None:
