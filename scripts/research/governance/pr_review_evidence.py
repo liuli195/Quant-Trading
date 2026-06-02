@@ -111,10 +111,6 @@ CONTEXT_HOSTILE_TRIGGER_ERROR = (
     "required @codex review trigger must not disable repository context"
 )
 REQUIRED_TRIGGER_TOKENS = ("@codex review",)
-REQUIRED_VERIFY_FULL_COMMANDS = (
-    ".\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full",
-    ".venv/bin/python -m scripts.research.governance verify full",
-)
 
 
 @dataclass(frozen=True)
@@ -249,9 +245,6 @@ def validate_pr_body(
             expected_head_sha=expected_head_sha,
         ):
             errors.append("PR comments must include the required @codex review trigger")
-    if not _has_verify_full_command(section):
-        errors.append("review evidence must include verify full command")
-
     return EvidenceReport(not errors, tuple(errors))
 
 
@@ -449,14 +442,6 @@ def _contract_v1_retained_errors(
 
 def _extract_section(body: str) -> str | None:
     return _extract_named_section(body, SECTION_HEADER)
-
-
-def _has_verify_full_command(section: str) -> bool:
-    normalized_section = " ".join(section.replace("`", "").split()).casefold()
-    return any(
-        command.casefold() in normalized_section
-        for command in REQUIRED_VERIFY_FULL_COMMANDS
-    )
 
 
 def _extract_named_section(body: str, header: str) -> str | None:
@@ -658,8 +643,6 @@ def _official_codex_required(
         )
     )
     errors.extend(_p2_section_errors(body))
-    if not _has_verify_full_command(body):
-        errors.append("local check evidence must include verify full command")
     if blockers != "无":
         errors.append("P0/P1 未关闭项 must be 无")
     high_risk_files = _high_risk_changed_files(changed_files)

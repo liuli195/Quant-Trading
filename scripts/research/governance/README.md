@@ -12,7 +12,7 @@
 .\.venv\Scripts\python.exe -m scripts.research.governance verify full
 ```
 
-`verify fast` 是日常开发入口；`verify full` 是 push、CI 和最终交付证据。`gate` 是低层完整门禁，由 `verify full` 调用。
+`verify fast` 是日常开发入口；本地 PR 提交不重复运行完整验证；`verify full` 是 push、CI 和最终交付证据。`gate` 是低层完整门禁，由 `verify full` 调用。
 
 ## PR Flow
 

@@ -273,11 +273,6 @@ def _contract_v1_official_codex_requirement(
     missing_ai_review = f"PR body missing section: {AI_REVIEW_SECTION_HEADER}"
     if body_errors == [missing_ai_review]:
         return True, []
-    body_errors = [
-        error
-        for error in body_errors
-        if error != "local check evidence must include verify full command"
-    ]
     return required, body_errors
 
 

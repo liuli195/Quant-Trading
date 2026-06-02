@@ -3191,7 +3191,7 @@ def test_low_risk_pr_body_does_not_require_codex_review() -> None:
     assert report.ok, report.errors
 
 
-def test_pr_review_evidence_requires_verify_full_command() -> None:
+def test_pr_review_evidence_does_not_require_local_verify_full_command() -> None:
     body = """
 ## AI Review 风险分级
 
@@ -3219,8 +3219,7 @@ def test_pr_review_evidence_requires_verify_full_command() -> None:
 
     report = validate_pr_body(body)
 
-    assert not report.ok
-    assert "review evidence must include verify full command" in report.errors
+    assert report.ok, report.errors
 
 
 def test_pr_review_evidence_rejects_mismatched_current_head_summary() -> None:
@@ -3859,10 +3858,6 @@ def test_pr_body_accepts_p2_none_before_managed_block_end() -> None:
 - 任务分发说明: 已分发给规格符合度评审和代码质量评审子 agent
 - P0/P1 未关闭项: 无
 
-## 已运行检查
-
-- verify full: `{pr_review_evidence.REQUIRED_VERIFY_FULL_COMMANDS[0]}`
-
 ## {pr_review_evidence.P2_SECTION_HEADER}
 
 - 无
@@ -3874,7 +3869,7 @@ def test_pr_body_accepts_p2_none_before_managed_block_end() -> None:
     assert report.ok, report.errors
 
 
-def test_low_risk_pr_body_requires_local_verify_full_command() -> None:
+def test_low_risk_pr_body_does_not_require_local_verify_full_command() -> None:
     body = f"""
 ## {pr_review_evidence.AI_REVIEW_SECTION_HEADER}
 
@@ -3893,8 +3888,7 @@ def test_low_risk_pr_body_requires_local_verify_full_command() -> None:
 
     report = validate_pr_body(body, comments=[])
 
-    assert not report.ok
-    assert "local check evidence must include verify full command" in report.errors
+    assert report.ok, report.errors
 
 
 def test_low_risk_pr_body_accepts_chinese_p2_fields() -> None:
@@ -4212,7 +4206,7 @@ def _reused_official_codex_review_body(*, current_head: str) -> str:
 """
 
 
-def test_low_risk_pr_body_rejects_bare_verify_full_module() -> None:
+def test_low_risk_pr_body_ignores_bare_verify_full_module() -> None:
     body = _low_risk_no_official_review_body().replace(
         "`.venv/bin/python -m scripts.research.governance verify full`",
         "`scripts.research.governance verify full`",
@@ -4220,11 +4214,10 @@ def test_low_risk_pr_body_rejects_bare_verify_full_module() -> None:
 
     report = validate_pr_body(body, comments=[])
 
-    assert not report.ok
-    assert "local check evidence must include verify full command" in report.errors
+    assert report.ok, report.errors
 
 
-def test_codex_review_evidence_rejects_bare_verify_full_module() -> None:
+def test_codex_review_evidence_ignores_bare_verify_full_module() -> None:
     body = _valid_codex_review_body().replace(
         "`.\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full`",
         "`scripts.research.governance verify full`",
@@ -4232,8 +4225,7 @@ def test_codex_review_evidence_rejects_bare_verify_full_module() -> None:
 
     report = validate_pr_body(body)
 
-    assert not report.ok
-    assert "review evidence must include verify full command" in report.errors
+    assert report.ok, report.errors
 
 
 def test_high_risk_pr_body_can_skip_codex_review_with_user_authorization() -> None:

@@ -35,7 +35,6 @@ description: 准备进入主干的 PR、review 证据、required checks、Codex 
 ## 推荐命令
 
 ```powershell
-make verify-full
 make pr-submit TITLE="<PR标题>"
 make pr-diagnose PR=<PR号>
 make pr-resolve-threads THREADS="<thread-id> [<thread-id>...]"

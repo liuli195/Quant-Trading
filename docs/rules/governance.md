@@ -5,7 +5,7 @@
 - **规则优先**：仓库规则最优先是元规则。任何与规则冲突的改动、对规则本身的改动都必须显式获得授权，否则不得执行。入口见 [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->。
 - `scripts.research.governance gate` 保留强门禁语义；`scripts.research.governance verify` 负责编排 affected fast、explain 和 full。
 - 日常小改默认使用 `scripts.research.governance verify fast`，只表示可继续开发，不作为 PR 或合并证据。
-- PR 准备、push 前、CI 和最终交付证据必须使用 `scripts.research.governance verify full`。
+- PR 提交不把本地 `verify full` 作为前置证据；push 前仍由 `.githooks/pre-push` 执行 `scripts.research.governance verify full`；CI 和最终合并证据以 GitHub required check `Research Governance / verify-full` 为准。
 - `.githooks/pre-commit` 使用 `scripts.research.governance verify fast --staged`。
 - `.githooks/pre-push` 和 CI 必须覆盖完整治理审计和 pathref gate，不得使用 fast。
 - `scripts.research.governance.pr_flow` 是本地 PR 自动化入口；高频 PR 流程只推荐 `make pr-submit TITLE="<PR标题>"`，它按 [pr-workflow.md](pr-workflow.md) <!-- pathref: docs/rules/pr-workflow.md --> 和 [pr-flow-interface-contract.yaml](pr-flow-interface-contract.yaml) <!-- pathref: docs/rules/pr-flow-interface-contract.yaml --> 推进到 GitHub auto-merge 和本地收尾。
