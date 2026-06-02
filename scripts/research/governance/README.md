@@ -1,8 +1,8 @@
 # 治理审计
 
-`governance/` 用来防止本地研究平台继续扩展后发生入口漂移、文档漂移和目录漂移。
+`governance/` 用来防止本地研究平台继续扩展后发生入口漂移、文档漂移和目录漂移。规则入口见 [docs/rules/index.md](../../../docs/rules/index.md) <!-- pathref: docs/rules/index.md -->，ADR 入口见 [docs/adr/index.md](../../../docs/adr/index.md) <!-- pathref: docs/adr/index.md -->。
 
-## 命令
+## 验证命令
 
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.research.governance audit
@@ -12,102 +12,56 @@
 .\.venv\Scripts\python.exe -m scripts.research.governance verify full
 ```
 
-`verify explain` 只解释本次改动命中的 scoped checks，不执行命令。
-`verify fast` 执行 affected scoped checks，输出 checked/skipped/full-not-run，
-只代表可以继续开发。PR、push 和 CI 以 `verify full` 为统一入口。
-`verify full` 运行 ruff、bandit、mypy、pip-audit、governance tests、pathref 和
-完整 `gate`，可作为 PR/push/CI/最终交付证据。
+`verify fast` 是日常开发入口；本地 PR 提交不重复运行完整验证；`verify full` 是 push、CI 和最终交付证据。`gate` 是低层完整门禁，由 `verify full` 调用。
 
-`gate` runs governance audit plus the pathref checker. It remains the low-level
-full gate that `verify full` invokes. The tracked hooks are `.githooks/pre-commit`,
-`.githooks/pre-push`, and `.githooks/reference-transaction`. They are not active
-just because the files exist; enable them in each local checkout with:
+## PR Flow
+
+高频 PR 流程只使用：
+
+```powershell
+make pr-submit TITLE="<PR标题>"
+```
+
+等价于：
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow submit --title "<PR标题>"
+```
+
+`pr-submit` 读取 [pr-flow-interface-contract.yaml](../../../docs/rules/pr-flow-interface-contract.yaml) <!-- pathref: docs/rules/pr-flow-interface-contract.yaml -->，检查 GitHub repo settings 和 required checks，校验 `.local/ai-review/fragments/*.json`，创建或更新 draft PR，写 PR Evidence JSON，触发 `@codex review`，等待 required checks，执行 head-locked auto-merge，并在 merged 后只做本地 fast-forward 与本地分支删除。远端分支删除交给 GitHub。
+
+接手入口是 `.local/pr-flow/status.json`。`pr-submit` 每次开始写当前 head 的空 `failures`，失败时覆盖为 failures，成功时可留下 `failures: []`；它不是成功证明。pending 不是失败；官方 Codex review 未返回或 required checks 未完成时继续等待，只有真实阻断、配置缺失或超时才写 failures。
+
+排障入口：
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow diagnose --pr <PR号>
+make pr-diagnose PR=<PR号>
+make pr-resolve-threads THREADS="<thread-id> [<thread-id>...]"
+```
+
+## Required Checks
+
+GitHub `main` required checks 必须与契约完全一致：
+
+- `PR Flow / review-status`
+- `Research Governance / verify-full`
+- `PR Flow / evidence`
+
+`PR Flow / evidence` 只读取 PR body 托管区里的 PR Evidence JSON。`PR Flow / review-status` 通过 commit status 表示官方 Codex review 和 unresolved thread 状态；官方 Codex 未返回时保持 pending，官方 P2/P3 进入 PR Evidence `retained` 后可 resolve。`Research Governance / verify-full` 在 GitHub 上执行完整治理验证，本地 PR 前置不重复运行完整验证。
+
+## Hooks 和主干保护
+
+本地 hook 需要在每个 checkout 启用：
 
 ```powershell
 git config core.hooksPath .githooks
 git config --get core.hooksPath
 ```
 
-The second command must print `.githooks`.
+`.githooks/pre-commit` 运行 `verify fast --staged` 和 commit intent gate；`.githooks/pre-push` 运行主干保护门禁和 `verify full`；`.githooks/reference-transaction` 阻断本地 `main` / `master` 被 merge、reset、delete 或 force rewrite。
 
-## 风险分级评审入口
-
-```powershell
-make pre-pr
-make ai-review
-make risk-check
-make pr-ready TITLE="<PR标题>"
-make pr-resolve-threads THREADS="<thread-id> [<thread-id>...]"
-make pr-complete TITLE="<PR标题>"
-```
-
-`make ai-review` 校验 `.local/ai-review/latest.json`，并生成 `.local/ai-review/latest.md` 和 `.local/ai-review/codex-review-scope.md`。`.local/` 不入库；CI 通过 PR body 的 `AI Review 风险分级` 和 `pr-review-evidence` job 复验风险证据。
-
-`make pr-ready TITLE="<PR标题>"` 是本地 PR 自动化入口，等价于：
-
-```powershell
-.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow ready --title "<PR标题>"
-```
-
-它会按 preflight、freeze diff、local review、security review、build evidence、official Codex、threads、sync PR body、wait latest checks 推进到 `merge-ready`，准备本地 review 证据、渲染 `.local/ai-review/pr-body.md`、同步 GitHub PR 的 `pr-flow` 托管区、按风险补 `ai-risk-review` label、触发必要的 `@codex review`，并等待 latest required checks。
-
-修复 Codex review thread 后，把明确已修复的 thread ID 传回自动化入口，让 `pr_flow` 先同步 evidence，再 resolve 指定 thread 并继续状态机：
-
-```powershell
-make pr-ready TITLE="<PR标题>" THREADS="PRRT_xxx PRRT_yyy"
-make pr-complete TITLE="<PR标题>" THREADS="PRRT_xxx"
-make pr-resolve-threads THREADS="PRRT_xxx"
-```
-
-`THREADS` 只接受显式 thread ID；工具不会猜测或批量 resolve 全部未处理 thread。官方 Codex P2/P3 thread 在 severity 可靠识别时由 `pr_flow` 用固定模板接受、resolve，并写入 `external_findings` 和 PR body P2 保留项；官方 P0/P1、无 severity thread、人工 reviewer thread 阻断。官方 P0/P1 只有结构化 `fixed` / `false_positive` 证据且绑定当前 head/diff/thread ID 时才自动回复并 resolve。
-
-`make pr-complete TITLE="<PR标题>"` 会在 `pr-ready` 到达 `merge-ready` 后继续把 draft PR 标记为 ready、等待新一轮 required checks、用当前 head SHA 锁定合并，并按受控 fast-forward 规则同步本地 `main`、删除已合并的本地和远端分支，最后输出 merge、base sync、分支删除和最终状态摘要。已有 PR 可传 `PR=<PR号>`：
-
-```powershell
-make pr-complete TITLE="<PR标题>" PR=<PR号>
-make pr-merge PR=<PR号>
-make pr-cleanup PR=<PR号>
-```
-
-`pr_flow sync` 创建 PR 前会检查当前分支是否已推送到 `origin`；缺远端 head 时输出 `PUSH_REQUIRED` 和对应 `git push -u origin <branch>`。
-
-排障时先使用 `diagnose` 汇总当前 PR 状态：
-
-```powershell
-.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow diagnose --pr <PR号>
-```
-
-它会读取 head、PR body evidence、merge state、review decision、required checks、Codex trigger/completion 和 review threads，并给出下一步机器状态；仓库禁用 auto-merge 时不要把 `--auto` 当作建议路径。
-
-`.local/ai-review/latest.json` 的 `reviewers` 字段必须记录至少两个独立 reviewer，作为子 agent 交叉评审证据；单 reviewer 或重复 reviewer 会被 `make ai-review` 拒绝。schema v4 必须记录 `diff_fingerprint`、`review_fragments.standards/spec/security`、`external_findings`、`current_commit_evidence`、`spec_ref` 和 `issue_refs`；v2/v3 只作为迁移输入。review wrapper 负责生成 Standards / Spec fragments；`issue_refs` 非空时 Spec fragment 必须逐 issue/AC 对照。security fragment 必须来自独立安全 review：Codex provider 要求 `tool=codex-security`，Claude provider 要求 `tool=security-guidance`，并填写 `evidence`。`review_mode=complete` 时，`complete_review.iterations` 必须证明每个 reviewer 持续查找更多发现，直到最后一轮 `no_new_findings=true` 且 `new_findings=[]`；`review_mode=partial` 或 `incremental` 必须填写对应授权或覆盖当前 diff。risk classifier 根据结构化 evidence、阻断项和授权最终裁决 risk level；P2/P3 accepted 不触发官方 Codex Review。生成的 `.local/ai-review/latest.md` 会列出交叉评审和安全 review 证据。PR body 会根据 `issue_refs` 写入 `Closes #N`；`sync_pr_body` 会拉取 GitHub Issue body 并要求 AC checkbox 全部勾选。PR body 的 `子 agent 交叉评审` 字段必须使用 `reviewers: A, B` 写明两个独立 reviewer，还必须说明任务分发情况，未分发时写明具体原因；`本地安全 review` 字段必须写明 `provider`、`tool` 和 `evidence`。high/unknown PR 必须带 `ai-risk-review` label。
-
-`.githooks/pre-push` calls all required push gates before handing off to Git LFS:
-
-```powershell
-.\.venv\Scripts\python.exe -m scripts.research.governance.branch_protection pre-push
-.\.venv\Scripts\python.exe -m scripts.research.governance verify full
-git lfs pre-push
-```
-
-It blocks direct pushes to `main` / `master` when remote rulesets are unavailable,
-reruns full governance verification before push, and preserves the Git LFS hook.
-The shell hooks call `.githooks/run-python.sh` only to choose the current
-worktree virtualenv on POSIX Git shell environments. Daily local commands should
-call `.venv` Python directly; UTF-8 output is handled by environment variables.
-
-`.githooks/reference-transaction` blocks local updates to `refs/heads/main` and
-`refs/heads/master`, including accidental local `git merge` or `git reset` into
-the protected branch. After a PR has already merged remotely, local main sync is
-an audited sync action and must set both environment variables. The hook also
-checks that the new local protected-branch SHA equals `refs/remotes/origin/<branch>`
-and that the update is fast-forward:
-
-```powershell
-$env:ALLOW_MAIN_REF_UPDATE="1"
-$env:MAIN_REF_UPDATE_REASON="sync origin/main after PR merge"
-```
-
-PR 在 GitHub 云端合并后的本地收尾示例：
+PR 在 GitHub 云端合并后的本地收尾只允许 fast-forward：
 
 ```powershell
 git fetch origin main
@@ -115,93 +69,15 @@ $env:ALLOW_MAIN_REF_UPDATE="1"
 $env:MAIN_REF_UPDATE_REASON="sync origin/main after PR #<n> merge"
 git switch main
 git merge --ff-only origin/main
-Remove-Item Env:\ALLOW_MAIN_REF_UPDATE -ErrorAction SilentlyContinue
-Remove-Item Env:\MAIN_REF_UPDATE_REASON -ErrorAction SilentlyContinue
 git branch -d <branch>
-git push origin --delete <branch>
 ```
 
-其中 `<branch>` 是已合并 PR 的提交分支。如果 GitHub 已自动删除远端分支，只需确认远端分支不存在；不要用 force delete 掩盖未合并分支。
+## 审计范围
 
-用户在当前对话中显式授权直接提交和推送主干时，使用独立的直写主干链路。该链路仍要求先检查 diff、运行相关测试和 governance gate，并且只允许 fast-forward 更新；禁止 reset、删除或 force rewrite：
-
-```powershell
-git fetch origin main
-git switch main
-git status --short --branch
-
-$env:ALLOW_DIRECT_MAIN_WRITE="1"
-$env:DIRECT_MAIN_WRITE_REASON="user explicitly authorized direct main commit: <reason>"
-git commit -m "<简体中文提交说明>"
-
-$env:ALLOW_DIRECT_MAIN_WRITE="1"
-$env:DIRECT_MAIN_WRITE_REASON="user explicitly authorized direct main push: <reason>"
-git push origin main
-
-Remove-Item Env:\ALLOW_DIRECT_MAIN_WRITE -ErrorAction SilentlyContinue
-Remove-Item Env:\DIRECT_MAIN_WRITE_REASON -ErrorAction SilentlyContinue
-```
-
-GitHub `main` must also enforce the same policy with branch protection or a
-ruleset:
-
-- require pull request before merging;
-- require status check `Research Governance / governance`;
-- require status check `Research Governance / pr-review-evidence`;
-- require status check `Codex Review Monitor`;
-- require conversation resolution before merging;
-- enforce approval / Code Owner review only when the remote ruleset or branch
-  protection actually requires it;
-- block force pushes.
-
-## Codex review monitor
-
-`Codex Review Monitor` listens to PR head updates, PR `@codex review` trigger
-comments, Codex review submitted/edited/dismissed events, and Codex inline
-review comments, including inline comment deletion. Trigger comments are counted
-only when their effective time is after the current PR head update, and a
-passing review must be submitted after that trigger. Unresolved review threads
-block when GitHub conversation resolution is required, regardless of
-whether the thread is advisory or outdated. It updates one PR comment
-marked with `<!-- codex-review-monitor -->`, reporting whether the current PR
-head is still waiting for Codex, blocked, or ready for the PR body evidence to
-be updated. It also writes the commit status context `Codex
-Review Monitor` to the PR head, so trigger-comment deletion can invalidate the
-head status instead of only updating a PR discussion comment. Low-risk PRs that
-do not require official Codex review can pass this required status without an
-`@codex review` trigger after PR evidence proves that official review is not
-required.
-
-`Research Governance / pr-review-evidence` reruns on PR metadata updates,
-Codex review submitted/edited/dismissed events, and inline review comment
-create/edit/delete events so its evidence decision is refreshed when Codex
-findings are edited, removed, or dismissed.
-
-Manual inspection is available through workflow dispatch, or locally with:
-
-```powershell
-$env:GITHUB_REPOSITORY="owner/repo"
-$env:PR_NUMBER="<number>"
-$env:GITHUB_TOKEN="<token>"
-.\.venv\Scripts\python.exe -m scripts.research.governance.codex_review_monitor
-```
-
-审计范围：
-
-- 仓库级规则文档 [docs/rules/index.md](../../../docs/rules/index.md) <!-- pathref: docs/rules/index.md --> 是否存在，ADR 索引 [docs/adr/index.md](../../../docs/adr/index.md) <!-- pathref: docs/adr/index.md --> 是否存在，ADR 目录是否连续编号。
-- `.githooks/pre-push` 是否仍调用代码化主干保护门禁、完整 `verify full` 和 Git LFS 转交。
-- Codex Code Review 规则 [review-guidelines.md](../../../docs/rules/review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md --> 是否存在，PR 模板是否要求 Codex 评审结论。
-- Codex Review Monitor workflow 是否监听 PR head 更新、`@codex review`、Codex review 和 inline review comment。
-- `CODEOWNERS` 是否覆盖关键治理路径，`.github/pull_request_template.md` 是否包含规则同步、检查、waiver 和证据项。
-- `docs/exceptions/active-waivers.yaml` 中的 waiver 是否有 owner、批准人、过期时间和迁移计划。
-- 工具是否登记在中央 registry。
-- README、文档入口、测试文件是否存在。
+- 规则文档、ADR 索引、CODEOWNERS、workflow、PR template、waiver、tool registry 和 pathref。
+- `AGENTS.md`、`CLAUDE.md` 与 `.agents/skills/` 是否同步到当前入口。
+- required checks、PR Evidence JSON、Codex review status 和 commit intent 是否仍使用同一契约。
 - 主要 CLI 的 `--help` 是否可运行。
-- `AGENTS.md`、`CLAUDE.md` 与 `.agents/skills/` 单一来源是否同步到新入口。
-- `research_datasets/catalog.json` 是否和目录一致。
-- `docs/indexes/docs_catalog.json`、`reports_catalog.json`、`datasets_catalog.json`、`variants_catalog.json` 是否存在，并和实际报告文件一致。
-- `scripts/research/workflows/templates/*.json` 是否符合模板 schema。
-- Markdown `pathref` 是否通过校验。
 
 开发单测可用：
 

@@ -13,14 +13,19 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from scripts.research.governance import pr_flow_contract
 from scripts.research.governance.codex_review_contract import (
     is_codex_review_request,
 )
 from scripts.research.governance.pr_review_evidence import (
+    AI_REVIEW_SECTION_HEADER,
     BLOCKING_CODEX_FINDING_PATTERN,
     CODEX_CONTEXT_INVALID_PATTERN,
     CONTEXT_HOSTILE_TRIGGER_PATTERN,
     CODEX_REVIEW_AUTHORS,
+    _extract_contract_v1_evidence,
+    _contract_v1_evidence_errors,
+    _contract_v1_official_review_risk_errors,
     _fetch_pr_review_threads,
     _fetch_issue_metadata,
     _fetch_pr_changed_files,
@@ -81,11 +86,21 @@ def build_monitor_report(
     pr_url = str(pr.get("html_url", "")) or f"https://github.com/{repo}/pull/{pr_number}"
     pr_body = str(pr.get("body", ""))
     skip_authorized = official_codex_review_skip_authorized(pr_body)
-    official_required, official_errors = _official_codex_required(
-        pr_body,
-        changed_files=changed_files,
-        labels=labels,
-    )
+    contract_payload, contract_errors = _extract_contract_v1_evidence(pr_body)
+    if contract_payload is not None or contract_errors:
+        official_required, official_errors = _contract_v1_official_codex_requirement(
+            pr_body,
+            contract_payload=contract_payload,
+            contract_errors=contract_errors,
+            changed_files=changed_files,
+            labels=labels,
+        )
+    else:
+        official_required, official_errors = _official_codex_required(
+            pr_body,
+            changed_files=changed_files,
+            labels=labels,
+        )
     if not pr_body.strip() and changed_files is None and labels is None:
         official_errors = []
     official_review_required = official_required or bool(official_errors)
@@ -220,6 +235,57 @@ def build_monitor_report(
     )
 
 
+def _contract_v1_official_codex_requirement(
+    body: str,
+    *,
+    contract_payload: Mapping[str, object] | None,
+    contract_errors: Sequence[str],
+    changed_files: Sequence[str] | None,
+    labels: Sequence[str] | None,
+) -> tuple[bool, list[str]]:
+    errors = list(contract_errors)
+    if contract_payload is not None:
+        errors.extend(
+            _contract_v1_evidence_errors(
+                body,
+                dict(contract_payload),
+                expected_head_sha=None,
+                expected_diff_hash=None,
+                expected_commit_shas=None,
+            )
+        )
+    if errors:
+        return True, errors
+    if contract_payload is not None:
+        official_review = contract_payload.get("official_review")
+        if isinstance(official_review, Mapping):
+            decision = str(official_review.get("decision") or "").strip()
+            if decision == "skip_risk_low":
+                skip_errors = _contract_v1_official_review_risk_errors(
+                    official_review,
+                    changed_files=changed_files,
+                    labels=labels,
+                )
+                if skip_errors:
+                    return True, skip_errors
+                return False, []
+            if decision == "skip_user_authorized":
+                return False, []
+            if decision == "required":
+                return True, []
+        if "official_review" not in contract_payload:
+            return True, []
+    required, body_errors = _official_codex_required(
+        body,
+        changed_files=changed_files,
+        labels=labels,
+    )
+    missing_ai_review = f"PR body missing section: {AI_REVIEW_SECTION_HEADER}"
+    if body_errors == [missing_ai_review]:
+        return True, []
+    return required, body_errors
+
+
 def render_monitor_comment(report: MonitorReport) -> str:
     status_label = {
         "waiting_for_trigger": "等待触发",
@@ -286,7 +352,7 @@ def sync_commit_status(
     *, repo: str, pr: Mapping[str, object], token: str, report: MonitorReport
 ) -> None:
     state = {
-        "waiting_for_trigger": "failure",
+        "waiting_for_trigger": "pending",
         "waiting_for_codex": "pending",
         "trigger_invalid": "failure",
         "context_invalid": "failure",
@@ -318,9 +384,13 @@ def sync_commit_status(
             "state": state,
             "target_url": target_url,
             "description": description[:140],
-            "context": "Codex Review Monitor",
+            "context": _review_status_context(),
         },
     )
+
+
+def _review_status_context() -> str:
+    return pr_flow_contract.load_contract(Path(".")).required_checks[0]
 
 
 def _has_required_trigger_comment(

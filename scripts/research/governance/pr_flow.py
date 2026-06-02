@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from .affected import plan_checks
-from . import ai_review_gate, pr_review_evidence
+from . import ai_review_gate, pr_flow_contract, pr_review_evidence
 from .codex_review_contract import is_codex_review_request, render_codex_review_request
 
 
@@ -54,9 +54,9 @@ ACTIONS_CHECK_URL_PATTERN = re.compile(r"/actions/runs/(?P<run_id>\d+)/job/(?P<j
 CHECKS_JSON_FIELDS = "name,state,bucket,link,workflow,startedAt,completedAt"
 STATUS_CHECK_ROLLUP_JSON_FIELDS = "url,baseRefName,isDraft,statusCheckRollup"
 REQUIRED_STATUS_CHECK_NAMES = {
-    "Research Governance / governance",
-    "Research Governance / pr-review-evidence",
-    "Codex Review Monitor",
+    "PR Flow / review-status",
+    "Research Governance / verify-full",
+    "PR Flow / evidence",
 }
 PR_DIAGNOSE_JSON_FIELDS = (
     "number,url,state,isDraft,headRefOid,baseRefName,mergeStateStatus,reviewDecision,body"
@@ -133,6 +133,17 @@ class StopStatus:
             "evidence_refs": list(self.evidence_refs),
             "next_actions": list(self.next_actions),
         }
+
+
+@dataclass(frozen=True)
+class SubmitReviewState:
+    reviews: dict[str, dict[str, str]]
+    retained: list[dict[str, str]]
+    official_review: dict[str, str]
+
+    @property
+    def requires_official_codex_review(self) -> bool:
+        return self.official_review.get("decision") == "required"
 
 
 class GitHubDataUnavailable(RuntimeError):
@@ -224,7 +235,6 @@ def stage_commit_intent(
     no_issue_authorized_by: str | None = None,
     no_issue_evidence: str | None = None,
     correction_reason: str | None = None,
-    ac_review_mode: str | None = None,
     now: str | None = None,
 ) -> int:
     root = Path(repo_root).resolve()
@@ -248,9 +258,6 @@ def stage_commit_intent(
             correction = _single_line_text(correction_reason)
             if correction:
                 intent["correction_reason"] = correction
-            ac_mode = _validated_ac_review_mode(ac_review_mode)
-            if ac_mode:
-                intent["ac_review_mode"] = ac_mode
         else:
             reason = _single_line_text(no_issue_reason)
             authorized_by = _single_line_text(no_issue_authorized_by)
@@ -279,9 +286,6 @@ def stage_commit_intent(
                 "created_by": created_by,
                 "consumed": False,
             }
-            ac_mode = _validated_ac_review_mode(ac_review_mode)
-            if ac_mode:
-                intent["ac_review_mode"] = ac_mode
         path = _pending_intent_path(root)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(intent, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -405,41 +409,7 @@ def check_branch_intent_coverage(
     root = Path(repo_root).resolve()
     runner = runner or CommandRunner()
     try:
-        try:
-            branch = _current_branch(root, runner)
-        except CommitIntentError:
-            commits_without_branch = _current_branch_commit_shas(
-                root,
-                runner,
-                base_ref=base_ref,
-            )
-            if not commits_without_branch:
-                return SUCCESS_EXIT_CODE
-            raise
-        commits = _current_branch_commit_shas(root, runner, base_ref=base_ref)
-        if not commits:
-            return SUCCESS_EXIT_CODE
-        branch_intent = _read_json_object(_branch_intent_path(root, branch)) or {}
-        recorded = {
-            _single_line_text(item.get("commit_sha"))
-            for item in branch_intent.get("commits", [])
-            if isinstance(item, dict) and _single_line_text(item.get("commit_sha"))
-        }
-        current = set(commits)
-        missing = [sha for sha in commits if sha not in recorded]
-        if missing:
-            raise CommitIntentError(
-                "branch intent does not cover all current branch commits",
-                reason_code="BRANCH_INTENT_COVERAGE_MISSING",
-                details=missing,
-            )
-        stale = sorted(sha for sha in recorded if sha not in current)
-        if stale:
-            raise CommitIntentError(
-                "branch intent contains commits outside the current branch",
-                reason_code="BRANCH_INTENT_STALE_COMMITS",
-                details=stale,
-            )
+        _validate_branch_intent_coverage(root, runner, base_ref=base_ref)
         return SUCCESS_EXIT_CODE
     except CommitIntentError as exc:
         _print_state(
@@ -453,6 +423,49 @@ def check_branch_intent_coverage(
             next_actions=("rebuild or confirm commit intent for rewritten commits",),
         )
         return DISPATCH_REQUIRED_EXIT_CODE
+
+
+def _validate_branch_intent_coverage(
+    root: Path,
+    runner: Runner,
+    *,
+    base_ref: str = "origin/main",
+) -> None:
+    try:
+        branch = _current_branch(root, runner)
+    except CommitIntentError:
+        commits_without_branch = _current_branch_commit_shas(
+            root,
+            runner,
+            base_ref=base_ref,
+        )
+        if not commits_without_branch:
+            return
+        raise
+    commits = _current_branch_commit_shas(root, runner, base_ref=base_ref)
+    if not commits:
+        return
+    branch_intent = _read_json_object(_branch_intent_path(root, branch)) or {}
+    recorded = {
+        _single_line_text(item.get("commit_sha"))
+        for item in branch_intent.get("commits", [])
+        if isinstance(item, dict) and _single_line_text(item.get("commit_sha"))
+    }
+    current = set(commits)
+    missing = [sha for sha in commits if sha not in recorded]
+    if missing:
+        raise CommitIntentError(
+            "branch intent does not cover all current branch commits",
+            reason_code="BRANCH_INTENT_COVERAGE_MISSING",
+            details=missing,
+        )
+    stale = sorted(sha for sha in recorded if sha not in current)
+    if stale:
+        raise CommitIntentError(
+            "branch intent contains commits outside the current branch",
+            reason_code="BRANCH_INTENT_STALE_COMMITS",
+            details=stale,
+        )
 
 
 def payload_with_branch_intent(
@@ -482,11 +495,6 @@ def payload_with_branch_intent(
         branch_intent["commits"] = commits
         branch_intent["issues"] = _aggregate_intent_issues(commits)
         branch_intent["no_issue_authorizations"] = _no_issue_authorizations(commits)
-        ac_review_mode = _branch_ac_review_mode(commits)
-        if ac_review_mode:
-            branch_intent["ac_review_mode"] = ac_review_mode
-        else:
-            branch_intent.pop("ac_review_mode", None)
     if not commits:
         return dict(payload)
     updated = dict(payload)
@@ -511,9 +519,6 @@ def payload_with_branch_intent(
             if isinstance(item, dict)
         ],
     }
-    ac_review_mode = _single_line_text(branch_intent.get("ac_review_mode"))
-    if ac_review_mode:
-        issue_intent["ac_review_mode"] = ac_review_mode
     updated["issue_intent"] = issue_intent
     return updated
 
@@ -531,14 +536,6 @@ def evaluate_review_pipeline(payload: dict[str, Any]) -> dict[str, Any]:
         return {
             "status": "security_skipped",
             "blocking_findings": first_stage_blocking,
-            "ac_evidence": _spec_ac_evidence(payload),
-        }
-    missing_ac = _missing_ac_evidence(payload)
-    if missing_ac:
-        return {
-            "status": "blocked",
-            "blocking_findings": missing_ac,
-            "ac_evidence": _spec_ac_evidence(payload),
         }
     security_blocking = [
         *_non_passing_fragment_status("security", fragments.get("security")),
@@ -548,108 +545,11 @@ def evaluate_review_pipeline(payload: dict[str, Any]) -> dict[str, Any]:
         return {
             "status": "blocked",
             "blocking_findings": security_blocking,
-            "ac_evidence": _spec_ac_evidence(payload),
         }
     return {
         "status": "security_ready",
         "blocking_findings": [],
-        "ac_evidence": _spec_ac_evidence(payload),
     }
-
-
-def auto_mark_acceptance_criteria(
-    *,
-    repo_root: str | Path = ".",
-    runner: Runner | None = None,
-    payload: dict[str, Any],
-    pr_url: str,
-    head_sha: str,
-) -> int:
-    root = Path(repo_root).resolve()
-    runner = runner or CommandRunner()
-    issue_intent = payload.get("issue_intent")
-    if isinstance(issue_intent, dict) and _single_line_text(
-        issue_intent.get("ac_review_mode")
-    ) == "user_required":
-        _print_state(
-            "DISPATCH_REQUIRED",
-            "user-required AC review mode is enabled",
-            repo_root=root,
-            reason_code="AC_REVIEW_USER_REQUIRED",
-            phase="ac_review",
-            dispatch_target="maintainer",
-            next_actions=("manually confirm acceptance criteria before continuing",),
-        )
-        return DISPATCH_REQUIRED_EXIT_CODE
-
-    decision = evaluate_review_pipeline(payload)
-    if decision.get("status") != "security_ready":
-        blocking = [
-            _single_line_text(item)
-            for item in decision.get("blocking_findings", [])
-            if _single_line_text(item)
-        ]
-        _print_state(
-            "DISPATCH_REQUIRED",
-            "acceptance criteria evidence is incomplete",
-            repo_root=root,
-            reason_code="AC_EVIDENCE_INCOMPLETE",
-            phase="ac_review",
-            dispatch_target="review-agent",
-            details=blocking,
-            next_actions=("complete Spec AC evidence and Security review",),
-        )
-        return DISPATCH_REQUIRED_EXIT_CODE
-
-    closing_numbers = _closing_intent_issue_numbers(payload)
-    if not closing_numbers:
-        return SUCCESS_EXIT_CODE
-    evidence_by_issue = _met_ac_evidence_by_issue(payload)
-    for number in closing_numbers:
-        evidence_items = evidence_by_issue.get(number, [])
-        if not evidence_items:
-            continue
-        result = _run_github_read_command(
-            root,
-            runner,
-            ["gh", "issue", "view", str(number), "--json", "title,body"],
-        )
-        if result.returncode != 0:
-            _print_command_failure("gh issue view " + str(number), result)
-            return result.returncode
-        issue = _json_from_result(result)
-        body = str(issue.get("body") or "")
-        updated_body = _body_with_marked_acceptance_criteria(body, evidence_items)
-        if updated_body == body:
-            continue
-        local = root / ".local" / "pr-flow"
-        local.mkdir(parents=True, exist_ok=True)
-        body_file = local / f"issue-{number}-body.md"
-        body_file.write_text(updated_body, encoding="utf-8")
-        edit = runner.run(
-            ["gh", "issue", "edit", str(number), "--body-file", str(body_file)],
-            cwd=root,
-        )
-        if edit.returncode != 0:
-            _print_command_failure("gh issue edit " + str(number), edit)
-            return edit.returncode
-        comment_file = local / f"issue-{number}-ac-audit.md"
-        comment_file.write_text(
-            _render_ac_audit_comment(
-                pr_url=pr_url,
-                head_sha=head_sha,
-                evidence_items=evidence_items,
-            ),
-            encoding="utf-8",
-        )
-        comment = runner.run(
-            ["gh", "issue", "comment", str(number), "--body-file", str(comment_file)],
-            cwd=root,
-        )
-        if comment.returncode != 0:
-            _print_command_failure("gh issue comment " + str(number), comment)
-            return comment.returncode
-    return SUCCESS_EXIT_CODE
 
 
 def prepare(
@@ -765,7 +665,6 @@ def sync(
     title: str | None = None,
     runner: Runner | None = None,
     existing_labels: Sequence[str] | None = None,
-    check_issue_acceptance_criteria: bool = True,
 ) -> int:
     root = Path(repo_root).resolve()
     runner = runner or CommandRunner()
@@ -909,14 +808,6 @@ def sync(
             _print_command_failure("gh pr edit --remove-label", remove)
             return remove.returncode
 
-    if check_issue_acceptance_criteria:
-        issue_gate = _check_linked_issue_acceptance_criteria(
-            root=root,
-            runner=runner,
-            payload=payload,
-        )
-        if issue_gate != SUCCESS_EXIT_CODE:
-            return issue_gate
 
     try:
         needs_codex_review_request = (
@@ -1099,6 +990,1349 @@ def wait(
     else:
         print(summary.stdout, end="")
     return watched.returncode
+
+
+def submit(
+    *,
+    repo_root: str | Path = ".",
+    title: str | None = None,
+    pr: str | None = None,
+    runner: Runner | None = None,
+    watch_timeout_seconds: float = CODEX_REVIEW_WAIT_TIMEOUT_SECONDS,
+    watch_poll_seconds: float = CODEX_REVIEW_WAIT_INTERVAL_SECONDS,
+    official_review_skip_authorized_by: str | None = None,
+    official_review_skip_evidence: str | None = None,
+) -> int:
+    root = Path(repo_root).resolve()
+    runner = runner or CommandRunner()
+    contract = pr_flow_contract.load_contract(root)
+    head_sha = _command_stdout(runner.run(["git", "rev-parse", "HEAD"], cwd=root))
+    pr_flow_contract.write_submit_status(root, contract, head=head_sha, failures=[])
+    auth_failure = _official_review_skip_authorization_failure(
+        authorized_by=official_review_skip_authorized_by,
+        evidence=official_review_skip_evidence,
+    )
+    if auth_failure is not None:
+        pr_flow_contract.write_submit_status(
+            root,
+            contract,
+            head=head_sha,
+            failures=[auth_failure],
+        )
+        print(f"error: {auth_failure.check}: {auth_failure.detail}", file=sys.stderr)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    try:
+        failures = _submit_preflight_failures(
+            root=root,
+            runner=runner,
+            contract=contract,
+        )
+    except GitHubDataUnavailable as exc:
+        failures = [
+            pr_flow_contract.SubmitFailure(
+                check="github",
+                source="",
+                detail=str(exc),
+            )
+        ]
+    if failures:
+        pr_flow_contract.write_submit_status(
+            root,
+            contract,
+            head=head_sha,
+            failures=failures,
+        )
+        for failure in failures:
+            print(f"error: {failure.check}: {failure.detail}", file=sys.stderr)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    failures = _submit_branch_intent_failures(root=root, runner=runner)
+    if failures:
+        pr_flow_contract.write_submit_status(
+            root,
+            contract,
+            head=head_sha,
+            failures=failures,
+        )
+        for failure in failures:
+            print(f"error: {failure.check}: {failure.detail}", file=sys.stderr)
+        return DISPATCH_REQUIRED_EXIT_CODE
+    try:
+        diff_hash = _submit_current_diff_hash(root, runner)
+    except GitHubDataUnavailable as exc:
+        pr_flow_contract.write_submit_status(
+            root,
+            contract,
+            head=head_sha,
+            failures=[
+                pr_flow_contract.SubmitFailure(
+                    check="github",
+                    source="",
+                    detail=str(exc),
+                )
+            ],
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    failures, has_blocking = _submit_first_stage_fragment_failures(
+        root=root,
+        contract=contract,
+        head_sha=head_sha,
+        diff_hash=diff_hash,
+    )
+    if failures:
+        pr_flow_contract.write_submit_status(
+            root,
+            contract,
+            head=head_sha,
+            failures=failures,
+        )
+        for failure in failures:
+            print(f"error: {failure.check}: {failure.detail}", file=sys.stderr)
+        return (
+            REPLY_OR_FIX_REQUIRED_EXIT_CODE
+            if has_blocking
+            else DISPATCH_REQUIRED_EXIT_CODE
+        )
+    failures, has_blocking = _submit_security_fragment_failures(
+        root=root,
+        contract=contract,
+        head_sha=head_sha,
+        diff_hash=diff_hash,
+    )
+    if failures:
+        pr_flow_contract.write_submit_status(
+            root,
+            contract,
+            head=head_sha,
+            failures=failures,
+        )
+        for failure in failures:
+            print(f"error: {failure.check}: {failure.detail}", file=sys.stderr)
+        return (
+            REPLY_OR_FIX_REQUIRED_EXIT_CODE
+            if has_blocking
+            else DISPATCH_REQUIRED_EXIT_CODE
+        )
+    try:
+        review_state, failures = _submit_review_state(
+            root=root,
+            runner=runner,
+            contract=contract,
+            head_sha=head_sha,
+            diff_hash=diff_hash,
+            official_review_skip_authorized_by=official_review_skip_authorized_by,
+            official_review_skip_evidence=official_review_skip_evidence,
+        )
+        if failures:
+            pr_flow_contract.write_submit_status(
+                root,
+                contract,
+                head=head_sha,
+                failures=failures,
+            )
+            return DISPATCH_REQUIRED_EXIT_CODE
+        evidence = _submit_pr_evidence(
+            root=root,
+            runner=runner,
+            contract=contract,
+            head_sha=head_sha,
+            diff_hash=diff_hash,
+            review_state=review_state,
+        )
+        sync_code, pr_number, pr_url = _sync_submit_pr_evidence(
+            root=root,
+            runner=runner,
+            contract=contract,
+            title=title,
+            target_pr=pr,
+            evidence=evidence,
+        )
+    except CommitIntentError as exc:
+        pr_flow_contract.write_submit_status(
+            root,
+            contract,
+            head=head_sha,
+            failures=[
+                pr_flow_contract.SubmitFailure(
+                    check="issue-intent",
+                    source=".local/pr-flow/intents",
+                    detail=_commit_intent_failure_detail(exc),
+                )
+            ],
+        )
+        print(
+            f"error: issue-intent: {_commit_intent_failure_detail(exc)}",
+            file=sys.stderr,
+        )
+        return DISPATCH_REQUIRED_EXIT_CODE
+    except GitHubDataUnavailable as exc:
+        pr_flow_contract.write_submit_status(
+            root,
+            contract,
+            head=head_sha,
+            failures=[
+                pr_flow_contract.SubmitFailure(
+                    check="github",
+                    source="",
+                    detail=str(exc),
+                )
+            ],
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    if sync_code != SUCCESS_EXIT_CODE:
+        return sync_code
+    merged_metadata = _submit_merged_pr_metadata(
+        root=root,
+        runner=runner,
+        pr_number=pr or pr_number,
+    )
+    if merged_metadata is not None:
+        return _submit_cleanup_merged_pr(
+            root=root,
+            runner=runner,
+            metadata=merged_metadata,
+        )
+    if review_state.requires_official_codex_review:
+        request_code = _submit_request_codex_review(
+            root=root,
+            runner=runner,
+            pr_number=pr or pr_number,
+            pr_url=pr_url,
+            head_sha=head_sha,
+        )
+        if request_code != SUCCESS_EXIT_CODE:
+            return request_code
+    watch_failures = _submit_wait_required_checks(
+        root=root,
+        runner=runner,
+        contract=contract,
+        pr_number=pr or pr_number,
+        timeout_seconds=watch_timeout_seconds,
+        poll_seconds=watch_poll_seconds,
+    )
+    if watch_failures:
+        retry_code, retry_checks = _submit_accept_official_codex_retained_threads(
+            root=root,
+            runner=runner,
+            contract=contract,
+            pr_number=pr or pr_number,
+            pr_url=pr_url,
+            failures=watch_failures,
+        )
+        if retry_code != SUCCESS_EXIT_CODE:
+            return retry_code
+        if retry_checks:
+            watch_failures = _submit_wait_required_checks(
+                root=root,
+                runner=runner,
+                contract=contract,
+                pr_number=pr or pr_number,
+                timeout_seconds=watch_timeout_seconds,
+                poll_seconds=watch_poll_seconds,
+            )
+    if watch_failures:
+        pr_flow_contract.write_submit_status(
+            root,
+            contract,
+            head=head_sha,
+            failures=watch_failures,
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    lifecycle_code = _submit_complete_lifecycle(
+        root=root,
+        runner=runner,
+        pr_number=pr or pr_number,
+        head_sha=head_sha,
+        timeout_seconds=watch_timeout_seconds,
+        poll_seconds=watch_poll_seconds,
+    )
+    if lifecycle_code != SUCCESS_EXIT_CODE:
+        return lifecycle_code
+    return SUCCESS_EXIT_CODE
+
+
+def _submit_preflight_failures(
+    *,
+    root: Path,
+    runner: Runner,
+    contract: pr_flow_contract.PRFlowContract,
+    base_branch: str = "main",
+) -> list[pr_flow_contract.SubmitFailure]:
+    failures: list[pr_flow_contract.SubmitFailure] = []
+    repo = _current_github_repo(root, runner)
+    settings = _gh_api_object(root, runner, f"repos/{repo}")
+    for key, expected in contract.required_settings.items():
+        actual = bool(settings.get(key))
+        if actual == expected:
+            continue
+        suffix = "enabled" if expected else "disabled"
+        failures.append(
+            pr_flow_contract.SubmitFailure(
+                check="github-settings",
+                source=f"repos/{repo}",
+                detail=f"{key} must be {suffix}",
+            )
+        )
+    configured = _required_status_check_names(
+        root=root,
+        runner=runner,
+        repo=repo,
+        branch=base_branch,
+    )
+    missing = [name for name in contract.required_checks if name not in configured]
+    if missing:
+        failures.append(
+            pr_flow_contract.SubmitFailure(
+                check="required-checks",
+                source=base_branch,
+                detail="missing required checks: " + ", ".join(missing),
+            )
+        )
+    return failures
+
+
+def _submit_branch_intent_failures(
+    *,
+    root: Path,
+    runner: Runner,
+) -> list[pr_flow_contract.SubmitFailure]:
+    try:
+        _validate_branch_intent_coverage(root, runner)
+    except CommitIntentError as exc:
+        return [
+            pr_flow_contract.SubmitFailure(
+                check="issue-intent",
+                source=".local/pr-flow/intents",
+                detail=_commit_intent_failure_detail(exc),
+            )
+        ]
+    return []
+
+
+def _commit_intent_failure_detail(exc: CommitIntentError) -> str:
+    if not exc.details:
+        return str(exc)
+    return f"{exc}: " + ", ".join(exc.details)
+
+
+def _current_github_repo(root: Path, runner: Runner) -> str:
+    result = _run_github_read_command(
+        root,
+        runner,
+        ["gh", "repo", "view", "--json", "nameWithOwner"],
+    )
+    if result.returncode != 0:
+        raise _github_data_unavailable(
+            "GitHub repository metadata unavailable",
+            "gh repo view --json nameWithOwner",
+            result,
+        )
+    payload = _json_object_from_result(result, "gh repo view --json nameWithOwner")
+    repo = _single_line_text(payload.get("nameWithOwner"))
+    if not repo:
+        raise GitHubDataUnavailable(
+            "GitHub repository metadata incomplete",
+            details=("nameWithOwner",),
+        )
+    return repo
+
+
+def _submit_first_stage_fragment_failures(
+    *,
+    root: Path,
+    contract: pr_flow_contract.PRFlowContract,
+    head_sha: str,
+    diff_hash: str,
+) -> tuple[list[pr_flow_contract.SubmitFailure], bool]:
+    failures: list[pr_flow_contract.SubmitFailure] = []
+    has_blocking = False
+    for role in ("standards", "spec"):
+        role_failures, role_blocking = _submit_fragment_failures_for_role(
+            root=root,
+            contract=contract,
+            role=role,
+            expected_head_sha=head_sha,
+            expected_diff_hash=diff_hash,
+        )
+        failures.extend(role_failures)
+        has_blocking = has_blocking or role_blocking
+    return failures, has_blocking
+
+
+def _submit_fragment_failures_for_role(
+    *,
+    root: Path,
+    contract: pr_flow_contract.PRFlowContract,
+    role: str,
+    expected_head_sha: str | None = None,
+    expected_diff_hash: str | None = None,
+) -> tuple[list[pr_flow_contract.SubmitFailure], bool]:
+    relative = contract.reviewer_fragments[role]
+    path = root / relative
+    source = relative.as_posix()
+    if not path.is_file():
+        return [
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail=f"{role} fragment is missing",
+            )
+        ], False
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return [
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail=f"{role} fragment is invalid JSON",
+            )
+        ], False
+    if not isinstance(payload, dict):
+        return [
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail=f"{role} fragment must be a JSON object",
+            )
+        ], False
+    failures: list[pr_flow_contract.SubmitFailure] = []
+    if tuple(payload) != contract.fragment_fields:
+        failures.append(
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail=f"{role} fragment fields must be schema/head/diff/findings",
+            )
+        )
+    if payload.get("schema") != contract.version:
+        failures.append(
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail=f"{role} fragment schema must be {contract.version}",
+            )
+        )
+    if (
+        expected_head_sha is not None
+        and _single_line_text(payload.get("head")) != expected_head_sha
+    ):
+        failures.append(
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail=f"{role} fragment head is stale",
+            )
+        )
+    if (
+        expected_diff_hash is not None
+        and _single_line_text(payload.get("diff")) != expected_diff_hash
+    ):
+        failures.append(
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail=f"{role} fragment diff is stale",
+            )
+        )
+    findings = payload.get("findings")
+    if not isinstance(findings, list):
+        failures.append(
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail=f"{role} fragment findings must be a list",
+            )
+        )
+        return failures, False
+    has_blocking = False
+    allowed = set(contract.blocking_severities) | set(contract.retained_severities)
+    for index, finding in enumerate(findings):
+        if not isinstance(finding, dict):
+            failures.append(
+                pr_flow_contract.SubmitFailure(
+                    check="local-review",
+                    source=source,
+                    detail=f"{role} finding {index} must be an object",
+                )
+            )
+            continue
+        if tuple(finding) != contract.fragment_finding_fields:
+            failures.append(
+                pr_flow_contract.SubmitFailure(
+                    check="local-review",
+                    source=source,
+                    detail=f"{role} finding {index} fields must be severity/detail",
+                )
+            )
+            continue
+        severity = _single_line_text(finding.get("severity"))
+        detail = pr_flow_contract.normalize_detail(
+            finding.get("detail"),
+            max_chars=contract.detail_max_chars,
+        )
+        if severity not in allowed:
+            failures.append(
+                pr_flow_contract.SubmitFailure(
+                    check="local-review",
+                    source=source,
+                    detail=f"{role} finding {index} severity is invalid",
+                )
+            )
+            continue
+        if not detail:
+            failures.append(
+                pr_flow_contract.SubmitFailure(
+                    check="local-review",
+                    source=source,
+                    detail=f"{role} finding {index} detail is required",
+                )
+            )
+            continue
+        if severity in contract.blocking_severities:
+            has_blocking = True
+            failures.append(
+                pr_flow_contract.SubmitFailure(
+                    check="local-review",
+                    source=source,
+                    detail=f"{role} {severity}: {detail}",
+                )
+            )
+    return failures, has_blocking
+
+
+def _submit_security_fragment_failures(
+    *,
+    root: Path,
+    contract: pr_flow_contract.PRFlowContract,
+    head_sha: str,
+    diff_hash: str,
+) -> tuple[list[pr_flow_contract.SubmitFailure], bool]:
+    return _submit_fragment_failures_for_role(
+        root=root,
+        contract=contract,
+        role="security",
+        expected_head_sha=head_sha,
+        expected_diff_hash=diff_hash,
+    )
+
+
+def _submit_current_diff_hash(root: Path, runner: Runner) -> str:
+    result = runner.run(
+        [
+            "git",
+            "-c",
+            "core.quotePath=false",
+            "diff",
+            "--binary",
+            "--no-ext-diff",
+            "origin/main...HEAD",
+        ],
+        cwd=root,
+    )
+    if result.returncode != 0:
+        raise GitHubDataUnavailable(
+            "current PR diff unavailable",
+            details=(_single_line_text(result.stderr), _single_line_text(result.stdout)),
+        )
+    return hashlib.sha256(result.stdout.encode("utf-8")).hexdigest()
+
+
+def _submit_review_state(
+    *,
+    root: Path,
+    runner: Runner,
+    contract: pr_flow_contract.PRFlowContract,
+    head_sha: str,
+    diff_hash: str,
+    official_review_skip_authorized_by: str | None = None,
+    official_review_skip_evidence: str | None = None,
+) -> tuple[SubmitReviewState, list[pr_flow_contract.SubmitFailure]]:
+    reviews: dict[str, dict[str, str]] = {}
+    retained: list[dict[str, str]] = []
+    failures: list[pr_flow_contract.SubmitFailure] = []
+    for role in ("standards", "spec", "security"):
+        relative = contract.reviewer_fragments[role]
+        source = relative.as_posix()
+        payload = _read_json_object(root / relative) or {}
+        fragment_head = _single_line_text(payload.get("head"))
+        fragment_diff = _single_line_text(payload.get("diff"))
+        if fragment_head != head_sha:
+            failures.append(
+                pr_flow_contract.SubmitFailure(
+                    check="local-review",
+                    source=source,
+                    detail=f"{role} fragment head is stale",
+                )
+            )
+        if fragment_diff != diff_hash:
+            failures.append(
+                pr_flow_contract.SubmitFailure(
+                    check="local-review",
+                    source=source,
+                    detail=f"{role} fragment diff is stale",
+                )
+            )
+        reviews[role] = {"head": head_sha, "diff": diff_hash}
+        findings = payload.get("findings")
+        if not isinstance(findings, list):
+            continue
+        for finding in findings:
+            if not isinstance(finding, dict):
+                continue
+            severity = _single_line_text(finding.get("severity"))
+            if severity not in contract.retained_severities:
+                continue
+            retained.append(
+                {
+                    "severity": severity,
+                    "source": role,
+                    "detail": pr_flow_contract.normalize_detail(
+                        finding.get("detail"),
+                        max_chars=contract.detail_max_chars,
+                    ),
+                }
+            )
+    return (
+        SubmitReviewState(
+            reviews=reviews,
+            retained=retained,
+            official_review=_submit_official_review_decision(
+                root=root,
+                runner=runner,
+                authorized_by=official_review_skip_authorized_by,
+                evidence=official_review_skip_evidence,
+            ),
+        ),
+        failures,
+    )
+
+
+def _submit_official_review_decision(
+    *,
+    root: Path,
+    runner: Runner,
+    authorized_by: str | None = None,
+    evidence: str | None = None,
+) -> dict[str, str]:
+    authorized_by_text = _single_line_text(authorized_by)
+    evidence_text = _single_line_text(evidence)
+    if authorized_by_text and evidence_text:
+        return {
+            "decision": "skip_user_authorized",
+            "authorized_by": authorized_by_text,
+            "evidence": evidence_text,
+        }
+    if _submit_requires_official_codex_review(root=root, runner=runner):
+        return {"decision": "required"}
+    return {"decision": "skip_risk_low"}
+
+
+def _official_review_skip_authorization_failure(
+    *,
+    authorized_by: str | None = None,
+    evidence: str | None = None,
+) -> pr_flow_contract.SubmitFailure | None:
+    authorized_by_text = _single_line_text(authorized_by)
+    evidence_text = _single_line_text(evidence)
+    if bool(authorized_by_text) == bool(evidence_text):
+        return None
+    return pr_flow_contract.SubmitFailure(
+        check="PR Flow / evidence",
+        source="official_review",
+        detail=(
+            "official review skip authorization requires both "
+            "authorized_by and evidence"
+        ),
+    )
+
+
+def _submit_requires_official_codex_review(*, root: Path, runner: Runner) -> bool:
+    changed_files = _submit_current_changed_files(root, runner)
+    if changed_files is None:
+        return True
+    return any(ai_review_gate._is_high_risk_path(path) for path in changed_files)
+
+
+def _submit_current_changed_files(root: Path, runner: Runner) -> tuple[str, ...] | None:
+    result = runner.run(
+        [
+            "git",
+            "-c",
+            "core.quotePath=false",
+            "diff",
+            "--name-only",
+            "origin/main...HEAD",
+        ],
+        cwd=root,
+    )
+    if result.returncode != 0:
+        return None
+    return tuple(line.strip() for line in result.stdout.splitlines() if line.strip())
+
+
+def _submit_pr_evidence(
+    *,
+    root: Path,
+    runner: Runner,
+    contract: pr_flow_contract.PRFlowContract,
+    head_sha: str,
+    diff_hash: str,
+    review_state: SubmitReviewState,
+) -> dict[str, Any]:
+    return {
+        "schema": contract.version,
+        "head": head_sha,
+        "diff": diff_hash,
+        "reviews": review_state.reviews,
+        "official_review": review_state.official_review,
+        "issues": _submit_issue_evidence(root=root, runner=runner),
+        "retained": review_state.retained,
+    }
+
+
+def _submit_issue_evidence(*, root: Path, runner: Runner) -> dict[str, Any]:
+    branch = _current_branch(root, runner)
+    branch_intent = _read_json_object(_branch_intent_path(root, branch)) or {}
+    commits = [
+        item for item in branch_intent.get("commits", []) if isinstance(item, dict)
+    ]
+    by_sha = {
+        _single_line_text(item.get("commit_sha")): item
+        for item in commits
+        if _single_line_text(item.get("commit_sha"))
+    }
+    evidence_commits: list[dict[str, Any]] = []
+    for sha in _current_branch_commit_shas(root, runner, base_ref="origin/main"):
+        item = by_sha.get(sha)
+        if item is None:
+            raise CommitIntentError(
+                "branch intent does not cover all current branch commits",
+                reason_code="BRANCH_INTENT_COVERAGE_MISSING",
+                details=(sha,),
+            )
+        issue_policy = _single_line_text(item.get("issue_policy"))
+        if issue_policy == "no_issue":
+            authorization = item.get("no_issue_authorization")
+            if not _valid_no_issue_authorization(authorization):
+                raise CommitIntentError(
+                    "no-Issue commit intent is missing authorization",
+                    reason_code="NO_ISSUE_AUTHORIZATION_MISSING",
+                    details=(sha,),
+                )
+            evidence_commits.append({"sha": sha, "no_issue": True})
+            continue
+        if issue_policy != "issues":
+            raise CommitIntentError(
+                "commit intent issue policy is invalid",
+                reason_code="COMMIT_ISSUE_POLICY_INVALID",
+                details=(sha,),
+            )
+        issues = [
+            {
+                "number": _positive_int_from_payload(issue.get("number")),
+                "role": _single_line_text(issue.get("role")),
+            }
+            for issue in item.get("issues", [])
+            if isinstance(issue, dict)
+            and _positive_int_from_payload(issue.get("number")) is not None
+            and _single_line_text(issue.get("role")) in VALID_INTENT_ROLES
+        ] if isinstance(item.get("issues"), list) else []
+        if issues:
+            evidence_commits.append({"sha": sha, "issues": issues})
+            continue
+        raise CommitIntentError(
+            "commit intent is missing valid issue bindings",
+            reason_code="COMMIT_ISSUE_BINDING_MISSING",
+            details=(sha,),
+        )
+    refs: list[dict[str, Any]] = []
+    for item in branch_intent.get("issues", []):
+        if not isinstance(item, dict):
+            continue
+        number = _positive_int_from_payload(item.get("number"))
+        role = _single_line_text(item.get("role"))
+        if number is None or role not in VALID_INTENT_ROLES:
+            continue
+        refs.append({"number": number, "role": role})
+    return {"commits": evidence_commits, "refs": refs}
+
+
+def _valid_no_issue_authorization(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    return all(
+        _single_line_text(value.get(field))
+        for field in ("reason", "authorized_by", "evidence")
+    )
+
+
+def _sync_submit_pr_evidence(
+    *,
+    root: Path,
+    runner: Runner,
+    contract: pr_flow_contract.PRFlowContract,
+    title: str | None,
+    target_pr: str | None,
+    evidence: dict[str, Any],
+) -> tuple[int, str, str]:
+    local = root / ".local" / "pr-flow"
+    managed_body = _render_submit_managed_body(contract, evidence)
+    view = _run_github_read_command(
+        root,
+        runner,
+        _gh_pr_view_command(target_pr, "number,url,state,isDraft"),
+    )
+    if view.returncode == 0:
+        metadata = _json_from_result(view)
+        pr_number = str(metadata.get("number") or "")
+        pr_url = _single_line_text(metadata.get("url"))
+        body_view = _run_github_read_command(
+            root,
+            runner,
+            _gh_pr_view_command(pr_number, "body"),
+        )
+        if body_view.returncode != 0:
+            _print_command_failure("gh pr view --json body", body_view)
+            return body_view.returncode, pr_number, pr_url
+        existing_body = str(_json_from_result(body_view).get("body") or "")
+        body_file = _write_managed_body_file(local, existing_body, managed_body)
+        edit = runner.run(
+            ["gh", "pr", "edit", pr_number, "--body-file", str(body_file)],
+            cwd=root,
+        )
+        if edit.returncode != 0:
+            _print_command_failure("gh pr edit", edit)
+            return edit.returncode, pr_number, pr_url
+        return SUCCESS_EXIT_CODE, pr_number, pr_url
+    if target_pr:
+        _print_command_failure("gh pr view", view)
+        return view.returncode, target_pr, ""
+    if not title:
+        print("error: --title is required when no PR exists", file=sys.stderr)
+        return GENERAL_FAILURE_EXIT_CODE, "", ""
+    branch = _current_branch(root, runner)
+    remote_head = runner.run(["git", "ls-remote", "--heads", "origin", branch], cwd=root)
+    if remote_head.returncode != 0 or not _command_stdout(remote_head):
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "remote branch missing for PR creation",
+            repo_root=root,
+            reason_code="REMOTE_BRANCH_MISSING",
+            phase="submit_sync_pr",
+            retryable=True,
+            dispatch_target="operator",
+            details=[f"git push -u origin {branch}"],
+            next_actions=(f"git push -u origin {branch}",),
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE, "", ""
+    body_file = _write_managed_body_file(local, _pr_template_body(root), managed_body)
+    create = runner.run(
+        [
+            "gh",
+            "pr",
+            "create",
+            "--draft",
+            "--title",
+            title,
+            "--body-file",
+            str(body_file),
+            "--head",
+            branch,
+        ],
+        cwd=root,
+    )
+    if create.returncode != 0:
+        _print_command_failure("gh pr create", create)
+        return create.returncode, "", ""
+    pr_url = _command_stdout(create)
+    return SUCCESS_EXIT_CODE, _pr_number_from_url(pr_url), pr_url
+
+
+def _gh_pr_view_command(pr_number: str | None, fields: str) -> list[str]:
+    command = ["gh", "pr", "view"]
+    if pr_number:
+        command.append(pr_number)
+    command.extend(["--json", fields])
+    return command
+
+
+def _submit_request_codex_review(
+    *,
+    root: Path,
+    runner: Runner,
+    pr_number: str,
+    pr_url: str,
+    head_sha: str,
+) -> int:
+    try:
+        if _current_head_codex_trigger_exists(
+            pr_url=pr_url,
+            head_sha=head_sha,
+            root=root,
+            runner=runner,
+        ):
+            return SUCCESS_EXIT_CODE
+    except GitHubDataUnavailable as exc:
+        _print_github_data_unavailable(exc)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    local = root / ".local" / "pr-flow"
+    local.mkdir(parents=True, exist_ok=True)
+    body = render_codex_review_request(
+        pr_url=pr_url,
+        head_sha=head_sha,
+        review_scope=(),
+    )
+    comment_file = local / "codex-review-request.md"
+    comment_file.write_text(body, encoding="utf-8")
+    comment = runner.run(
+        ["gh", "pr", "comment", pr_number, "--body-file", str(comment_file)],
+        cwd=root,
+    )
+    if comment.returncode != 0:
+        _print_command_failure("gh pr comment", comment)
+        return comment.returncode
+    return SUCCESS_EXIT_CODE
+
+
+def _submit_accept_official_codex_retained_threads(
+    *,
+    root: Path,
+    runner: Runner,
+    contract: pr_flow_contract.PRFlowContract,
+    pr_number: str,
+    pr_url: str,
+    failures: Sequence[pr_flow_contract.SubmitFailure],
+) -> tuple[int, bool]:
+    if not _submit_should_retry_official_codex_retained(failures):
+        return SUCCESS_EXIT_CODE, False
+    pr_info = _github_pr_info_from_url(pr_url)
+    if pr_info is None:
+        return SUCCESS_EXIT_CODE, False
+    repo, resolved_pr_number = pr_info
+    threads = _current_pr_review_threads(
+        root=root,
+        runner=runner,
+        repo=repo,
+        pr_number=resolved_pr_number,
+    )
+    retained: list[dict[str, str]] = []
+    changed = False
+    for thread in threads:
+        if _thread_is_resolved(thread):
+            continue
+        entry = _submit_official_codex_retained_entry(
+            contract=contract,
+            thread=thread,
+        )
+        if entry is None:
+            continue
+        thread_id = _thread_id(thread)
+        if not thread_id:
+            continue
+        finding = _external_finding_for_review_thread(
+            repo=repo,
+            pr_number=resolved_pr_number,
+            thread=thread,
+            status="accepted",
+        )
+        code = _reply_to_review_thread(
+            root=root,
+            runner=runner,
+            thread_id=thread_id,
+            body=_accepted_review_thread_reply(finding),
+        )
+        if code != SUCCESS_EXIT_CODE:
+            return code, changed
+        code = resolve_review_threads(
+            repo_root=root,
+            runner=runner,
+            thread_ids=(thread_id,),
+        )
+        if code != SUCCESS_EXIT_CODE:
+            return code, changed
+        thread["isResolved"] = True
+        retained.append(entry)
+        changed = True
+        print(f"accepted official Codex review thread: {thread_id}")
+    if not retained:
+        return SUCCESS_EXIT_CODE, changed
+    code = _submit_append_retained_to_pr_body(
+        root=root,
+        runner=runner,
+        contract=contract,
+        pr_number=pr_number,
+        retained=retained,
+    )
+    if code != SUCCESS_EXIT_CODE:
+        return code, changed
+    return SUCCESS_EXIT_CODE, changed
+
+
+def _submit_should_retry_official_codex_retained(
+    failures: Sequence[pr_flow_contract.SubmitFailure],
+) -> bool:
+    for failure in failures:
+        if failure.check != "PR Flow / review-status":
+            continue
+        detail = failure.detail.casefold()
+        if "pending" in detail or "timed out" in detail:
+            continue
+        return True
+    return False
+
+
+def _submit_official_codex_retained_entry(
+    *,
+    contract: pr_flow_contract.PRFlowContract,
+    thread: dict[str, Any],
+) -> dict[str, str] | None:
+    severity = _codex_thread_severity(thread)
+    if severity not in contract.retained_severities:
+        return None
+    detail = pr_flow_contract.normalize_detail(
+        _codex_thread_body(thread),
+        max_chars=contract.detail_max_chars,
+    )
+    if not detail:
+        detail = f"official Codex {severity} retained finding"
+    return {
+        "severity": severity,
+        "source": "official_codex",
+        "detail": detail,
+    }
+
+
+def _submit_append_retained_to_pr_body(
+    *,
+    root: Path,
+    runner: Runner,
+    contract: pr_flow_contract.PRFlowContract,
+    pr_number: str,
+    retained: Sequence[dict[str, str]],
+) -> int:
+    body_view = _run_github_read_command(
+        root,
+        runner,
+        _gh_pr_view_command(pr_number, "body"),
+    )
+    if body_view.returncode != 0:
+        _print_command_failure("gh pr view --json body", body_view)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    existing_body = str(_json_from_result(body_view).get("body") or "")
+    payload, errors = pr_review_evidence._extract_contract_v1_evidence(existing_body)
+    if payload is None or errors:
+        details = list(errors) or ["PR Flow evidence block is missing"]
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "PR Evidence JSON unavailable for retained findings",
+            repo_root=root,
+            reason_code="PR_EVIDENCE_UNAVAILABLE",
+            phase="submit_official_codex",
+            dispatch_target="github",
+            details=details,
+            next_actions=("rerun pr-submit after PR Evidence is synced",),
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    updated: dict[str, Any] = dict(payload)
+    current_retained = [
+        dict(item)
+        for item in updated.get("retained", [])
+        if isinstance(item, dict)
+    ]
+    seen = {
+        (
+            _single_line_text(item.get("severity")),
+            _single_line_text(item.get("source")),
+            _single_line_text(item.get("detail")),
+        )
+        for item in current_retained
+    }
+    for entry in retained:
+        key = (
+            _single_line_text(entry.get("severity")),
+            _single_line_text(entry.get("source")),
+            _single_line_text(entry.get("detail")),
+        )
+        if key in seen:
+            continue
+        current_retained.append(dict(entry))
+        seen.add(key)
+    updated["retained"] = current_retained
+    managed_body = _render_submit_managed_body(contract, updated)
+    body_file = _write_managed_body_file(
+        root / ".local" / "pr-flow",
+        existing_body,
+        managed_body,
+    )
+    edit = runner.run(
+        ["gh", "pr", "edit", pr_number, "--body-file", str(body_file)],
+        cwd=root,
+    )
+    if edit.returncode != 0:
+        _print_command_failure("gh pr edit", edit)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    return SUCCESS_EXIT_CODE
+
+
+def _submit_wait_required_checks(
+    *,
+    root: Path,
+    runner: Runner,
+    contract: pr_flow_contract.PRFlowContract,
+    pr_number: str,
+    timeout_seconds: float,
+    poll_seconds: float,
+) -> list[pr_flow_contract.SubmitFailure]:
+    deadline = time.monotonic() + max(timeout_seconds, 0)
+    pending: list[pr_flow_contract.SubmitFailure] = []
+    while True:
+        failures, pending = _submit_required_check_failures(
+            root=root,
+            runner=runner,
+            contract=contract,
+            pr_number=pr_number,
+        )
+        if not pending:
+            return failures
+        if time.monotonic() >= deadline:
+            return [
+                pr_flow_contract.SubmitFailure(
+                    check=failure.check,
+                    source=failure.source,
+                    detail="required check timed out while pending",
+                )
+                for failure in pending
+            ]
+        time.sleep(max(poll_seconds, 0))
+
+
+def _submit_required_check_failures(
+    *,
+    root: Path,
+    runner: Runner,
+    contract: pr_flow_contract.PRFlowContract,
+    pr_number: str,
+) -> tuple[list[pr_flow_contract.SubmitFailure], list[pr_flow_contract.SubmitFailure]]:
+    result = runner.run(
+        [
+            "gh",
+            "pr",
+            "checks",
+            pr_number,
+            "--required",
+            "--json",
+            CHECKS_JSON_FIELDS,
+        ],
+        cwd=root,
+    )
+    latest = _latest_required_check_results(result.stdout) or []
+    if result.returncode != 0 and not latest:
+        return [
+            pr_flow_contract.SubmitFailure(
+                check="required-checks",
+                source="",
+                detail="required checks unavailable",
+            )
+        ], []
+    by_name = {_json_check_display_name(check): check for check in latest}
+    failures: list[pr_flow_contract.SubmitFailure] = []
+    pending: list[pr_flow_contract.SubmitFailure] = []
+    for name in contract.required_checks:
+        check = by_name.get(name)
+        if check is None:
+            pending.append(
+                pr_flow_contract.SubmitFailure(
+                    check=name,
+                    source="",
+                    detail="required check is pending",
+                )
+            )
+            continue
+        source = _single_line_text(check.get("link"))
+        if _json_check_failed(check):
+            failures.append(
+                pr_flow_contract.SubmitFailure(
+                    check=name,
+                    source=source,
+                    detail=_json_check_failure_detail(check),
+                )
+            )
+        elif not _json_check_passed(check):
+            pending.append(
+                pr_flow_contract.SubmitFailure(
+                    check=name,
+                    source=source,
+                    detail="required check is pending",
+                )
+            )
+    if pending:
+        return [], pending
+    return failures, []
+
+
+def _submit_complete_lifecycle(
+    *,
+    root: Path,
+    runner: Runner,
+    pr_number: str,
+    head_sha: str,
+    timeout_seconds: float,
+    poll_seconds: float,
+) -> int:
+    ready = runner.run(["gh", "pr", "ready", pr_number], cwd=root)
+    if ready.returncode != 0 and not _pr_ready_already_ready(ready):
+        _print_command_failure("gh pr ready", ready)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    merge = runner.run(
+        [
+            "gh",
+            "pr",
+            "merge",
+            pr_number,
+            "--merge",
+            "--auto",
+            "--match-head-commit",
+            head_sha,
+        ],
+        cwd=root,
+    )
+    if merge.returncode != 0 and not _auto_merge_already_enabled(merge):
+        _print_command_failure("gh pr merge --auto", merge)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    metadata = _submit_wait_for_merged_pr(
+        root=root,
+        runner=runner,
+        pr_number=pr_number,
+        timeout_seconds=timeout_seconds,
+        poll_seconds=poll_seconds,
+    )
+    if metadata is None:
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "PR merge timed out",
+            repo_root=root,
+            reason_code="PR_MERGE_TIMEOUT",
+            phase="submit_merge",
+            retryable=True,
+            dispatch_target="github",
+            details=(f"PR #{pr_number}",),
+            next_actions=("wait for GitHub auto-merge or inspect merge blockers",),
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    return _submit_cleanup_merged_pr(root=root, runner=runner, metadata=metadata)
+
+
+def _submit_merged_pr_metadata(
+    *,
+    root: Path,
+    runner: Runner,
+    pr_number: str,
+) -> dict[str, Any] | None:
+    view = runner.run(
+        [
+            "gh",
+            "pr",
+            "view",
+            pr_number,
+            "--json",
+            "number,state,mergedAt,headRefName,baseRefName,isCrossRepository",
+        ],
+        cwd=root,
+    )
+    if view.returncode != 0:
+        return None
+    metadata = _json_object_from_result(
+        view,
+        "gh pr view --json number,state,mergedAt,headRefName,baseRefName,isCrossRepository",
+    )
+    if _single_line_text(metadata.get("state")).upper() == "MERGED":
+        return metadata
+    return None
+
+
+def _submit_wait_for_merged_pr(
+    *,
+    root: Path,
+    runner: Runner,
+    pr_number: str,
+    timeout_seconds: float,
+    poll_seconds: float,
+) -> dict[str, Any] | None:
+    deadline = time.monotonic() + max(timeout_seconds, 0)
+    while True:
+        metadata = _submit_merged_pr_metadata(
+            root=root,
+            runner=runner,
+            pr_number=pr_number,
+        )
+        if metadata is not None:
+            return metadata
+        if time.monotonic() >= deadline:
+            return None
+        time.sleep(max(poll_seconds, 0))
+
+
+def _pr_ready_already_ready(result: CommandResult) -> bool:
+    text = f"{result.stdout}\n{result.stderr}".casefold()
+    return ("already" in text and "ready" in text) or "not a draft" in text
+
+
+def _auto_merge_already_enabled(result: CommandResult) -> bool:
+    text = f"{result.stdout}\n{result.stderr}".casefold()
+    return "already" in text and ("auto-merge" in text or "auto merge" in text)
+
+
+def _submit_cleanup_merged_pr(
+    *,
+    root: Path,
+    runner: Runner,
+    metadata: dict[str, Any],
+) -> int:
+    head_branch = _single_line_text(metadata.get("headRefName"))
+    base_branch = _single_line_text(metadata.get("baseRefName")) or "main"
+    is_cross_repository = bool(metadata.get("isCrossRepository"))
+    for label, command in (
+        ("git fetch --prune origin", ["git", "fetch", "--prune", "origin"]),
+        ("git switch base branch", ["git", "switch", base_branch]),
+    ):
+        result = runner.run(command, cwd=root)
+        if result.returncode != 0:
+            _print_command_failure(label, result)
+            return EXCEPTION_REQUIRED_EXIT_CODE
+    with _temporary_env(
+        {
+            "ALLOW_MAIN_REF_UPDATE": "1",
+            "MAIN_REF_UPDATE_REASON": "sync local base after pr-submit merge",
+        }
+    ):
+        synced = runner.run(
+            ["git", "merge", "--ff-only", f"origin/{base_branch}"],
+            cwd=root,
+        )
+    if synced.returncode != 0:
+        _print_command_failure("git merge --ff-only origin base", synced)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    if head_branch and not is_cross_repository:
+        deleted = runner.run(["git", "branch", "-d", head_branch], cwd=root)
+        if deleted.returncode != 0:
+            _print_command_failure("git branch -d", deleted)
+            return EXCEPTION_REQUIRED_EXIT_CODE
+    return SUCCESS_EXIT_CODE
+
+
+def _render_submit_managed_body(
+    contract: pr_flow_contract.PRFlowContract,
+    evidence: dict[str, Any],
+) -> str:
+    return (
+        f"```{contract.fenced_language}\n"
+        + json.dumps(
+            evidence,
+            ensure_ascii=contract.json_ensure_ascii,
+            indent=contract.json_indent,
+        )
+        + "\n```"
+    )
 
 
 def resolve_review_threads(
@@ -1502,7 +2736,6 @@ def ready(
         repo_root=root,
         title=title,
         runner=runner,
-        check_issue_acceptance_criteria=False,
     )
     if code != 0:
         if code == EXCEPTION_REQUIRED_EXIT_CODE:
@@ -1586,7 +2819,7 @@ def ready(
                     phase="official_codex",
                     retryable=True,
                     dispatch_target="github",
-                    details=[f"rerun: make pr-ready TITLE=\"{title or '<same title>'}\""],
+                    details=[f"rerun: make pr-submit TITLE=\"{title or '<same title>'}\""],
                     next_actions=("wait for official Codex review completion",),
                 )
                 return CODEX_REVIEW_PENDING_EXIT_CODE
@@ -1643,16 +2876,6 @@ def ready(
                 next_actions=("fix or reply to blocking review findings",),
             )
             return REPLY_OR_FIX_REQUIRED_EXIT_CODE
-        if isinstance(payload.get("issue_intent"), dict):
-            code = auto_mark_acceptance_criteria(
-                repo_root=root,
-                runner=runner,
-                payload=payload,
-                pr_url=pr_url,
-                head_sha=head_sha,
-            )
-            if code != SUCCESS_EXIT_CODE:
-                return code
         _record_pr_ready_phase(root, completed_phases, "sync_pr_body")
         code = sync(repo_root=root, title=title, runner=runner)
         if code != 0:
@@ -2303,19 +3526,6 @@ def _parse_intent_issue_binding(binding: str) -> tuple[int, str]:
     return number, role
 
 
-def _validated_ac_review_mode(value: str | None) -> str:
-    mode = _single_line_text(value)
-    if not mode or mode == "auto":
-        return ""
-    if mode != "user_required":
-        raise CommitIntentError(
-            "AC review mode must be auto or user_required",
-            reason_code="COMMIT_INTENT_AC_REVIEW_MODE_INVALID",
-            details=(mode,),
-        )
-    return mode
-
-
 def _pending_intent(root: Path) -> dict[str, Any]:
     path = _pending_intent_path(root)
     payload = _read_json_object(path)
@@ -2394,9 +3604,6 @@ def _branch_intent_with_commit(
         "issues": _aggregate_intent_issues(commits),
         "no_issue_authorizations": _no_issue_authorizations(commits),
     }
-    ac_review_mode = _branch_ac_review_mode(commits)
-    if ac_review_mode:
-        payload["ac_review_mode"] = ac_review_mode
     return payload
 
 
@@ -2448,13 +3655,6 @@ def _no_issue_authorizations(commits: Sequence[dict[str, Any]]) -> list[dict[str
     return authorizations
 
 
-def _branch_ac_review_mode(commits: Sequence[dict[str, Any]]) -> str:
-    for commit in commits:
-        if _single_line_text(commit.get("ac_review_mode")) == "user_required":
-            return "user_required"
-    return ""
-
-
 def _spec_issues_from_branch_intent(
     branch_intent: dict[str, Any],
 ) -> list[dict[str, Any]]:
@@ -2496,145 +3696,6 @@ def _non_passing_fragment_status(axis: str, fragment: Any) -> list[str]:
     return [f"{axis} review fragment status {status}"]
 
 
-def _spec_ac_evidence(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    fragments = payload.get("review_fragments")
-    if not isinstance(fragments, dict):
-        return []
-    spec = fragments.get("spec")
-    if not isinstance(spec, dict):
-        return []
-    evidence = spec.get("ac_evidence")
-    return [item for item in evidence if isinstance(item, dict)] if isinstance(evidence, list) else []
-
-
-def _missing_ac_evidence(payload: dict[str, Any]) -> list[str]:
-    missing: list[str] = []
-    evidence = _spec_ac_evidence(payload)
-    for issue in _closing_issue_acceptance_criteria(payload):
-        issue_number = issue["number"]
-        for criterion in issue["criteria"]:
-            matched = [
-                item
-                for item in evidence
-                if _positive_int_from_payload(item.get("issue")) == issue_number
-                and _single_line_text(item.get("criteria")) == criterion
-            ]
-            if not matched:
-                missing.append(f"missing AC evidence for #{issue_number}: {criterion}")
-                continue
-            item = matched[0]
-            item_evidence = item.get("evidence")
-            if not bool(item.get("met")):
-                missing.append(f"unmet AC evidence for #{issue_number}: {criterion}")
-            if not isinstance(item_evidence, list) or not any(
-                _single_line_text(value) for value in item_evidence
-            ):
-                missing.append(f"empty AC evidence for #{issue_number}: {criterion}")
-            if not _single_line_text(item.get("reviewer")):
-                missing.append(f"missing AC reviewer for #{issue_number}: {criterion}")
-    return missing
-
-
-def _closing_issue_acceptance_criteria(
-    payload: dict[str, Any],
-) -> list[dict[str, Any]]:
-    closing_numbers = set(_closing_intent_issue_numbers(payload))
-    issue_refs = payload.get("issue_refs")
-    if not isinstance(issue_refs, list):
-        return []
-    issues: list[dict[str, Any]] = []
-    for item in issue_refs:
-        if not isinstance(item, dict):
-            continue
-        number = _positive_int_from_payload(item.get("number"))
-        if number not in closing_numbers:
-            continue
-        criteria = [
-            _single_line_text(value)
-            for value in item.get("acceptance_criteria", [])
-            if _single_line_text(value)
-        ] if isinstance(item.get("acceptance_criteria"), list) else []
-        issues.append({"number": number, "criteria": criteria})
-    return issues
-
-
-def _closing_intent_issue_numbers(payload: dict[str, Any]) -> tuple[int, ...]:
-    issue_intent = payload.get("issue_intent")
-    issues = issue_intent.get("issues") if isinstance(issue_intent, dict) else None
-    if isinstance(issues, list):
-        numbers = [
-            number
-            for item in issues
-            if isinstance(item, dict)
-            and _single_line_text(item.get("role")) == "closes"
-            and (number := _positive_int_from_payload(item.get("number"))) is not None
-        ]
-        return tuple(sorted(dict.fromkeys(numbers)))
-    return _closing_issue_numbers(payload.get("spec_ref"))
-
-
-def _met_ac_evidence_by_issue(
-    payload: dict[str, Any],
-) -> dict[int, list[dict[str, Any]]]:
-    grouped: dict[int, list[dict[str, Any]]] = {}
-    for item in _spec_ac_evidence(payload):
-        number = _positive_int_from_payload(item.get("issue"))
-        evidence = item.get("evidence")
-        if (
-            number is None
-            or not bool(item.get("met"))
-            or not isinstance(evidence, list)
-            or not any(_single_line_text(value) for value in evidence)
-        ):
-            continue
-        grouped.setdefault(number, []).append(item)
-    return grouped
-
-
-def _body_with_marked_acceptance_criteria(
-    body: str,
-    evidence_items: Sequence[dict[str, Any]],
-) -> str:
-    criteria = {_single_line_text(item.get("criteria")) for item in evidence_items}
-    lines: list[str] = []
-    for line in body.splitlines():
-        match = ai_review_gate.ISSUE_ACCEPTANCE_CRITERION_PATTERN.match(line)
-        if match and match.group("status") == " " and _single_line_text(
-            match.group("text")
-        ) in criteria:
-            lines.append(line.replace("[ ]", "[x]", 1))
-        else:
-            lines.append(line)
-    suffix = "\n" if body.endswith("\n") else ""
-    return "\n".join(lines) + suffix
-
-
-def _render_ac_audit_comment(
-    *,
-    pr_url: str,
-    head_sha: str,
-    evidence_items: Sequence[dict[str, Any]],
-) -> str:
-    lines = [
-        "PR Flow AC auto-mark audit",
-        "",
-        f"- PR: {pr_url}",
-        f"- Head: {head_sha}",
-        "- Marked AC:",
-    ]
-    for item in evidence_items:
-        evidence = ", ".join(
-            _single_line_text(value)
-            for value in item.get("evidence", [])
-            if _single_line_text(value)
-        )
-        lines.append(
-            f"  - {_single_line_text(item.get('criteria'))} "
-            f"(reviewer={_single_line_text(item.get('reviewer'))}; evidence={evidence})"
-        )
-    return "\n".join(lines) + "\n"
-
-
 def _positive_int_from_payload(value: Any) -> int | None:
     if value is None:
         return None
@@ -2674,82 +3735,6 @@ def _issue_ref_numbers(issue_refs: Any) -> tuple[int, ...]:
         if number is not None:
             numbers.append(number)
     return tuple(sorted(dict.fromkeys(numbers)))
-
-
-def _check_linked_issue_acceptance_criteria(
-    *,
-    root: Path,
-    runner: Runner,
-    payload: dict[str, Any],
-) -> int:
-    issue_refs = payload.get("issue_refs")
-    if not isinstance(issue_refs, list) or not issue_refs:
-        return SUCCESS_EXIT_CODE
-    blocking: list[str] = []
-    for item in issue_refs:
-        if not isinstance(item, dict):
-            continue
-        number = _positive_int_from_payload(item.get("number"))
-        if number is None:
-            continue
-        command = ["gh", "issue", "view", str(number), "--json", "title,body"]
-        result = _run_github_read_command(root, runner, command)
-        if result.returncode != 0:
-            exc = _github_data_unavailable(
-                "GitHub issue acceptance criteria unavailable",
-                "gh issue view " + str(number) + " --json title,body",
-                result,
-            )
-            _print_state(
-                "EXCEPTION_REQUIRED",
-                str(exc),
-                repo_root=root,
-                reason_code="ISSUE_ACCEPTANCE_CRITERIA_UNAVAILABLE",
-                phase="sync_pr_body",
-                retryable=exc.retryable,
-                dispatch_target="github",
-                details=exc.details,
-                next_actions=("restore GitHub issue access",),
-            )
-            return EXCEPTION_REQUIRED_EXIT_CODE
-        try:
-            issue = _json_object_from_result(
-                result,
-                "gh issue view " + str(number) + " --json title,body",
-            )
-        except GitHubDataUnavailable as exc:
-            _print_state(
-                "EXCEPTION_REQUIRED",
-                str(exc),
-                repo_root=root,
-                reason_code="ISSUE_ACCEPTANCE_CRITERIA_UNAVAILABLE",
-                phase="sync_pr_body",
-                retryable=exc.retryable,
-                dispatch_target="github",
-                details=exc.details,
-                next_actions=("restore GitHub issue access",),
-            )
-            return EXCEPTION_REQUIRED_EXIT_CODE
-        title = _single_line_text(issue.get("title")) or _single_line_text(
-            item.get("title")
-        )
-        for line in ai_review_gate.unchecked_issue_acceptance_criteria(
-            str(issue.get("body") or "")
-        ):
-            blocking.append(f"#{number} {title}: {line}")
-    if not blocking:
-        return SUCCESS_EXIT_CODE
-    _print_state(
-        "DISPATCH_REQUIRED",
-        "linked issue acceptance criteria incomplete",
-        repo_root=root,
-        reason_code="ISSUE_ACCEPTANCE_CRITERIA_INCOMPLETE",
-        phase="sync_pr_body",
-        dispatch_target="author",
-        details=blocking,
-        next_actions=("check completed acceptance criteria in linked issues",),
-    )
-    return DISPATCH_REQUIRED_EXIT_CODE
 
 
 def _verify_full_evidence_command(root: Path) -> str:
@@ -4551,6 +5536,8 @@ def _json_check_failure_detail(check: dict[str, Any]) -> str:
 def _json_check_failed(check: dict[str, Any]) -> bool:
     bucket = _single_line_text(check.get("bucket")).casefold()
     state = _single_line_text(check.get("state")).casefold()
+    if _json_check_has_skipped_state(check):
+        return not _json_check_allows_skipped_success(check)
     return bucket == "fail" or state in {
         "action_required",
         "cancelled",
@@ -4564,7 +5551,19 @@ def _json_check_failed(check: dict[str, Any]) -> bool:
 def _json_check_passed(check: dict[str, Any]) -> bool:
     bucket = _single_line_text(check.get("bucket")).casefold()
     state = _single_line_text(check.get("state")).casefold()
-    return bucket in {"pass", "skipping"} or state in {"neutral", "skipped", "success"}
+    if _json_check_has_skipped_state(check):
+        return _json_check_allows_skipped_success(check)
+    return bucket == "pass" or state == "success"
+
+
+def _json_check_has_skipped_state(check: dict[str, Any]) -> bool:
+    bucket = _single_line_text(check.get("bucket")).casefold()
+    state = _single_line_text(check.get("state")).casefold()
+    return bucket == "skipping" or state in {"neutral", "skipped"}
+
+
+def _json_check_allows_skipped_success(check: dict[str, Any]) -> bool:
+    return _json_check_display_name(check) == "PR Flow / review-status"
 
 
 def _diagnose_required_checks(
@@ -4868,6 +5867,11 @@ def build_parser() -> argparse.ArgumentParser:
     sync_parser.add_argument("--title")
     wait_parser = subparsers.add_parser("wait")
     wait_parser.add_argument("--pr")
+    submit_parser = subparsers.add_parser("submit")
+    submit_parser.add_argument("--title")
+    submit_parser.add_argument("--pr")
+    submit_parser.add_argument("--official-review-skip-authorized-by")
+    submit_parser.add_argument("--official-review-skip-evidence")
     diagnose_parser = subparsers.add_parser("diagnose")
     diagnose_parser.add_argument("--pr")
     resolve_threads_parser = subparsers.add_parser("resolve-threads")
@@ -4890,10 +5894,6 @@ def build_parser() -> argparse.ArgumentParser:
     intent_stage_parser.add_argument("--no-issue-authorized-by")
     intent_stage_parser.add_argument("--no-issue-evidence")
     intent_stage_parser.add_argument("--correction-reason")
-    intent_stage_parser.add_argument(
-        "--ac-review-mode",
-        choices=("auto", "user_required"),
-    )
     intent_subparsers.add_parser("pre-commit")
     intent_subparsers.add_parser("post-commit")
     coverage_parser = intent_subparsers.add_parser("check-coverage")
@@ -4936,6 +5936,16 @@ def main(argv: list[str] | None = None) -> int:
         return sync(repo_root=args.repo_root, title=args.title)
     if args.command == "wait":
         return wait(repo_root=args.repo_root, pr=args.pr)
+    if args.command == "submit":
+        return submit(
+            repo_root=args.repo_root,
+            title=args.title,
+            pr=args.pr,
+            official_review_skip_authorized_by=(
+                args.official_review_skip_authorized_by
+            ),
+            official_review_skip_evidence=args.official_review_skip_evidence,
+        )
     if args.command == "diagnose":
         return diagnose(repo_root=args.repo_root, pr=args.pr)
     if args.command == "resolve-threads":
@@ -4958,7 +5968,6 @@ def main(argv: list[str] | None = None) -> int:
                 no_issue_authorized_by=args.no_issue_authorized_by,
                 no_issue_evidence=args.no_issue_evidence,
                 correction_reason=args.correction_reason,
-                ac_review_mode=args.ac_review_mode,
             )
         if args.intent_command == "pre-commit":
             return validate_pending_commit_intent(repo_root=args.repo_root)

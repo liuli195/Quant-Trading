@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 新增 repo-native affected 验证层，让日常小改默认跑 `verify-fast`，PR、push、CI 和最终交付仍跑完整 `verify-full`。
+**Goal:** 新增 repo-native affected 验证层，让日常小改默认跑 `verify-fast`；本地 PR 提交走 `pr-submit`，push、CI 和最终交付仍跑完整 `verify-full`。
 
-**Architecture:** 保留 `scripts.research.governance gate` 的强门禁语义，新增 `verify` 编排层负责 affected 选择、解释输出和本地缓存。每个检查都有稳定 `check_id`、输入文件、配置依赖和命令边界；fast 只证明“可继续开发”，full 才能作为 PR/合并证据。
+**Architecture:** 保留 `scripts.research.governance gate` 的强门禁语义，新增 `verify` 编排层负责 affected 选择、解释输出和本地缓存。每个检查都有稳定 `check_id`、输入文件、配置依赖和命令边界；fast 只证明“可继续开发”，PR/合并证据来自 GitHub required check，full 保留为 push/CI/final 完整验证。
 
 **Tech Stack:** Python 3.12, argparse, pytest, existing `scripts.research.governance`, existing `scripts.tools.path_tools.refactor`, Makefile, `.githooks`, GitHub Actions.
 
@@ -306,7 +306,7 @@ AFK 表示实现和合并不需要新的人工判断；HITL 表示需要先确�
 
 ## S08 [AFK]: Full Contract And Entrypoints
 
-**Demo:** 日常入口变快，PR/push/CI 仍跑完整门禁。
+**Demo:** 日常入口变快，本地 PR 提交不重复跑完整门禁，push/CI 仍跑完整门禁。
 
 ```powershell
 make verify-fast
@@ -359,7 +359,7 @@ make verify-full
 - Modify: `indexes.md` if docs index requires it
 
 - [ ] 登记 `research.governance_verify` 或更新 `research.governance` 描述，使 `verify fast/full/explain` 可见。
-- [ ] 规则文档写清：日常小改默认 `verify fast`；PR 准备、push 前、CI、最终交付证据必须 `verify full`。
+- [ ] 规则文档写清：日常小改默认 `verify fast`；本地 PR 提交走 `pr-submit`；push 前、CI、最终交付证据必须 `verify full`。
 - [ ] AGENTS.md 只保留入口级规则，避免复制实现细节。
 - [ ] 重新生成层索引和 docs index。
 - [ ] 运行：
@@ -398,7 +398,7 @@ git diff --check
 - `verify fast` 对普通 Markdown 小改不运行完整 `scripts.research.governance gate`。
 - `verify fast` 输出包含 checked、skipped、cache-hit、full-not-run。
 - `verify explain` 可在不执行命令的情况下说明命中检查。
-- `verify full` 与现有完整 PR/pre-push/CI 覆盖等价。
+- `verify full` 与现有完整 pre-push/CI 覆盖等价；PR 合并证据来自 GitHub required check。
 - `.githooks/pre-commit` 走 fast；`.githooks/pre-push` 和 GitHub Actions 仍走 full。
 - 缓存只保存通过结果，输入、配置、Python 或工具版本变化后失效。
 - 文档、工具注册表、层索引、pathref、governance gate 全部同步。

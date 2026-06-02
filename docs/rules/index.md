@@ -22,6 +22,7 @@
 | [collaboration.md](collaboration.md) <!-- pathref: docs/rules/collaboration.md --> | AI 协作、分支命名、共享工作区 |
 | [docs-and-pathref.md](docs-and-pathref.md) <!-- pathref: docs/rules/docs-and-pathref.md --> | Markdown、pathref、报告索引 |
 | [pr-workflow.md](pr-workflow.md) <!-- pathref: docs/rules/pr-workflow.md --> | PR、主干同步、分支清理 |
+| [pr-flow-interface-contract.yaml](pr-flow-interface-contract.yaml) <!-- pathref: docs/rules/pr-flow-interface-contract.yaml --> | PR Flow 机器接口契约 |
 | [review-guidelines.md](review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md --> | 本地 AI review、Codex Code Review、PR 证据 |
 | [governance.md](governance.md) <!-- pathref: docs/rules/governance.md --> | CI、hooks、CODEOWNERS、waiver、漂移检查 |
 

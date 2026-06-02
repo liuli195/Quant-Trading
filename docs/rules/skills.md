@@ -13,7 +13,7 @@
 - Skill 正文只写触发语义、必读规则、推荐命令和验证提醒，不复制 `docs/rules/**` 正文。
 - 同一条规则、命令或脚本只能有一个 Skill 负责；跨流程依赖使用 `uses` 表达。
 - 修改 Skill 时同步 `.agents/skills/<skill>/`、`ownership.yaml`、测试和文档索引。
-- Skill 小改的日常检查入口是 `scripts.research.governance verify fast --files <Skill文件>`；PR 前仍跑完整门禁。
+- Skill 小改的日常检查入口是 `scripts.research.governance verify fast --files <Skill文件>`；PR 提交走 `pr-submit`，完整门禁由 push/CI/final 验证承担。
 
 ## 发现
 

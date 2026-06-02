@@ -41,16 +41,14 @@ Windows 示例：
 .\.venv\Scripts\python.exe -m scripts.research.governance verify explain --files docs\rules\commands.md
 .\.venv\Scripts\python.exe -m scripts.research.governance verify fast --files docs\rules\commands.md
 .\.venv\Scripts\python.exe -m scripts.research.governance verify full
-.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow ready --title "<PR标题>"
+.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow submit --title "<PR标题>"
 .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow diagnose --pr <PR号>
 .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow resolve-threads <thread-id> [<thread-id>...]
-.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow complete --title "<PR标题>" --pr <PR号>
-.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow complete --title "<PR标题>" --resolve-thread <thread-id>
 gh pr checks <PR号或URL> --required --watch --interval 10
 gh pr checks <PR号或URL> --required
 ```
 
-`verify explain` 只说明会命中哪些检查，不执行命令。`verify fast` 是日常小改入口，只表示当前改动可继续开发；PR 准备、push 前、CI 和最终交付证据必须使用 `verify full`。
+`verify explain` 只说明会命中哪些检查，不执行命令。`verify fast` 是日常小改入口，只表示当前改动可继续开发；PR 提交走 `pr-submit`，不把本地 `verify full` 作为前置证据；push 前、CI 和最终交付以 `verify full` / `Research Governance / verify-full` 为准。
 
 可用 CLI：
 
@@ -62,7 +60,7 @@ gh pr checks <PR号或URL> --required
 | `scripts.research.variants` | `list`、`register`、`materialize`、`branch-plan`、`branch-create`、`merge-plan`、`merge-apply` |
 | `scripts.research.registry.tool_registry` | `list`、`validate` |
 | `scripts.research.governance` | `audit`、`gate`、`verify explain/fast/full` |
-| `scripts.research.governance.pr_flow` | `prepare`、`sync`、`wait`、`ready`、`diagnose`、`resolve-threads`、`ready-for-review`、`merge`、`cleanup`、`complete` |
+| `scripts.research.governance.pr_flow` | `submit`、`diagnose`、`resolve-threads`、`intent`；`ready`、`ready-for-review`、`merge`、`cleanup`、`complete` 仅作内部恢复/调试 |
 
 POSIX 示例把 Windows Python 路径替换为 `.venv/bin/python`。
 
@@ -77,7 +75,6 @@ POSIX 示例把 Windows Python 路径替换为 `.venv/bin/python`。
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow intent stage --issue 54:reference
 .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow intent stage --issue 55:closes --issue 54:reference
-.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow intent stage --issue 60:closes --ac-review-mode user_required
 .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow intent stage --no-issue-reason "<reason>" --no-issue-authorized-by "<user>" --no-issue-evidence "<evidence>"
 .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow intent pre-commit
 .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow intent post-commit
@@ -85,4 +82,3 @@ POSIX 示例把 Windows Python 路径替换为 `.venv/bin/python`。
 ```
 
 `pr_flow intent stage` 必须在 `git add` 之后、`git commit` 之前运行；`pr_flow intent pre-commit` 和 `pr_flow intent post-commit` 由 hooks 调用；`pr_flow intent check-coverage` 用于 PR readiness/CI 发现 rewritten commits 缺少 branch intent。
-`--ac-review-mode user_required` 表示该 branch intent 要求人工确认 AC，不自动勾选 Issue checkbox。

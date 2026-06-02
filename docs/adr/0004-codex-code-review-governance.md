@@ -15,8 +15,8 @@ Superseded in part by [ADR 0005](0005-ai-entry-progressive-disclosure.md) <!-- p
 - [CLAUDE.md](../../CLAUDE.md) <!-- pathref: repo/CLAUDE.md --> 仍是 AI 助手主入口和权威规则源。此条已由 [ADR 0005](0005-ai-entry-progressive-disclosure.md) <!-- pathref: docs/adr/0005-ai-entry-progressive-disclosure.md --> 更新为 `CLAUDE.md` 只保留到 `AGENTS.md` 的入口指针。
 - Codex Code Review 必须由 PR 评论 `@codex review` 明确触发；具体审查范围由 PR body 或触发评论中的 Review Scope 提供。
 - Automatic reviews 可以作为补充，但不能替代上面的明确触发评论。
-- PR 描述必须包含 `Codex Code Review 结论`，CI job `pr-review-evidence` 校验该结论。
-- GitHub `main` 的 required checks 必须包含 `Research Governance / governance`、`Research Governance / pr-review-evidence` 和 `Codex Review Monitor`。
+- PR 描述必须包含 `pr-flow` 托管区的 PR Evidence JSON，CI job `PR Flow / evidence` 校验该 JSON。
+- GitHub `main` 的 required checks 必须包含 `PR Flow / review-status`、`Research Governance / verify-full` 和 `PR Flow / evidence`。
 
 ## 后果
 

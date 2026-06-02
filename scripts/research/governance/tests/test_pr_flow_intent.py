@@ -118,24 +118,6 @@ def test_intent_stage_records_multi_issue_pending_intent(tmp_path: Path) -> None
     assert pending["consumed"] is False
 
 
-def test_intent_stage_records_user_required_ac_review_mode(tmp_path: Path) -> None:
-    runner = FakeIntentRunner()
-
-    code = pr_flow.stage_commit_intent(
-        repo_root=tmp_path,
-        runner=runner,
-        issue_bindings=("55:closes",),
-        ac_review_mode="user_required",
-        now="2026-06-01T08:00:00Z",
-    )
-
-    assert code == pr_flow.SUCCESS_EXIT_CODE
-    pending = json.loads(
-        (tmp_path / ".local/pr-flow/pending-intent.json").read_text(encoding="utf-8")
-    )
-    assert pending["ac_review_mode"] == "user_required"
-
-
 def test_intent_stage_records_no_issue_authorization(tmp_path: Path) -> None:
     runner = FakeIntentRunner()
 
@@ -446,31 +428,6 @@ def test_branch_intent_preserves_no_issue_authorizations(tmp_path: Path) -> None
             "commit_sha": "3" * 40,
         }
     ]
-
-
-def test_branch_intent_preserves_user_required_ac_review_mode(tmp_path: Path) -> None:
-    runner = FakeIntentRunner(head_sha="3" * 40)
-    assert (
-        pr_flow.stage_commit_intent(
-            repo_root=tmp_path,
-            runner=runner,
-            issue_bindings=("55:closes",),
-            ac_review_mode="user_required",
-        )
-        == pr_flow.SUCCESS_EXIT_CODE
-    )
-
-    assert (
-        pr_flow.record_committed_intent(repo_root=tmp_path, runner=runner)
-        == pr_flow.SUCCESS_EXIT_CODE
-    )
-
-    branch_intent = json.loads(
-        (tmp_path / ".local/pr-flow/intents/feature/intent.json").read_text(
-            encoding="utf-8"
-        )
-    )
-    assert branch_intent["ac_review_mode"] == "user_required"
 
 
 def test_branch_intent_coverage_detects_missing_current_commit(
@@ -841,31 +798,6 @@ def test_branch_context_applies_intent_before_spec_policy_validation(
     ]
 
 
-def test_review_payload_carries_ac_review_mode_from_branch_intent(tmp_path: Path) -> None:
-    runner = FakeIntentRunner(head_sha="4" * 40)
-    assert (
-        pr_flow.stage_commit_intent(
-            repo_root=tmp_path,
-            runner=runner,
-            issue_bindings=("55:closes",),
-            ac_review_mode="user_required",
-        )
-        == pr_flow.SUCCESS_EXIT_CODE
-    )
-    assert (
-        pr_flow.record_committed_intent(repo_root=tmp_path, runner=runner)
-        == pr_flow.SUCCESS_EXIT_CODE
-    )
-
-    updated = pr_flow.payload_with_branch_intent(
-        _valid_issue_intent_payload(),
-        repo_root=tmp_path,
-        runner=runner,
-    )
-
-    assert updated["issue_intent"]["ac_review_mode"] == "user_required"
-
-
 def test_review_pipeline_skips_security_when_standards_has_open_p1() -> None:
     payload = _valid_issue_intent_payload()
     payload["review_fragments"]["standards"]["findings"] = [
@@ -888,7 +820,7 @@ def test_review_pipeline_blocks_non_passing_first_stage_fragment_status() -> Non
     assert "standards review fragment status blocked" in decision["blocking_findings"]
 
 
-def test_review_pipeline_requires_spec_ac_evidence_for_closes_issue() -> None:
+def test_review_pipeline_ignores_spec_ac_evidence_when_present() -> None:
     payload = _valid_issue_intent_payload()
     payload["review_fragments"]["spec"]["ac_evidence"] = [
         {
@@ -903,89 +835,16 @@ def test_review_pipeline_requires_spec_ac_evidence_for_closes_issue() -> None:
     decision = pr_flow.evaluate_review_pipeline(payload)
 
     assert decision["status"] == "security_ready"
-    assert decision["ac_evidence"][0]["criteria"] == "AC is met"
+    assert "ac_evidence" not in decision
 
 
-def test_review_pipeline_blocks_missing_ac_evidence() -> None:
+def test_review_pipeline_does_not_block_missing_ac_evidence() -> None:
     payload = _valid_issue_intent_payload()
 
     decision = pr_flow.evaluate_review_pipeline(payload)
 
-    assert decision["status"] == "blocked"
-    assert "missing AC evidence for #55: AC is met" in decision["blocking_findings"]
-
-
-def test_auto_mark_acceptance_criteria_marks_met_closes_issue_and_comments(
-    tmp_path: Path,
-) -> None:
-    payload = _valid_issue_intent_payload()
-    payload["review_fragments"]["spec"]["ac_evidence"] = [
-        {
-            "issue": 55,
-            "criteria": "AC is met",
-            "met": True,
-            "evidence": ["focused pytest"],
-            "reviewer": "spec-reviewer",
-        }
-    ]
-    runner = FakeIntentRunner(issue_bodies={55: "- [ ] AC is met\n- [ ] Other AC\n"})
-
-    code = pr_flow.auto_mark_acceptance_criteria(
-        repo_root=tmp_path,
-        runner=runner,
-        payload=payload,
-        pr_url="https://github.com/liuli195/Quant-Trading/pull/7",
-        head_sha="a" * 40,
-    )
-
-    assert code == pr_flow.SUCCESS_EXIT_CODE
-    assert "- [x] AC is met" in runner.edited_issues[55]
-    assert "- [ ] Other AC" in runner.edited_issues[55]
-    assert "https://github.com/liuli195/Quant-Trading/pull/7" in runner.issue_comments[55][0]
-    assert "AC is met" in runner.issue_comments[55][0]
-
-
-def test_auto_mark_acceptance_criteria_stops_for_user_required_mode(
-    tmp_path: Path,
-) -> None:
-    payload = _valid_issue_intent_payload()
-    payload["issue_intent"]["ac_review_mode"] = "user_required"
-    runner = FakeIntentRunner(issue_bodies={55: "- [ ] AC is met\n"})
-
-    code = pr_flow.auto_mark_acceptance_criteria(
-        repo_root=tmp_path,
-        runner=runner,
-        payload=payload,
-        pr_url="https://github.com/liuli195/Quant-Trading/pull/7",
-        head_sha="a" * 40,
-    )
-
-    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
-    assert runner.edited_issues == {}
-    status = json.loads(
-        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
-    )
-    assert status["reason_code"] == "AC_REVIEW_USER_REQUIRED"
-
-
-def test_auto_mark_acceptance_criteria_skips_reference_issue(tmp_path: Path) -> None:
-    payload = _valid_issue_intent_payload()
-    payload["issue_intent"]["issues"] = [
-        {"number": 55, "role": "reference", "title": "Intent stage"}
-    ]
-    payload["spec_ref"]["issues"] = [{"number": 55, "role": "reference"}]
-    runner = FakeIntentRunner(issue_bodies={55: "- [ ] AC is met\n"})
-
-    code = pr_flow.auto_mark_acceptance_criteria(
-        repo_root=tmp_path,
-        runner=runner,
-        payload=payload,
-        pr_url="https://github.com/liuli195/Quant-Trading/pull/7",
-        head_sha="a" * 40,
-    )
-
-    assert code == pr_flow.SUCCESS_EXIT_CODE
-    assert runner.edited_issues == {}
+    assert decision["status"] == "security_ready"
+    assert "ac_evidence" not in decision
 
 
 def test_intent_cli_parser_accepts_stage_command() -> None:
@@ -997,8 +856,6 @@ def test_intent_cli_parser_accepts_stage_command() -> None:
             "55:closes",
             "--correction-reason",
             "fix role",
-            "--ac-review-mode",
-            "user_required",
         ]
     )
 
@@ -1006,7 +863,6 @@ def test_intent_cli_parser_accepts_stage_command() -> None:
     assert args.intent_command == "stage"
     assert args.issue == ["55:closes"]
     assert args.correction_reason == "fix role"
-    assert args.ac_review_mode == "user_required"
 
 
 def test_git_hooks_call_commit_intent_gate() -> None:

@@ -2,26 +2,29 @@
 
 入口见 [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->；PR 流程见 [pr-workflow.md](pr-workflow.md) <!-- pathref: docs/rules/pr-workflow.md -->。
 
-本页保留 evidence schema 和 review 要求。日常不要手工复制整段 PR 证据；先让 Skills / agents 产出 `.local/ai-review/latest.json`，再运行 `make pr-ready TITLE="<PR标题>"`，由 `scripts.research.governance.pr_flow` 渲染 `.local/ai-review/pr-body.md` 并更新 PR body 的 `pr-flow` 托管区。
+本页保留 review 要求。日常不要手工复制 PR 证据；让 reviewer 直接产出契约化 fragment，再运行 `make pr-submit TITLE="<PR标题>"`，由 `scripts.research.governance.pr_flow` 更新 PR body 的 `pr-flow` 托管区。
 
 ## MUST
 
+- `target方案优先`: 当 PR/Issue/PRD 明确目标方案时，Standards/Spec reviewer 必须以目标方案为裁判基准；旧仓库规则与目标方案冲突时，finding 归类为规则/ADR drift，不得归类为实现违反旧规则。
 - 所有 PR 必须完成本地 AI review、问题评级和风险分级。
 - 本地 AI review 必须记录至少两个独立 reviewer；有子 agent 能力时必须完成子 agent 交叉评审。无能力时记录原因和替代证据。
 - 交叉评审必须记录 `superpowers:subagent-driven-development/spec-reviewer-prompt.md`、`superpowers:subagent-driven-development/code-quality-reviewer-prompt.md` 和 `reviewers: A, B`。
-- Codex 本地安全 review 使用 `codex-security`；Claude 使用 `security-guidance`；报告字段为 `security_review`，PR body 字段为 `本地安全 review`。
+- Codex 本地安全 review 使用 `codex-security`；Claude 使用 `security-guidance`；结构化 fragment 记录安全结论，PR body 只保留 PR Evidence JSON。
 - 本地 AI review 默认 `review_mode=complete`；`complete_review.iterations` 必须证明每个 reviewer 最后一轮 `no_new_findings=true` 且 `new_findings=[]`。
 - `review_mode=partial` 只在用户显式授权时可用，并记录 `authorized_by`、`reason`、`evidence`。
 - P0/P1 未以 `fixed` 或 `false_positive` 关闭前，不得进入下一阶段。
-- 高风险或 unknown PR 必须加 `ai-risk-review` label，并触发官方 Codex Code Review；用户显式授权跳过时，PR body 必须记录 `官方 Codex Review 跳过授权`。
+- `target spec wins`: 当目标 Issue/PRD/spec 与旧规则或 ADR 冲突时，review finding 应归类为 `rule/ADR drift`；规则或 ADR 修改仍必须先获得用户显式授权。
+- 官方 Codex Code Review 是否等待只看 PR Evidence `official_review.decision`：`required` 等待官方 review，`skip_risk_low` 跳过低风险官方 review，`skip_user_authorized` 表示用户显式授权跳过官方 review。
+- `skip_user_authorized` 只记录 `authorized_by + evidence`，不记录 `reason`；该授权不能绕过 unresolved thread、P0/P1 或 GitHub required checks 的其它阻断。
 - 官方 Codex Review 触发评论必须包含 `@codex review`、当前 PR、当前 head SHA、Review Scope（可为空）和审查重点；禁止模板外文案，禁止写“不要执行命令”“只做静态 diff review”等切断仓库、diff 或命令上下文的指令。
-- 官方 Codex Review 按 Review Scope 聚焦 P0/P1 合并阻断风险；无法生成明确 scope 的大型 PR 应拆分，否则按全量高风险 PR 处理。
-- 官方 Codex Review 无 P0/P1 且匹配当前 head 时，`pr_flow` 可以自动把真实 review/comment 链接写入 PR body evidence。
-- 自动写入不等于跳过 review；证据必须来自当前 PR、当前 head、当前 trigger 之后的 Codex 结果。
-- `pr-review-evidence` 和 `Codex Review Monitor` 必须读取 review thread 状态；只要 GitHub conversation resolution ruleset 要求 resolved conversation，任何未 resolved 的 review thread 都阻断，跳过授权不得绕过。
-- `Codex Review Monitor` 是 GitHub `main` 全局 required status check；低风险且无需官方 Codex Review 的 PR 允许快速通过/空跑，但不替代 PR body 证据。
+- 需要官方 Codex Review 时，Review Scope 聚焦 P0/P1 合并阻断风险；无法生成明确 scope 的大型 PR 应拆分，否则按全量高风险 PR 处理。
+- 官方 Codex P2/P3 是非阻断 retained finding；`pr_flow` 只能写入 PR Evidence `retained`，不得扩展 PR body 机器字段。
+- 自动写入不等于跳过 review；需要官方 Codex Review 时，证据必须来自当前 PR、当前 head、当前 trigger 之后的 Codex 结果。
+- `PR Flow / evidence` 和 `PR Flow / review-status` 必须读取 review thread 状态；未 resolved human thread、无 severity thread 和官方 P0/P1 阻断。官方 P2/P3 只能由 `pr_flow` 写入固定接受模板和 PR Evidence retained 后 resolve。
+- `PR Flow / review-status` 是 GitHub `main` 全局 required status check；官方 Codex review 未返回时保持 pending，不写失败。`pr-submit` 开始和成功时 `status.json` 可留下 `failures: []`，它不是成功证明。
 - 如果 Codex review 无法读取当前 PR diff、要求额外提供 unified diff、引用不存在或非当前 head，按 review 上下文失效阻断。
-- 必须保留本地检查证据，至少包括 `.\.venv\Scripts\python.exe -m scripts.research.governance verify full`；`verify fast` 不能作为 PR 证据。
+- 本地不再把 `verify full` 作为 PR 前置证据；完整验证由 GitHub required check `Research Governance / verify-full` 执行。`verify fast` 只用于日常开发。
 
 ## 评级
 
@@ -63,42 +66,24 @@ Review Scope：
 - [governance.md](governance.md) <!-- pathref: docs/rules/governance.md -->
 - [review-guidelines.md](review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md -->
 
-## PR 证据格式
+## PR Evidence JSON
 
-```markdown
-## AI Review 风险分级
+- PR body 托管区只写 fenced JSON，字段为 `schema/head/diff/reviews/official_review/issues/retained`，来源见 [pr-flow-interface-contract.yaml](pr-flow-interface-contract.yaml) <!-- pathref: docs/rules/pr-flow-interface-contract.yaml -->。
+- `reviews` 只保存 Standards、Spec、Security 的通过指纹。
+- `official_review.decision` 只允许 `required`、`skip_risk_low`、`skip_user_authorized`；旧 evidence 缺失 `official_review` 时按 `required` 读取，新写出必须包含。
+- `issues.commits` 覆盖每个 PR commit；每个 commit 要么有关联 Issue，要么明确 `no_issue`。
+- `issues.refs` 仅记录 closes/reference 角色；GitHub Issue AC checkbox 仅作为人工记录，不参与 PR gate。
+- `retained` 只允许 P2/P3，来源只能是 standards/spec/security/official_codex。
 
-- 风险等级: low / high / unknown
-- 是否需要官方 Codex Review: 是 / 否（低风险无需 / 用户授权跳过）
-- high/unknown PR label: `ai-risk-review` / 不适用
-- 官方 Codex Review 跳过授权: 无 / authorized_by=<授权人>；reason=<原因>；evidence=<授权证据>
-- 本地 AI review: `.local/ai-review/latest.md`
-- 本地安全 review: provider=codex / claude；tool=codex-security / security-guidance；evidence=<安全 review 证据>
-- 本地 AI review 模式: complete / partial
-- 不完全 Review 模式授权: 无 / authorized_by=<授权人>；reason=<原因>；evidence=<授权证据>
-- 子 agent 交叉评审: `superpowers:subagent-driven-development/spec-reviewer-prompt.md` + `superpowers:subagent-driven-development/code-quality-reviewer-prompt.md`；reviewers: <规格评审子agent>, <代码质量评审子agent>；见 `.local/ai-review/latest.md`
-- 任务分发说明: 已分发任务 / 未分发原因
-- Codex Review Scope: `.local/ai-review/codex-review-scope.md`
-- P0/P1 未关闭项: 无
+## Local Review Wrapper
 
-## P2 保留项
-
-- 无
-
-## Codex Code Review 结论
-
-- Reviewer: `Codex`
-- 触发方式: `@codex review`
-- 结论: 通过 / 未要求 / 未执行
-- 阻断问题: 无
-- 关键证据:
-  - Codex review 链接：https://github.com/<owner>/<repo>/pull/<number>#pullrequestreview-<id>
-  - `.\.venv\Scripts\python.exe -m scripts.research.governance verify full`
-```
+- `repo-pr-governance wrapper for $review`: 主 agent 用本技能作为轻量包装器，不修改 `$review` 技能，不复制完整提示词，不让 `pr-submit` 派发子 agent。
+- `pr-submit` 只校验结构化 fragments；缺失时输出 `DISPATCH_REQUIRED`。主 agent 派发 `$review`，并把 `$review` 文本结论映射为 standards/spec fragments；Security review 独立生成 security fragment。
+- 有 Issue refs 时，只在 `$review` 默认逻辑基础上补充 spec hint：`closes` 是主规格，`reference` 是背景。无 Issue refs 或 no-Issue 时，完全走 `$review` 默认逻辑。
 
 ## Issue Intent Review
 
 - Standards reviewer 和 Spec reviewer 先并行运行；`Security-after-Standards/Spec` 是固定顺序，只有两者没有 open P0/P1 后才运行 Security reviewer。
-- `Spec reviewer AC evidence` 必须覆盖每个 `closes` Issue 的 AC，包含 AC text、`met`、evidence references 和 reviewer identity。
+- Spec reviewer 按目标方案整体判断实现是否满足需求，不额外输出逐项 AC 确认；PR Evidence 不记录 AC 确认字段。
 - `Standards/Security veto` 保留阻断权：Standards 可阻断规则、证据或流程问题；Security 可在第二阶段阻断安全问题。
-- P2/P3 accepted findings 继续作为非阻断证据保留，不阻止 Security 或 AC auto-marking。
+- P2/P3 accepted findings 继续作为非阻断证据保留，不阻止 Security 后续流程。

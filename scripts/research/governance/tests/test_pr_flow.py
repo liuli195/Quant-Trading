@@ -469,21 +469,21 @@ class DuplicateRequiredChecksRunner:
         self.calls: list[list[str]] = []
         self.checks = checks or [
             {
-                "name": "pr-review-evidence",
+                "name": "evidence",
                 "state": "SUCCESS",
                 "bucket": "pass",
-                "workflow": "Research Governance",
+                "workflow": "PR Flow",
                 "link": "https://github.com/o/r/actions/runs/20/job/200",
             },
             {
-                "name": "pr-review-evidence",
+                "name": "evidence",
                 "state": "FAILURE",
                 "bucket": "fail",
-                "workflow": "Research Governance",
+                "workflow": "PR Flow",
                 "link": "https://github.com/o/r/actions/runs/10/job/100",
             },
             {
-                "name": "Codex Review Monitor",
+                "name": "PR Flow / review-status",
                 "state": "SUCCESS",
                 "bucket": "pass",
                 "workflow": "",
@@ -582,7 +582,7 @@ class PendingRequiredChecksRunner:
                 json.dumps(
                     [
                         {
-                            "name": "governance",
+                            "name": "verify-full",
                             "state": "PENDING",
                             "bucket": "pending",
                             "workflow": "Research Governance",
@@ -605,7 +605,7 @@ class RollupFallbackChecksRunner:
         self.legacy_required_contexts = legacy_required_contexts or []
         self.rollup_checks = rollup_checks or [
             {
-                "name": "governance",
+                "name": "verify-full",
                 "workflowName": "Research Governance",
                 "state": "SUCCESS",
                 "detailsUrl": "https://github.com/o/r/actions/runs/30/job/300",
@@ -613,15 +613,15 @@ class RollupFallbackChecksRunner:
                 "completedAt": "2026-05-28T10:01:00Z",
             },
             {
-                "name": "pr-review-evidence",
-                "workflowName": "Research Governance",
+                "name": "evidence",
+                "workflowName": "PR Flow",
                 "state": "SUCCESS",
                 "detailsUrl": "https://github.com/o/r/actions/runs/31/job/310",
                 "startedAt": "2026-05-28T10:00:00Z",
                 "completedAt": "2026-05-28T10:01:00Z",
             },
             {
-                "name": "Codex Review Monitor",
+                "name": "PR Flow / review-status",
                 "workflowName": "",
                 "state": "SUCCESS",
                 "detailsUrl": "https://github.com/o/r/pull/7#issuecomment-1",
@@ -704,7 +704,7 @@ class RollupFallbackChecksRunner:
                                 "type": "required_status_checks",
                                 "parameters": {
                                     "required_status_checks": [
-                                        {"context": "Research Governance / governance"}
+                                        {"context": "Research Governance / verify-full"}
                                     ]
                                 },
                             }
@@ -867,10 +867,10 @@ class DiagnoseRunner:
                 json.dumps(
                     [
                         {
-                            "name": "pr-review-evidence",
+                            "name": "evidence",
                             "state": self.check_state,
                             "bucket": self.check_bucket,
-                            "workflow": "Research Governance",
+                            "workflow": "PR Flow",
                             "link": "https://github.com/o/r/actions/runs/20/job/200",
                         }
                     ]
@@ -1311,17 +1311,17 @@ def test_wait_blocks_latest_duplicate_required_check_failure(
     runner = DuplicateRequiredChecksRunner(
         [
             {
-                "name": "pr-review-evidence",
+                "name": "evidence",
                 "state": "FAILURE",
                 "bucket": "fail",
-                "workflow": "Research Governance",
+                "workflow": "PR Flow",
                 "link": "https://github.com/o/r/actions/runs/20/job/200",
             },
             {
-                "name": "pr-review-evidence",
+                "name": "evidence",
                 "state": "SUCCESS",
                 "bucket": "pass",
-                "workflow": "Research Governance",
+                "workflow": "PR Flow",
                 "link": "https://github.com/o/r/actions/runs/10/job/100",
             },
         ]
@@ -1330,7 +1330,7 @@ def test_wait_blocks_latest_duplicate_required_check_failure(
     code = pr_flow.wait(repo_root=tmp_path, pr="7", runner=runner)
 
     assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
-    assert "Research Governance / pr-review-evidence" in capsys.readouterr().err
+    assert "PR Flow / evidence" in capsys.readouterr().err
 
 
 def test_wait_uses_latest_duplicate_non_actions_required_check_timestamp(
@@ -1364,6 +1364,78 @@ def test_wait_uses_latest_duplicate_non_actions_required_check_timestamp(
     assert "required checks passed" in capsys.readouterr().out
 
 
+def test_wait_allows_skipped_review_status_required_check(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = DuplicateRequiredChecksRunner(
+        [
+            {
+                "name": "PR Flow / review-status",
+                "state": "SKIPPED",
+                "bucket": "skipping",
+                "workflow": "",
+                "link": "https://github.com/o/r/pull/7#issuecomment-1",
+            },
+            {
+                "name": "verify-full",
+                "state": "SUCCESS",
+                "bucket": "pass",
+                "workflow": "Research Governance",
+                "link": "https://github.com/o/r/actions/runs/20/job/200",
+            },
+            {
+                "name": "evidence",
+                "state": "SUCCESS",
+                "bucket": "pass",
+                "workflow": "PR Flow",
+                "link": "https://github.com/o/r/actions/runs/21/job/210",
+            },
+        ]
+    )
+
+    code = pr_flow.wait(repo_root=tmp_path, pr="7", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert "required checks passed" in capsys.readouterr().out
+
+
+def test_wait_blocks_skipped_non_review_status_required_check(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = DuplicateRequiredChecksRunner(
+        [
+            {
+                "name": "PR Flow / review-status",
+                "state": "SUCCESS",
+                "bucket": "pass",
+                "workflow": "",
+                "link": "https://github.com/o/r/pull/7#issuecomment-1",
+            },
+            {
+                "name": "verify-full",
+                "state": "SKIPPED",
+                "bucket": "pass",
+                "workflow": "Research Governance",
+                "link": "https://github.com/o/r/actions/runs/20/job/200",
+            },
+            {
+                "name": "evidence",
+                "state": "SUCCESS",
+                "bucket": "pass",
+                "workflow": "PR Flow",
+                "link": "https://github.com/o/r/actions/runs/21/job/210",
+            },
+        ]
+    )
+
+    code = pr_flow.wait(repo_root=tmp_path, pr="7", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "Research Governance / verify-full" in capsys.readouterr().err
+
+
 def test_wait_falls_back_to_status_check_rollup_when_required_checks_empty(
     tmp_path: Path,
     capsys,
@@ -1391,7 +1463,7 @@ def test_wait_fallback_blocks_when_mandatory_required_check_is_missing(
     runner = RollupFallbackChecksRunner(
         rollup_checks=[
             {
-                "name": "governance",
+                "name": "verify-full",
                 "workflowName": "Research Governance",
                 "state": "SUCCESS",
                 "detailsUrl": "https://github.com/o/r/actions/runs/30/job/300",
@@ -1406,8 +1478,8 @@ def test_wait_fallback_blocks_when_mandatory_required_check_is_missing(
     captured = capsys.readouterr()
     assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
     assert "REQUIRED_CHECKS_PENDING" in captured.err
-    assert "Research Governance / pr-review-evidence" in captured.err
-    assert "Codex Review Monitor" in captured.err
+    assert "PR Flow / evidence" in captured.err
+    assert "PR Flow / review-status" in captured.err
 
 
 def test_wait_fallback_includes_legacy_branch_protection_required_checks(
@@ -1418,7 +1490,7 @@ def test_wait_fallback_includes_legacy_branch_protection_required_checks(
         legacy_required_contexts=["External Policy"],
         rollup_checks=[
             {
-                "name": "governance",
+                "name": "verify-full",
                 "workflowName": "Research Governance",
                 "state": "SUCCESS",
                 "detailsUrl": "https://github.com/o/r/actions/runs/30/job/300",
@@ -1426,15 +1498,15 @@ def test_wait_fallback_includes_legacy_branch_protection_required_checks(
                 "completedAt": "2026-05-28T10:01:00Z",
             },
             {
-                "name": "pr-review-evidence",
-                "workflowName": "Research Governance",
+                "name": "evidence",
+                "workflowName": "PR Flow",
                 "state": "SUCCESS",
                 "detailsUrl": "https://github.com/o/r/actions/runs/31/job/310",
                 "startedAt": "2026-05-28T10:00:00Z",
                 "completedAt": "2026-05-28T10:01:00Z",
             },
             {
-                "name": "Codex Review Monitor",
+                "name": "PR Flow / review-status",
                 "workflowName": "",
                 "state": "SUCCESS",
                 "detailsUrl": "https://github.com/o/r/pull/7#issuecomment-1",
@@ -1565,7 +1637,7 @@ def test_wait_reports_exception_when_required_checks_are_pending(
     captured = capsys.readouterr()
     assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
     assert "EXCEPTION_REQUIRED" in captured.err
-    assert "Research Governance / governance" in captured.err
+    assert "Research Governance / verify-full" in captured.err
 
 
 def test_wait_writes_structured_last_status_for_pending_checks(
@@ -1592,7 +1664,7 @@ def test_wait_writes_structured_last_status_for_pending_checks(
     assert status["phase"] == "wait_required_checks"
     assert status["retryable"] is True
     assert status["dispatch_target"] == "github"
-    assert status["blocking_items"] == ["Research Governance / governance"]
+    assert status["blocking_items"] == ["Research Governance / verify-full"]
     assert status["next_actions"] == ["wait for pending required checks"]
 
 
@@ -1608,7 +1680,7 @@ def test_diagnose_reports_required_checks_and_unresolved_threads(
     assert "mergeStateStatus: BLOCKED" in captured.out
     assert "pr body evidence: present" in captured.out
     assert "required checks: failing" in captured.out
-    assert "Research Governance / pr-review-evidence" in captured.out
+    assert "PR Flow / evidence" in captured.out
     assert "review threads: unresolved=1" in captured.out
     assert "next: resolve unresolved review threads" in captured.out
 
@@ -1654,19 +1726,19 @@ def test_diagnose_falls_back_to_status_check_rollup_when_required_checks_empty(
                             "isDraft": False,
                                 "statusCheckRollup": [
                                     {
-                                        "name": "governance",
+                                        "name": "verify-full",
                                         "workflowName": "Research Governance",
                                         "state": "SUCCESS",
                                         "detailsUrl": "https://github.com/o/r/actions/runs/30/job/300",
                                     },
                                     {
-                                        "name": "pr-review-evidence",
-                                        "workflowName": "Research Governance",
+                                        "name": "evidence",
+                                        "workflowName": "PR Flow",
                                         "state": "SUCCESS",
                                         "detailsUrl": "https://github.com/o/r/actions/runs/31/job/310",
                                     },
                                     {
-                                        "name": "Codex Review Monitor",
+                                        "name": "PR Flow / review-status",
                                         "workflowName": "",
                                         "state": "SUCCESS",
                                         "detailsUrl": "https://github.com/o/r/pull/7#issuecomment-1",
@@ -1740,19 +1812,19 @@ def test_diagnose_falls_back_when_required_checks_command_reports_none(
                             "isDraft": False,
                             "statusCheckRollup": [
                                 {
-                                    "name": "governance",
+                                    "name": "verify-full",
                                     "workflowName": "Research Governance",
                                     "state": "SUCCESS",
                                     "detailsUrl": "https://github.com/o/r/actions/runs/30/job/300",
                                 },
                                 {
-                                    "name": "pr-review-evidence",
-                                    "workflowName": "Research Governance",
+                                    "name": "evidence",
+                                    "workflowName": "PR Flow",
                                     "state": "SUCCESS",
                                     "detailsUrl": "https://github.com/o/r/actions/runs/31/job/310",
                                 },
                                 {
-                                    "name": "Codex Review Monitor",
+                                    "name": "PR Flow / review-status",
                                     "workflowName": "",
                                     "state": "SUCCESS",
                                     "detailsUrl": "https://github.com/o/r/pull/7#issuecomment-1",
@@ -2508,7 +2580,7 @@ def test_sync_rejects_stale_schema_v3_diff_fingerprint(
     assert not any(call[:3] == ["gh", "pr", "edit"] for call in runner.calls)
 
 
-def test_sync_stops_after_pr_body_update_when_issue_ac_is_unchecked(
+def test_sync_ignores_unchecked_issue_ac_checkbox(
     tmp_path: Path,
 ) -> None:
     _write_valid_v4_issue_report(tmp_path, issue_number=50)
@@ -2534,65 +2606,16 @@ def test_sync_stops_after_pr_body_update_when_issue_ac_is_unchecked(
 
     code = pr_flow.sync(repo_root=tmp_path, title="PR Flow issue gate", runner=runner)
 
-    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
-    assert "Closes #50" in runner.edited_bodies[-1]
-    status = json.loads(
-        (tmp_path / ".local" / "pr-flow" / "last-status.json").read_text(
-            encoding="utf-8"
-        )
-    )
-    assert status["state"] == "DISPATCH_REQUIRED"
-    assert status["reason_code"] == "ISSUE_ACCEPTANCE_CRITERIA_INCOMPLETE"
-    assert status["blocking_items"] == ["#50 Issue 50: - [ ] first AC"]
-
-
-def test_sync_continues_when_linked_issue_ac_is_checked(
-    tmp_path: Path,
-) -> None:
-    _write_valid_v4_issue_report(tmp_path, issue_number=50)
-
-    class IssueAcRunner(FakeRunner):
-        def run(
-            self,
-            command: list[str],
-            *,
-            cwd: Path | None = None,
-            input_text: str | None = None,
-        ) -> pr_flow.CommandResult:
-            if command == ["gh", "issue", "view", "50", "--json", "title,body"]:
-                self.calls.append(command)
-                return pr_flow.CommandResult(
-                    0,
-                    json.dumps({"title": "Issue 50", "body": "- [x] first AC\n"}),
-                    "",
-                )
-            return super().run(command, cwd=cwd, input_text=input_text)
-
-    runner = IssueAcRunner(existing_pr=True)
-
-    code = pr_flow.sync(repo_root=tmp_path, title="PR Flow issue gate", runner=runner)
-
     assert code == 0
     assert "Closes #50" in runner.edited_bodies[-1]
+    assert ["gh", "issue", "view", "50", "--json", "title,body"] not in runner.calls
 
 
-def test_ready_auto_marks_ac_before_final_issue_gate(
+def test_ready_does_not_auto_mark_ac_before_final_issue_gate(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
     _write_valid_v4_issue_report(tmp_path, issue_number=50)
-    latest = tmp_path / ".local" / "ai-review" / "latest.json"
-    payload = json.loads(latest.read_text(encoding="utf-8"))
-    payload["review_fragments"]["spec"]["ac_evidence"] = [
-        {
-            "issue": 50,
-            "criteria": "first AC",
-            "met": True,
-            "evidence": ["test_ready_auto_marks_ac_before_final_issue_gate"],
-            "reviewer": "spec-review-subagent",
-        }
-    ]
-    latest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     intent = {
         "schema_version": 1,
         "branch": "feature/pr-flow",
@@ -2652,8 +2675,8 @@ def test_ready_auto_marks_ac_before_final_issue_gate(
     code = pr_flow.ready(repo_root=tmp_path, title="PR Flow issue gate", runner=runner)
 
     assert code == pr_flow.SUCCESS_EXIT_CODE
-    assert "- [x] first AC" in runner.issue_body
-    assert runner.issue_comments
+    assert "- [ ] first AC" in runner.issue_body
+    assert runner.issue_comments == []
     assert len(runner.edited_bodies) >= 2
 
 

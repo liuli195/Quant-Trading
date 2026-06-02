@@ -18,7 +18,7 @@ permissions:
   pull-requests: read
 
 jobs:
-  governance:
+  verify-full:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,46 +32,3 @@ jobs:
         run: python -m pip install -r requirements-dev.txt
       - name: Verify full
         run: python -m scripts.research.governance verify full
-
-  pr-review-evidence:
-    runs-on: windows-latest
-    steps:
-      - name: Skip outside PR review evidence context
-        if: >-
-          github.event_name != 'pull_request' &&
-          github.event_name != 'pull_request_review' &&
-          github.event_name != 'pull_request_review_comment'
-        run: echo "No PR review evidence context; required check passes as no-op."
-      - uses: actions/checkout@v4
-        if: >-
-          github.event_name == 'pull_request' ||
-          github.event_name == 'pull_request_review' ||
-          github.event_name == 'pull_request_review_comment'
-      - uses: actions/setup-python@v5
-        if: >-
-          github.event_name == 'pull_request' ||
-          github.event_name == 'pull_request_review' ||
-          github.event_name == 'pull_request_review_comment'
-        with:
-          python-version: "3.12"
-      - name: Validate PR review evidence
-        if: >-
-          github.event_name == 'pull_request' ||
-          github.event_name == 'pull_request_review' ||
-          github.event_name == 'pull_request_review_comment'
-        env:
-          PR_BODY: ${{ github.event.pull_request.body || github.event.issue.body }}
-          PR_URL: ${{ github.event.pull_request.html_url || format('https://github.com/{0}/pull/{1}', github.repository, github.event.issue.number) }}
-          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_HEAD_UPDATED_AT: ${{ github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.action == 'reopened') && github.event.pull_request.updated_at || '' }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: >-
-          python -m scripts.research.governance.pr_review_evidence
-          --body-env PR_BODY
-          --pr-url-env PR_URL
-          --repo-env GITHUB_REPOSITORY
-          --pr-number-env PR_NUMBER
-          --head-sha-env PR_HEAD_SHA
-          --head-updated-at-env PR_HEAD_UPDATED_AT
-          --github-token-env GITHUB_TOKEN

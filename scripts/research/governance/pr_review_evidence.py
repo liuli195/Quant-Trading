@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 import urllib.request
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from scripts.research.governance import pr_flow_contract
 from scripts.research.governance.codex_review_contract import (
     is_codex_review_request,
 )
@@ -108,10 +111,6 @@ CONTEXT_HOSTILE_TRIGGER_ERROR = (
     "required @codex review trigger must not disable repository context"
 )
 REQUIRED_TRIGGER_TOKENS = ("@codex review",)
-REQUIRED_VERIFY_FULL_COMMANDS = (
-    ".\\.venv\\Scripts\\python.exe -m scripts.research.governance verify full",
-    ".venv/bin/python -m scripts.research.governance verify full",
-)
 
 
 @dataclass(frozen=True)
@@ -125,6 +124,7 @@ def validate_pr_body(
     *,
     expected_pr_url: str | None = None,
     expected_head_sha: str | None = None,
+    expected_diff_hash: str | None = None,
     expected_commit_shas: Sequence[str] | None = None,
     expected_head_created_at: str | None = None,
     comments: Sequence[object] | None = None,
@@ -135,6 +135,28 @@ def validate_pr_body(
     labels: Sequence[str] | None = None,
 ) -> EvidenceReport:
     """Return whether a PR body contains merge-blocking review evidence."""
+
+    contract_payload, contract_errors = _extract_contract_v1_evidence(body)
+    if contract_payload is not None or contract_errors:
+        errors = list(contract_errors)
+        if contract_payload is not None:
+            errors.extend(
+                _contract_v1_evidence_errors(
+                    body,
+                    contract_payload,
+                    expected_head_sha=expected_head_sha,
+                    expected_diff_hash=expected_diff_hash,
+                    expected_commit_shas=expected_commit_shas,
+                    changed_files=changed_files,
+                    labels=labels,
+                )
+            )
+        if (
+            review_threads is not None
+            and unresolved_blocking_codex_thread_count(review_threads) > 0
+        ):
+            errors.append("Codex review must not have unresolved review threads")
+        return EvidenceReport(not errors, tuple(errors))
 
     official_codex_required, errors = _official_codex_required(
         body, changed_files=changed_files, labels=labels
@@ -225,22 +247,236 @@ def validate_pr_body(
             expected_head_sha=expected_head_sha,
         ):
             errors.append("PR comments must include the required @codex review trigger")
-    if not _has_verify_full_command(section):
-        errors.append("review evidence must include verify full command")
-
     return EvidenceReport(not errors, tuple(errors))
+
+
+def _extract_contract_v1_evidence(
+    body: str,
+) -> tuple[dict[str, object] | None, tuple[str, ...]]:
+    contract = pr_flow_contract.load_contract(Path("."))
+    if contract.marker_start not in body:
+        return None, ()
+    pattern = re.compile(
+        rf"{re.escape(contract.marker_start)}\s*"
+        rf"```{re.escape(contract.fenced_language)}\s*"
+        r"(?P<payload>\{.*?\})\s*```\s*"
+        rf"{re.escape(contract.marker_end)}",
+        re.DOTALL,
+    )
+    match = pattern.search(body)
+    if match is None:
+        return None, ("PR Flow evidence block must contain fenced JSON",)
+    try:
+        payload = json.loads(match.group("payload"))
+    except json.JSONDecodeError:
+        return None, ("PR Flow evidence JSON must be valid JSON",)
+    if not isinstance(payload, dict):
+        return None, ("PR Flow evidence JSON must be an object",)
+    return payload, ()
+
+
+def _contract_v1_evidence_errors(
+    body: str,
+    payload: dict[str, object],
+    *,
+    expected_head_sha: str | None,
+    expected_diff_hash: str | None,
+    expected_commit_shas: Sequence[str] | None,
+    changed_files: Sequence[str] | None = None,
+    labels: Sequence[str] | None = None,
+) -> list[str]:
+    contract = pr_flow_contract.load_contract(Path("."))
+    errors: list[str] = []
+    fields = tuple(payload)
+    legacy_fields = tuple(
+        field for field in contract.pr_evidence_fields if field != "official_review"
+    )
+    if fields not in {contract.pr_evidence_fields, legacy_fields}:
+        errors.append(
+            "PR Evidence JSON fields must be "
+            + "/".join(contract.pr_evidence_fields)
+        )
+    if payload.get("schema") != contract.version:
+        errors.append("PR Evidence JSON schema must be 1")
+    head = _single_line_text(payload.get("head"))
+    diff = _single_line_text(payload.get("diff"))
+    if expected_head_sha and head != expected_head_sha:
+        errors.append("PR Evidence JSON head does not match current PR head")
+    if expected_diff_hash and diff != expected_diff_hash:
+        errors.append("PR Evidence JSON diff does not match current PR diff")
+    if ISSUE_INTENT_MACHINE_BLOCK_PATTERN.search(body):
+        errors.append("PR body must not contain legacy Issue intent machine block")
+    errors.extend(_contract_v1_review_errors(payload.get("reviews"), head=head, diff=diff))
+    if "official_review" in payload:
+        errors.extend(_contract_v1_official_review_errors(payload.get("official_review")))
+        errors.extend(
+            _contract_v1_official_review_risk_errors(
+                payload.get("official_review"),
+                changed_files=changed_files,
+                labels=labels,
+            )
+        )
+    errors.extend(
+        _contract_v1_issue_errors(
+            payload.get("issues"),
+            expected_commit_shas=expected_commit_shas,
+        )
+    )
+    errors.extend(_contract_v1_retained_errors(payload.get("retained"), contract))
+    return errors
+
+
+def _contract_v1_official_review_errors(official_review: object) -> list[str]:
+    if not isinstance(official_review, Mapping):
+        return ["PR Evidence official_review must be an object"]
+    decision = _single_line_text(official_review.get("decision"))
+    if decision == "required":
+        if tuple(official_review) != ("decision",):
+            return ["PR Evidence official_review.required must only contain decision"]
+        return []
+    if decision == "skip_risk_low":
+        if tuple(official_review) != ("decision",):
+            return ["PR Evidence official_review.skip_risk_low must only contain decision"]
+        return []
+    if decision == "skip_user_authorized":
+        errors: list[str] = []
+        if tuple(official_review) != ("decision", "authorized_by", "evidence"):
+            errors.append(
+                "PR Evidence official_review.skip_user_authorized fields must be "
+                "decision/authorized_by/evidence"
+            )
+        for field in ("authorized_by", "evidence"):
+            if not _single_line_text(official_review.get(field)):
+                errors.append(
+                    f"PR Evidence official_review.skip_user_authorized missing {field}"
+                )
+        return errors
+    return ["PR Evidence official_review.decision is invalid"]
+
+
+def _contract_v1_official_review_risk_errors(
+    official_review: object,
+    *,
+    changed_files: Sequence[str] | None,
+    labels: Sequence[str] | None,
+) -> list[str]:
+    if not isinstance(official_review, Mapping):
+        return []
+    if _single_line_text(official_review.get("decision")) != "skip_risk_low":
+        return []
+    errors: list[str] = []
+    if _high_risk_changed_files(changed_files):
+        errors.append(
+            "PR Evidence official_review.skip_risk_low is invalid for high-risk changed files"
+        )
+    if _has_ai_risk_review_label(labels):
+        errors.append(
+            "PR Evidence official_review.skip_risk_low is invalid with ai-risk-review label"
+        )
+    return errors
+
+
+def _contract_v1_review_errors(
+    reviews: object,
+    *,
+    head: str,
+    diff: str,
+) -> list[str]:
+    if not isinstance(reviews, Mapping):
+        return ["PR Evidence reviews must be an object"]
+    errors: list[str] = []
+    for role in ("standards", "spec", "security"):
+        item = reviews.get(role)
+        if not isinstance(item, Mapping):
+            errors.append(f"PR Evidence reviews.{role} must be an object")
+            continue
+        if _single_line_text(item.get("head")) != head:
+            errors.append(f"PR Evidence reviews.{role}.head must match head")
+        if _single_line_text(item.get("diff")) != diff:
+            errors.append(f"PR Evidence reviews.{role}.diff must match diff")
+    return errors
+
+
+def _contract_v1_issue_errors(
+    issues: object,
+    *,
+    expected_commit_shas: Sequence[str] | None,
+) -> list[str]:
+    if not isinstance(issues, Mapping):
+        return ["PR Evidence issues must be an object"]
+    errors: list[str] = []
+    commits = issues.get("commits")
+    if not isinstance(commits, list):
+        errors.append("PR Evidence issues.commits must be a list")
+        commits = []
+    recorded = {
+        _single_line_text(item.get("sha"))
+        for item in commits
+        if isinstance(item, Mapping) and _single_line_text(item.get("sha"))
+    }
+    if expected_commit_shas is not None:
+        missing = [
+            _single_line_text(sha)
+            for sha in expected_commit_shas
+            if _single_line_text(sha) and _single_line_text(sha) not in recorded
+        ]
+        if missing:
+            errors.append("PR Evidence issues.commits missing coverage: " + ", ".join(missing))
+    for index, item in enumerate(commits):
+        if not isinstance(item, Mapping):
+            errors.append(f"PR Evidence issues.commits[{index}] must be an object")
+            continue
+        has_issue = isinstance(item.get("issues"), list) and bool(item.get("issues"))
+        has_no_issue = bool(item.get("no_issue"))
+        if has_issue == has_no_issue:
+            errors.append(
+                f"PR Evidence issues.commits[{index}] must have issues or no_issue"
+            )
+    refs = issues.get("refs")
+    if not isinstance(refs, list):
+        errors.append("PR Evidence issues.refs must be a list")
+        return errors
+    for index, item in enumerate(refs):
+        if not isinstance(item, Mapping):
+            errors.append(f"PR Evidence issues.refs[{index}] must be an object")
+            continue
+        role = _single_line_text(item.get("role"))
+        if role not in {"reference", "closes"}:
+            errors.append(f"PR Evidence issues.refs[{index}].role is invalid")
+        if "ac_checked" in item:
+            errors.append(
+                f"PR Evidence issues.refs[{index}].ac_checked is not allowed"
+            )
+    return errors
+
+
+def _contract_v1_retained_errors(
+    retained: object,
+    contract: pr_flow_contract.PRFlowContract,
+) -> list[str]:
+    if not isinstance(retained, list):
+        return ["PR Evidence retained must be a list"]
+    errors: list[str] = []
+    for index, item in enumerate(retained):
+        if not isinstance(item, Mapping):
+            errors.append(f"PR Evidence retained[{index}] must be an object")
+            continue
+        severity = _single_line_text(item.get("severity"))
+        source = _single_line_text(item.get("source"))
+        detail = _single_line_text(item.get("detail"))
+        if severity not in contract.retained_severities:
+            errors.append(f"PR Evidence retained[{index}].severity must be P2 or P3")
+        if source not in contract.retained_sources:
+            errors.append(f"PR Evidence retained[{index}].source is invalid")
+        if not detail:
+            errors.append(f"PR Evidence retained[{index}].detail is required")
+        if "\n" in detail or len(detail) > contract.detail_max_chars:
+            errors.append(f"PR Evidence retained[{index}].detail must be one short line")
+    return errors
 
 
 def _extract_section(body: str) -> str | None:
     return _extract_named_section(body, SECTION_HEADER)
-
-
-def _has_verify_full_command(section: str) -> bool:
-    normalized_section = " ".join(section.replace("`", "").split()).casefold()
-    return any(
-        command.casefold() in normalized_section
-        for command in REQUIRED_VERIFY_FULL_COMMANDS
-    )
 
 
 def _extract_named_section(body: str, header: str) -> str | None:
@@ -442,8 +678,6 @@ def _official_codex_required(
         )
     )
     errors.extend(_p2_section_errors(body))
-    if not _has_verify_full_command(body):
-        errors.append("local check evidence must include verify full command")
     if blockers != "无":
         errors.append("P0/P1 未关闭项 must be 无")
     high_risk_files = _high_risk_changed_files(changed_files)
@@ -1609,6 +1843,21 @@ def _fetch_github_json(*, repo: str, path: str, token: str) -> object:
     return payload
 
 
+def _fetch_github_text(
+    *, repo: str, path: str, token: str, accept: str = "application/vnd.github+json"
+) -> str:
+    request = urllib.request.Request(
+        _github_api_url(repo=repo, path=path),
+        headers={
+            "Accept": accept,
+            "Authorization": f"Bearer {token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return response.read().decode("utf-8")
+
+
 def _fetch_github_graphql(
     *, query: str, variables: Mapping[str, object], token: str
 ) -> Mapping[str, object]:
@@ -1739,6 +1988,37 @@ def _fetch_pr_changed_files(
         for item in payload
         if isinstance(item, Mapping) and str(item.get("filename", "")).strip()
     )
+
+
+def _local_pr_diff_hash(repo_root: Path | None = None) -> str:
+    result = subprocess.run(
+        [
+            "git",
+            "-c",
+            "core.quotePath=false",
+            "diff",
+            "--binary",
+            "--no-ext-diff",
+            "origin/main...HEAD",
+        ],
+        cwd=repo_root or Path.cwd(),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = _single_line_text(result.stderr or result.stdout)
+        raise RuntimeError(
+            "git diff --binary origin/main...HEAD failed"
+            + (f": {detail}" if detail else "")
+        )
+    return hashlib.sha256(result.stdout.encode("utf-8")).hexdigest()
+
+
+def _fetch_pr_diff_hash(*, repo: str, pr_number: str, token: str) -> str:
+    return _local_pr_diff_hash()
 
 
 def _fetch_pr_commit_shas(
@@ -1933,6 +2213,7 @@ def main(argv: list[str] | None = None) -> int:
         _read_optional_file(args.review_threads_file)
     )
     changed_files: Sequence[str] | None = None
+    expected_diff_hash: str | None = None
     expected_commit_shas: Sequence[str] | None = None
     labels: Sequence[str] | None = None
     expected_pr_url = _read_env(args.pr_url_env)
@@ -1974,6 +2255,9 @@ def main(argv: list[str] | None = None) -> int:
         changed_files = _fetch_pr_changed_files(
             repo=repo, pr_number=pr_number, token=token
         )
+        expected_diff_hash = _fetch_pr_diff_hash(
+            repo=repo, pr_number=pr_number, token=token
+        )
         fetched_commit_shas = _fetch_pr_commit_shas(
             repo=repo, pr_number=pr_number, token=token
         )
@@ -1992,6 +2276,7 @@ def main(argv: list[str] | None = None) -> int:
         body,
         expected_pr_url=expected_pr_url,
         expected_head_sha=expected_head_sha,
+        expected_diff_hash=expected_diff_hash,
         expected_commit_shas=expected_commit_shas,
         expected_head_created_at=expected_head_created_at,
         comments=comments,
