@@ -59,7 +59,7 @@ gh pr checks <PR号或URL> --required
 | `scripts.research.variants` | `list`、`register`、`materialize`、`branch-plan`、`branch-create`、`merge-plan`、`merge-apply` |
 | `scripts.research.registry.tool_registry` | `list`、`validate` |
 | `scripts.research.governance` | `audit`、`gate`、`verify explain/fast/full` |
-| `scripts.research.governance.pr_flow` | `submit`、`resolve-threads`、`intent`；`ready`、`ready-for-review`、`merge`、`cleanup`、`complete` 仅作内部恢复/调试；`diagnose` 仅保留内部归因面 |
+| `scripts.research.governance.pr_flow` | `submit`、`resolve-threads`、`intent`；`ready`、`ready-for-review`、`merge`、`cleanup`、`complete` 仅作内部恢复/调试 |
 
 POSIX 示例把 Windows Python 路径替换为 `.venv/bin/python`。
 

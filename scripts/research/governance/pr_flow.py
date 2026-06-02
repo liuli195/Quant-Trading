@@ -430,6 +430,7 @@ def _validate_branch_intent_coverage(
     runner: Runner,
     *,
     base_ref: str = "origin/main",
+    pr_number: str | None = None,
 ) -> None:
     try:
         branch = _current_branch(root, runner)
@@ -461,6 +462,7 @@ def _validate_branch_intent_coverage(
             runner,
             sha,
             base_ref=base_ref,
+            pr_number=pr_number,
         )
     ]
     if missing:
@@ -1306,7 +1308,11 @@ def _submit_branch_intent_failures(
     runner: Runner,
 ) -> list[pr_flow_contract.SubmitFailure]:
     try:
-        _validate_branch_intent_coverage(root, runner)
+        _validate_branch_intent_coverage(
+            root,
+            runner,
+            pr_number=_current_pr_number(root, runner),
+        )
     except CommitIntentError as exc:
         return [
             pr_flow_contract.SubmitFailure(
@@ -1702,6 +1708,7 @@ def _submit_pr_evidence(
 
 def _submit_issue_evidence(*, root: Path, runner: Runner) -> dict[str, Any]:
     branch = _current_branch(root, runner)
+    pr_number = _current_pr_number(root, runner)
     branch_intent = _read_json_object(_branch_intent_path(root, branch)) or {}
     commits = [
         item for item in branch_intent.get("commits", []) if isinstance(item, dict)
@@ -1720,6 +1727,7 @@ def _submit_issue_evidence(*, root: Path, runner: Runner) -> dict[str, Any]:
                 runner,
                 sha,
                 base_ref="origin/main",
+                pr_number=pr_number,
             ):
                 evidence_commits.append({"sha": sha, "no_issue": True})
                 continue
@@ -2306,35 +2314,105 @@ def _submit_cleanup_merged_pr(
     runner: Runner,
     metadata: dict[str, Any],
 ) -> int:
+    pr_ref = _single_line_text(metadata.get("number")) or "unknown"
+    return _cleanup_merged_pr_metadata(
+        root=root,
+        runner=runner,
+        metadata=metadata,
+        pr_ref=pr_ref,
+    )
+
+
+def _cleanup_merged_pr_metadata(
+    *,
+    root: Path,
+    runner: Runner,
+    metadata: dict[str, Any],
+    pr_ref: str,
+) -> int:
+    state = _single_line_text(metadata.get("state")).upper()
+    merged_at = _single_line_text(metadata.get("mergedAt"))
     head_branch = _single_line_text(metadata.get("headRefName"))
     base_branch = _single_line_text(metadata.get("baseRefName")) or "main"
     is_cross_repository = bool(metadata.get("isCrossRepository"))
-    for label, command in (
-        ("git fetch --prune origin", ["git", "fetch", "--prune", "origin"]),
-        ("git switch base branch", ["git", "switch", base_branch]),
-    ):
-        result = runner.run(command, cwd=root)
-        if result.returncode != 0:
-            _print_command_failure(label, result)
+    if state != "MERGED" or not merged_at:
+        _print_state("EXCEPTION_REQUIRED", "PR is not merged")
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    if not head_branch:
+        _print_state("EXCEPTION_REQUIRED", "merged PR head branch unavailable")
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    print(f"cleanup: PR #{pr_ref} merged at {merged_at}")
+
+    fetch = runner.run(["git", "fetch", "--prune", "origin"], cwd=root)
+    if fetch.returncode != 0:
+        _print_command_failure("git fetch --prune origin", fetch)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+
+    base_worktree = _branch_worktree_path(root, runner, base_branch)
+    sync_root = base_worktree or root
+    if base_worktree is None:
+        switched = runner.run(["git", "switch", base_branch], cwd=root)
+        if switched.returncode != 0:
+            _print_command_failure("git switch base branch", switched)
             return EXCEPTION_REQUIRED_EXIT_CODE
+    else:
+        detached = runner.run(
+            ["git", "switch", "--detach", f"origin/{base_branch}"],
+            cwd=root,
+        )
+        if detached.returncode != 0:
+            _print_command_failure("git switch --detach origin base", detached)
+            return EXCEPTION_REQUIRED_EXIT_CODE
+
     with _temporary_env(
         {
             "ALLOW_MAIN_REF_UPDATE": "1",
-            "MAIN_REF_UPDATE_REASON": "sync local base after pr-submit merge",
+            "MAIN_REF_UPDATE_REASON": f"sync local {base_branch} after PR #{pr_ref} merge",
         }
     ):
         synced = runner.run(
             ["git", "merge", "--ff-only", f"origin/{base_branch}"],
-            cwd=root,
+            cwd=sync_root,
         )
     if synced.returncode != 0:
         _print_command_failure("git merge --ff-only origin base", synced)
         return EXCEPTION_REQUIRED_EXIT_CODE
+    if base_worktree is None:
+        print(f"cleanup: base {base_branch} synced with origin/{base_branch}")
+    else:
+        print(
+            f"cleanup: base {base_branch} synced in worktree "
+            f"{base_worktree} with origin/{base_branch}"
+        )
+
     if head_branch and not is_cross_repository:
         deleted = runner.run(["git", "branch", "-d", head_branch], cwd=root)
         if deleted.returncode != 0:
             _print_command_failure("git branch -d", deleted)
             return EXCEPTION_REQUIRED_EXIT_CODE
+        print(f"cleanup: local branch deleted: {head_branch}")
+        print(f"cleanup: remote branch deletion delegated to GitHub: {head_branch}")
+    elif is_cross_repository:
+        print(f"skip head branch delete for fork PR: {head_branch}")
+
+    synced_state = runner.run(
+        ["git", "rev-list", "--left-right", "--count", f"{base_branch}...origin/{base_branch}"],
+        cwd=sync_root,
+    )
+    if synced_state.returncode != 0:
+        _print_command_failure("git rev-list main...origin/main", synced_state)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    if _command_stdout(synced_state) != "0\t0":
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "local base branch is not synced to origin",
+            details=[_command_stdout(synced_state)],
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    print(
+        f"cleanup: final base sync verified: "
+        f"{base_branch}...origin/{base_branch} = 0 0"
+    )
     return SUCCESS_EXIT_CODE
 
 
@@ -3064,90 +3142,12 @@ def cleanup_pr(
         view,
         "gh pr view --json number,state,mergedAt,headRefName,baseRefName,isCrossRepository",
     )
-    state = _single_line_text(metadata.get("state")).upper()
-    merged_at = _single_line_text(metadata.get("mergedAt"))
-    head_branch = _single_line_text(metadata.get("headRefName"))
-    base_branch = _single_line_text(metadata.get("baseRefName")) or "main"
-    is_cross_repository = bool(metadata.get("isCrossRepository"))
-    if state != "MERGED" or not merged_at:
-        _print_state("EXCEPTION_REQUIRED", "PR is not merged")
-        return EXCEPTION_REQUIRED_EXIT_CODE
-    if not head_branch:
-        _print_state("EXCEPTION_REQUIRED", "merged PR head branch unavailable")
-        return EXCEPTION_REQUIRED_EXIT_CODE
-    print(f"cleanup: PR #{pr_ref} merged at {merged_at}")
-
-    fetch = runner.run(["git", "fetch", "--prune", "origin"], cwd=root)
-    if fetch.returncode != 0:
-        _print_command_failure("git fetch --prune origin", fetch)
-        return EXCEPTION_REQUIRED_EXIT_CODE
-
-    base_worktree = _branch_worktree_path(root, runner, base_branch)
-    sync_root = base_worktree or root
-    if base_worktree is None:
-        switched = runner.run(["git", "switch", base_branch], cwd=root)
-        if switched.returncode != 0:
-            _print_command_failure("git switch base branch", switched)
-            return EXCEPTION_REQUIRED_EXIT_CODE
-    else:
-        detached = runner.run(
-            ["git", "switch", "--detach", f"origin/{base_branch}"],
-            cwd=root,
-        )
-        if detached.returncode != 0:
-            _print_command_failure("git switch --detach origin base", detached)
-            return EXCEPTION_REQUIRED_EXIT_CODE
-
-    with _temporary_env(
-        {
-            "ALLOW_MAIN_REF_UPDATE": "1",
-            "MAIN_REF_UPDATE_REASON": f"sync local {base_branch} after PR #{pr_ref} merge",
-        }
-    ):
-        synced = runner.run(
-            ["git", "merge", "--ff-only", f"origin/{base_branch}"],
-            cwd=sync_root,
-        )
-    if synced.returncode != 0:
-        _print_command_failure("git merge --ff-only origin base", synced)
-        return EXCEPTION_REQUIRED_EXIT_CODE
-    if base_worktree is None:
-        print(f"cleanup: base {base_branch} synced with origin/{base_branch}")
-    else:
-        print(
-            f"cleanup: base {base_branch} synced in worktree "
-            f"{base_worktree} with origin/{base_branch}"
-        )
-
-    if is_cross_repository:
-        print(f"skip head branch delete for fork PR: {head_branch}")
-    else:
-        local_delete = runner.run(["git", "branch", "-d", head_branch], cwd=root)
-        if local_delete.returncode != 0:
-            _print_command_failure("git branch -d", local_delete)
-            return EXCEPTION_REQUIRED_EXIT_CODE
-        print(f"cleanup: local branch deleted: {head_branch}")
-        print(f"cleanup: remote branch deletion delegated to GitHub: {head_branch}")
-
-    synced_state = runner.run(
-        ["git", "rev-list", "--left-right", "--count", f"{base_branch}...origin/{base_branch}"],
-        cwd=sync_root,
+    return _cleanup_merged_pr_metadata(
+        root=root,
+        runner=runner,
+        metadata=metadata,
+        pr_ref=pr_ref,
     )
-    if synced_state.returncode != 0:
-        _print_command_failure("git rev-list main...origin/main", synced_state)
-        return EXCEPTION_REQUIRED_EXIT_CODE
-    if _command_stdout(synced_state) != "0\t0":
-        _print_state(
-            "EXCEPTION_REQUIRED",
-            "local base branch is not synced to origin",
-            details=[_command_stdout(synced_state)],
-        )
-        return EXCEPTION_REQUIRED_EXIT_CODE
-    print(
-        f"cleanup: final base sync verified: "
-        f"{base_branch}...origin/{base_branch} = 0 0"
-    )
-    return SUCCESS_EXIT_CODE
 
 
 def _branch_worktree_path(root: Path, runner: Runner, branch: str) -> Path | None:
@@ -3618,6 +3618,7 @@ def _is_github_update_branch_merge_commit(
     sha: str,
     *,
     base_ref: str,
+    pr_number: str | None = None,
 ) -> bool:
     result = runner.run(["git", "show", "-s", "--format=%P%n%s", sha], cwd=root)
     if result.returncode != 0:
@@ -3634,7 +3635,63 @@ def _is_github_update_branch_merge_commit(
         rf"^Merge branch '{re.escape(base_branch)}' into .+",
         rf"^Merge remote-tracking branch 'origin/{re.escape(base_branch)}' into .+",
     )
-    return any(re.match(pattern, subject) for pattern in patterns)
+    if not any(re.match(pattern, subject) for pattern in patterns):
+        return False
+    if not pr_number:
+        return False
+    return _pr_commit_has_github_update_branch_evidence(
+        root=root,
+        runner=runner,
+        pr_number=pr_number,
+        sha=sha,
+    )
+
+
+def _pr_commit_has_github_update_branch_evidence(
+    *,
+    root: Path,
+    runner: Runner,
+    pr_number: str,
+    sha: str,
+) -> bool:
+    try:
+        repo = _current_github_repo(root, runner)
+        commits = _gh_api_list(
+            root,
+            runner,
+            f"repos/{repo}/pulls/{pr_number}/commits?per_page=100",
+        )
+    except GitHubDataUnavailable:
+        return False
+    for item in commits:
+        if _single_line_text(item.get("sha")) != sha:
+            continue
+        if _github_commit_actor_is_web_flow(item.get("author")):
+            return True
+        if _github_commit_actor_is_web_flow(item.get("committer")):
+            return True
+        commit = item.get("commit")
+        if not isinstance(commit, dict):
+            continue
+        if _github_commit_identity_is_github(commit.get("author")):
+            return True
+        if _github_commit_identity_is_github(commit.get("committer")):
+            return True
+    return False
+
+
+def _github_commit_actor_is_web_flow(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    return _single_line_text(value.get("login")).casefold() == "web-flow"
+
+
+def _github_commit_identity_is_github(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    name = _single_line_text(value.get("name")).casefold()
+    email = _single_line_text(value.get("email")).casefold()
+    return name == "github" or email.endswith("@users.noreply.github.com")
 
 
 def _base_branch_name(base_ref: str) -> str:

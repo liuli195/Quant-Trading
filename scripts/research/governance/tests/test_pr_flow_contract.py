@@ -47,6 +47,8 @@ class SubmitPreflightRunner:
             return pr_flow.CommandResult(0, "", "")
         if command[:4] == ["git", "show", "-s", "--format=%P%n%s"]:
             return pr_flow.CommandResult(0, "0" * 40 + "\nregular commit\n", "")
+        if command == ["gh", "pr", "view", "--json", "number,url,state,isDraft"]:
+            return pr_flow.CommandResult(1, "", "no pull request")
         if command == ["gh", "repo", "view", "--json", "nameWithOwner"]:
             return pr_flow.CommandResult(
                 0,
@@ -133,6 +135,7 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
         merge_stdout: str = "auto-merge enabled\n",
         merge_stderr: str = "",
         changed_files_output: str = "docs/guides/example.md\n",
+        main_worktree_path: str | None = None,
     ) -> None:
         super().__init__(valid_contract=True)
         self.diff_text = diff_text
@@ -146,11 +149,13 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
         self.merge_stdout = merge_stdout
         self.merge_stderr = merge_stderr
         self.changed_files_output = changed_files_output
+        self.main_worktree_path = main_worktree_path
         self.auto_merge_requested = existing_state.upper() == "MERGED"
         self.created_bodies: list[str] = []
         self.edited_bodies: list[str] = []
         self.comments: list[str] = []
         self.lifecycle_calls: list[list[str]] = []
+        self.cwd_calls: list[tuple[list[str], Path | None]] = []
 
     def run(
         self,
@@ -344,16 +349,36 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             ["git", "fetch", "--prune", "origin"],
             ["git", "worktree", "list", "--porcelain"],
             ["git", "switch", "main"],
+            ["git", "switch", "--detach", "origin/main"],
             ["git", "merge", "--ff-only", "origin/main"],
             ["git", "branch", "-d", "feature/contract"],
+            ["git", "rev-list", "--left-right", "--count", "main...origin/main"],
         ):
             if command == ["git", "worktree", "list", "--porcelain"]:
+                if self.main_worktree_path is not None:
+                    return pr_flow.CommandResult(
+                        0,
+                        "worktree /repo\n"
+                        "branch refs/heads/feature/contract\n\n"
+                        f"worktree {self.main_worktree_path}\n"
+                        "branch refs/heads/main\n",
+                        "",
+                    )
                 return pr_flow.CommandResult(
                     0,
                     "worktree /repo\nbranch refs/heads/feature/contract\n",
                     "",
                 )
             self.lifecycle_calls.append(command)
+            self.cwd_calls.append((command, cwd))
+            if command == [
+                "git",
+                "rev-list",
+                "--left-right",
+                "--count",
+                "main...origin/main",
+            ]:
+                return pr_flow.CommandResult(0, "0\t0\n", "")
             return pr_flow.CommandResult(0, "", "")
         return super().run(command, cwd=cwd, input_text=input_text)
 
@@ -406,11 +431,86 @@ class SubmitUpdateBranchMergeRunner(SubmitCreatePrRunner):
                 self.parents + "\nMerge branch 'main' into feature/contract\n",
                 "",
             )
+        if command == [
+            "gh",
+            "api",
+            "--paginate",
+            "--slurp",
+            "repos/liuli195/Quant-Trading/pulls/88/commits?per_page=100",
+        ]:
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    [
+                        [
+                            {
+                                "sha": self.update_branch_sha,
+                                "author": {"login": "web-flow"},
+                                "committer": {"login": "web-flow"},
+                                "commit": {
+                                    "author": {
+                                        "name": "GitHub",
+                                        "email": "noreply@github.com",
+                                    },
+                                    "committer": {
+                                        "name": "GitHub",
+                                        "email": "noreply@github.com",
+                                    },
+                                },
+                            }
+                        ]
+                    ]
+                ),
+                "",
+            )
         return super().run(command, cwd=cwd, input_text=input_text)
 
 
 class SubmitUpdateBranchSubjectOnlyRunner(SubmitUpdateBranchMergeRunner):
     parents = "1" * 40
+
+
+class SubmitForgedUpdateBranchMergeRunner(SubmitUpdateBranchMergeRunner):
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        if command == [
+            "gh",
+            "api",
+            "--paginate",
+            "--slurp",
+            "repos/liuli195/Quant-Trading/pulls/88/commits?per_page=100",
+        ]:
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    [
+                        [
+                            {
+                                "sha": self.update_branch_sha,
+                                "author": {"login": "liuli195"},
+                                "committer": {"login": "liuli195"},
+                                "commit": {
+                                    "author": {
+                                        "name": "liuli195",
+                                        "email": "liuli195@example.invalid",
+                                    },
+                                    "committer": {
+                                        "name": "liuli195",
+                                        "email": "liuli195@example.invalid",
+                                    },
+                                },
+                            }
+                        ]
+                    ]
+                ),
+                "",
+            )
+        return super().run(command, cwd=cwd, input_text=input_text)
 
 
 class SubmitFailingChecksRunner(SubmitCreatePrRunner):
@@ -1124,7 +1224,7 @@ def test_submit_auto_covers_github_update_branch_merge_commit(
 ) -> None:
     diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
     diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
-    runner = SubmitUpdateBranchMergeRunner(diff_text=diff_text)
+    runner = SubmitUpdateBranchMergeRunner(diff_text=diff_text, existing_pr=True)
     _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
     _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
     _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
@@ -1133,7 +1233,7 @@ def test_submit_auto_covers_github_update_branch_merge_commit(
     code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
 
     assert code == pr_flow.SUCCESS_EXIT_CODE
-    payload = _payload_from_managed_body(runner.created_bodies[-1])
+    payload = _payload_from_managed_body(runner.edited_bodies[-1])
     issues = payload["issues"]
     assert isinstance(issues, dict)
     commits = issues["commits"]
@@ -1143,6 +1243,27 @@ def test_submit_auto_covers_github_update_branch_merge_commit(
         {"number": 65, "role": "reference"},
         {"number": 66, "role": "closes"},
     ]
+
+
+def test_submit_does_not_infer_no_issue_from_forged_update_branch_merge_commit(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitForgedUpdateBranchMergeRunner(diff_text=diff_text, existing_pr=True)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"][0]["check"] == "issue-intent"
+    assert runner.update_branch_sha in status["failures"][0]["detail"]
 
 
 def test_submit_does_not_infer_no_issue_from_update_branch_subject_only(
@@ -1361,6 +1482,38 @@ def test_submit_short_circuits_already_merged_pr_to_cleanup(tmp_path: Path) -> N
     assert ["gh", "pr", "ready", "88"] not in runner.lifecycle_calls
     assert not any(call[:3] == ["gh", "pr", "merge"] for call in runner.lifecycle_calls)
     assert ["git", "branch", "-d", "feature/contract"] in runner.lifecycle_calls
+
+
+def test_submit_cleanup_syncs_main_in_existing_main_worktree(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    main_worktree = tmp_path / "main-worktree"
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        existing_pr=True,
+        existing_state="MERGED",
+        main_worktree_path=str(main_worktree),
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR 自动化", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert ["git", "switch", "--detach", "origin/main"] in runner.lifecycle_calls
+    assert ["git", "switch", "main"] not in runner.lifecycle_calls
+    assert (
+        ["git", "merge", "--ff-only", "origin/main"],
+        main_worktree,
+    ) in runner.cwd_calls
+    assert (
+        ["git", "rev-list", "--left-right", "--count", "main...origin/main"],
+        main_worktree,
+    ) in runner.cwd_calls
 
 
 def test_submit_completes_head_locked_auto_merge_and_local_cleanup(
