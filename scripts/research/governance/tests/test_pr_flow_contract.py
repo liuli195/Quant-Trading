@@ -513,6 +513,49 @@ class SubmitForgedUpdateBranchMergeRunner(SubmitUpdateBranchMergeRunner):
         return super().run(command, cwd=cwd, input_text=input_text)
 
 
+class SubmitForgedRawGithubUpdateBranchMergeRunner(SubmitUpdateBranchMergeRunner):
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        if command == [
+            "gh",
+            "api",
+            "--paginate",
+            "--slurp",
+            "repos/liuli195/Quant-Trading/pulls/88/commits?per_page=100",
+        ]:
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    [
+                        [
+                            {
+                                "sha": self.update_branch_sha,
+                                "author": {"login": "liuli195"},
+                                "committer": {"login": "liuli195"},
+                                "commit": {
+                                    "author": {
+                                        "name": "GitHub",
+                                        "email": "noreply@github.com",
+                                    },
+                                    "committer": {
+                                        "name": "GitHub",
+                                        "email": "github@users.noreply.github.com",
+                                    },
+                                },
+                            }
+                        ]
+                    ]
+                ),
+                "",
+            )
+        return super().run(command, cwd=cwd, input_text=input_text)
+
+
 class SubmitFailingChecksRunner(SubmitCreatePrRunner):
     def run(
         self,
@@ -1251,6 +1294,30 @@ def test_submit_does_not_infer_no_issue_from_forged_update_branch_merge_commit(
     diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
     diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
     runner = SubmitForgedUpdateBranchMergeRunner(diff_text=diff_text, existing_pr=True)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"][0]["check"] == "issue-intent"
+    assert runner.update_branch_sha in status["failures"][0]["detail"]
+
+
+def test_submit_does_not_infer_no_issue_from_forged_raw_github_identity(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitForgedRawGithubUpdateBranchMergeRunner(
+        diff_text=diff_text,
+        existing_pr=True,
+    )
     _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
     _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
     _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)

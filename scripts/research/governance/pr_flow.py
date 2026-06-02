@@ -3670,13 +3670,6 @@ def _pr_commit_has_github_update_branch_evidence(
             return True
         if _github_commit_actor_is_web_flow(item.get("committer")):
             return True
-        commit = item.get("commit")
-        if not isinstance(commit, dict):
-            continue
-        if _github_commit_identity_is_github(commit.get("author")):
-            return True
-        if _github_commit_identity_is_github(commit.get("committer")):
-            return True
     return False
 
 
@@ -3684,14 +3677,6 @@ def _github_commit_actor_is_web_flow(value: object) -> bool:
     if not isinstance(value, dict):
         return False
     return _single_line_text(value.get("login")).casefold() == "web-flow"
-
-
-def _github_commit_identity_is_github(value: object) -> bool:
-    if not isinstance(value, dict):
-        return False
-    name = _single_line_text(value.get("name")).casefold()
-    email = _single_line_text(value.get("email")).casefold()
-    return name == "github" or email.endswith("@users.noreply.github.com")
 
 
 def _base_branch_name(base_ref: str) -> str:
