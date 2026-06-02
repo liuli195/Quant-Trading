@@ -2742,6 +2742,30 @@ class TestSnapshotParams:
         assert params["DynamicVolReliefMomentumWindow"] == 20
         assert params["DynamicVolReliefCovWindow"] == 40
 
+    def test_snapshot_backfills_missing_portfolio_vol_relief_params(self, strategy, mock_g):
+        """Live simulation code replacement can keep an older g without new attrs."""
+        for name in (
+            "PortfolioVolReliefMode",
+            "GoldVolReliefFraction",
+            "GoldVolReliefMaxRatio",
+            "DynamicVolReliefFraction",
+            "DynamicVolReliefMaxRatio",
+            "DynamicVolReliefMomentumWindow",
+            "DynamicVolReliefCovWindow",
+        ):
+            delattr(mock_g, name)
+
+        params = strategy.snapshot_params()
+
+        assert params["PortfolioVolReliefMode"] == "dyn_marginal"
+        assert params["GoldVolReliefFraction"] == 0.5
+        assert params["GoldVolReliefMaxRatio"] == 2.0
+        assert params["DynamicVolReliefFraction"] == 1.0
+        assert params["DynamicVolReliefMaxRatio"] == 1.5
+        assert params["DynamicVolReliefMomentumWindow"] == 20
+        assert params["DynamicVolReliefCovWindow"] == 40
+        assert mock_g.PortfolioVolReliefMode == "dyn_marginal"
+
     def test_snapshot_list_values_are_copies(self, strategy, mock_g):
         params = strategy.snapshot_params()
         # 修改快照不应影响 g
