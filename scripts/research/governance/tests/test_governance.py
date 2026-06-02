@@ -1558,6 +1558,7 @@ def _write_minimal_repo(root: Path) -> None:
         "  pull_request_review_comment:\n"
         "    types: [created, edited, deleted]\n"
         "permissions:\n  statuses: write\nsteps:\n"
+        "  - run: python -m pip install -r requirements-dev.txt\n"
         "  - run: python -m scripts.research.governance.codex_review_monitor --sync-status\n",
         encoding="utf-8",
     )

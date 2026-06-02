@@ -837,6 +837,7 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             "pull_request_review",
             "pull_request_review_comment",
             "statuses: write",
+            "python -m pip install -r requirements-dev.txt",
             "scripts.research.governance.codex_review_monitor",
             "--sync-status",
         ):
