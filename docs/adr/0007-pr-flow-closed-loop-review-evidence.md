@@ -29,6 +29,7 @@ PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pa
 - evidence builder 只读取结构化 fragments、security fragment、external findings、authorizations 和 diff facts；不得从聊天总结或自然语言结论中推断 review 通过。
 - PR Evidence JSON v1 写入 current head、diff hash、review fingerprints、Issue intent 和 retained findings；过渡期可读旧 schema，但新写出只写契约 v1。
 - PR Evidence JSON 的 `issues.commits` 必须覆盖每个 PR commit；每个 commit 要么有关联 Issue，要么记录 `no_issue: true`。`issues.refs` 只保留 closes/reference 和 closes Issue 的 AC checked 状态。
+- `target scheme review authority`: 当 PR 的目标 Issue/PRD 与旧仓库规则冲突时，Standards/Spec reviewer 以目标方案为裁判基准；旧规则冲突归类为规则/ADR drift，不归类为实现违规。
 - risk classifier 由 builder 最终裁决，review/security 只提供输入。风险分级只影响本地关注重点、label 和 Review Scope，不影响是否触发官方 Codex Review。
 - P2/P3 accepted findings 不影响 `risk_level`，也不阻断合并；所有来源的 P2/P3 统一写入 PR Evidence `retained`。
 - 官方 Codex P2/P3 review thread 在 severity 可靠识别时，由 `pr_flow` 用固定模板自动接受、resolve、重新读取确认 resolved，并写入 PR Evidence `retained`。官方 Codex P0/P1 在缺少结构化 `fixed` / `false_positive` evidence 时阻断；有绑定当前 head/diff/thread ID 的证据时可由 `pr_flow` 自动回复并 resolve。无 severity thread 和人工 reviewer thread 不自动 resolve。

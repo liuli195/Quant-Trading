@@ -6,6 +6,7 @@
 
 ## MUST
 
+- `target方案优先`: 当 PR/Issue/PRD 明确目标方案时，Standards/Spec reviewer 必须以目标方案为裁判基准；旧仓库规则与目标方案冲突时，finding 归类为规则/ADR drift，不得归类为实现违反旧规则。
 - 所有 PR 必须完成本地 AI review、问题评级和风险分级。
 - 本地 AI review 必须记录至少两个独立 reviewer；有子 agent 能力时必须完成子 agent 交叉评审。无能力时记录原因和替代证据。
 - 交叉评审必须记录 `superpowers:subagent-driven-development/spec-reviewer-prompt.md`、`superpowers:subagent-driven-development/code-quality-reviewer-prompt.md` 和 `reviewers: A, B`。

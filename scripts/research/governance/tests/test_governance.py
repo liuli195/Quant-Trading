@@ -68,6 +68,7 @@ def test_commit_intent_pr_flow_contract_is_documented() -> None:
             "branch intent authority",
             "no branch creation gate",
             "PR Evidence JSON issues",
+            "target scheme review authority",
             "two-stage review",
             "default AC auto-marking",
         ],
@@ -78,6 +79,7 @@ def test_commit_intent_pr_flow_contract_is_documented() -> None:
             "branch intent",
         ],
         Path("docs/rules/review-guidelines.md"): [
+            "target方案优先",
             "Spec reviewer AC evidence",
             "Security-after-Standards/Spec",
             "Standards/Security veto",
