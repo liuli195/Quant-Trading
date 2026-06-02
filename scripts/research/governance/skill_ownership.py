@@ -54,7 +54,6 @@ VALID_PYTHON_OWNED_ARGS = {
         (),
         ("submit",),
         ("ready",),
-        ("diagnose",),
         ("resolve-threads",),
         ("ready-for-review",),
         ("merge",),

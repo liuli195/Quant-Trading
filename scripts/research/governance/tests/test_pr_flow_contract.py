@@ -45,6 +45,8 @@ class SubmitPreflightRunner:
             return pr_flow.CommandResult(0, "feature/contract\n", "")
         if command == ["git", "rev-list", "--reverse", "origin/main..HEAD"]:
             return pr_flow.CommandResult(0, "", "")
+        if command[:4] == ["git", "show", "-s", "--format=%P%n%s"]:
+            return pr_flow.CommandResult(0, "0" * 40 + "\nregular commit\n", "")
         if command == ["gh", "repo", "view", "--json", "nameWithOwner"]:
             return pr_flow.CommandResult(
                 0,
@@ -340,10 +342,17 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             )
         if command in (
             ["git", "fetch", "--prune", "origin"],
+            ["git", "worktree", "list", "--porcelain"],
             ["git", "switch", "main"],
             ["git", "merge", "--ff-only", "origin/main"],
             ["git", "branch", "-d", "feature/contract"],
         ):
+            if command == ["git", "worktree", "list", "--porcelain"]:
+                return pr_flow.CommandResult(
+                    0,
+                    "worktree /repo\nbranch refs/heads/feature/contract\n",
+                    "",
+                )
             self.lifecycle_calls.append(command)
             return pr_flow.CommandResult(0, "", "")
         return super().run(command, cwd=cwd, input_text=input_text)
@@ -365,6 +374,115 @@ class MissingSubmitRemoteHeadRunner(SubmitCreatePrRunner):
             "feature/contract",
         ]:
             return pr_flow.CommandResult(0, "", "")
+        return super().run(command, cwd=cwd, input_text=input_text)
+
+
+class SubmitUpdateBranchMergeRunner(SubmitCreatePrRunner):
+    update_branch_sha = "3" * 40
+    parents = "1" * 40 + " " + "9" * 40
+
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        if command == ["git", "rev-list", "--reverse", "origin/main..HEAD"]:
+            return pr_flow.CommandResult(
+                0,
+                "1" * 40 + "\n" + "2" * 40 + "\n" + self.update_branch_sha + "\n",
+                "",
+            )
+        if command == [
+            "git",
+            "show",
+            "-s",
+            "--format=%P%n%s",
+            self.update_branch_sha,
+        ]:
+            return pr_flow.CommandResult(
+                0,
+                self.parents + "\nMerge branch 'main' into feature/contract\n",
+                "",
+            )
+        return super().run(command, cwd=cwd, input_text=input_text)
+
+
+class SubmitUpdateBranchSubjectOnlyRunner(SubmitUpdateBranchMergeRunner):
+    parents = "1" * 40
+
+
+class SubmitFailingChecksRunner(SubmitCreatePrRunner):
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        if command == [
+            "gh",
+            "pr",
+            "checks",
+            "88",
+            "--required",
+            "--json",
+            pr_flow.CHECKS_JSON_FIELDS,
+        ]:
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    [
+                        {
+                            "name": "evidence",
+                            "workflow": "PR Flow",
+                            "state": "FAILURE",
+                            "bucket": "fail",
+                            "link": "https://github.com/runs/evidence",
+                        },
+                        {
+                            "name": "verify-full",
+                            "workflow": "Research Governance",
+                            "state": "FAILURE",
+                            "bucket": "fail",
+                            "link": "https://github.com/runs/verify",
+                        },
+                        {
+                            "name": "PR Flow / review-status",
+                            "workflow": "",
+                            "state": "FAILURE",
+                            "bucket": "fail",
+                            "link": "https://github.com/runs/review",
+                        },
+                    ]
+                ),
+                "",
+            )
+        if command[:3] == ["gh", "api", "graphql"] and any(
+            "reviewThreads" in part for part in command
+        ):
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "data": {
+                            "repository": {
+                                "pullRequest": {
+                                    "reviewThreads": {
+                                        "nodes": [],
+                                        "pageInfo": {
+                                            "hasNextPage": False,
+                                            "endCursor": None,
+                                        },
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ),
+                "",
+            )
         return super().run(command, cwd=cwd, input_text=input_text)
 
 
@@ -1001,6 +1119,53 @@ def test_submit_rejects_missing_commit_intent_before_creating_pr(
     assert "111111111111" in status["failures"][0]["detail"]
 
 
+def test_submit_auto_covers_github_update_branch_merge_commit(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitUpdateBranchMergeRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    payload = _payload_from_managed_body(runner.created_bodies[-1])
+    issues = payload["issues"]
+    assert isinstance(issues, dict)
+    commits = issues["commits"]
+    refs = issues["refs"]
+    assert {"sha": runner.update_branch_sha, "no_issue": True} in commits
+    assert refs == [
+        {"number": 65, "role": "reference"},
+        {"number": 66, "role": "closes"},
+    ]
+
+
+def test_submit_does_not_infer_no_issue_from_update_branch_subject_only(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitUpdateBranchSubjectOnlyRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"][0]["check"] == "issue-intent"
+    assert runner.update_branch_sha in status["failures"][0]["detail"]
+
+
 def test_submit_waits_on_pending_required_checks_until_timeout(tmp_path: Path) -> None:
     diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
     diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
@@ -1035,6 +1200,35 @@ def test_submit_waits_on_pending_required_checks_until_timeout(tmp_path: Path) -
     ]
 
 
+def test_submit_writes_required_check_failures_in_contract_order(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitFailingChecksRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert [failure["check"] for failure in status["failures"]] == [
+        "PR Flow / review-status",
+        "Research Governance / verify-full",
+        "PR Flow / evidence",
+    ]
+    assert [failure["source"] for failure in status["failures"]] == [
+        "https://github.com/runs/review",
+        "https://github.com/runs/verify",
+        "https://github.com/runs/evidence",
+    ]
+
+
 def test_submit_reuses_existing_current_head_trigger_without_duplicate_comment(
     tmp_path: Path,
 ) -> None:
@@ -1063,6 +1257,45 @@ def test_submit_reuses_existing_current_head_trigger_without_duplicate_comment(
     assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
     assert runner.comments == []
     assert not any(call[:3] == ["gh", "pr", "comment"] for call in runner.calls)
+
+
+def test_submit_reuses_current_diff_fragments_after_pr_body_update(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    stale_body = _managed_evidence_body(
+        {
+            "schema": 1,
+            "head": "0" * 40,
+            "diff": "old-diff",
+            "reviews": {},
+            "official_review": {"decision": "required"},
+            "issues": {"commits": [], "refs": []},
+            "retained": [],
+        }
+    )
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        existing_pr=True,
+        existing_body=stale_body,
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert runner.edited_bodies
+    payload = _payload_from_managed_body(runner.edited_bodies[-1])
+    assert payload["head"] == "1" * 40
+    assert payload["diff"] == diff_hash
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"] == []
 
 
 def test_submit_reports_exception_when_remote_head_is_missing(
@@ -1259,7 +1492,9 @@ def test_codex_review_monitor_skips_contract_v1_user_authorized_official_review(
     assert report.status == "skipped"
 
 
-def test_codex_review_status_uses_contract_context_and_pending(monkeypatch) -> None:
+def test_codex_review_status_uses_contract_context_and_workflow_target(
+    monkeypatch,
+) -> None:
     captured: dict[str, object] = {}
 
     def fake_request_json(**kwargs: object) -> object:
@@ -1267,6 +1502,9 @@ def test_codex_review_status_uses_contract_context_and_pending(monkeypatch) -> N
         return {}
 
     monkeypatch.setattr(codex_review_monitor, "_request_json", fake_request_json)
+    monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.com")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "liuli195/Quant-Trading")
+    monkeypatch.setenv("GITHUB_RUN_ID", "123456789")
     report = codex_review_monitor.MonitorReport(
         status="waiting_for_codex",
         pr_number="88",
@@ -1290,6 +1528,10 @@ def test_codex_review_status_uses_contract_context_and_pending(monkeypatch) -> N
     assert isinstance(payload, dict)
     assert payload["state"] == "pending"
     assert payload["context"] == "PR Flow / review-status"
+    assert (
+        payload["target_url"]
+        == "https://github.com/liuli195/Quant-Trading/actions/runs/123456789"
+    )
 
 
 def _write_fragment(

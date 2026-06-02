@@ -36,7 +36,7 @@ PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pa
 - 官方 Codex Review 状态由 `PR Flow / review-status` 复核；官方 Codex 未返回时 pending，不写失败。
 - PR body 继续作为 CI 可见 evidence surface；CI 不读取 `.local`。CI 通过 PR body 和 GitHub API 校验 current head、PR Evidence JSON、thread 状态和 required checks。
 - `pr_flow` 顶层停止状态保持三类：`DISPATCH_REQUIRED`、`REPLY_OR_FIX_REQUIRED`、`EXCEPTION_REQUIRED`。所有非 0 退出必须输出 `reason_code`、phase、retryable、dispatch target、blocking items、evidence refs 和 next actions。
-- `pr_flow diagnose` 必须成为状态机观测面，能够复现停止原因，避免后续 agent 重新调查。
+- `diagnose` 只保留为 `pr-submit` 内部归因和开发测试面；用户接手失败统一读取 `.local/pr-flow/status.json`。
 - cleanup 必须在确认 PR merged、本地 base 分支受控 fast-forward 后，才删除本地已合并 head branch；远端分支删除交给 GitHub。
 
 ## 后果
@@ -46,7 +46,7 @@ PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pa
 - `$review` 成为本地非安全 review 的统一入口；security review 继续独立存在。
 - P2/P3 的仓库语义与 GitHub conversation resolution 规则统一：可以不修复，但必须结构化接受并 resolve thread。
 - 官方 Codex Review 质量边界按风险/授权执行；大型 PR 通过 scope 收窄、delta review 和 evidence 复用提效，不能用未记录授权绕过 current-head 审查要求。
-- `PR Flow / evidence`、`PR Flow / review-status`、PR body renderer、`pr_flow diagnose` 和 governance tests 必须同步升级，避免规则、文档和工具漂移。
+- `PR Flow / evidence`、`PR Flow / review-status`、PR body renderer、`submit_status` 和 governance tests 必须同步升级，避免规则、文档和工具漂移。
 
 ## Issue Intent Extension
 

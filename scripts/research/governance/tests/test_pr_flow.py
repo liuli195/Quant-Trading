@@ -1055,9 +1055,16 @@ class MergeReadyRunner(DiagnoseRunner):
 
 
 class CleanupRunner:
-    def __init__(self, *, is_cross_repository: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        is_cross_repository: bool = False,
+        main_worktree_path: str | None = None,
+    ) -> None:
         self.calls: list[list[str]] = []
+        self.cwd_calls: list[tuple[list[str], Path | None]] = []
         self.is_cross_repository = is_cross_repository
+        self.main_worktree_path = main_worktree_path
 
     def run(
         self,
@@ -1067,6 +1074,7 @@ class CleanupRunner:
         input_text: str | None = None,
     ) -> pr_flow.CommandResult:
         self.calls.append(command)
+        self.cwd_calls.append((command, cwd))
         if command == [
             "gh",
             "pr",
@@ -1089,14 +1097,27 @@ class CleanupRunner:
                 ),
                 "",
             )
+        if command == ["git", "worktree", "list", "--porcelain"]:
+            if self.main_worktree_path is None:
+                return pr_flow.CommandResult(0, "worktree /repo\nbranch refs/heads/feature/pr-flow\n", "")
+            return pr_flow.CommandResult(
+                0,
+                (
+                    "worktree /repo\n"
+                    "branch refs/heads/feature/pr-flow\n"
+                    "\n"
+                    f"worktree {self.main_worktree_path}\n"
+                    "branch refs/heads/main\n"
+                ),
+                "",
+            )
         if command in (
             ["git", "fetch", "--prune", "origin"],
             ["git", "switch", "main"],
+            ["git", "switch", "--detach", "origin/main"],
             ["git", "merge", "--ff-only", "origin/main"],
             ["git", "branch", "-d", "feature/pr-flow"],
-            ["git", "push", "origin", "--delete", "feature/pr-flow"],
             ["git", "rev-list", "--left-right", "--count", "main...origin/main"],
-            ["git", "ls-remote", "--heads", "origin", "feature/pr-flow"],
         ):
             stdout = "0\t0\n" if command[1:3] == ["rev-list", "--left-right"] else ""
             return pr_flow.CommandResult(0, stdout, "")
@@ -4517,6 +4538,13 @@ def test_merge_pr_uses_diagnose_and_match_head_commit(
     assert "merge commit abc1234" in captured.out
 
 
+def test_pr_flow_cli_does_not_expose_diagnose_user_entry() -> None:
+    parser = pr_flow.build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["diagnose", "--pr", "7"])
+
+
 def test_merge_pr_allows_unapproved_review_when_remote_does_not_require_approval(
     tmp_path: Path,
 ) -> None:
@@ -4582,13 +4610,31 @@ def test_cleanup_pr_syncs_main_and_deletes_merged_branch(
     assert ["git", "switch", "main"] in runner.calls
     assert ["git", "merge", "--ff-only", "origin/main"] in runner.calls
     assert ["git", "branch", "-d", "feature/pr-flow"] in runner.calls
-    assert ["git", "push", "origin", "--delete", "feature/pr-flow"] in runner.calls
-    assert ["git", "ls-remote", "--heads", "origin", "feature/pr-flow"] in runner.calls
+    assert ["git", "push", "origin", "--delete", "feature/pr-flow"] not in runner.calls
+    assert ["git", "ls-remote", "--heads", "origin", "feature/pr-flow"] not in runner.calls
     assert "cleanup: PR #7 merged at 2026-05-29T16:48:26Z" in captured.out
     assert "cleanup: base main synced with origin/main" in captured.out
     assert "cleanup: local branch deleted: feature/pr-flow" in captured.out
-    assert "cleanup: remote branch deleted: feature/pr-flow" in captured.out
+    assert "cleanup: remote branch deletion delegated to GitHub: feature/pr-flow" in captured.out
     assert "cleanup: final base sync verified: main...origin/main = 0 0" in captured.out
+
+
+def test_cleanup_pr_syncs_main_in_existing_main_worktree(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    main_worktree = tmp_path / "main-worktree"
+    runner = CleanupRunner(main_worktree_path=str(main_worktree))
+
+    code = pr_flow.cleanup_pr(repo_root=tmp_path, pr="7", runner=runner)
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert ["git", "switch", "main"] not in runner.calls
+    assert (["git", "merge", "--ff-only", "origin/main"], main_worktree) in runner.cwd_calls
+    assert (["git", "rev-list", "--left-right", "--count", "main...origin/main"], main_worktree) in runner.cwd_calls
+    assert (["git", "branch", "-d", "feature/pr-flow"], tmp_path) in runner.cwd_calls
+    assert "cleanup: base main synced in worktree" in captured.out
 
 
 def test_cleanup_pr_skips_head_branch_delete_for_fork_pr(tmp_path: Path) -> None:

@@ -17,15 +17,18 @@ Review 细则见 [review-guidelines.md](review-guidelines.md) <!-- pathref: docs
 - 禁止把功能分支本地合入 `main`；GitHub 合并后的本地同步只能走受控 fast-forward。
 - 直写主干或 GitHub 合并后的本地 `main` 同步都必须走受控 fast-forward；前者设置 `ALLOW_DIRECT_MAIN_WRITE=1` 和 `DIRECT_MAIN_WRITE_REASON=<reason>`，后者先 `git fetch origin main`，再设置 `ALLOW_MAIN_REF_UPDATE=1` 和 `MAIN_REF_UPDATE_REASON=<reason>`，并用 `git merge --ff-only origin/main` 或等价 fast-forward 同步；禁止 reset、删除或 force rewrite。
 - PR 合并后远端分支删除交给 GitHub；本地收尾只删除已合并的本地功能分支，不本地删除远端分支。
+- `main` 被其他 worktree 占用时，`pr-submit` 在 `main` 所在 worktree 执行受控 fast-forward；当前 worktree 只切到 detached `origin/main` 以便删除已合并的本地功能分支。
 
 - 本地删除已合并功能分支使用 `git branch -d <branch>`；远端分支删除交给 GitHub。
 ## Review 和 Evidence
 
 - 本地 review fragment 是 `pr-submit` 的输入，路径和字段以 [pr-flow-interface-contract.yaml](pr-flow-interface-contract.yaml) <!-- pathref: docs/rules/pr-flow-interface-contract.yaml --> 为准。
+- review fragment 只绑定当前 `head` 和 `diff`；PR body、required status 或 update-branch 状态变化不会单独让 fragment 失效。只有 fragment 缺失、`head` 不匹配或 `diff` 不匹配时才要求重新 review。
 - Standards 和 Spec 同阶段完成后统一汇总 P0/P1；两者无 P0/P1 后才进入 Security。Security P0/P1 阻断，P2/P3 进入 retained findings。
 - PR body 的 `pr-flow` 托管区只写 fenced PR Evidence JSON。CI 的 `PR Flow / evidence` 只信任 PR body，不读取本地 `.local`。
 - Issue intent 并入 PR Evidence JSON 的 `issues`，不再单独维护 Issue intent machine block。每个 PR commit 要么有关联 Issue，要么明确 `no_issue: true`。
-- 手工排障先读 `.local/pr-flow/status.json`；需要查 GitHub 当前状态时使用 `scripts.research.governance.pr_flow diagnose --pr <PR号>`。
+- GitHub update-branch 生成的同步主干 merge commit 由 `pr-submit` 自动按 commit 级 `no_issue: true` 覆盖；PR 级 `issues.refs` 仍只表达 closes/reference，不受该 synthetic merge commit 影响。
+- 手工排障先读 `.local/pr-flow/status.json`；GitHub 当前状态归因由 `pr-submit` 内部处理，`diagnose` 不作为用户流程入口。
 
 ## Commit Intent
 

@@ -452,7 +452,17 @@ def _validate_branch_intent_coverage(
         if isinstance(item, dict) and _single_line_text(item.get("commit_sha"))
     }
     current = set(commits)
-    missing = [sha for sha in commits if sha not in recorded]
+    missing = [
+        sha
+        for sha in commits
+        if sha not in recorded
+        and not _is_github_update_branch_merge_commit(
+            root,
+            runner,
+            sha,
+            base_ref=base_ref,
+        )
+    ]
     if missing:
         raise CommitIntentError(
             "branch intent does not cover all current branch commits",
@@ -1705,6 +1715,14 @@ def _submit_issue_evidence(*, root: Path, runner: Runner) -> dict[str, Any]:
     for sha in _current_branch_commit_shas(root, runner, base_ref="origin/main"):
         item = by_sha.get(sha)
         if item is None:
+            if _is_github_update_branch_merge_commit(
+                root,
+                runner,
+                sha,
+                base_ref="origin/main",
+            ):
+                evidence_commits.append({"sha": sha, "no_issue": True})
+                continue
             raise CommitIntentError(
                 "branch intent does not cover all current branch commits",
                 reason_code="BRANCH_INTENT_COVERAGE_MISSING",
@@ -3059,13 +3077,25 @@ def cleanup_pr(
         return EXCEPTION_REQUIRED_EXIT_CODE
     print(f"cleanup: PR #{pr_ref} merged at {merged_at}")
 
-    for label, command in (
-        ("git fetch --prune origin", ["git", "fetch", "--prune", "origin"]),
-        ("git switch base branch", ["git", "switch", base_branch]),
-    ):
-        result = runner.run(command, cwd=root)
-        if result.returncode != 0:
-            _print_command_failure(label, result)
+    fetch = runner.run(["git", "fetch", "--prune", "origin"], cwd=root)
+    if fetch.returncode != 0:
+        _print_command_failure("git fetch --prune origin", fetch)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+
+    base_worktree = _branch_worktree_path(root, runner, base_branch)
+    sync_root = base_worktree or root
+    if base_worktree is None:
+        switched = runner.run(["git", "switch", base_branch], cwd=root)
+        if switched.returncode != 0:
+            _print_command_failure("git switch base branch", switched)
+            return EXCEPTION_REQUIRED_EXIT_CODE
+    else:
+        detached = runner.run(
+            ["git", "switch", "--detach", f"origin/{base_branch}"],
+            cwd=root,
+        )
+        if detached.returncode != 0:
+            _print_command_failure("git switch --detach origin base", detached)
             return EXCEPTION_REQUIRED_EXIT_CODE
 
     with _temporary_env(
@@ -3076,12 +3106,18 @@ def cleanup_pr(
     ):
         synced = runner.run(
             ["git", "merge", "--ff-only", f"origin/{base_branch}"],
-            cwd=root,
+            cwd=sync_root,
         )
     if synced.returncode != 0:
         _print_command_failure("git merge --ff-only origin base", synced)
         return EXCEPTION_REQUIRED_EXIT_CODE
-    print(f"cleanup: base {base_branch} synced with origin/{base_branch}")
+    if base_worktree is None:
+        print(f"cleanup: base {base_branch} synced with origin/{base_branch}")
+    else:
+        print(
+            f"cleanup: base {base_branch} synced in worktree "
+            f"{base_worktree} with origin/{base_branch}"
+        )
 
     if is_cross_repository:
         print(f"skip head branch delete for fork PR: {head_branch}")
@@ -3091,34 +3127,11 @@ def cleanup_pr(
             _print_command_failure("git branch -d", local_delete)
             return EXCEPTION_REQUIRED_EXIT_CODE
         print(f"cleanup: local branch deleted: {head_branch}")
-
-        remote_delete = runner.run(
-            ["git", "push", "origin", "--delete", head_branch],
-            cwd=root,
-        )
-        if remote_delete.returncode != 0:
-            _print_command_failure("git push origin --delete", remote_delete)
-            return EXCEPTION_REQUIRED_EXIT_CODE
-        print(f"cleanup: remote branch deleted: {head_branch}")
-
-        remote_ref = runner.run(
-            ["git", "ls-remote", "--heads", "origin", head_branch],
-            cwd=root,
-        )
-        if remote_ref.returncode != 0:
-            _print_command_failure("git ls-remote --heads", remote_ref)
-            return EXCEPTION_REQUIRED_EXIT_CODE
-        if _command_stdout(remote_ref):
-            _print_state(
-                "EXCEPTION_REQUIRED",
-                "remote branch still exists after cleanup",
-                details=[head_branch],
-            )
-            return EXCEPTION_REQUIRED_EXIT_CODE
+        print(f"cleanup: remote branch deletion delegated to GitHub: {head_branch}")
 
     synced_state = runner.run(
         ["git", "rev-list", "--left-right", "--count", f"{base_branch}...origin/{base_branch}"],
-        cwd=root,
+        cwd=sync_root,
     )
     if synced_state.returncode != 0:
         _print_command_failure("git rev-list main...origin/main", synced_state)
@@ -3135,6 +3148,25 @@ def cleanup_pr(
         f"{base_branch}...origin/{base_branch} = 0 0"
     )
     return SUCCESS_EXIT_CODE
+
+
+def _branch_worktree_path(root: Path, runner: Runner, branch: str) -> Path | None:
+    result = runner.run(["git", "worktree", "list", "--porcelain"], cwd=root)
+    if result.returncode != 0:
+        return None
+    current_path: Path | None = None
+    for raw_line in result.stdout.splitlines():
+        line = raw_line.strip()
+        if not line:
+            current_path = None
+            continue
+        if line.startswith("worktree "):
+            current_path = Path(line.removeprefix("worktree ").strip())
+            continue
+        if line == f"branch refs/heads/{branch}" and current_path is not None:
+            resolved = current_path.resolve()
+            return None if resolved == root.resolve() else resolved
+    return None
 
 
 def complete_pr(
@@ -3578,6 +3610,36 @@ def _current_branch_commit_shas(
             details=(_single_line_text(result.stderr), _single_line_text(result.stdout)),
         )
     return tuple(line.strip() for line in result.stdout.splitlines() if line.strip())
+
+
+def _is_github_update_branch_merge_commit(
+    root: Path,
+    runner: Runner,
+    sha: str,
+    *,
+    base_ref: str,
+) -> bool:
+    result = runner.run(["git", "show", "-s", "--format=%P%n%s", sha], cwd=root)
+    if result.returncode != 0:
+        return False
+    lines = result.stdout.splitlines()
+    if len(lines) < 2:
+        return False
+    parents = [parent for parent in lines[0].split() if parent]
+    if len(parents) < 2:
+        return False
+    base_branch = _base_branch_name(base_ref)
+    subject = lines[1].strip()
+    patterns = (
+        rf"^Merge branch '{re.escape(base_branch)}' into .+",
+        rf"^Merge remote-tracking branch 'origin/{re.escape(base_branch)}' into .+",
+    )
+    return any(re.match(pattern, subject) for pattern in patterns)
+
+
+def _base_branch_name(base_ref: str) -> str:
+    normalized = base_ref.strip().replace("\\", "/")
+    return normalized.rsplit("/", 1)[-1] if normalized else "main"
 
 
 def _branch_intent_with_commit(
@@ -5872,8 +5934,6 @@ def build_parser() -> argparse.ArgumentParser:
     submit_parser.add_argument("--pr")
     submit_parser.add_argument("--official-review-skip-authorized-by")
     submit_parser.add_argument("--official-review-skip-evidence")
-    diagnose_parser = subparsers.add_parser("diagnose")
-    diagnose_parser.add_argument("--pr")
     resolve_threads_parser = subparsers.add_parser("resolve-threads")
     resolve_threads_parser.add_argument("thread_ids", nargs="*")
     resolve_threads_parser.add_argument("--thread", action="append", default=[])
@@ -5946,8 +6006,6 @@ def main(argv: list[str] | None = None) -> int:
             ),
             official_review_skip_evidence=args.official_review_skip_evidence,
         )
-    if args.command == "diagnose":
-        return diagnose(repo_root=args.repo_root, pr=args.pr)
     if args.command == "resolve-threads":
         return resolve_review_threads(
             repo_root=args.repo_root,
