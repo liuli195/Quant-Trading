@@ -23,7 +23,7 @@ Skill 按四个逻辑组管理。逻辑组只用于分类和 owner 分配。
 | --- | --- | --- |
 | `repo-python-env` | Python 环境、`.venv`、跨平台 wrapper、云端/本地边界 | `docs/rules/commands.md`、`docs/rules/environments.md` 中的 Python 环境规则 |
 | `repo-docs-pathref` | Markdown、pathref、文档索引、报告索引 | `docs/rules/docs-and-pathref.md`、`scripts.tools.path_tools.refactor`、`scripts.research.docs index` |
-| `repo-pr-governance` | PR 准备、review 证据、风险分级、官方 Codex review、required checks、governance gate、主干保护、合并前状态和分支清理 | `docs/rules/pr-workflow.md`、`docs/rules/review-guidelines.md`、`docs/rules/governance.md`、`make pr-submit TITLE="<PR标题>"`、`make pr-diagnose PR=<PR号>`、`make pr-resolve-threads THREADS="<thread-id...>"`、`scripts.research.governance.pr_flow` |
+| `repo-pr-governance` | PR 准备、review 证据、风险分级、官方 Codex review、required checks、governance gate、主干保护、合并前状态和分支清理 | `docs/rules/pr-workflow.md`、`docs/rules/review-guidelines.md`、`docs/rules/governance.md`、`make pr-submit TITLE="<PR标题>"`、`make pr-resolve-threads THREADS="<thread-id...>"`、`scripts.research.governance.pr_flow` |
 
 ### Strategy Research
 
@@ -162,7 +162,7 @@ Claude adapter：
 | --- | --- | --- | --- |
 | “这个仓库本地 Python 应该怎么跑，为什么不能用系统 Python？” | `repo-python-env` | `docs/rules/commands.md`、`docs/rules/environments.md` | `.\.venv\Scripts\python.exe -m <module>` |
 | “我移动了文档和报告链接，怎么检查 pathref 和索引？” | `repo-docs-pathref` | `docs/rules/docs-and-pathref.md` | `.\.venv\Scripts\python.exe -m scripts.tools.path_tools.refactor check`、`.\.venv\Scripts\python.exe -m scripts.research.docs index` |
-| “准备一个进入主干的 PR，确认 review 证据和 required checks。” | `repo-pr-governance` | `docs/rules/pr-workflow.md`、`docs/rules/review-guidelines.md`、`docs/rules/governance.md` | `make pr-submit TITLE="<PR标题>"`、`make pr-diagnose PR=<PR号>`、`make pr-resolve-threads THREADS="<thread-id...>"` |
+| “准备一个进入主干的 PR，确认 review 证据和 required checks。” | `repo-pr-governance` | `docs/rules/pr-workflow.md`、`docs/rules/review-guidelines.md`、`docs/rules/governance.md` | `make pr-submit TITLE="<PR标题>"`、`make pr-resolve-threads THREADS="<thread-id...>"` |
 | “先本地筛选研究候选，别直接消耗 JoinQuant 云端额度。” | `research-local-first` | `docs/rules/research-workflow.md` | `.\.venv\Scripts\python.exe -m scripts.research.cli` |
 | “把历史回测 run 做成可追溯数据快照。” | `research-data-center` | `docs/rules/research-workflow.md` | `.\.venv\Scripts\python.exe -m scripts.research.datasets` |
 | “补齐回测报告并对比多个 run 的收益和回撤。” | `research-report-analysis` | `docs/rules/research-workflow.md` | 报告分析脚本、`.\.venv\Scripts\python.exe -m scripts.research.docs index` |

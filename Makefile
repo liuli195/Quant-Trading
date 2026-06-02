@@ -1,4 +1,4 @@
-.PHONY: verify-fast verify-full pre-pr pr-submit pr-diagnose pr-resolve-threads
+.PHONY: verify-fast verify-full pre-pr pr-submit pr-resolve-threads
 
 ifeq ($(OS),Windows_NT)
 PYTHON ?= ./.venv/Scripts/python.exe
@@ -24,9 +24,6 @@ pre-pr:
 
 pr-submit:
 	$(PYTHON) -m scripts.research.governance.pr_flow submit --title "$(TITLE)" $(if $(PR),--pr "$(PR)",)
-
-pr-diagnose:
-	$(PYTHON) -m scripts.research.governance.pr_flow diagnose $(if $(PR),--pr "$(PR)",)
 
 pr-resolve-threads:
 	$(PYTHON) -m scripts.research.governance.pr_flow resolve-threads $(THREADS)

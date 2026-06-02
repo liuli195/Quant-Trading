@@ -430,6 +430,7 @@ def _validate_branch_intent_coverage(
     runner: Runner,
     *,
     base_ref: str = "origin/main",
+    pr_number: str | None = None,
 ) -> None:
     try:
         branch = _current_branch(root, runner)
@@ -452,7 +453,18 @@ def _validate_branch_intent_coverage(
         if isinstance(item, dict) and _single_line_text(item.get("commit_sha"))
     }
     current = set(commits)
-    missing = [sha for sha in commits if sha not in recorded]
+    missing = [
+        sha
+        for sha in commits
+        if sha not in recorded
+        and not _is_github_update_branch_merge_commit(
+            root,
+            runner,
+            sha,
+            base_ref=base_ref,
+            pr_number=pr_number,
+        )
+    ]
     if missing:
         raise CommitIntentError(
             "branch intent does not cover all current branch commits",
@@ -1296,7 +1308,11 @@ def _submit_branch_intent_failures(
     runner: Runner,
 ) -> list[pr_flow_contract.SubmitFailure]:
     try:
-        _validate_branch_intent_coverage(root, runner)
+        _validate_branch_intent_coverage(
+            root,
+            runner,
+            pr_number=_current_pr_number(root, runner),
+        )
     except CommitIntentError as exc:
         return [
             pr_flow_contract.SubmitFailure(
@@ -1692,6 +1708,7 @@ def _submit_pr_evidence(
 
 def _submit_issue_evidence(*, root: Path, runner: Runner) -> dict[str, Any]:
     branch = _current_branch(root, runner)
+    pr_number = _current_pr_number(root, runner)
     branch_intent = _read_json_object(_branch_intent_path(root, branch)) or {}
     commits = [
         item for item in branch_intent.get("commits", []) if isinstance(item, dict)
@@ -1705,6 +1722,15 @@ def _submit_issue_evidence(*, root: Path, runner: Runner) -> dict[str, Any]:
     for sha in _current_branch_commit_shas(root, runner, base_ref="origin/main"):
         item = by_sha.get(sha)
         if item is None:
+            if _is_github_update_branch_merge_commit(
+                root,
+                runner,
+                sha,
+                base_ref="origin/main",
+                pr_number=pr_number,
+            ):
+                evidence_commits.append({"sha": sha, "no_issue": True})
+                continue
             raise CommitIntentError(
                 "branch intent does not cover all current branch commits",
                 reason_code="BRANCH_INTENT_COVERAGE_MISSING",
@@ -2095,14 +2121,24 @@ def _submit_wait_required_checks(
         if not pending:
             return failures
         if time.monotonic() >= deadline:
-            return [
-                pr_flow_contract.SubmitFailure(
-                    check=failure.check,
-                    source=failure.source,
-                    detail="required check timed out while pending",
-                )
-                for failure in pending
-            ]
+            failure_by_check = {failure.check: failure for failure in failures}
+            pending_by_check = {failure.check: failure for failure in pending}
+            timed_out: list[pr_flow_contract.SubmitFailure] = []
+            for name in contract.required_checks:
+                failure = failure_by_check.get(name)
+                if failure is not None:
+                    timed_out.append(failure)
+                    continue
+                pending_failure = pending_by_check.get(name)
+                if pending_failure is not None:
+                    timed_out.append(
+                        pr_flow_contract.SubmitFailure(
+                            check=pending_failure.check,
+                            source=pending_failure.source,
+                            detail="required check timed out while pending",
+                        )
+                    )
+            return timed_out
         time.sleep(max(poll_seconds, 0))
 
 
@@ -2165,9 +2201,7 @@ def _submit_required_check_failures(
                     detail="required check is pending",
                 )
             )
-    if pending:
-        return [], pending
-    return failures, []
+    return failures, pending
 
 
 def _submit_complete_lifecycle(
@@ -2288,35 +2322,105 @@ def _submit_cleanup_merged_pr(
     runner: Runner,
     metadata: dict[str, Any],
 ) -> int:
+    pr_ref = _single_line_text(metadata.get("number")) or "unknown"
+    return _cleanup_merged_pr_metadata(
+        root=root,
+        runner=runner,
+        metadata=metadata,
+        pr_ref=pr_ref,
+    )
+
+
+def _cleanup_merged_pr_metadata(
+    *,
+    root: Path,
+    runner: Runner,
+    metadata: dict[str, Any],
+    pr_ref: str,
+) -> int:
+    state = _single_line_text(metadata.get("state")).upper()
+    merged_at = _single_line_text(metadata.get("mergedAt"))
     head_branch = _single_line_text(metadata.get("headRefName"))
     base_branch = _single_line_text(metadata.get("baseRefName")) or "main"
     is_cross_repository = bool(metadata.get("isCrossRepository"))
-    for label, command in (
-        ("git fetch --prune origin", ["git", "fetch", "--prune", "origin"]),
-        ("git switch base branch", ["git", "switch", base_branch]),
-    ):
-        result = runner.run(command, cwd=root)
-        if result.returncode != 0:
-            _print_command_failure(label, result)
+    if state != "MERGED" or not merged_at:
+        _print_state("EXCEPTION_REQUIRED", "PR is not merged")
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    if not head_branch:
+        _print_state("EXCEPTION_REQUIRED", "merged PR head branch unavailable")
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    print(f"cleanup: PR #{pr_ref} merged at {merged_at}")
+
+    fetch = runner.run(["git", "fetch", "--prune", "origin"], cwd=root)
+    if fetch.returncode != 0:
+        _print_command_failure("git fetch --prune origin", fetch)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+
+    base_worktree = _branch_worktree_path(root, runner, base_branch)
+    sync_root = base_worktree or root
+    if base_worktree is None:
+        switched = runner.run(["git", "switch", base_branch], cwd=root)
+        if switched.returncode != 0:
+            _print_command_failure("git switch base branch", switched)
             return EXCEPTION_REQUIRED_EXIT_CODE
+    else:
+        detached = runner.run(
+            ["git", "switch", "--detach", f"origin/{base_branch}"],
+            cwd=root,
+        )
+        if detached.returncode != 0:
+            _print_command_failure("git switch --detach origin base", detached)
+            return EXCEPTION_REQUIRED_EXIT_CODE
+
     with _temporary_env(
         {
             "ALLOW_MAIN_REF_UPDATE": "1",
-            "MAIN_REF_UPDATE_REASON": "sync local base after pr-submit merge",
+            "MAIN_REF_UPDATE_REASON": f"sync local {base_branch} after PR #{pr_ref} merge",
         }
     ):
         synced = runner.run(
             ["git", "merge", "--ff-only", f"origin/{base_branch}"],
-            cwd=root,
+            cwd=sync_root,
         )
     if synced.returncode != 0:
         _print_command_failure("git merge --ff-only origin base", synced)
         return EXCEPTION_REQUIRED_EXIT_CODE
+    if base_worktree is None:
+        print(f"cleanup: base {base_branch} synced with origin/{base_branch}")
+    else:
+        print(
+            f"cleanup: base {base_branch} synced in worktree "
+            f"{base_worktree} with origin/{base_branch}"
+        )
+
     if head_branch and not is_cross_repository:
         deleted = runner.run(["git", "branch", "-d", head_branch], cwd=root)
         if deleted.returncode != 0:
             _print_command_failure("git branch -d", deleted)
             return EXCEPTION_REQUIRED_EXIT_CODE
+        print(f"cleanup: local branch deleted: {head_branch}")
+        print(f"cleanup: remote branch deletion delegated to GitHub: {head_branch}")
+    elif is_cross_repository:
+        print(f"skip head branch delete for fork PR: {head_branch}")
+
+    synced_state = runner.run(
+        ["git", "rev-list", "--left-right", "--count", f"{base_branch}...origin/{base_branch}"],
+        cwd=sync_root,
+    )
+    if synced_state.returncode != 0:
+        _print_command_failure("git rev-list main...origin/main", synced_state)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    if _command_stdout(synced_state) != "0\t0":
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "local base branch is not synced to origin",
+            details=[_command_stdout(synced_state)],
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    print(
+        f"cleanup: final base sync verified: "
+        f"{base_branch}...origin/{base_branch} = 0 0"
+    )
     return SUCCESS_EXIT_CODE
 
 
@@ -3046,95 +3150,31 @@ def cleanup_pr(
         view,
         "gh pr view --json number,state,mergedAt,headRefName,baseRefName,isCrossRepository",
     )
-    state = _single_line_text(metadata.get("state")).upper()
-    merged_at = _single_line_text(metadata.get("mergedAt"))
-    head_branch = _single_line_text(metadata.get("headRefName"))
-    base_branch = _single_line_text(metadata.get("baseRefName")) or "main"
-    is_cross_repository = bool(metadata.get("isCrossRepository"))
-    if state != "MERGED" or not merged_at:
-        _print_state("EXCEPTION_REQUIRED", "PR is not merged")
-        return EXCEPTION_REQUIRED_EXIT_CODE
-    if not head_branch:
-        _print_state("EXCEPTION_REQUIRED", "merged PR head branch unavailable")
-        return EXCEPTION_REQUIRED_EXIT_CODE
-    print(f"cleanup: PR #{pr_ref} merged at {merged_at}")
-
-    for label, command in (
-        ("git fetch --prune origin", ["git", "fetch", "--prune", "origin"]),
-        ("git switch base branch", ["git", "switch", base_branch]),
-    ):
-        result = runner.run(command, cwd=root)
-        if result.returncode != 0:
-            _print_command_failure(label, result)
-            return EXCEPTION_REQUIRED_EXIT_CODE
-
-    with _temporary_env(
-        {
-            "ALLOW_MAIN_REF_UPDATE": "1",
-            "MAIN_REF_UPDATE_REASON": f"sync local {base_branch} after PR #{pr_ref} merge",
-        }
-    ):
-        synced = runner.run(
-            ["git", "merge", "--ff-only", f"origin/{base_branch}"],
-            cwd=root,
-        )
-    if synced.returncode != 0:
-        _print_command_failure("git merge --ff-only origin base", synced)
-        return EXCEPTION_REQUIRED_EXIT_CODE
-    print(f"cleanup: base {base_branch} synced with origin/{base_branch}")
-
-    if is_cross_repository:
-        print(f"skip head branch delete for fork PR: {head_branch}")
-    else:
-        local_delete = runner.run(["git", "branch", "-d", head_branch], cwd=root)
-        if local_delete.returncode != 0:
-            _print_command_failure("git branch -d", local_delete)
-            return EXCEPTION_REQUIRED_EXIT_CODE
-        print(f"cleanup: local branch deleted: {head_branch}")
-
-        remote_delete = runner.run(
-            ["git", "push", "origin", "--delete", head_branch],
-            cwd=root,
-        )
-        if remote_delete.returncode != 0:
-            _print_command_failure("git push origin --delete", remote_delete)
-            return EXCEPTION_REQUIRED_EXIT_CODE
-        print(f"cleanup: remote branch deleted: {head_branch}")
-
-        remote_ref = runner.run(
-            ["git", "ls-remote", "--heads", "origin", head_branch],
-            cwd=root,
-        )
-        if remote_ref.returncode != 0:
-            _print_command_failure("git ls-remote --heads", remote_ref)
-            return EXCEPTION_REQUIRED_EXIT_CODE
-        if _command_stdout(remote_ref):
-            _print_state(
-                "EXCEPTION_REQUIRED",
-                "remote branch still exists after cleanup",
-                details=[head_branch],
-            )
-            return EXCEPTION_REQUIRED_EXIT_CODE
-
-    synced_state = runner.run(
-        ["git", "rev-list", "--left-right", "--count", f"{base_branch}...origin/{base_branch}"],
-        cwd=root,
+    return _cleanup_merged_pr_metadata(
+        root=root,
+        runner=runner,
+        metadata=metadata,
+        pr_ref=pr_ref,
     )
-    if synced_state.returncode != 0:
-        _print_command_failure("git rev-list main...origin/main", synced_state)
-        return EXCEPTION_REQUIRED_EXIT_CODE
-    if _command_stdout(synced_state) != "0\t0":
-        _print_state(
-            "EXCEPTION_REQUIRED",
-            "local base branch is not synced to origin",
-            details=[_command_stdout(synced_state)],
-        )
-        return EXCEPTION_REQUIRED_EXIT_CODE
-    print(
-        f"cleanup: final base sync verified: "
-        f"{base_branch}...origin/{base_branch} = 0 0"
-    )
-    return SUCCESS_EXIT_CODE
+
+
+def _branch_worktree_path(root: Path, runner: Runner, branch: str) -> Path | None:
+    result = runner.run(["git", "worktree", "list", "--porcelain"], cwd=root)
+    if result.returncode != 0:
+        return None
+    current_path: Path | None = None
+    for raw_line in result.stdout.splitlines():
+        line = raw_line.strip()
+        if not line:
+            current_path = None
+            continue
+        if line.startswith("worktree "):
+            current_path = Path(line.removeprefix("worktree ").strip())
+            continue
+        if line == f"branch refs/heads/{branch}" and current_path is not None:
+            resolved = current_path.resolve()
+            return None if resolved == root.resolve() else resolved
+    return None
 
 
 def complete_pr(
@@ -3578,6 +3618,78 @@ def _current_branch_commit_shas(
             details=(_single_line_text(result.stderr), _single_line_text(result.stdout)),
         )
     return tuple(line.strip() for line in result.stdout.splitlines() if line.strip())
+
+
+def _is_github_update_branch_merge_commit(
+    root: Path,
+    runner: Runner,
+    sha: str,
+    *,
+    base_ref: str,
+    pr_number: str | None = None,
+) -> bool:
+    result = runner.run(["git", "show", "-s", "--format=%P%n%s", sha], cwd=root)
+    if result.returncode != 0:
+        return False
+    lines = result.stdout.splitlines()
+    if len(lines) < 2:
+        return False
+    parents = [parent for parent in lines[0].split() if parent]
+    if len(parents) < 2:
+        return False
+    base_branch = _base_branch_name(base_ref)
+    subject = lines[1].strip()
+    patterns = (
+        rf"^Merge branch '{re.escape(base_branch)}' into .+",
+        rf"^Merge remote-tracking branch 'origin/{re.escape(base_branch)}' into .+",
+    )
+    if not any(re.match(pattern, subject) for pattern in patterns):
+        return False
+    if not pr_number:
+        return False
+    return _pr_commit_has_github_update_branch_evidence(
+        root=root,
+        runner=runner,
+        pr_number=pr_number,
+        sha=sha,
+    )
+
+
+def _pr_commit_has_github_update_branch_evidence(
+    *,
+    root: Path,
+    runner: Runner,
+    pr_number: str,
+    sha: str,
+) -> bool:
+    try:
+        repo = _current_github_repo(root, runner)
+        commits = _gh_api_list(
+            root,
+            runner,
+            f"repos/{repo}/pulls/{pr_number}/commits?per_page=100",
+        )
+    except GitHubDataUnavailable:
+        return False
+    for item in commits:
+        if _single_line_text(item.get("sha")) != sha:
+            continue
+        if _github_commit_actor_is_web_flow(item.get("author")):
+            return True
+        if _github_commit_actor_is_web_flow(item.get("committer")):
+            return True
+    return False
+
+
+def _github_commit_actor_is_web_flow(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    return _single_line_text(value.get("login")).casefold() == "web-flow"
+
+
+def _base_branch_name(base_ref: str) -> str:
+    normalized = base_ref.strip().replace("\\", "/")
+    return normalized.rsplit("/", 1)[-1] if normalized else "main"
 
 
 def _branch_intent_with_commit(
@@ -5872,8 +5984,6 @@ def build_parser() -> argparse.ArgumentParser:
     submit_parser.add_argument("--pr")
     submit_parser.add_argument("--official-review-skip-authorized-by")
     submit_parser.add_argument("--official-review-skip-evidence")
-    diagnose_parser = subparsers.add_parser("diagnose")
-    diagnose_parser.add_argument("--pr")
     resolve_threads_parser = subparsers.add_parser("resolve-threads")
     resolve_threads_parser.add_argument("thread_ids", nargs="*")
     resolve_threads_parser.add_argument("--thread", action="append", default=[])
@@ -5946,8 +6056,6 @@ def main(argv: list[str] | None = None) -> int:
             ),
             official_review_skip_evidence=args.official_review_skip_evidence,
         )
-    if args.command == "diagnose":
-        return diagnose(repo_root=args.repo_root, pr=args.pr)
     if args.command == "resolve-threads":
         return resolve_review_threads(
             repo_root=args.repo_root,

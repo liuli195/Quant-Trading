@@ -365,7 +365,7 @@ def sync_commit_status(
         str(pr.get("html_url", ""))
         or f"https://github.com/{repo}/pull/{report.pr_number}"
     )
-    target_url = report.latest_review_url or pr_url
+    target_url = _workflow_run_url(repo) or report.latest_review_url or pr_url
     description = {
         "waiting_for_trigger": "Waiting for required @codex review trigger",
         "waiting_for_codex": "Waiting for Codex review on current head",
@@ -391,6 +391,15 @@ def sync_commit_status(
 
 def _review_status_context() -> str:
     return pr_flow_contract.load_contract(Path(".")).required_checks[0]
+
+
+def _workflow_run_url(repo: str) -> str:
+    run_id = os.environ.get("GITHUB_RUN_ID", "").strip()
+    if not run_id:
+        return ""
+    server_url = os.environ.get("GITHUB_SERVER_URL", "https://github.com").strip()
+    repository = os.environ.get("GITHUB_REPOSITORY", "").strip() or repo
+    return f"{server_url.rstrip('/')}/{repository}/actions/runs/{run_id}"
 
 
 def _has_required_trigger_comment(
