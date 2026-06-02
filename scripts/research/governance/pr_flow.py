@@ -411,41 +411,7 @@ def check_branch_intent_coverage(
     root = Path(repo_root).resolve()
     runner = runner or CommandRunner()
     try:
-        try:
-            branch = _current_branch(root, runner)
-        except CommitIntentError:
-            commits_without_branch = _current_branch_commit_shas(
-                root,
-                runner,
-                base_ref=base_ref,
-            )
-            if not commits_without_branch:
-                return SUCCESS_EXIT_CODE
-            raise
-        commits = _current_branch_commit_shas(root, runner, base_ref=base_ref)
-        if not commits:
-            return SUCCESS_EXIT_CODE
-        branch_intent = _read_json_object(_branch_intent_path(root, branch)) or {}
-        recorded = {
-            _single_line_text(item.get("commit_sha"))
-            for item in branch_intent.get("commits", [])
-            if isinstance(item, dict) and _single_line_text(item.get("commit_sha"))
-        }
-        current = set(commits)
-        missing = [sha for sha in commits if sha not in recorded]
-        if missing:
-            raise CommitIntentError(
-                "branch intent does not cover all current branch commits",
-                reason_code="BRANCH_INTENT_COVERAGE_MISSING",
-                details=missing,
-            )
-        stale = sorted(sha for sha in recorded if sha not in current)
-        if stale:
-            raise CommitIntentError(
-                "branch intent contains commits outside the current branch",
-                reason_code="BRANCH_INTENT_STALE_COMMITS",
-                details=stale,
-            )
+        _validate_branch_intent_coverage(root, runner, base_ref=base_ref)
         return SUCCESS_EXIT_CODE
     except CommitIntentError as exc:
         _print_state(
@@ -459,6 +425,49 @@ def check_branch_intent_coverage(
             next_actions=("rebuild or confirm commit intent for rewritten commits",),
         )
         return DISPATCH_REQUIRED_EXIT_CODE
+
+
+def _validate_branch_intent_coverage(
+    root: Path,
+    runner: Runner,
+    *,
+    base_ref: str = "origin/main",
+) -> None:
+    try:
+        branch = _current_branch(root, runner)
+    except CommitIntentError:
+        commits_without_branch = _current_branch_commit_shas(
+            root,
+            runner,
+            base_ref=base_ref,
+        )
+        if not commits_without_branch:
+            return
+        raise
+    commits = _current_branch_commit_shas(root, runner, base_ref=base_ref)
+    if not commits:
+        return
+    branch_intent = _read_json_object(_branch_intent_path(root, branch)) or {}
+    recorded = {
+        _single_line_text(item.get("commit_sha"))
+        for item in branch_intent.get("commits", [])
+        if isinstance(item, dict) and _single_line_text(item.get("commit_sha"))
+    }
+    current = set(commits)
+    missing = [sha for sha in commits if sha not in recorded]
+    if missing:
+        raise CommitIntentError(
+            "branch intent does not cover all current branch commits",
+            reason_code="BRANCH_INTENT_COVERAGE_MISSING",
+            details=missing,
+        )
+    stale = sorted(sha for sha in recorded if sha not in current)
+    if stale:
+        raise CommitIntentError(
+            "branch intent contains commits outside the current branch",
+            reason_code="BRANCH_INTENT_STALE_COMMITS",
+            details=stale,
+        )
 
 
 def payload_with_branch_intent(
@@ -1145,6 +1154,17 @@ def submit(
         for failure in failures:
             print(f"error: {failure.check}: {failure.detail}", file=sys.stderr)
         return EXCEPTION_REQUIRED_EXIT_CODE
+    failures = _submit_branch_intent_failures(root=root, runner=runner)
+    if failures:
+        pr_flow_contract.write_submit_status(
+            root,
+            contract,
+            head=head_sha,
+            failures=failures,
+        )
+        for failure in failures:
+            print(f"error: {failure.check}: {failure.detail}", file=sys.stderr)
+        return DISPATCH_REQUIRED_EXIT_CODE
     failures, has_blocking = _submit_first_stage_fragment_failures(
         root=root,
         contract=contract,
@@ -1212,6 +1232,24 @@ def submit(
             title=title,
             evidence=evidence,
         )
+    except CommitIntentError as exc:
+        pr_flow_contract.write_submit_status(
+            root,
+            contract,
+            head=head_sha,
+            failures=[
+                pr_flow_contract.SubmitFailure(
+                    check="issue-intent",
+                    source=".local/pr-flow/intents",
+                    detail=_commit_intent_failure_detail(exc),
+                )
+            ],
+        )
+        print(
+            f"error: issue-intent: {_commit_intent_failure_detail(exc)}",
+            file=sys.stderr,
+        )
+        return DISPATCH_REQUIRED_EXIT_CODE
     except GitHubDataUnavailable as exc:
         pr_flow_contract.write_submit_status(
             root,
@@ -1304,6 +1342,30 @@ def _submit_preflight_failures(
             )
         )
     return failures
+
+
+def _submit_branch_intent_failures(
+    *,
+    root: Path,
+    runner: Runner,
+) -> list[pr_flow_contract.SubmitFailure]:
+    try:
+        _validate_branch_intent_coverage(root, runner)
+    except CommitIntentError as exc:
+        return [
+            pr_flow_contract.SubmitFailure(
+                check="issue-intent",
+                source=".local/pr-flow/intents",
+                detail=_commit_intent_failure_detail(exc),
+            )
+        ]
+    return []
+
+
+def _commit_intent_failure_detail(exc: CommitIntentError) -> str:
+    if not exc.details:
+        return str(exc)
+    return f"{exc}: " + ", ".join(exc.details)
 
 
 def _current_github_repo(root: Path, runner: Runner) -> str:
@@ -1584,10 +1646,30 @@ def _submit_issue_evidence(*, root: Path, runner: Runner) -> dict[str, Any]:
     }
     evidence_commits: list[dict[str, Any]] = []
     for sha in _current_branch_commit_shas(root, runner, base_ref="origin/main"):
-        item = by_sha.get(sha) or {}
-        if _single_line_text(item.get("issue_policy")) == "no_issue":
+        item = by_sha.get(sha)
+        if item is None:
+            raise CommitIntentError(
+                "branch intent does not cover all current branch commits",
+                reason_code="BRANCH_INTENT_COVERAGE_MISSING",
+                details=(sha,),
+            )
+        issue_policy = _single_line_text(item.get("issue_policy"))
+        if issue_policy == "no_issue":
+            authorization = item.get("no_issue_authorization")
+            if not _valid_no_issue_authorization(authorization):
+                raise CommitIntentError(
+                    "no-Issue commit intent is missing authorization",
+                    reason_code="NO_ISSUE_AUTHORIZATION_MISSING",
+                    details=(sha,),
+                )
             evidence_commits.append({"sha": sha, "no_issue": True})
             continue
+        if issue_policy != "issues":
+            raise CommitIntentError(
+                "commit intent issue policy is invalid",
+                reason_code="COMMIT_ISSUE_POLICY_INVALID",
+                details=(sha,),
+            )
         issues = [
             {
                 "number": _positive_int_from_payload(issue.get("number")),
@@ -1600,8 +1682,12 @@ def _submit_issue_evidence(*, root: Path, runner: Runner) -> dict[str, Any]:
         ] if isinstance(item.get("issues"), list) else []
         if issues:
             evidence_commits.append({"sha": sha, "issues": issues})
-        else:
-            evidence_commits.append({"sha": sha, "no_issue": True})
+            continue
+        raise CommitIntentError(
+            "commit intent is missing valid issue bindings",
+            reason_code="COMMIT_ISSUE_BINDING_MISSING",
+            details=(sha,),
+        )
     refs: list[dict[str, Any]] = []
     for item in branch_intent.get("issues", []):
         if not isinstance(item, dict):
@@ -1619,6 +1705,15 @@ def _submit_issue_evidence(*, root: Path, runner: Runner) -> dict[str, Any]:
             )
         refs.append(ref)
     return {"commits": evidence_commits, "refs": refs}
+
+
+def _valid_no_issue_authorization(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    return all(
+        _single_line_text(value.get(field))
+        for field in ("reason", "authorized_by", "evidence")
+    )
 
 
 def _submit_issue_ac_checked(*, root: Path, runner: Runner, number: int) -> bool:

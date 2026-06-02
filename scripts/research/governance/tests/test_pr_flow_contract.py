@@ -27,6 +27,10 @@ class SubmitPreflightRunner:
         self.calls.append(command)
         if command == ["git", "rev-parse", "HEAD"]:
             return pr_flow.CommandResult(0, "1" * 40 + "\n", "")
+        if command == ["git", "branch", "--show-current"]:
+            return pr_flow.CommandResult(0, "feature/contract\n", "")
+        if command == ["git", "rev-list", "--reverse", "origin/main..HEAD"]:
+            return pr_flow.CommandResult(0, "", "")
         if command == ["gh", "repo", "view", "--json", "nameWithOwner"]:
             return pr_flow.CommandResult(
                 0,
@@ -479,6 +483,32 @@ def test_submit_creates_draft_pr_with_contract_evidence_json(tmp_path: Path) -> 
     assert "@codex review" in runner.comments[-1]
     assert "https://github.com/liuli195/Quant-Trading/pull/88" in runner.comments[-1]
     assert "1" * 40 in runner.comments[-1]
+
+
+def test_submit_rejects_missing_commit_intent_before_creating_pr(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR 自动化", runner=runner)
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    assert runner.created_bodies == []
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"][0]["check"] == "issue-intent"
+    assert status["failures"][0]["source"] == ".local/pr-flow/intents"
+    assert (
+        "branch intent does not cover all current branch commits"
+        in status["failures"][0]["detail"]
+    )
+    assert "111111111111" in status["failures"][0]["detail"]
 
 
 def test_submit_waits_on_pending_required_checks_until_timeout(tmp_path: Path) -> None:
