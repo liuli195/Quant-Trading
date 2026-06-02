@@ -765,6 +765,21 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                         f"PR Flow evidence workflow missing {token}",
                     )
                 )
+        workflow_tokens = (
+            ("actions/checkout@v4", "PR Flow evidence workflow must checkout the PR head"),
+            (
+                "github.event.pull_request.head.sha",
+                "PR Flow evidence workflow must checkout the current PR head",
+            ),
+            ("fetch-depth: 0", "PR Flow evidence workflow must fetch full history"),
+            (
+                "refs/remotes/origin/${{ github.event.pull_request.base.ref }}",
+                "PR Flow evidence workflow must fetch the PR base branch",
+            ),
+        )
+        for token, message in workflow_tokens:
+            if token not in text:
+                findings.append(AuditFinding("governance_gate", "error", message))
         if re.search(r"evidence:\s*\n\s*if:", text):
             findings.append(
                 AuditFinding(

@@ -731,6 +731,29 @@ def test_pr_review_evidence_rejects_invalid_official_review_shape() -> None:
     assert "PR Evidence official_review.skip_user_authorized missing evidence" in report.errors
 
 
+def test_pr_review_evidence_rejects_contract_v1_low_risk_skip_for_high_risk_files() -> (
+    None
+):
+    payload = _contract_evidence_payload()
+    payload["official_review"] = {"decision": "skip_risk_low"}
+    body = _managed_evidence_body(payload)
+
+    report = pr_review_evidence.validate_pr_body(
+        body,
+        expected_head_sha="a" * 40,
+        expected_diff_hash="diff-hash",
+        expected_commit_shas=("1" * 40, "2" * 40),
+        changed_files=("scripts/research/governance/pr_flow.py",),
+        labels=(),
+    )
+
+    assert not report.ok
+    assert (
+        "PR Evidence official_review.skip_risk_low is invalid for high-risk changed files"
+        in report.errors
+    )
+
+
 def test_pr_review_evidence_rejects_contract_v1_diff_mismatch() -> None:
     body = _managed_evidence_body(_contract_evidence_payload())
 
@@ -1172,6 +1195,29 @@ def test_codex_review_monitor_skips_low_risk_contract_v1_without_official_review
     )
 
     assert report.status == "skipped"
+
+
+def test_codex_review_monitor_rejects_low_risk_contract_v1_skip_for_high_risk_files() -> (
+    None
+):
+    payload = _contract_evidence_payload()
+    payload["official_review"] = {"decision": "skip_risk_low"}
+    report = codex_review_monitor.build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="88",
+        pr={"head": {"sha": "a" * 40}, "body": _managed_evidence_body(payload)},
+        issue_comments=[],
+        reviews=[],
+        review_comments=[],
+        changed_files=("scripts/research/governance/pr_flow.py",),
+        labels=(),
+    )
+
+    assert report.status == "evidence_invalid"
+    assert (
+        "PR Evidence official_review.skip_risk_low is invalid for high-risk changed files"
+        in report.message
+    )
 
 
 def test_codex_review_monitor_skips_contract_v1_user_authorized_official_review() -> (

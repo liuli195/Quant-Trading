@@ -1543,6 +1543,11 @@ def _write_minimal_repo(root: Path) -> None:
         "jobs:\n"
         "  evidence:\n"
         "    steps:\n"
+        "      - uses: actions/checkout@v4\n"
+        "        with:\n"
+        "          ref: ${{ github.event.pull_request.head.sha }}\n"
+        "          fetch-depth: 0\n"
+        "      - run: git fetch --no-tags --prune origin +refs/heads/${{ github.event.pull_request.base.ref }}:refs/remotes/origin/${{ github.event.pull_request.base.ref }}\n"
         "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
         encoding="utf-8",
     )
@@ -2250,6 +2255,34 @@ def test_governance_audit_flags_workflow_without_pr_review_evidence_gate(
         in finding.message
         for finding in report.findings
     )
+
+
+def test_governance_audit_flags_pr_flow_without_pr_head_checkout_and_base_fetch(
+    tmp_path: Path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    workflow = tmp_path / ".github/workflows/pr-flow.yml"
+    workflow.write_text(
+        "name: PR Flow\n"
+        "on:\n"
+        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
+        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
+        "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
+        "jobs:\n"
+        "  evidence:\n"
+        "    steps:\n"
+        "      - uses: actions/checkout@v4\n"
+        "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    messages = {finding.message for finding in report.findings}
+    assert "PR Flow evidence workflow must checkout the current PR head" in messages
+    assert "PR Flow evidence workflow must fetch full history" in messages
+    assert "PR Flow evidence workflow must fetch the PR base branch" in messages
 
 
 def test_governance_audit_flags_workflow_without_skill_junction_setup(

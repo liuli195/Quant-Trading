@@ -25,6 +25,7 @@ from scripts.research.governance.pr_review_evidence import (
     CODEX_REVIEW_AUTHORS,
     _extract_contract_v1_evidence,
     _contract_v1_evidence_errors,
+    _contract_v1_official_review_risk_errors,
     _fetch_pr_review_threads,
     _fetch_issue_metadata,
     _fetch_pr_changed_files,
@@ -259,7 +260,16 @@ def _contract_v1_official_codex_requirement(
         official_review = contract_payload.get("official_review")
         if isinstance(official_review, Mapping):
             decision = str(official_review.get("decision") or "").strip()
-            if decision in {"skip_risk_low", "skip_user_authorized"}:
+            if decision == "skip_risk_low":
+                skip_errors = _contract_v1_official_review_risk_errors(
+                    official_review,
+                    changed_files=changed_files,
+                    labels=labels,
+                )
+                if skip_errors:
+                    return True, skip_errors
+                return False, []
+            if decision == "skip_user_authorized":
                 return False, []
             if decision == "required":
                 return True, []

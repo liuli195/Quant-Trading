@@ -147,6 +147,8 @@ def validate_pr_body(
                     expected_head_sha=expected_head_sha,
                     expected_diff_hash=expected_diff_hash,
                     expected_commit_shas=expected_commit_shas,
+                    changed_files=changed_files,
+                    labels=labels,
                 )
             )
         if (
@@ -280,6 +282,8 @@ def _contract_v1_evidence_errors(
     expected_head_sha: str | None,
     expected_diff_hash: str | None,
     expected_commit_shas: Sequence[str] | None,
+    changed_files: Sequence[str] | None = None,
+    labels: Sequence[str] | None = None,
 ) -> list[str]:
     contract = pr_flow_contract.load_contract(Path("."))
     errors: list[str] = []
@@ -305,6 +309,13 @@ def _contract_v1_evidence_errors(
     errors.extend(_contract_v1_review_errors(payload.get("reviews"), head=head, diff=diff))
     if "official_review" in payload:
         errors.extend(_contract_v1_official_review_errors(payload.get("official_review")))
+        errors.extend(
+            _contract_v1_official_review_risk_errors(
+                payload.get("official_review"),
+                changed_files=changed_files,
+                labels=labels,
+            )
+        )
     errors.extend(
         _contract_v1_issue_errors(
             payload.get("issues"),
@@ -341,6 +352,28 @@ def _contract_v1_official_review_errors(official_review: object) -> list[str]:
                 )
         return errors
     return ["PR Evidence official_review.decision is invalid"]
+
+
+def _contract_v1_official_review_risk_errors(
+    official_review: object,
+    *,
+    changed_files: Sequence[str] | None,
+    labels: Sequence[str] | None,
+) -> list[str]:
+    if not isinstance(official_review, Mapping):
+        return []
+    if _single_line_text(official_review.get("decision")) != "skip_risk_low":
+        return []
+    errors: list[str] = []
+    if _high_risk_changed_files(changed_files):
+        errors.append(
+            "PR Evidence official_review.skip_risk_low is invalid for high-risk changed files"
+        )
+    if _has_ai_risk_review_label(labels):
+        errors.append(
+            "PR Evidence official_review.skip_risk_low is invalid with ai-risk-review label"
+        )
+    return errors
 
 
 def _contract_v1_review_errors(
