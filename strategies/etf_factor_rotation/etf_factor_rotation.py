@@ -66,6 +66,15 @@ PORTFOLIO_VOL_RELIEF_MODES = (
     "fixed_gold",
     "dyn_marginal",
 )
+PORTFOLIO_VOL_RELIEF_DEFAULTS = {
+    "PortfolioVolReliefMode": "dyn_marginal",
+    "GoldVolReliefFraction": 0.5,
+    "GoldVolReliefMaxRatio": 2.0,
+    "DynamicVolReliefFraction": 1.0,
+    "DynamicVolReliefMaxRatio": 1.5,
+    "DynamicVolReliefMomentumWindow": 20,
+    "DynamicVolReliefCovWindow": 40,
+}
 
 
 def fund_code(security):
@@ -182,6 +191,12 @@ def audit_event(event, context=None, **payload):
     write_file(path, json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n", append=True)
 
 
+def _runtime_param(name, default):
+    if not hasattr(g, name):
+        setattr(g, name, default)
+    return getattr(g, name)
+
+
 # ============================================================
 # snapshot_params — 参数快照
 # ============================================================
@@ -237,13 +252,34 @@ def snapshot_params():
         "PortfolioVolWindow": g.PortfolioVolWindow,
         "TargetVol": g.TargetVol,
         "MaxPortfolioVolScale": g.MaxPortfolioVolScale,
-        "PortfolioVolReliefMode": g.PortfolioVolReliefMode,
-        "GoldVolReliefFraction": g.GoldVolReliefFraction,
-        "GoldVolReliefMaxRatio": g.GoldVolReliefMaxRatio,
-        "DynamicVolReliefFraction": g.DynamicVolReliefFraction,
-        "DynamicVolReliefMaxRatio": g.DynamicVolReliefMaxRatio,
-        "DynamicVolReliefMomentumWindow": g.DynamicVolReliefMomentumWindow,
-        "DynamicVolReliefCovWindow": g.DynamicVolReliefCovWindow,
+        "PortfolioVolReliefMode": _runtime_param(
+            "PortfolioVolReliefMode",
+            PORTFOLIO_VOL_RELIEF_DEFAULTS["PortfolioVolReliefMode"],
+        ),
+        "GoldVolReliefFraction": _runtime_param(
+            "GoldVolReliefFraction",
+            PORTFOLIO_VOL_RELIEF_DEFAULTS["GoldVolReliefFraction"],
+        ),
+        "GoldVolReliefMaxRatio": _runtime_param(
+            "GoldVolReliefMaxRatio",
+            PORTFOLIO_VOL_RELIEF_DEFAULTS["GoldVolReliefMaxRatio"],
+        ),
+        "DynamicVolReliefFraction": _runtime_param(
+            "DynamicVolReliefFraction",
+            PORTFOLIO_VOL_RELIEF_DEFAULTS["DynamicVolReliefFraction"],
+        ),
+        "DynamicVolReliefMaxRatio": _runtime_param(
+            "DynamicVolReliefMaxRatio",
+            PORTFOLIO_VOL_RELIEF_DEFAULTS["DynamicVolReliefMaxRatio"],
+        ),
+        "DynamicVolReliefMomentumWindow": _runtime_param(
+            "DynamicVolReliefMomentumWindow",
+            PORTFOLIO_VOL_RELIEF_DEFAULTS["DynamicVolReliefMomentumWindow"],
+        ),
+        "DynamicVolReliefCovWindow": _runtime_param(
+            "DynamicVolReliefCovWindow",
+            PORTFOLIO_VOL_RELIEF_DEFAULTS["DynamicVolReliefCovWindow"],
+        ),
         "MaxWeight": g.MaxWeight,
         "MinWeight": g.MinWeight,
         "RebalanceThreshold": g.RebalanceThreshold,
