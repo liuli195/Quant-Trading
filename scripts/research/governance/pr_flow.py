@@ -235,7 +235,6 @@ def stage_commit_intent(
     no_issue_authorized_by: str | None = None,
     no_issue_evidence: str | None = None,
     correction_reason: str | None = None,
-    ac_review_mode: str | None = None,
     now: str | None = None,
 ) -> int:
     root = Path(repo_root).resolve()
@@ -259,9 +258,6 @@ def stage_commit_intent(
             correction = _single_line_text(correction_reason)
             if correction:
                 intent["correction_reason"] = correction
-            ac_mode = _validated_ac_review_mode(ac_review_mode)
-            if ac_mode:
-                intent["ac_review_mode"] = ac_mode
         else:
             reason = _single_line_text(no_issue_reason)
             authorized_by = _single_line_text(no_issue_authorized_by)
@@ -290,9 +286,6 @@ def stage_commit_intent(
                 "created_by": created_by,
                 "consumed": False,
             }
-            ac_mode = _validated_ac_review_mode(ac_review_mode)
-            if ac_mode:
-                intent["ac_review_mode"] = ac_mode
         path = _pending_intent_path(root)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(intent, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -502,11 +495,6 @@ def payload_with_branch_intent(
         branch_intent["commits"] = commits
         branch_intent["issues"] = _aggregate_intent_issues(commits)
         branch_intent["no_issue_authorizations"] = _no_issue_authorizations(commits)
-        ac_review_mode = _branch_ac_review_mode(commits)
-        if ac_review_mode:
-            branch_intent["ac_review_mode"] = ac_review_mode
-        else:
-            branch_intent.pop("ac_review_mode", None)
     if not commits:
         return dict(payload)
     updated = dict(payload)
@@ -531,9 +519,6 @@ def payload_with_branch_intent(
             if isinstance(item, dict)
         ],
     }
-    ac_review_mode = _single_line_text(branch_intent.get("ac_review_mode"))
-    if ac_review_mode:
-        issue_intent["ac_review_mode"] = ac_review_mode
     updated["issue_intent"] = issue_intent
     return updated
 
@@ -551,14 +536,6 @@ def evaluate_review_pipeline(payload: dict[str, Any]) -> dict[str, Any]:
         return {
             "status": "security_skipped",
             "blocking_findings": first_stage_blocking,
-            "ac_evidence": _spec_ac_evidence(payload),
-        }
-    missing_ac = _missing_ac_evidence(payload)
-    if missing_ac:
-        return {
-            "status": "blocked",
-            "blocking_findings": missing_ac,
-            "ac_evidence": _spec_ac_evidence(payload),
         }
     security_blocking = [
         *_non_passing_fragment_status("security", fragments.get("security")),
@@ -568,108 +545,11 @@ def evaluate_review_pipeline(payload: dict[str, Any]) -> dict[str, Any]:
         return {
             "status": "blocked",
             "blocking_findings": security_blocking,
-            "ac_evidence": _spec_ac_evidence(payload),
         }
     return {
         "status": "security_ready",
         "blocking_findings": [],
-        "ac_evidence": _spec_ac_evidence(payload),
     }
-
-
-def auto_mark_acceptance_criteria(
-    *,
-    repo_root: str | Path = ".",
-    runner: Runner | None = None,
-    payload: dict[str, Any],
-    pr_url: str,
-    head_sha: str,
-) -> int:
-    root = Path(repo_root).resolve()
-    runner = runner or CommandRunner()
-    issue_intent = payload.get("issue_intent")
-    if isinstance(issue_intent, dict) and _single_line_text(
-        issue_intent.get("ac_review_mode")
-    ) == "user_required":
-        _print_state(
-            "DISPATCH_REQUIRED",
-            "user-required AC review mode is enabled",
-            repo_root=root,
-            reason_code="AC_REVIEW_USER_REQUIRED",
-            phase="ac_review",
-            dispatch_target="maintainer",
-            next_actions=("manually confirm acceptance criteria before continuing",),
-        )
-        return DISPATCH_REQUIRED_EXIT_CODE
-
-    decision = evaluate_review_pipeline(payload)
-    if decision.get("status") != "security_ready":
-        blocking = [
-            _single_line_text(item)
-            for item in decision.get("blocking_findings", [])
-            if _single_line_text(item)
-        ]
-        _print_state(
-            "DISPATCH_REQUIRED",
-            "acceptance criteria evidence is incomplete",
-            repo_root=root,
-            reason_code="AC_EVIDENCE_INCOMPLETE",
-            phase="ac_review",
-            dispatch_target="review-agent",
-            details=blocking,
-            next_actions=("complete Spec AC evidence and Security review",),
-        )
-        return DISPATCH_REQUIRED_EXIT_CODE
-
-    closing_numbers = _closing_intent_issue_numbers(payload)
-    if not closing_numbers:
-        return SUCCESS_EXIT_CODE
-    evidence_by_issue = _met_ac_evidence_by_issue(payload)
-    for number in closing_numbers:
-        evidence_items = evidence_by_issue.get(number, [])
-        if not evidence_items:
-            continue
-        result = _run_github_read_command(
-            root,
-            runner,
-            ["gh", "issue", "view", str(number), "--json", "title,body"],
-        )
-        if result.returncode != 0:
-            _print_command_failure("gh issue view " + str(number), result)
-            return result.returncode
-        issue = _json_from_result(result)
-        body = str(issue.get("body") or "")
-        updated_body = _body_with_marked_acceptance_criteria(body, evidence_items)
-        if updated_body == body:
-            continue
-        local = root / ".local" / "pr-flow"
-        local.mkdir(parents=True, exist_ok=True)
-        body_file = local / f"issue-{number}-body.md"
-        body_file.write_text(updated_body, encoding="utf-8")
-        edit = runner.run(
-            ["gh", "issue", "edit", str(number), "--body-file", str(body_file)],
-            cwd=root,
-        )
-        if edit.returncode != 0:
-            _print_command_failure("gh issue edit " + str(number), edit)
-            return edit.returncode
-        comment_file = local / f"issue-{number}-ac-audit.md"
-        comment_file.write_text(
-            _render_ac_audit_comment(
-                pr_url=pr_url,
-                head_sha=head_sha,
-                evidence_items=evidence_items,
-            ),
-            encoding="utf-8",
-        )
-        comment = runner.run(
-            ["gh", "issue", "comment", str(number), "--body-file", str(comment_file)],
-            cwd=root,
-        )
-        if comment.returncode != 0:
-            _print_command_failure("gh issue comment " + str(number), comment)
-            return comment.returncode
-    return SUCCESS_EXIT_CODE
 
 
 def prepare(
@@ -785,7 +665,6 @@ def sync(
     title: str | None = None,
     runner: Runner | None = None,
     existing_labels: Sequence[str] | None = None,
-    check_issue_acceptance_criteria: bool = True,
 ) -> int:
     root = Path(repo_root).resolve()
     runner = runner or CommandRunner()
@@ -929,14 +808,6 @@ def sync(
             _print_command_failure("gh pr edit --remove-label", remove)
             return remove.returncode
 
-    if check_issue_acceptance_criteria:
-        issue_gate = _check_linked_issue_acceptance_criteria(
-            root=root,
-            runner=runner,
-            payload=payload,
-        )
-        if issue_gate != SUCCESS_EXIT_CODE:
-            return issue_gate
 
     try:
         needs_codex_review_request = (
@@ -1882,14 +1753,7 @@ def _submit_issue_evidence(*, root: Path, runner: Runner) -> dict[str, Any]:
         role = _single_line_text(item.get("role"))
         if number is None or role not in VALID_INTENT_ROLES:
             continue
-        ref: dict[str, Any] = {"number": number, "role": role}
-        if role == "closes":
-            ref["ac_checked"] = _submit_issue_ac_checked(
-                root=root,
-                runner=runner,
-                number=number,
-            )
-        refs.append(ref)
+        refs.append({"number": number, "role": role})
     return {"commits": evidence_commits, "refs": refs}
 
 
@@ -1900,22 +1764,6 @@ def _valid_no_issue_authorization(value: object) -> bool:
         _single_line_text(value.get(field))
         for field in ("reason", "authorized_by", "evidence")
     )
-
-
-def _submit_issue_ac_checked(*, root: Path, runner: Runner, number: int) -> bool:
-    command = ["gh", "issue", "view", str(number), "--json", "title,body"]
-    result = _run_github_read_command(root, runner, command)
-    if result.returncode != 0:
-        raise _github_data_unavailable(
-            "GitHub issue acceptance criteria unavailable",
-            " ".join(command),
-            result,
-        )
-    payload = _json_object_from_result(result, " ".join(command))
-    unchecked = ai_review_gate.unchecked_issue_acceptance_criteria(
-        str(payload.get("body") or "")
-    )
-    return not bool(unchecked)
 
 
 def _sync_submit_pr_evidence(
@@ -2888,7 +2736,6 @@ def ready(
         repo_root=root,
         title=title,
         runner=runner,
-        check_issue_acceptance_criteria=False,
     )
     if code != 0:
         if code == EXCEPTION_REQUIRED_EXIT_CODE:
@@ -3029,16 +2876,6 @@ def ready(
                 next_actions=("fix or reply to blocking review findings",),
             )
             return REPLY_OR_FIX_REQUIRED_EXIT_CODE
-        if isinstance(payload.get("issue_intent"), dict):
-            code = auto_mark_acceptance_criteria(
-                repo_root=root,
-                runner=runner,
-                payload=payload,
-                pr_url=pr_url,
-                head_sha=head_sha,
-            )
-            if code != SUCCESS_EXIT_CODE:
-                return code
         _record_pr_ready_phase(root, completed_phases, "sync_pr_body")
         code = sync(repo_root=root, title=title, runner=runner)
         if code != 0:
@@ -3689,19 +3526,6 @@ def _parse_intent_issue_binding(binding: str) -> tuple[int, str]:
     return number, role
 
 
-def _validated_ac_review_mode(value: str | None) -> str:
-    mode = _single_line_text(value)
-    if not mode or mode == "auto":
-        return ""
-    if mode != "user_required":
-        raise CommitIntentError(
-            "AC review mode must be auto or user_required",
-            reason_code="COMMIT_INTENT_AC_REVIEW_MODE_INVALID",
-            details=(mode,),
-        )
-    return mode
-
-
 def _pending_intent(root: Path) -> dict[str, Any]:
     path = _pending_intent_path(root)
     payload = _read_json_object(path)
@@ -3780,9 +3604,6 @@ def _branch_intent_with_commit(
         "issues": _aggregate_intent_issues(commits),
         "no_issue_authorizations": _no_issue_authorizations(commits),
     }
-    ac_review_mode = _branch_ac_review_mode(commits)
-    if ac_review_mode:
-        payload["ac_review_mode"] = ac_review_mode
     return payload
 
 
@@ -3834,13 +3655,6 @@ def _no_issue_authorizations(commits: Sequence[dict[str, Any]]) -> list[dict[str
     return authorizations
 
 
-def _branch_ac_review_mode(commits: Sequence[dict[str, Any]]) -> str:
-    for commit in commits:
-        if _single_line_text(commit.get("ac_review_mode")) == "user_required":
-            return "user_required"
-    return ""
-
-
 def _spec_issues_from_branch_intent(
     branch_intent: dict[str, Any],
 ) -> list[dict[str, Any]]:
@@ -3882,145 +3696,6 @@ def _non_passing_fragment_status(axis: str, fragment: Any) -> list[str]:
     return [f"{axis} review fragment status {status}"]
 
 
-def _spec_ac_evidence(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    fragments = payload.get("review_fragments")
-    if not isinstance(fragments, dict):
-        return []
-    spec = fragments.get("spec")
-    if not isinstance(spec, dict):
-        return []
-    evidence = spec.get("ac_evidence")
-    return [item for item in evidence if isinstance(item, dict)] if isinstance(evidence, list) else []
-
-
-def _missing_ac_evidence(payload: dict[str, Any]) -> list[str]:
-    missing: list[str] = []
-    evidence = _spec_ac_evidence(payload)
-    for issue in _closing_issue_acceptance_criteria(payload):
-        issue_number = issue["number"]
-        for criterion in issue["criteria"]:
-            matched = [
-                item
-                for item in evidence
-                if _positive_int_from_payload(item.get("issue")) == issue_number
-                and _single_line_text(item.get("criteria")) == criterion
-            ]
-            if not matched:
-                missing.append(f"missing AC evidence for #{issue_number}: {criterion}")
-                continue
-            item = matched[0]
-            item_evidence = item.get("evidence")
-            if not bool(item.get("met")):
-                missing.append(f"unmet AC evidence for #{issue_number}: {criterion}")
-            if not isinstance(item_evidence, list) or not any(
-                _single_line_text(value) for value in item_evidence
-            ):
-                missing.append(f"empty AC evidence for #{issue_number}: {criterion}")
-            if not _single_line_text(item.get("reviewer")):
-                missing.append(f"missing AC reviewer for #{issue_number}: {criterion}")
-    return missing
-
-
-def _closing_issue_acceptance_criteria(
-    payload: dict[str, Any],
-) -> list[dict[str, Any]]:
-    closing_numbers = set(_closing_intent_issue_numbers(payload))
-    issue_refs = payload.get("issue_refs")
-    if not isinstance(issue_refs, list):
-        return []
-    issues: list[dict[str, Any]] = []
-    for item in issue_refs:
-        if not isinstance(item, dict):
-            continue
-        number = _positive_int_from_payload(item.get("number"))
-        if number not in closing_numbers:
-            continue
-        criteria = [
-            _single_line_text(value)
-            for value in item.get("acceptance_criteria", [])
-            if _single_line_text(value)
-        ] if isinstance(item.get("acceptance_criteria"), list) else []
-        issues.append({"number": number, "criteria": criteria})
-    return issues
-
-
-def _closing_intent_issue_numbers(payload: dict[str, Any]) -> tuple[int, ...]:
-    issue_intent = payload.get("issue_intent")
-    issues = issue_intent.get("issues") if isinstance(issue_intent, dict) else None
-    if isinstance(issues, list):
-        numbers = [
-            number
-            for item in issues
-            if isinstance(item, dict)
-            and _single_line_text(item.get("role")) == "closes"
-            and (number := _positive_int_from_payload(item.get("number"))) is not None
-        ]
-        return tuple(sorted(dict.fromkeys(numbers)))
-    return _closing_issue_numbers(payload.get("spec_ref"))
-
-
-def _met_ac_evidence_by_issue(
-    payload: dict[str, Any],
-) -> dict[int, list[dict[str, Any]]]:
-    grouped: dict[int, list[dict[str, Any]]] = {}
-    for item in _spec_ac_evidence(payload):
-        number = _positive_int_from_payload(item.get("issue"))
-        evidence = item.get("evidence")
-        if (
-            number is None
-            or not bool(item.get("met"))
-            or not isinstance(evidence, list)
-            or not any(_single_line_text(value) for value in evidence)
-        ):
-            continue
-        grouped.setdefault(number, []).append(item)
-    return grouped
-
-
-def _body_with_marked_acceptance_criteria(
-    body: str,
-    evidence_items: Sequence[dict[str, Any]],
-) -> str:
-    criteria = {_single_line_text(item.get("criteria")) for item in evidence_items}
-    lines: list[str] = []
-    for line in body.splitlines():
-        match = ai_review_gate.ISSUE_ACCEPTANCE_CRITERION_PATTERN.match(line)
-        if match and match.group("status") == " " and _single_line_text(
-            match.group("text")
-        ) in criteria:
-            lines.append(line.replace("[ ]", "[x]", 1))
-        else:
-            lines.append(line)
-    suffix = "\n" if body.endswith("\n") else ""
-    return "\n".join(lines) + suffix
-
-
-def _render_ac_audit_comment(
-    *,
-    pr_url: str,
-    head_sha: str,
-    evidence_items: Sequence[dict[str, Any]],
-) -> str:
-    lines = [
-        "PR Flow AC auto-mark audit",
-        "",
-        f"- PR: {pr_url}",
-        f"- Head: {head_sha}",
-        "- Marked AC:",
-    ]
-    for item in evidence_items:
-        evidence = ", ".join(
-            _single_line_text(value)
-            for value in item.get("evidence", [])
-            if _single_line_text(value)
-        )
-        lines.append(
-            f"  - {_single_line_text(item.get('criteria'))} "
-            f"(reviewer={_single_line_text(item.get('reviewer'))}; evidence={evidence})"
-        )
-    return "\n".join(lines) + "\n"
-
-
 def _positive_int_from_payload(value: Any) -> int | None:
     if value is None:
         return None
@@ -4060,82 +3735,6 @@ def _issue_ref_numbers(issue_refs: Any) -> tuple[int, ...]:
         if number is not None:
             numbers.append(number)
     return tuple(sorted(dict.fromkeys(numbers)))
-
-
-def _check_linked_issue_acceptance_criteria(
-    *,
-    root: Path,
-    runner: Runner,
-    payload: dict[str, Any],
-) -> int:
-    issue_refs = payload.get("issue_refs")
-    if not isinstance(issue_refs, list) or not issue_refs:
-        return SUCCESS_EXIT_CODE
-    blocking: list[str] = []
-    for item in issue_refs:
-        if not isinstance(item, dict):
-            continue
-        number = _positive_int_from_payload(item.get("number"))
-        if number is None:
-            continue
-        command = ["gh", "issue", "view", str(number), "--json", "title,body"]
-        result = _run_github_read_command(root, runner, command)
-        if result.returncode != 0:
-            exc = _github_data_unavailable(
-                "GitHub issue acceptance criteria unavailable",
-                "gh issue view " + str(number) + " --json title,body",
-                result,
-            )
-            _print_state(
-                "EXCEPTION_REQUIRED",
-                str(exc),
-                repo_root=root,
-                reason_code="ISSUE_ACCEPTANCE_CRITERIA_UNAVAILABLE",
-                phase="sync_pr_body",
-                retryable=exc.retryable,
-                dispatch_target="github",
-                details=exc.details,
-                next_actions=("restore GitHub issue access",),
-            )
-            return EXCEPTION_REQUIRED_EXIT_CODE
-        try:
-            issue = _json_object_from_result(
-                result,
-                "gh issue view " + str(number) + " --json title,body",
-            )
-        except GitHubDataUnavailable as exc:
-            _print_state(
-                "EXCEPTION_REQUIRED",
-                str(exc),
-                repo_root=root,
-                reason_code="ISSUE_ACCEPTANCE_CRITERIA_UNAVAILABLE",
-                phase="sync_pr_body",
-                retryable=exc.retryable,
-                dispatch_target="github",
-                details=exc.details,
-                next_actions=("restore GitHub issue access",),
-            )
-            return EXCEPTION_REQUIRED_EXIT_CODE
-        title = _single_line_text(issue.get("title")) or _single_line_text(
-            item.get("title")
-        )
-        for line in ai_review_gate.unchecked_issue_acceptance_criteria(
-            str(issue.get("body") or "")
-        ):
-            blocking.append(f"#{number} {title}: {line}")
-    if not blocking:
-        return SUCCESS_EXIT_CODE
-    _print_state(
-        "DISPATCH_REQUIRED",
-        "linked issue acceptance criteria incomplete",
-        repo_root=root,
-        reason_code="ISSUE_ACCEPTANCE_CRITERIA_INCOMPLETE",
-        phase="sync_pr_body",
-        dispatch_target="author",
-        details=blocking,
-        next_actions=("check completed acceptance criteria in linked issues",),
-    )
-    return DISPATCH_REQUIRED_EXIT_CODE
 
 
 def _verify_full_evidence_command(root: Path) -> str:
@@ -6295,10 +5894,6 @@ def build_parser() -> argparse.ArgumentParser:
     intent_stage_parser.add_argument("--no-issue-authorized-by")
     intent_stage_parser.add_argument("--no-issue-evidence")
     intent_stage_parser.add_argument("--correction-reason")
-    intent_stage_parser.add_argument(
-        "--ac-review-mode",
-        choices=("auto", "user_required"),
-    )
     intent_subparsers.add_parser("pre-commit")
     intent_subparsers.add_parser("post-commit")
     coverage_parser = intent_subparsers.add_parser("check-coverage")
@@ -6373,7 +5968,6 @@ def main(argv: list[str] | None = None) -> int:
                 no_issue_authorized_by=args.no_issue_authorized_by,
                 no_issue_evidence=args.no_issue_evidence,
                 correction_reason=args.correction_reason,
-                ac_review_mode=args.ac_review_mode,
             )
         if args.intent_command == "pre-commit":
             return validate_pending_commit_intent(repo_root=args.repo_root)

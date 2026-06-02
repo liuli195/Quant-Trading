@@ -71,7 +71,7 @@ def test_commit_intent_pr_flow_contract_is_documented() -> None:
             "PR Evidence JSON issues",
             "target scheme review authority",
             "two-stage review",
-            "default AC auto-marking",
+            "no AC auto-marking",
         ],
         Path("docs/rules/pr-workflow.md"): [
             "git add",
@@ -81,7 +81,7 @@ def test_commit_intent_pr_flow_contract_is_documented() -> None:
         ],
         Path("docs/rules/review-guidelines.md"): [
             "target方案优先",
-            "Spec reviewer AC evidence",
+            "Spec reviewer 按目标方案整体判断",
             "Security-after-Standards/Spec",
             "Standards/Security veto",
         ],

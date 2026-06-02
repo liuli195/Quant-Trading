@@ -835,7 +835,7 @@ def test_submit_creates_draft_pr_with_contract_evidence_json(tmp_path: Path) -> 
     ]
     assert issues["refs"] == [
         {"number": 65, "role": "reference"},
-        {"number": 66, "role": "closes", "ac_checked": True},
+        {"number": 66, "role": "closes"},
     ]
     assert payload["retained"] == [
         {"severity": "P2", "source": "security", "detail": "accepted follow-up"}
@@ -1160,6 +1160,22 @@ def test_submit_completes_head_locked_auto_merge_and_local_cleanup(
     assert not any(call[:3] == ["git", "push", "origin"] for call in runner.lifecycle_calls)
 
 
+def test_contract_v1_rejects_legacy_ac_checked_field() -> None:
+    payload = _contract_evidence_payload()
+    issues = payload["issues"]
+    assert isinstance(issues, dict)
+    refs = issues["refs"]
+    assert isinstance(refs, list)
+    ref = refs[1]
+    assert isinstance(ref, dict)
+    ref["ac_checked"] = True
+
+    report = pr_review_evidence.validate_pr_body(_managed_evidence_body(payload))
+
+    assert not report.ok
+    assert "PR Evidence issues.refs[1].ac_checked is not allowed" in report.errors
+
+
 def test_codex_review_monitor_waits_for_trigger_with_contract_v1_evidence() -> None:
     report = codex_review_monitor.build_monitor_report(
         repo="liuli195/Quant-Trading",
@@ -1413,7 +1429,6 @@ def _contract_evidence_payload() -> dict[str, object]:
                 {
                     "number": 66,
                     "role": "closes",
-                    "ac_checked": True,
                 },
             ],
         },

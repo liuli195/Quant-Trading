@@ -443,8 +443,10 @@ def _contract_v1_issue_errors(
         role = _single_line_text(item.get("role"))
         if role not in {"reference", "closes"}:
             errors.append(f"PR Evidence issues.refs[{index}].role is invalid")
-        if role == "closes" and not bool(item.get("ac_checked")):
-            errors.append(f"PR Evidence closes issue #{item.get('number')} AC is not checked")
+        if "ac_checked" in item:
+            errors.append(
+                f"PR Evidence issues.refs[{index}].ac_checked is not allowed"
+            )
     return errors
 
 

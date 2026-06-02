@@ -2580,7 +2580,7 @@ def test_sync_rejects_stale_schema_v3_diff_fingerprint(
     assert not any(call[:3] == ["gh", "pr", "edit"] for call in runner.calls)
 
 
-def test_sync_stops_after_pr_body_update_when_issue_ac_is_unchecked(
+def test_sync_ignores_unchecked_issue_ac_checkbox(
     tmp_path: Path,
 ) -> None:
     _write_valid_v4_issue_report(tmp_path, issue_number=50)
@@ -2606,65 +2606,16 @@ def test_sync_stops_after_pr_body_update_when_issue_ac_is_unchecked(
 
     code = pr_flow.sync(repo_root=tmp_path, title="PR Flow issue gate", runner=runner)
 
-    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
-    assert "Closes #50" in runner.edited_bodies[-1]
-    status = json.loads(
-        (tmp_path / ".local" / "pr-flow" / "last-status.json").read_text(
-            encoding="utf-8"
-        )
-    )
-    assert status["state"] == "DISPATCH_REQUIRED"
-    assert status["reason_code"] == "ISSUE_ACCEPTANCE_CRITERIA_INCOMPLETE"
-    assert status["blocking_items"] == ["#50 Issue 50: - [ ] first AC"]
-
-
-def test_sync_continues_when_linked_issue_ac_is_checked(
-    tmp_path: Path,
-) -> None:
-    _write_valid_v4_issue_report(tmp_path, issue_number=50)
-
-    class IssueAcRunner(FakeRunner):
-        def run(
-            self,
-            command: list[str],
-            *,
-            cwd: Path | None = None,
-            input_text: str | None = None,
-        ) -> pr_flow.CommandResult:
-            if command == ["gh", "issue", "view", "50", "--json", "title,body"]:
-                self.calls.append(command)
-                return pr_flow.CommandResult(
-                    0,
-                    json.dumps({"title": "Issue 50", "body": "- [x] first AC\n"}),
-                    "",
-                )
-            return super().run(command, cwd=cwd, input_text=input_text)
-
-    runner = IssueAcRunner(existing_pr=True)
-
-    code = pr_flow.sync(repo_root=tmp_path, title="PR Flow issue gate", runner=runner)
-
     assert code == 0
     assert "Closes #50" in runner.edited_bodies[-1]
+    assert ["gh", "issue", "view", "50", "--json", "title,body"] not in runner.calls
 
 
-def test_ready_auto_marks_ac_before_final_issue_gate(
+def test_ready_does_not_auto_mark_ac_before_final_issue_gate(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
     _write_valid_v4_issue_report(tmp_path, issue_number=50)
-    latest = tmp_path / ".local" / "ai-review" / "latest.json"
-    payload = json.loads(latest.read_text(encoding="utf-8"))
-    payload["review_fragments"]["spec"]["ac_evidence"] = [
-        {
-            "issue": 50,
-            "criteria": "first AC",
-            "met": True,
-            "evidence": ["test_ready_auto_marks_ac_before_final_issue_gate"],
-            "reviewer": "spec-review-subagent",
-        }
-    ]
-    latest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     intent = {
         "schema_version": 1,
         "branch": "feature/pr-flow",
@@ -2724,8 +2675,8 @@ def test_ready_auto_marks_ac_before_final_issue_gate(
     code = pr_flow.ready(repo_root=tmp_path, title="PR Flow issue gate", runner=runner)
 
     assert code == pr_flow.SUCCESS_EXIT_CODE
-    assert "- [x] first AC" in runner.issue_body
-    assert runner.issue_comments
+    assert "- [ ] first AC" in runner.issue_body
+    assert runner.issue_comments == []
     assert len(runner.edited_bodies) >= 2
 
 

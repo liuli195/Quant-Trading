@@ -72,7 +72,7 @@ Review Scope：
 - `reviews` 只保存 Standards、Spec、Security 的通过指纹。
 - `official_review.decision` 只允许 `required`、`skip_risk_low`、`skip_user_authorized`；旧 evidence 缺失 `official_review` 时按 `required` 读取，新写出必须包含。
 - `issues.commits` 覆盖每个 PR commit；每个 commit 要么有关联 Issue，要么明确 `no_issue`。
-- `issues.refs` 记录 closes/reference 和 closes Issue 的 AC checked 状态。
+- `issues.refs` 仅记录 closes/reference 角色；GitHub Issue AC checkbox 仅作为人工记录，不参与 PR gate。
 - `retained` 只允许 P2/P3，来源只能是 standards/spec/security/official_codex。
 
 ## Local Review Wrapper
@@ -84,6 +84,6 @@ Review Scope：
 ## Issue Intent Review
 
 - Standards reviewer 和 Spec reviewer 先并行运行；`Security-after-Standards/Spec` 是固定顺序，只有两者没有 open P0/P1 后才运行 Security reviewer。
-- `Spec reviewer AC evidence` 不扩展 fragment 或 PR Evidence 字段；Spec reviewer 只判断每个 `closes` Issue 的 AC 是否满足，PR Evidence 仅记录 `issues.refs[].ac_checked`。
+- Spec reviewer 按目标方案整体判断实现是否满足需求，不额外输出逐项 AC 确认；PR Evidence 不记录 AC 确认字段。
 - `Standards/Security veto` 保留阻断权：Standards 可阻断规则、证据或流程问题；Security 可在第二阶段阻断安全问题。
-- P2/P3 accepted findings 继续作为非阻断证据保留，不阻止 Security 或 AC auto-marking。
+- P2/P3 accepted findings 继续作为非阻断证据保留，不阻止 Security 后续流程。
