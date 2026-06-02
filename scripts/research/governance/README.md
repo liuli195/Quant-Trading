@@ -30,7 +30,7 @@ make pr-submit TITLE="<PR标题>"
 
 `pr-submit` 读取 [pr-flow-interface-contract.yaml](../../../docs/rules/pr-flow-interface-contract.yaml) <!-- pathref: docs/rules/pr-flow-interface-contract.yaml -->，检查 GitHub repo settings 和 required checks，校验 `.local/ai-review/fragments/*.json`，创建或更新 draft PR，写 PR Evidence JSON，触发 `@codex review`，等待 required checks，执行 head-locked auto-merge，并在 merged 后只做本地 fast-forward 与本地分支删除。远端分支删除交给 GitHub。
 
-失败接手入口是 `.local/pr-flow/status.json`。pending 不是失败；官方 Codex review 未返回或 required checks 未完成时继续等待，只有真实阻断、配置缺失或超时才写 failures。
+接手入口是 `.local/pr-flow/status.json`。`pr-submit` 每次开始写当前 head 的空 `failures`，失败时覆盖为 failures，成功时可留下 `failures: []`；它不是成功证明。pending 不是失败；官方 Codex review 未返回或 required checks 未完成时继续等待，只有真实阻断、配置缺失或超时才写 failures。
 
 排障入口：
 
@@ -48,7 +48,7 @@ GitHub `main` required checks 必须与契约完全一致：
 - `Research Governance / verify-full`
 - `PR Flow / evidence`
 
-`PR Flow / evidence` 只读取 PR body 托管区里的 PR Evidence JSON。`PR Flow / review-status` 通过 commit status 表示官方 Codex review 和 unresolved thread 状态；官方 Codex 未返回时保持 pending。`Research Governance / verify-full` 在 GitHub 上执行完整治理验证，本地 PR 前置不重复运行完整验证。
+`PR Flow / evidence` 只读取 PR body 托管区里的 PR Evidence JSON。`PR Flow / review-status` 通过 commit status 表示官方 Codex review 和 unresolved thread 状态；官方 Codex 未返回时保持 pending，官方 P2/P3 进入 PR Evidence `retained` 后可 resolve。`Research Governance / verify-full` 在 GitHub 上执行完整治理验证，本地 PR 前置不重复运行完整验证。
 
 ## Hooks 和主干保护
 

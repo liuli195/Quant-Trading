@@ -19,16 +19,16 @@ Accepted
 - 有可用子 agent 能力时，PR 任务默认优先分发；无能力、简单只读、强串行依赖或权限只在主会话可用时，记录原因和替代证据。
 - P0/P1 问题必须修复或证明误报后才能继续。
 - P2 问题可以保留，但必须记录不修原因、风险接受理由和处理方式。
-- 低风险 PR 不强制触发官方 Codex Code Review。
-- 高风险或 unknown PR 必须加 `ai-risk-review` label，并默认触发官方 Codex Code Review；用户显式授权时可以跳过，但必须记录授权人、原因和证据。
+- 新 PR Flow 下，`pr-submit` 对所有 PR 触发官方 Codex Code Review；低风险不再作为跳过官方 review 的条件。
+- 高风险或 unknown PR 必须加 `ai-risk-review` label，用于标记风险和收窄 Review Scope；用户授权不得绕过 GitHub required check、官方 Codex review 或 unresolved thread 阻断。
 - `PR Flow / review-status` 保持 GitHub `main` 全局 required status check；官方 Codex review 未返回时保持 pending。
-- 大型 PR 的官方 Codex Review 必须使用定向 scope，只审高风险目录和高风险命中改动的 P0/P1 逻辑风险。
+- 大型 PR 的官方 Codex Review 必须使用定向 scope 聚焦 P0/P1 逻辑风险；scope 只能提效，不得绕过 current-head 官方 review。
 
 ## Consequences
 
-- 官方 Codex Review 从全量必跑变成高风险复核；`PR Flow / review-status` 仍是全局 required check。
-- 本地 AI review 和 CI gate 承担低风险 PR 的主要自动化检查责任。
+- 官方 Codex Review 由 `PR Flow / review-status` 统一等待和校验；低风险 PR 不再绕过该 required check。
+- 本地 AI review、Security fragment 和 CI gate 提供输入与远端验证；GitHub required checks 和 merged state 仍是合并权威。
 - 本地 AI review 报告 schema 需要机器校验至少两个独立 reviewer、两个 Superpowers 评审模板、安全 review provider/tool/evidence、完全 review 终止条件和不完全模式授权；PR 模板需要用 `reviewers: A, B` 记录子 agent 交叉评审，并记录任务分发和本地安全 review 说明。
-- 官方 Codex Review 跳过授权只影响是否等待官方 review，不影响未 resolved review thread 的阻断。
-- 无法证明低风险的 PR 一律按高风险处理。
+- 旧的 official-review waiver 不再属于新 PR Flow 合并路径；官方 P2/P3 只能通过 retained+resolve 例外路径处理。
+- 无法证明低风险的 PR 一律按高风险处理，但风险分级只影响 scope 和本地关注重点，不影响是否触发官方 review。
 - 规则、PR 模板、workflow 和 governance gate 必须使用同一套风险评级语义。

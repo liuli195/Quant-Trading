@@ -12,6 +12,10 @@ from scripts.research.governance import (
 )
 
 
+DEFAULT_DIFF_TEXT = "diff --git a/a.txt b/a.txt\n+hello\n"
+DEFAULT_DIFF_HASH = hashlib.sha256(DEFAULT_DIFF_TEXT.encode("utf-8")).hexdigest()
+
+
 class SubmitPreflightRunner:
     def __init__(self, *, valid_contract: bool = False) -> None:
         self.calls: list[list[str]] = []
@@ -27,6 +31,16 @@ class SubmitPreflightRunner:
         self.calls.append(command)
         if command == ["git", "rev-parse", "HEAD"]:
             return pr_flow.CommandResult(0, "1" * 40 + "\n", "")
+        if command == [
+            "git",
+            "-c",
+            "core.quotePath=false",
+            "diff",
+            "--binary",
+            "--no-ext-diff",
+            "origin/main...HEAD",
+        ]:
+            return pr_flow.CommandResult(0, DEFAULT_DIFF_TEXT, "")
         if command == ["git", "branch", "--show-current"]:
             return pr_flow.CommandResult(0, "feature/contract\n", "")
         if command == ["git", "rev-list", "--reverse", "origin/main..HEAD"]:
@@ -161,7 +175,10 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
                 json.dumps({"title": f"Issue {command[3]}", "body": "- [x] done\n"}),
                 "",
             )
-        if command == ["gh", "pr", "view", "--json", "number,url,state,isDraft"]:
+        if command in (
+            ["gh", "pr", "view", "--json", "number,url,state,isDraft"],
+            ["gh", "pr", "view", "88", "--json", "number,url,state,isDraft"],
+        ):
             if not self.existing_pr:
                 return pr_flow.CommandResult(1, "", "no pull request")
             return pr_flow.CommandResult(
@@ -176,8 +193,18 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
                 ),
                 "",
             )
-        if command == ["gh", "pr", "view", "--json", "body"]:
-            return pr_flow.CommandResult(0, json.dumps({"body": self.existing_body}), "")
+        if command in (
+            ["gh", "pr", "view", "--json", "body"],
+            ["gh", "pr", "view", "88", "--json", "body"],
+        ):
+            body = (
+                self.edited_bodies[-1]
+                if self.edited_bodies
+                else self.created_bodies[-1]
+                if self.created_bodies
+                else self.existing_body
+            )
+            return pr_flow.CommandResult(0, json.dumps({"body": body}), "")
         if command[:4] == ["gh", "pr", "edit", "88"]:
             body_file = Path(command[command.index("--body-file") + 1])
             self.edited_bodies.append(body_file.read_text(encoding="utf-8"))
@@ -330,6 +357,141 @@ class MissingSubmitRemoteHeadRunner(SubmitCreatePrRunner):
         return super().run(command, cwd=cwd, input_text=input_text)
 
 
+class SubmitOfficialCodexRetainedRunner(SubmitCreatePrRunner):
+    def __init__(self, *, diff_text: str) -> None:
+        super().__init__(diff_text=diff_text)
+        self.checks_calls = 0
+        self.thread_id = "PRRT_official_p2"
+        self.replies: list[str] = []
+        self.resolved_threads: list[str] = []
+
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        joined = "\n".join(command)
+        if (
+            command[:6]
+            == ["gh", "pr", "checks", "88", "--required", "--json"]
+        ):
+            self.checks_calls += 1
+            review_bucket = "fail" if self.checks_calls == 1 else "pass"
+            review_state = "FAILURE" if self.checks_calls == 1 else "SUCCESS"
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    [
+                        {
+                            "name": "PR Flow / review-status",
+                            "workflow": "",
+                            "state": review_state,
+                            "bucket": review_bucket,
+                            "link": "https://github.com/checks/review",
+                        },
+                        {
+                            "name": "verify-full",
+                            "workflow": "Research Governance",
+                            "state": "SUCCESS",
+                            "bucket": "pass",
+                            "link": "https://github.com/runs/1",
+                        },
+                        {
+                            "name": "evidence",
+                            "workflow": "PR Flow",
+                            "state": "SUCCESS",
+                            "bucket": "pass",
+                            "link": "https://github.com/runs/2",
+                        },
+                    ]
+                ),
+                "",
+            )
+        if "addPullRequestReviewThreadReply" in joined:
+            body = next(
+                (item.removeprefix("body=") for item in command if item.startswith("body=")),
+                "",
+            )
+            self.replies.append(body)
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "data": {
+                            "addPullRequestReviewThreadReply": {
+                                "comment": {"id": "comment-id"}
+                            }
+                        }
+                    }
+                ),
+                "",
+            )
+        if "resolveReviewThread" in joined:
+            thread_id = next(
+                (
+                    item.removeprefix("threadId=")
+                    for item in command
+                    if item.startswith("threadId=")
+                ),
+                "",
+            )
+            self.resolved_threads.append(thread_id)
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "data": {
+                            "resolveReviewThread": {
+                                "thread": {"id": thread_id, "isResolved": True}
+                            }
+                        }
+                    }
+                ),
+                "",
+            )
+        if "reviewThreads" in joined:
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "data": {
+                            "repository": {
+                                "pullRequest": {
+                                    "reviewThreads": {
+                                        "nodes": [
+                                            {
+                                                "id": self.thread_id,
+                                                "isResolved": False,
+                                                "isOutdated": False,
+                                                "comments": {
+                                                    "nodes": [
+                                                        {
+                                                            "body": "**P2** retain as follow-up",
+                                                            "author": {
+                                                                "login": "chatgpt-codex-connector[bot]"
+                                                            },
+                                                        }
+                                                    ]
+                                                },
+                                            }
+                                        ],
+                                        "pageInfo": {
+                                            "hasNextPage": False,
+                                            "endCursor": None,
+                                        },
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ),
+                "",
+            )
+        return super().run(command, cwd=cwd, input_text=input_text)
+
+
 def test_contract_loads_required_checks_and_writes_submit_status(tmp_path: Path) -> None:
     contract = pr_flow_contract.load_contract(Path("."))
 
@@ -427,6 +589,28 @@ def test_submit_requires_security_only_after_first_stage_passes(tmp_path: Path) 
             "check": "local-review",
             "source": ".local/ai-review/fragments/security.json",
             "detail": "security fragment is missing",
+        }
+    ]
+
+
+def test_submit_rejects_stale_first_stage_fragment_before_security(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+    _write_fragment(tmp_path, "standards", findings=[], diff="stale-diff")
+    _write_fragment(tmp_path, "spec", findings=[])
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"] == [
+        {
+            "check": "local-review",
+            "source": ".local/ai-review/fragments/standards.json",
+            "detail": "standards fragment diff is stale",
         }
     ]
 
@@ -552,6 +736,33 @@ def test_submit_creates_draft_pr_with_contract_evidence_json(tmp_path: Path) -> 
     assert "@codex review" in runner.comments[-1]
     assert "https://github.com/liuli195/Quant-Trading/pull/88" in runner.comments[-1]
     assert "1" * 40 in runner.comments[-1]
+
+
+def test_submit_accepts_official_codex_p2_thread_into_retained(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitOfficialCodexRetainedRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert runner.checks_calls == 2
+    assert runner.replies
+    assert runner.resolved_threads == [runner.thread_id]
+    payload = _payload_from_managed_body(runner.edited_bodies[-1])
+    retained = payload["retained"]
+    assert isinstance(retained, list)
+    assert {
+        "severity": "P2",
+        "source": "official_codex",
+        "detail": "**P2** retain as follow-up",
+    } in retained
 
 
 def test_submit_rejects_missing_commit_intent_before_creating_pr(
@@ -795,7 +1006,7 @@ def _write_fragment(
     role: str,
     *,
     findings: list[dict[str, str]],
-    diff: str = "current-diff",
+    diff: str = DEFAULT_DIFF_HASH,
 ) -> None:
     path = root / ".local" / "ai-review" / "fragments" / f"{role}.json"
     path.parent.mkdir(parents=True, exist_ok=True)

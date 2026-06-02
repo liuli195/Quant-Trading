@@ -85,7 +85,7 @@ def test_commit_intent_pr_flow_contract_is_documented() -> None:
         Path("docs/rules/governance.md"): [
             "commit intent hook",
             "PR Evidence JSON issues",
-            "no-Issue authorization audit",
+            "no-Issue PR Evidence minimum",
         ],
         Path("docs/rules/commands.md"): [
             "pr_flow intent stage",
@@ -1521,8 +1521,8 @@ def _write_minimal_repo(root: Path) -> None:
         ".githooks/reference-transaction ALLOW_MAIN_REF_UPDATE MAIN_REF_UPDATE_REASON "
         "ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON PR Flow / review-status "
         "Research Governance / verify-full PR Flow / evidence PR Evidence JSON issues "
-        "no-Issue authorization audit "
-        "review_mode=complete 官方 Codex Review 跳过授权 "
+        "no-Issue PR Evidence minimum "
+        "review_mode=complete official Codex required check "
         "security_review 本地安全 review codex-security security-guidance "
         "git fetch origin main git merge --ff-only origin/main "
         "git branch -d <branch> 远端分支删除交给 GitHub force delete\n",
@@ -1555,7 +1555,7 @@ def _write_minimal_repo(root: Path) -> None:
         "superpowers:subagent-driven-development/spec-reviewer-prompt.md\n"
         "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md\n"
         "reviewers:\n"
-        "任务分发说明\nhigh/unknown PR label\n官方 Codex Review 跳过授权\n"
+        "任务分发说明\nai-risk-review label\nofficial Codex required check\n"
         "本地 AI review 模式\n不完全 Review 模式授权\nCodex Code Review 结论\n"
         "本地安全 review\ncodex-security\nsecurity-guidance\n"
         "Codex\n"
@@ -1605,7 +1605,7 @@ def _write_minimal_repo(root: Path) -> None:
                 "codex-security",
                 "security-guidance",
                 "retained",
-                "官方 Codex Review 跳过授权",
+                "official Codex required check",
                 "Codex Code Review 结论",
                 "结论: 通过",
                 "阻断问题: 无",

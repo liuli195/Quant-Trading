@@ -920,7 +920,7 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             "Research Governance / verify-full",
             "PR Flow / evidence",
             "PR Evidence JSON issues",
-            "no-Issue authorization audit",
+            "no-Issue PR Evidence minimum",
         ):
             if token not in text:
                 findings.append(

@@ -13,13 +13,13 @@
 - 本地 AI review 默认 `review_mode=complete`；`complete_review.iterations` 必须证明每个 reviewer 最后一轮 `no_new_findings=true` 且 `new_findings=[]`。
 - `review_mode=partial` 只在用户显式授权时可用，并记录 `authorized_by`、`reason`、`evidence`。
 - P0/P1 未以 `fixed` 或 `false_positive` 关闭前，不得进入下一阶段。
-- 高风险或 unknown PR 必须加 `ai-risk-review` label，并触发官方 Codex Code Review；用户显式授权跳过时，PR body 必须记录 `官方 Codex Review 跳过授权`。
+- `pr-submit` 对所有 PR 触发官方 Codex Code Review；高风险或 unknown PR 仍加 `ai-risk-review` label，用于标记风险和收窄 Review Scope，不作为是否触发官方 review 的开关。
 - 官方 Codex Review 触发评论必须包含 `@codex review`、当前 PR、当前 head SHA、Review Scope（可为空）和审查重点；禁止模板外文案，禁止写“不要执行命令”“只做静态 diff review”等切断仓库、diff 或命令上下文的指令。
-- 官方 Codex Review 按 Review Scope 聚焦 P0/P1 合并阻断风险；无法生成明确 scope 的大型 PR 应拆分，否则按全量高风险 PR 处理。
-- 官方 Codex Review 无 P0/P1 且匹配当前 head 时，`pr_flow` 可以自动把真实 review/comment 链接写入 PR body evidence。
+- 官方 Codex Review 按 Review Scope 聚焦 P0/P1 合并阻断风险；无法生成明确 scope 的大型 PR 应拆分，否则按全量高风险 PR 处理，但仍必须使用当前 head 的官方 review。
+- 官方 Codex P2/P3 是非阻断 retained finding；`pr_flow` 只能写入 PR Evidence `retained`，不得扩展 PR body 机器字段。
 - 自动写入不等于跳过 review；证据必须来自当前 PR、当前 head、当前 trigger 之后的 Codex 结果。
-- `PR Flow / evidence` 和 `PR Flow / review-status` 必须读取 review thread 状态；只要 GitHub conversation resolution ruleset 要求 resolved conversation，任何未 resolved 的 review thread 都阻断，跳过授权不得绕过。
-- `PR Flow / review-status` 是 GitHub `main` 全局 required status check；官方 Codex review 未返回时保持 pending，不写失败。
+- `PR Flow / evidence` 和 `PR Flow / review-status` 必须读取 review thread 状态；未 resolved human thread、无 severity thread 和官方 P0/P1 阻断。官方 P2/P3 只能由 `pr_flow` 写入固定接受模板和 PR Evidence retained 后 resolve。
+- `PR Flow / review-status` 是 GitHub `main` 全局 required status check；官方 Codex review 未返回时保持 pending，不写失败。`pr-submit` 开始和成功时 `status.json` 可留下 `failures: []`，它不是成功证明。
 - 如果 Codex review 无法读取当前 PR diff、要求额外提供 unified diff、引用不存在或非当前 head，按 review 上下文失效阻断。
 - 本地不再把 `verify full` 作为 PR 前置证据；完整验证由 GitHub required check `Research Governance / verify-full` 执行。`verify fast` 只用于日常开发。
 
@@ -74,6 +74,6 @@ Review Scope：
 ## Issue Intent Review
 
 - Standards reviewer 和 Spec reviewer 先并行运行；`Security-after-Standards/Spec` 是固定顺序，只有两者没有 open P0/P1 后才运行 Security reviewer。
-- `Spec reviewer AC evidence` 必须覆盖每个 `closes` Issue 的 AC，包含 AC text、`met`、evidence references 和 reviewer identity。
+- `Spec reviewer AC evidence` 不扩展 fragment 或 PR Evidence 字段；Spec reviewer 只判断每个 `closes` Issue 的 AC 是否满足，PR Evidence 仅记录 `issues.refs[].ac_checked`。
 - `Standards/Security veto` 保留阻断权：Standards 可阻断规则、证据或流程问题；Security 可在第二阶段阻断安全问题。
 - P2/P3 accepted findings 继续作为非阻断证据保留，不阻止 Security 或 AC auto-marking。

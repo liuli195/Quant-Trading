@@ -1165,9 +1165,27 @@ def submit(
         for failure in failures:
             print(f"error: {failure.check}: {failure.detail}", file=sys.stderr)
         return DISPATCH_REQUIRED_EXIT_CODE
+    try:
+        diff_hash = _submit_current_diff_hash(root, runner)
+    except GitHubDataUnavailable as exc:
+        pr_flow_contract.write_submit_status(
+            root,
+            contract,
+            head=head_sha,
+            failures=[
+                pr_flow_contract.SubmitFailure(
+                    check="github",
+                    source="",
+                    detail=str(exc),
+                )
+            ],
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
     failures, has_blocking = _submit_first_stage_fragment_failures(
         root=root,
         contract=contract,
+        head_sha=head_sha,
+        diff_hash=diff_hash,
     )
     if failures:
         pr_flow_contract.write_submit_status(
@@ -1186,6 +1204,8 @@ def submit(
     failures, has_blocking = _submit_security_fragment_failures(
         root=root,
         contract=contract,
+        head_sha=head_sha,
+        diff_hash=diff_hash,
     )
     if failures:
         pr_flow_contract.write_submit_status(
@@ -1202,7 +1222,6 @@ def submit(
             else DISPATCH_REQUIRED_EXIT_CODE
         )
     try:
-        diff_hash = _submit_current_diff_hash(root, runner)
         review_state, failures = _submit_review_state(
             root=root,
             contract=contract,
@@ -1230,6 +1249,7 @@ def submit(
             runner=runner,
             contract=contract,
             title=title,
+            target_pr=pr,
             evidence=evidence,
         )
     except CommitIntentError as exc:
@@ -1294,6 +1314,26 @@ def submit(
         timeout_seconds=watch_timeout_seconds,
         poll_seconds=watch_poll_seconds,
     )
+    if watch_failures:
+        retry_code, retry_checks = _submit_accept_official_codex_retained_threads(
+            root=root,
+            runner=runner,
+            contract=contract,
+            pr_number=pr or pr_number,
+            pr_url=pr_url,
+            failures=watch_failures,
+        )
+        if retry_code != SUCCESS_EXIT_CODE:
+            return retry_code
+        if retry_checks:
+            watch_failures = _submit_wait_required_checks(
+                root=root,
+                runner=runner,
+                contract=contract,
+                pr_number=pr or pr_number,
+                timeout_seconds=watch_timeout_seconds,
+                poll_seconds=watch_poll_seconds,
+            )
     if watch_failures:
         pr_flow_contract.write_submit_status(
             root,
@@ -1405,6 +1445,8 @@ def _submit_first_stage_fragment_failures(
     *,
     root: Path,
     contract: pr_flow_contract.PRFlowContract,
+    head_sha: str,
+    diff_hash: str,
 ) -> tuple[list[pr_flow_contract.SubmitFailure], bool]:
     failures: list[pr_flow_contract.SubmitFailure] = []
     has_blocking = False
@@ -1413,6 +1455,8 @@ def _submit_first_stage_fragment_failures(
             root=root,
             contract=contract,
             role=role,
+            expected_head_sha=head_sha,
+            expected_diff_hash=diff_hash,
         )
         failures.extend(role_failures)
         has_blocking = has_blocking or role_blocking
@@ -1424,6 +1468,8 @@ def _submit_fragment_failures_for_role(
     root: Path,
     contract: pr_flow_contract.PRFlowContract,
     role: str,
+    expected_head_sha: str | None = None,
+    expected_diff_hash: str | None = None,
 ) -> tuple[list[pr_flow_contract.SubmitFailure], bool]:
     relative = contract.reviewer_fragments[role]
     path = root / relative
@@ -1469,6 +1515,28 @@ def _submit_fragment_failures_for_role(
                 check="local-review",
                 source=source,
                 detail=f"{role} fragment schema must be {contract.version}",
+            )
+        )
+    if (
+        expected_head_sha is not None
+        and _single_line_text(payload.get("head")) != expected_head_sha
+    ):
+        failures.append(
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail=f"{role} fragment head is stale",
+            )
+        )
+    if (
+        expected_diff_hash is not None
+        and _single_line_text(payload.get("diff")) != expected_diff_hash
+    ):
+        failures.append(
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail=f"{role} fragment diff is stale",
             )
         )
     findings = payload.get("findings")
@@ -1541,11 +1609,15 @@ def _submit_security_fragment_failures(
     *,
     root: Path,
     contract: pr_flow_contract.PRFlowContract,
+    head_sha: str,
+    diff_hash: str,
 ) -> tuple[list[pr_flow_contract.SubmitFailure], bool]:
     return _submit_fragment_failures_for_role(
         root=root,
         contract=contract,
         role="security",
+        expected_head_sha=head_sha,
+        expected_diff_hash=diff_hash,
     )
 
 
@@ -1749,6 +1821,7 @@ def _sync_submit_pr_evidence(
     runner: Runner,
     contract: pr_flow_contract.PRFlowContract,
     title: str | None,
+    target_pr: str | None,
     evidence: dict[str, Any],
 ) -> tuple[int, str, str]:
     local = root / ".local" / "pr-flow"
@@ -1756,7 +1829,7 @@ def _sync_submit_pr_evidence(
     view = _run_github_read_command(
         root,
         runner,
-        ["gh", "pr", "view", "--json", "number,url,state,isDraft"],
+        _gh_pr_view_command(target_pr, "number,url,state,isDraft"),
     )
     if view.returncode == 0:
         metadata = _json_from_result(view)
@@ -1765,7 +1838,7 @@ def _sync_submit_pr_evidence(
         body_view = _run_github_read_command(
             root,
             runner,
-            ["gh", "pr", "view", "--json", "body"],
+            _gh_pr_view_command(pr_number, "body"),
         )
         if body_view.returncode != 0:
             _print_command_failure("gh pr view --json body", body_view)
@@ -1780,6 +1853,9 @@ def _sync_submit_pr_evidence(
             _print_command_failure("gh pr edit", edit)
             return edit.returncode, pr_number, pr_url
         return SUCCESS_EXIT_CODE, pr_number, pr_url
+    if target_pr:
+        _print_command_failure("gh pr view", view)
+        return view.returncode, target_pr, ""
     if not title:
         print("error: --title is required when no PR exists", file=sys.stderr)
         return GENERAL_FAILURE_EXIT_CODE, "", ""
@@ -1821,6 +1897,14 @@ def _sync_submit_pr_evidence(
     return SUCCESS_EXIT_CODE, _pr_number_from_url(pr_url), pr_url
 
 
+def _gh_pr_view_command(pr_number: str | None, fields: str) -> list[str]:
+    command = ["gh", "pr", "view"]
+    if pr_number:
+        command.append(pr_number)
+    command.extend(["--json", fields])
+    return command
+
+
 def _submit_request_codex_review(
     *,
     root: Path,
@@ -1856,6 +1940,186 @@ def _submit_request_codex_review(
     if comment.returncode != 0:
         _print_command_failure("gh pr comment", comment)
         return comment.returncode
+    return SUCCESS_EXIT_CODE
+
+
+def _submit_accept_official_codex_retained_threads(
+    *,
+    root: Path,
+    runner: Runner,
+    contract: pr_flow_contract.PRFlowContract,
+    pr_number: str,
+    pr_url: str,
+    failures: Sequence[pr_flow_contract.SubmitFailure],
+) -> tuple[int, bool]:
+    if not _submit_should_retry_official_codex_retained(failures):
+        return SUCCESS_EXIT_CODE, False
+    pr_info = _github_pr_info_from_url(pr_url)
+    if pr_info is None:
+        return SUCCESS_EXIT_CODE, False
+    repo, resolved_pr_number = pr_info
+    threads = _current_pr_review_threads(
+        root=root,
+        runner=runner,
+        repo=repo,
+        pr_number=resolved_pr_number,
+    )
+    retained: list[dict[str, str]] = []
+    changed = False
+    for thread in threads:
+        if _thread_is_resolved(thread):
+            continue
+        entry = _submit_official_codex_retained_entry(
+            contract=contract,
+            thread=thread,
+        )
+        if entry is None:
+            continue
+        thread_id = _thread_id(thread)
+        if not thread_id:
+            continue
+        finding = _external_finding_for_review_thread(
+            repo=repo,
+            pr_number=resolved_pr_number,
+            thread=thread,
+            status="accepted",
+        )
+        code = _reply_to_review_thread(
+            root=root,
+            runner=runner,
+            thread_id=thread_id,
+            body=_accepted_review_thread_reply(finding),
+        )
+        if code != SUCCESS_EXIT_CODE:
+            return code, changed
+        code = resolve_review_threads(
+            repo_root=root,
+            runner=runner,
+            thread_ids=(thread_id,),
+        )
+        if code != SUCCESS_EXIT_CODE:
+            return code, changed
+        thread["isResolved"] = True
+        retained.append(entry)
+        changed = True
+        print(f"accepted official Codex review thread: {thread_id}")
+    if not retained:
+        return SUCCESS_EXIT_CODE, changed
+    code = _submit_append_retained_to_pr_body(
+        root=root,
+        runner=runner,
+        contract=contract,
+        pr_number=pr_number,
+        retained=retained,
+    )
+    if code != SUCCESS_EXIT_CODE:
+        return code, changed
+    return SUCCESS_EXIT_CODE, changed
+
+
+def _submit_should_retry_official_codex_retained(
+    failures: Sequence[pr_flow_contract.SubmitFailure],
+) -> bool:
+    for failure in failures:
+        if failure.check != "PR Flow / review-status":
+            continue
+        detail = failure.detail.casefold()
+        if "pending" in detail or "timed out" in detail:
+            continue
+        return True
+    return False
+
+
+def _submit_official_codex_retained_entry(
+    *,
+    contract: pr_flow_contract.PRFlowContract,
+    thread: dict[str, Any],
+) -> dict[str, str] | None:
+    severity = _codex_thread_severity(thread)
+    if severity not in contract.retained_severities:
+        return None
+    detail = pr_flow_contract.normalize_detail(
+        _codex_thread_body(thread),
+        max_chars=contract.detail_max_chars,
+    )
+    if not detail:
+        detail = f"official Codex {severity} retained finding"
+    return {
+        "severity": severity,
+        "source": "official_codex",
+        "detail": detail,
+    }
+
+
+def _submit_append_retained_to_pr_body(
+    *,
+    root: Path,
+    runner: Runner,
+    contract: pr_flow_contract.PRFlowContract,
+    pr_number: str,
+    retained: Sequence[dict[str, str]],
+) -> int:
+    body_view = _run_github_read_command(
+        root,
+        runner,
+        _gh_pr_view_command(pr_number, "body"),
+    )
+    if body_view.returncode != 0:
+        _print_command_failure("gh pr view --json body", body_view)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    existing_body = str(_json_from_result(body_view).get("body") or "")
+    payload, errors = pr_review_evidence._extract_contract_v1_evidence(existing_body)
+    if payload is None or errors:
+        details = list(errors) or ["PR Flow evidence block is missing"]
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            "PR Evidence JSON unavailable for retained findings",
+            repo_root=root,
+            reason_code="PR_EVIDENCE_UNAVAILABLE",
+            phase="submit_official_codex",
+            dispatch_target="github",
+            details=details,
+            next_actions=("rerun pr-submit after PR Evidence is synced",),
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    updated: dict[str, Any] = dict(payload)
+    current_retained = [
+        dict(item)
+        for item in updated.get("retained", [])
+        if isinstance(item, dict)
+    ]
+    seen = {
+        (
+            _single_line_text(item.get("severity")),
+            _single_line_text(item.get("source")),
+            _single_line_text(item.get("detail")),
+        )
+        for item in current_retained
+    }
+    for entry in retained:
+        key = (
+            _single_line_text(entry.get("severity")),
+            _single_line_text(entry.get("source")),
+            _single_line_text(entry.get("detail")),
+        )
+        if key in seen:
+            continue
+        current_retained.append(dict(entry))
+        seen.add(key)
+    updated["retained"] = current_retained
+    managed_body = _render_submit_managed_body(contract, updated)
+    body_file = _write_managed_body_file(
+        root / ".local" / "pr-flow",
+        existing_body,
+        managed_body,
+    )
+    edit = runner.run(
+        ["gh", "pr", "edit", pr_number, "--body-file", str(body_file)],
+        cwd=root,
+    )
+    if edit.returncode != 0:
+        _print_command_failure("gh pr edit", edit)
+        return EXCEPTION_REQUIRED_EXIT_CODE
     return SUCCESS_EXIT_CODE
 
 

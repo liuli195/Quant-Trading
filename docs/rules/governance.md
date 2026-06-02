@@ -13,9 +13,9 @@
 - required checks 必须与 `PR Flow Interface Contract` 完全一致：`PR Flow / review-status`、`Research Governance / verify-full`、`PR Flow / evidence`。
 - `Research Governance / verify-full` 通过 `verify full` 汇总静态扫描、类型检查、依赖漏洞扫描、测试、pathref 和 governance gate。
 - `PR Flow / evidence` 只校验 PR body 托管区中的 PR Evidence JSON v1；CI 不读取本地 `.local` 产物。
-- `PR Flow / review-status` 监听当前 head 的官方 Codex review 和 unresolved threads。官方 Codex 未返回时保持 pending；P0/P1 或 unresolved human thread 阻断；P2/P3 进入 retained findings。
-- 只要 GitHub conversation resolution ruleset 要求 resolved conversation，未 resolved 的 review thread 必须阻断，任何跳过授权不得绕过；官方 Codex P2/P3 thread 例外路径只能由 `pr_flow` 写入固定接受模板、`external_findings` 和 PR body P2 保留项后 resolve。
-- 修复后的 review thread 只能由 `pr_flow resolve-threads` 或内部恢复命令显式 resolve，且必须显式传入 thread ID；不得猜测或批量 resolve 全部未处理 thread。官方 P0/P1、无 severity thread、人工 reviewer thread 阻断；官方 P0/P1 只有结构化 `fixed` / `false_positive` 证据且绑定当前 head/diff/thread ID 时才可自动关闭。
+- `PR Flow / review-status` 监听当前 head 的官方 Codex review 和 unresolved threads。官方 Codex 未返回时保持 pending；官方 P0/P1、无 severity thread 和 unresolved human thread 阻断；官方 P2/P3 由 `pr_flow` 接受、resolve，并写入 PR Evidence `retained`。
+- 只要 GitHub conversation resolution ruleset 要求 resolved conversation，未 resolved 的 review thread 必须阻断；新 PR Flow 不提供绕过官方 Codex required check 的合并路径。
+- 修复后的 review thread 只能由 `pr_flow resolve-threads` 或内部恢复命令显式 resolve，且必须显式传入 thread ID；不得猜测或批量 resolve 全部未处理 thread。官方 P2/P3 例外路径只能由 `pr_flow` 写入固定接受模板和 PR Evidence retained 后 resolve；官方 P0/P1 只有结构化 `fixed` / `false_positive` 证据且绑定当前 head/diff/thread ID 时才可自动关闭。
 - 本地仓库必须设置 `git config core.hooksPath .githooks`。
 - `.githooks/pre-commit`、`.githooks/pre-push`、`.githooks/reference-transaction` 必须通过 `.githooks/run-python.sh` 选择项目虚拟环境，不硬编码单一平台解释器。
 - `.githooks/pre-push` 必须调用 `scripts.research.governance.branch_protection pre-push` 和 `scripts.research.governance verify full`，并保留 Git LFS pre-push 转交。
@@ -60,5 +60,5 @@
 
 - `commit intent hook`: `.githooks/pre-commit` 必须运行 `pr_flow intent pre-commit`，`.githooks/post-commit` 必须运行 `pr_flow intent post-commit`，并继续通过 `.githooks/run-python.sh` 使用项目 `.venv`。
 - PR readiness 必须检查 branch intent coverage，发现 amend、squash、rebase 或 hook bypass 导致的 missing SHA 时停止。
-- `PR Evidence JSON issues` 是 CI 可见审计面，必须覆盖 current head、PR commits、Issue roles 和 no-Issue records；CI 不读取本地 `.local`。
-- `no-Issue authorization audit` 必须记录 reason、authorized_by 和 evidence，并按 commit 保留在 branch intent 和 PR body machine data 中。
+- `PR Evidence JSON issues` 是 CI 可见审计面，必须覆盖 current head、PR commits、Issue roles 和 no-Issue minimum records；CI 不读取本地 `.local`。
+- `no-Issue PR Evidence minimum` 在 PR body 只记录 `no_issue: true`；reason、authorized_by 和 evidence 按 commit 保留在 branch intent 中，不扩展 PR Evidence 契约。
