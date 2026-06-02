@@ -223,6 +223,11 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
                 else self.existing_body
             )
             return pr_flow.CommandResult(0, json.dumps({"body": body}), "")
+        if command in (
+            ["gh", "pr", "view", "--json", "headRefOid"],
+            ["gh", "pr", "view", "88", "--json", "headRefOid"],
+        ):
+            return pr_flow.CommandResult(0, json.dumps({"headRefOid": "1" * 40}), "")
         if command[:4] == ["gh", "pr", "edit", "88"]:
             body_file = Path(command[command.index("--body-file") + 1])
             self.edited_bodies.append(body_file.read_text(encoding="utf-8"))
@@ -626,6 +631,43 @@ class SubmitFailingChecksRunner(SubmitCreatePrRunner):
                 ),
                 "",
             )
+        return super().run(command, cwd=cwd, input_text=input_text)
+
+
+class SubmitEmptyRequiredChecksWindowRunner(SubmitCreatePrRunner):
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        if command == [
+            "gh",
+            "pr",
+            "checks",
+            "88",
+            "--required",
+            "--json",
+            pr_flow.CHECKS_JSON_FIELDS,
+        ]:
+            return pr_flow.CommandResult(8, "[]", "no required checks reported")
+        return super().run(command, cwd=cwd, input_text=input_text)
+
+
+class SubmitMismatchedHeadRunner(SubmitEmptyRequiredChecksWindowRunner):
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        if command in (
+            ["gh", "pr", "view", "--json", "headRefOid"],
+            ["gh", "pr", "view", "88", "--json", "headRefOid"],
+        ):
+            return pr_flow.CommandResult(0, json.dumps({"headRefOid": "0" * 40}), "")
         return super().run(command, cwd=cwd, input_text=input_text)
 
 
@@ -1147,6 +1189,9 @@ def test_submit_creates_draft_pr_with_contract_evidence_json(tmp_path: Path) -> 
         {"number": 65, "role": "reference"},
         {"number": 66, "role": "closes"},
     ]
+    assert "<!-- github-native-links:start -->" in body
+    assert "Closes #66" in body
+    assert "#65" not in body.split("<!-- github-native-links:start -->", 1)[1]
     assert payload["retained"] == [
         {"severity": "P2", "source": "security", "detail": "accepted follow-up"}
     ]
@@ -1174,6 +1219,43 @@ def test_submit_skips_official_codex_request_for_low_risk_fragments(
     assert payload["official_review"] == {"decision": "skip_risk_low"}
     assert runner.comments == []
     assert not any(call[:3] == ["gh", "pr", "comment"] for call in runner.calls)
+
+
+def test_submit_removes_github_native_links_when_no_closing_refs(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/docs/guides/example.md b/docs/guides/example.md\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        existing_pr=True,
+        existing_body=(
+            "<!-- github-native-links:start -->\n"
+            "Closes #66\n"
+            "<!-- github-native-links:end -->\n\n"
+            "<!-- pr-flow:start -->\nold\n<!-- pr-flow:end -->\n"
+        ),
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(
+        tmp_path,
+        commit_issues=[{"number": 65, "role": "reference"}],
+        refs=[{"number": 65, "role": "reference"}],
+    )
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert runner.edited_bodies
+    body = runner.edited_bodies[-1]
+    assert "<!-- github-native-links:start -->" not in body
+    assert "Closes #66" not in body
+    payload = _payload_from_managed_body(body)
+    issues = payload["issues"]
+    assert isinstance(issues, dict)
+    assert issues["refs"] == [{"number": 65, "role": "reference"}]
 
 
 def test_submit_skips_official_codex_request_with_user_authorization(
@@ -1437,6 +1519,80 @@ def test_submit_waits_on_pending_required_checks_until_timeout(tmp_path: Path) -
     ]
 
 
+def test_submit_treats_empty_required_checks_window_as_pending(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitEmptyRequiredChecksWindowRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(
+        repo_root=tmp_path,
+        title="PR automation",
+        runner=runner,
+        watch_timeout_seconds=0,
+        watch_poll_seconds=0,
+    )
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"] == [
+        {
+            "check": "PR Flow / review-status",
+            "source": "",
+            "detail": "required check timed out while pending",
+        },
+        {
+            "check": "Research Governance / verify-full",
+            "source": "",
+            "detail": "required check timed out while pending",
+        },
+        {
+            "check": "PR Flow / evidence",
+            "source": "",
+            "detail": "required check timed out while pending",
+        },
+    ]
+
+
+def test_submit_fails_closed_when_pr_head_does_not_match_local_head(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitMismatchedHeadRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(
+        repo_root=tmp_path,
+        title="PR automation",
+        runner=runner,
+        watch_timeout_seconds=0,
+        watch_poll_seconds=0,
+    )
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"] == [
+        {
+            "check": "github",
+            "source": "",
+            "detail": "PR head does not match local HEAD",
+        }
+    ]
+
+
 def test_submit_writes_required_check_failures_in_contract_order(
     tmp_path: Path,
 ) -> None:
@@ -1570,6 +1726,41 @@ def test_submit_reuses_current_diff_fragments_after_pr_body_update(
         (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
     )
     assert status["failures"] == []
+
+
+def test_submit_refreshes_same_diff_review_fragment_heads(tmp_path: Path) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(diff_text=diff_text)
+    for role in ("standards", "spec", "security"):
+        _write_fragment(
+            tmp_path,
+            role,
+            findings=[],
+            head="0" * 40,
+            diff=diff_hash,
+        )
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    for role in ("standards", "spec", "security"):
+        fragment = json.loads(
+            (
+                tmp_path
+                / ".local"
+                / "ai-review"
+                / "fragments"
+                / f"{role}.json"
+            ).read_text(encoding="utf-8")
+        )
+        assert fragment == {
+            "schema": 1,
+            "head": "1" * 40,
+            "diff": diff_hash,
+            "findings": [],
+        }
 
 
 def test_submit_reports_exception_when_remote_head_is_missing(
@@ -1845,6 +2036,7 @@ def _write_fragment(
     role: str,
     *,
     findings: list[dict[str, str]],
+    head: str = "1" * 40,
     diff: str = DEFAULT_DIFF_HASH,
 ) -> None:
     path = root / ".local" / "ai-review" / "fragments" / f"{role}.json"
@@ -1853,7 +2045,7 @@ def _write_fragment(
         json.dumps(
             {
                 "schema": 1,
-                "head": "1" * 40,
+                "head": head,
                 "diff": diff,
                 "findings": findings,
             }
@@ -2011,9 +2203,19 @@ def _payload_from_managed_body(body: str) -> dict[str, object]:
     return parsed
 
 
-def _write_branch_intent(root: Path) -> None:
+def _write_branch_intent(
+    root: Path,
+    *,
+    commit_issues: list[dict[str, object]] | None = None,
+    refs: list[dict[str, object]] | None = None,
+) -> None:
     path = root / ".local/pr-flow/intents/feature/contract.json"
     path.parent.mkdir(parents=True, exist_ok=True)
+    commit_issues = commit_issues or [{"number": 66, "role": "closes"}]
+    refs = refs or [
+        {"number": 65, "role": "reference"},
+        {"number": 66, "role": "closes"},
+    ]
     path.write_text(
         json.dumps(
             {
@@ -2023,7 +2225,7 @@ def _write_branch_intent(root: Path) -> None:
                     {
                         "commit_sha": "1" * 40,
                         "issue_policy": "issues",
-                        "issues": [{"number": 66, "role": "closes"}],
+                        "issues": commit_issues,
                     },
                     {
                         "commit_sha": "2" * 40,
@@ -2035,10 +2237,7 @@ def _write_branch_intent(root: Path) -> None:
                         },
                     },
                 ],
-                "issues": [
-                    {"number": 65, "role": "reference"},
-                    {"number": 66, "role": "closes"},
-                ],
+                "issues": refs,
                 "no_issue_authorizations": [],
             }
         ),

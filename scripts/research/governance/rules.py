@@ -780,6 +780,17 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         for token, message in workflow_tokens:
             if token not in text:
                 findings.append(AuditFinding("governance_gate", "error", message))
+        if (
+            "Publish PR Flow evidence status" in text
+            and "github.event.pull_request.state == 'open'" not in text
+        ):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "PR Flow evidence workflow must verify open PR before publishing evidence status",
+                )
+            )
         if re.search(r"evidence:\s*\n\s*if:", text):
             findings.append(
                 AuditFinding(

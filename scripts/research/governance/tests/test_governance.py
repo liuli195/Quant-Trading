@@ -2207,6 +2207,43 @@ def test_governance_audit_flags_review_evidence_without_label_events(
     )
 
 
+def test_governance_audit_flags_pr_flow_status_publish_without_open_pr_guard(
+    tmp_path: Path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    workflow = tmp_path / ".github/workflows/pr-flow.yml"
+    workflow.write_text(
+        "name: PR Flow\n"
+        "on:\n"
+        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
+        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
+        "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
+        "permissions:\n  statuses: write\n"
+        "jobs:\n"
+        "  evidence:\n"
+        "    steps:\n"
+        "      - uses: actions/checkout@v4\n"
+        "        with:\n"
+        "          ref: ${{ github.event.pull_request.head.sha }}\n"
+        "          fetch-depth: 0\n"
+        "      - run: git fetch --no-tags --prune origin +refs/heads/${{ github.event.pull_request.base.ref }}:refs/remotes/origin/${{ github.event.pull_request.base.ref }}\n"
+        "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n"
+        "      - name: Publish PR Flow evidence status\n"
+        "        if: ${{ always() }}\n"
+        "        run: gh api repos/x/y/statuses/${{ github.event.pull_request.head.sha }}\n",
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "open PR before publishing evidence status" in finding.message
+        for finding in report.findings
+    )
+
+
 def test_governance_workflow_uses_single_verify_full_entrypoint(tmp_path: Path) -> None:
     _write_minimal_repo(tmp_path)
     workflow = tmp_path / ".github/workflows/research-governance.yml"
