@@ -139,7 +139,11 @@ class StopStatus:
 class SubmitReviewState:
     reviews: dict[str, dict[str, str]]
     retained: list[dict[str, str]]
-    requires_official_codex_review: bool
+    official_review: dict[str, str]
+
+    @property
+    def requires_official_codex_review(self) -> bool:
+        return self.official_review.get("decision") == "required"
 
 
 class GitHubDataUnavailable(RuntimeError):
@@ -1125,12 +1129,27 @@ def submit(
     runner: Runner | None = None,
     watch_timeout_seconds: float = CODEX_REVIEW_WAIT_TIMEOUT_SECONDS,
     watch_poll_seconds: float = CODEX_REVIEW_WAIT_INTERVAL_SECONDS,
+    official_review_skip_authorized_by: str | None = None,
+    official_review_skip_evidence: str | None = None,
 ) -> int:
     root = Path(repo_root).resolve()
     runner = runner or CommandRunner()
     contract = pr_flow_contract.load_contract(root)
     head_sha = _command_stdout(runner.run(["git", "rev-parse", "HEAD"], cwd=root))
     pr_flow_contract.write_submit_status(root, contract, head=head_sha, failures=[])
+    auth_failure = _official_review_skip_authorization_failure(
+        authorized_by=official_review_skip_authorized_by,
+        evidence=official_review_skip_evidence,
+    )
+    if auth_failure is not None:
+        pr_flow_contract.write_submit_status(
+            root,
+            contract,
+            head=head_sha,
+            failures=[auth_failure],
+        )
+        print(f"error: {auth_failure.check}: {auth_failure.detail}", file=sys.stderr)
+        return EXCEPTION_REQUIRED_EXIT_CODE
     try:
         failures = _submit_preflight_failures(
             root=root,
@@ -1229,6 +1248,8 @@ def submit(
             contract=contract,
             head_sha=head_sha,
             diff_hash=diff_hash,
+            official_review_skip_authorized_by=official_review_skip_authorized_by,
+            official_review_skip_evidence=official_review_skip_evidence,
         )
         if failures:
             pr_flow_contract.write_submit_status(
@@ -1652,6 +1673,8 @@ def _submit_review_state(
     contract: pr_flow_contract.PRFlowContract,
     head_sha: str,
     diff_hash: str,
+    official_review_skip_authorized_by: str | None = None,
+    official_review_skip_evidence: str | None = None,
 ) -> tuple[SubmitReviewState, list[pr_flow_contract.SubmitFailure]]:
     reviews: dict[str, dict[str, str]] = {}
     retained: list[dict[str, str]] = []
@@ -1702,26 +1725,61 @@ def _submit_review_state(
         SubmitReviewState(
             reviews=reviews,
             retained=retained,
-            requires_official_codex_review=_submit_requires_official_codex_review(
+            official_review=_submit_official_review_decision(
                 root=root,
                 runner=runner,
+                authorized_by=official_review_skip_authorized_by,
+                evidence=official_review_skip_evidence,
             ),
         ),
         failures,
     )
 
 
+def _submit_official_review_decision(
+    *,
+    root: Path,
+    runner: Runner,
+    authorized_by: str | None = None,
+    evidence: str | None = None,
+) -> dict[str, str]:
+    authorized_by_text = _single_line_text(authorized_by)
+    evidence_text = _single_line_text(evidence)
+    if authorized_by_text and evidence_text:
+        return {
+            "decision": "skip_user_authorized",
+            "authorized_by": authorized_by_text,
+            "evidence": evidence_text,
+        }
+    if _submit_requires_official_codex_review(root=root, runner=runner):
+        return {"decision": "required"}
+    return {"decision": "skip_risk_low"}
+
+
+def _official_review_skip_authorization_failure(
+    *,
+    authorized_by: str | None = None,
+    evidence: str | None = None,
+) -> pr_flow_contract.SubmitFailure | None:
+    authorized_by_text = _single_line_text(authorized_by)
+    evidence_text = _single_line_text(evidence)
+    if bool(authorized_by_text) == bool(evidence_text):
+        return None
+    return pr_flow_contract.SubmitFailure(
+        check="PR Flow / evidence",
+        source="official_review",
+        detail=(
+            "official review skip authorization requires both "
+            "authorized_by and evidence"
+        ),
+    )
+
+
 def _submit_requires_official_codex_review(*, root: Path, runner: Runner) -> bool:
-    payload = _read_json_object(root / ".local" / "ai-review" / "latest.json")
-    if not isinstance(payload, dict):
-        return True
     changed_files = _submit_current_changed_files(root, runner)
-    if changed_files is not None:
-        payload = {**payload, "changed_files": list(changed_files)}
-    result = ai_review_gate.validate_report(payload)
-    if not result.ok:
+    if changed_files is None:
         return True
-    return result.requires_official_codex_review
+    return any(ai_review_gate._is_high_risk_path(path) for path in changed_files)
 
 
 def _submit_current_changed_files(root: Path, runner: Runner) -> tuple[str, ...] | None:
@@ -1755,6 +1813,7 @@ def _submit_pr_evidence(
         "head": head_sha,
         "diff": diff_hash,
         "reviews": review_state.reviews,
+        "official_review": review_state.official_review,
         "issues": _submit_issue_evidence(root=root, runner=runner),
         "retained": review_state.retained,
     }
@@ -6212,6 +6271,8 @@ def build_parser() -> argparse.ArgumentParser:
     submit_parser = subparsers.add_parser("submit")
     submit_parser.add_argument("--title")
     submit_parser.add_argument("--pr")
+    submit_parser.add_argument("--official-review-skip-authorized-by")
+    submit_parser.add_argument("--official-review-skip-evidence")
     diagnose_parser = subparsers.add_parser("diagnose")
     diagnose_parser.add_argument("--pr")
     resolve_threads_parser = subparsers.add_parser("resolve-threads")
@@ -6281,7 +6342,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "wait":
         return wait(repo_root=args.repo_root, pr=args.pr)
     if args.command == "submit":
-        return submit(repo_root=args.repo_root, title=args.title, pr=args.pr)
+        return submit(
+            repo_root=args.repo_root,
+            title=args.title,
+            pr=args.pr,
+            official_review_skip_authorized_by=(
+                args.official_review_skip_authorized_by
+            ),
+            official_review_skip_evidence=args.official_review_skip_evidence,
+        )
     if args.command == "diagnose":
         return diagnose(repo_root=args.repo_root, pr=args.pr)
     if args.command == "resolve-threads":

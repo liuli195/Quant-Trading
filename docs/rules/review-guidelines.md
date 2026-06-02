@@ -14,8 +14,9 @@
 - 本地 AI review 默认 `review_mode=complete`；`complete_review.iterations` 必须证明每个 reviewer 最后一轮 `no_new_findings=true` 且 `new_findings=[]`。
 - `review_mode=partial` 只在用户显式授权时可用，并记录 `authorized_by`、`reason`、`evidence`。
 - P0/P1 未以 `fixed` 或 `false_positive` 关闭前，不得进入下一阶段。
-- `risk=low` 且标记“官方 Codex Review=否”时，可以不触发官方 Codex Code Review；高风险、unknown、命中高风险路径或带 `ai-risk-review` label 的 PR 默认必须触发官方 Codex Code Review。
-- 用户显式授权时可以跳过官方 Codex Review，但必须记录 `authorized_by`、`reason`、`evidence`；该授权不能绕过 unresolved thread、P0/P1 或 GitHub required checks 的其它阻断。
+- `target spec wins`: 当目标 Issue/PRD/spec 与旧规则或 ADR 冲突时，review finding 应归类为 `rule/ADR drift`；规则或 ADR 修改仍必须先获得用户显式授权。
+- 官方 Codex Code Review 是否等待只看 PR Evidence `official_review.decision`：`required` 等待官方 review，`skip_risk_low` 跳过低风险官方 review，`skip_user_authorized` 表示用户显式授权跳过官方 review。
+- `skip_user_authorized` 只记录 `authorized_by + evidence`，不记录 `reason`；该授权不能绕过 unresolved thread、P0/P1 或 GitHub required checks 的其它阻断。
 - 官方 Codex Review 触发评论必须包含 `@codex review`、当前 PR、当前 head SHA、Review Scope（可为空）和审查重点；禁止模板外文案，禁止写“不要执行命令”“只做静态 diff review”等切断仓库、diff 或命令上下文的指令。
 - 需要官方 Codex Review 时，Review Scope 聚焦 P0/P1 合并阻断风险；无法生成明确 scope 的大型 PR 应拆分，否则按全量高风险 PR 处理。
 - 官方 Codex P2/P3 是非阻断 retained finding；`pr_flow` 只能写入 PR Evidence `retained`，不得扩展 PR body 机器字段。
@@ -67,11 +68,18 @@ Review Scope：
 
 ## PR Evidence JSON
 
-- PR body 托管区只写 fenced JSON，字段为 `schema/head/diff/reviews/issues/retained`，来源见 [pr-flow-interface-contract.yaml](pr-flow-interface-contract.yaml) <!-- pathref: docs/rules/pr-flow-interface-contract.yaml -->。
+- PR body 托管区只写 fenced JSON，字段为 `schema/head/diff/reviews/official_review/issues/retained`，来源见 [pr-flow-interface-contract.yaml](pr-flow-interface-contract.yaml) <!-- pathref: docs/rules/pr-flow-interface-contract.yaml -->。
 - `reviews` 只保存 Standards、Spec、Security 的通过指纹。
+- `official_review.decision` 只允许 `required`、`skip_risk_low`、`skip_user_authorized`；旧 evidence 缺失 `official_review` 时按 `required` 读取，新写出必须包含。
 - `issues.commits` 覆盖每个 PR commit；每个 commit 要么有关联 Issue，要么明确 `no_issue`。
 - `issues.refs` 记录 closes/reference 和 closes Issue 的 AC checked 状态。
 - `retained` 只允许 P2/P3，来源只能是 standards/spec/security/official_codex。
+
+## Local Review Wrapper
+
+- `repo-pr-governance wrapper for $review`: 主 agent 用本技能作为轻量包装器，不修改 `$review` 技能，不复制完整提示词，不让 `pr-submit` 派发子 agent。
+- `pr-submit` 只校验结构化 fragments；缺失时输出 `DISPATCH_REQUIRED`。主 agent 派发 `$review`，并把 `$review` 文本结论映射为 standards/spec fragments；Security review 独立生成 security fragment。
+- 有 Issue refs 时，只在 `$review` 默认逻辑基础上补充 spec hint：`closes` 是主规格，`reference` 是背景。无 Issue refs 或 no-Issue 时，完全走 `$review` 默认逻辑。
 
 ## Issue Intent Review
 

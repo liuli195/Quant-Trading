@@ -107,6 +107,70 @@ def test_commit_intent_pr_flow_contract_is_documented() -> None:
         assert not missing, f"{path} missing: {missing}"
 
 
+def test_official_review_pr_flow_contract_is_documented() -> None:
+    paths = [
+        Path("docs/rules/pr-flow-interface-contract.yaml"),
+        Path("docs/rules/governance.md"),
+        Path("docs/rules/review-guidelines.md"),
+        Path("docs/adr/0006-risk-tiered-pr-review.md"),
+        Path("docs/adr/0007-pr-flow-closed-loop-review-evidence.md"),
+        Path(".agents/skills/repo-pr-governance/SKILL.md"),
+    ]
+    texts = {path: path.read_text(encoding="utf-8") for path in paths}
+
+    required_tokens = {
+        Path("docs/rules/pr-flow-interface-contract.yaml"): [
+            "official_review",
+            "skip_risk_low",
+            "skip_user_authorized",
+            "authorized_by",
+            "evidence",
+        ],
+        Path("docs/rules/governance.md"): [
+            "official_review.decision",
+            "skip_risk_low",
+            "skip_user_authorized",
+            "authorized_by + evidence",
+        ],
+        Path("docs/rules/review-guidelines.md"): [
+            "target spec wins",
+            "rule/ADR drift",
+            "official_review.decision",
+            "authorized_by + evidence",
+            "repo-pr-governance wrapper for $review",
+        ],
+        Path("docs/adr/0006-risk-tiered-pr-review.md"): [
+            "official_review.decision",
+            "skip_risk_low",
+            "skip_user_authorized",
+            "authorized_by + evidence",
+        ],
+        Path("docs/adr/0007-pr-flow-closed-loop-review-evidence.md"): [
+            "official_review",
+            "skip_risk_low",
+            "skip_user_authorized",
+            "target spec wins",
+            "pr-submit is not a sub-agent dispatcher",
+        ],
+        Path(".agents/skills/repo-pr-governance/SKILL.md"): [
+            "repo-pr-governance wrapper for $review",
+            "pr-submit is not a sub-agent dispatcher",
+            "target spec wins",
+            "closes = primary spec",
+            "reference = background",
+            "no Issue refs means default $review",
+        ],
+    }
+
+    for path, tokens in required_tokens.items():
+        missing = [token for token in tokens if token not in texts[path]]
+        assert not missing, f"{path} missing: {missing}"
+
+    old_drift = "risk=low + 官方 Review=否"
+    for path, text in texts.items():
+        assert old_drift not in text, f"{path} still documents old official review drift"
+
+
 def test_gitignore_audit_rejects_broad_data_ignore_patterns(tmp_path: Path) -> None:
     (tmp_path / ".gitignore").write_text(
         "data/\n**/data/\n/data/\n",

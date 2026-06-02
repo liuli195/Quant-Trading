@@ -31,8 +31,24 @@ pr_evidence:
     - head
     - diff
     - reviews
+    - official_review
     - issues
     - retained
+  official_review:
+    required:
+      fields:
+        - decision
+      decision: required
+    skip_risk_low:
+      fields:
+        - decision
+      decision: skip_risk_low
+    skip_user_authorized:
+      fields:
+        - decision
+        - authorized_by
+        - evidence
+      decision: skip_user_authorized
 
 fragment:
   fields:

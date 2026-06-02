@@ -290,8 +290,15 @@ def _contract_v1_evidence_errors(
 ) -> list[str]:
     contract = pr_flow_contract.load_contract(Path("."))
     errors: list[str] = []
-    if tuple(payload) != contract.pr_evidence_fields:
-        errors.append("PR Evidence JSON fields must be schema/head/diff/reviews/issues/retained")
+    fields = tuple(payload)
+    legacy_fields = tuple(
+        field for field in contract.pr_evidence_fields if field != "official_review"
+    )
+    if fields not in {contract.pr_evidence_fields, legacy_fields}:
+        errors.append(
+            "PR Evidence JSON fields must be "
+            + "/".join(contract.pr_evidence_fields)
+        )
     if payload.get("schema") != contract.version:
         errors.append("PR Evidence JSON schema must be 1")
     head = _single_line_text(payload.get("head"))
@@ -303,6 +310,8 @@ def _contract_v1_evidence_errors(
     if ISSUE_INTENT_MACHINE_BLOCK_PATTERN.search(body):
         errors.append("PR body must not contain legacy Issue intent machine block")
     errors.extend(_contract_v1_review_errors(payload.get("reviews"), head=head, diff=diff))
+    if "official_review" in payload:
+        errors.extend(_contract_v1_official_review_errors(payload.get("official_review")))
     errors.extend(
         _contract_v1_issue_errors(
             payload.get("issues"),
@@ -311,6 +320,34 @@ def _contract_v1_evidence_errors(
     )
     errors.extend(_contract_v1_retained_errors(payload.get("retained"), contract))
     return errors
+
+
+def _contract_v1_official_review_errors(official_review: object) -> list[str]:
+    if not isinstance(official_review, Mapping):
+        return ["PR Evidence official_review must be an object"]
+    decision = _single_line_text(official_review.get("decision"))
+    if decision == "required":
+        if tuple(official_review) != ("decision",):
+            return ["PR Evidence official_review.required must only contain decision"]
+        return []
+    if decision == "skip_risk_low":
+        if tuple(official_review) != ("decision",):
+            return ["PR Evidence official_review.skip_risk_low must only contain decision"]
+        return []
+    if decision == "skip_user_authorized":
+        errors: list[str] = []
+        if tuple(official_review) != ("decision", "authorized_by", "evidence"):
+            errors.append(
+                "PR Evidence official_review.skip_user_authorized fields must be "
+                "decision/authorized_by/evidence"
+            )
+        for field in ("authorized_by", "evidence"):
+            if not _single_line_text(official_review.get(field)):
+                errors.append(
+                    f"PR Evidence official_review.skip_user_authorized missing {field}"
+                )
+        return errors
+    return ["PR Evidence official_review.decision is invalid"]
 
 
 def _contract_v1_review_errors(

@@ -13,7 +13,7 @@
 - required checks 必须与 `PR Flow Interface Contract` 完全一致：`PR Flow / review-status`、`Research Governance / verify-full`、`PR Flow / evidence`。
 - `Research Governance / verify-full` 通过 `verify full` 汇总静态扫描、类型检查、依赖漏洞扫描、测试、pathref 和 governance gate。
 - `PR Flow / evidence` 只校验 PR body 托管区中的 PR Evidence JSON v1；CI 不读取本地 `.local` 产物。
-- `PR Flow / review-status` 监听当前 head 的官方 Codex review、风险/授权跳过状态和 unresolved threads。需要官方 Codex review 且未返回时保持 pending；官方 P0/P1、无 severity thread 和 unresolved human thread 阻断；官方 P2/P3 由 `pr_flow` 接受、resolve，并写入 PR Evidence `retained`。`risk=low + 官方 Review=否` 或用户显式授权跳过时，该 check 可写 skipped success。
+- `PR Flow / review-status` 监听当前 head 的官方 Codex review、PR Evidence `official_review.decision` 和 unresolved threads。`official_review.decision=required` 且官方 Codex review 未返回时保持 pending；官方 P0/P1、无 severity thread 和 unresolved human thread 阻断；官方 P2/P3 由 `pr_flow` 接受、resolve，并写入 PR Evidence `retained`。`skip_risk_low` 或 `skip_user_authorized` 时，该 check 可写 skipped success；用户授权只记录 `authorized_by + evidence`。
 - 只要 GitHub conversation resolution ruleset 要求 resolved conversation，未 resolved 的 review thread 必须阻断；风险/授权跳过只影响是否等待官方 Codex review，不绕过其它 required checks。
 - 修复后的 review thread 只能由 `pr_flow resolve-threads` 或内部恢复命令显式 resolve，且必须显式传入 thread ID；不得猜测或批量 resolve 全部未处理 thread。官方 P2/P3 例外路径只能由 `pr_flow` 写入固定接受模板和 PR Evidence retained 后 resolve；官方 P0/P1 只有结构化 `fixed` / `false_positive` 证据且绑定当前 head/diff/thread ID 时才可自动关闭。
 - 本地仓库必须设置 `git config core.hooksPath .githooks`。

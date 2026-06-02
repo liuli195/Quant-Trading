@@ -25,12 +25,12 @@ PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pa
 - 高频入口收敛为 `pr-submit`；它负责创建/更新 PR、刷新 PR Evidence JSON、等待 required checks、ready-for-review、head-locked auto-merge 和本地收尾。
 - `.local/pr-flow/status.json` 是 `pr-submit` 到 AI 的本地接手入口。`pr-submit` 每次开始写当前 head 的空 `failures`，失败时覆盖为 failures，成功时可留下 `failures: []`；它不是成功证明，权威证据只来自当前 Git 状态、GitHub 状态和校验过的 PR Evidence JSON。
 - review coverage 必须绑定当前 diff fingerprint。`base_sha`、`head_sha`、`diff_hash` 或文件集变化后，旧 evidence 失效；允许 delta review，但最终 evidence 必须证明覆盖当前完整 diff。
-- 不修改 `$review` 技能本身；由 `pr_flow review` wrapper 调用 `$review` 的 Standards / Spec 双轴审查，并生成结构化 fragments。Security review 仍单独必需，不能被 `$review` 替代。
+- `pr-submit is not a sub-agent dispatcher`: `pr-submit` 只校验 fragments 并在缺失时输出 `DISPATCH_REQUIRED`；主 agent 使用 `repo-pr-governance wrapper for $review` 调用 `$review` 默认审查，并把文本结论映射为 Standards / Spec fragments。Security review 仍单独必需，不能被 `$review` 替代。
 - evidence builder 只读取结构化 fragments、security fragment、external findings、authorizations 和 diff facts；不得从聊天总结或自然语言结论中推断 review 通过。
-- PR Evidence JSON v1 写入 current head、diff hash、review fingerprints、Issue intent 和 retained findings；过渡期可读旧 schema，但新写出只写契约 v1。
+- PR Evidence JSON v1 写入 current head、diff hash、review fingerprints、`official_review`、Issue intent 和 retained findings；过渡期可读旧 schema 缺失 `official_review` 时按 `required` 读取，新写出只写契约 v1 且必须包含 `official_review`。
 - PR Evidence JSON 的 `issues.commits` 必须覆盖每个 PR commit；每个 commit 要么有关联 Issue，要么记录 `no_issue: true`。`issues.refs` 只保留 closes/reference 和 closes Issue 的 AC checked 状态。
-- `target scheme review authority`: 当 PR 的目标 Issue/PRD 与旧仓库规则冲突时，Standards/Spec reviewer 以目标方案为裁判基准；旧规则冲突归类为规则/ADR drift，不归类为实现违规。
-- risk classifier 由 builder 最终裁决，review/security 只提供输入。`risk=low + 官方 Review=否` 可以不触发官方 Codex Review；高风险、unknown、命中高风险路径或带 `ai-risk-review` label 的 PR 默认触发官方 Codex Review；用户显式授权可跳过官方 Codex Review。
+- `target scheme review authority`: `target spec wins`。当 PR 的目标 Issue/PRD 与旧仓库规则冲突时，Standards/Spec reviewer 以目标方案为裁判基准；旧规则冲突归类为 rule/ADR drift，不归类为实现违规；规则或 ADR 修改仍必须先获得用户显式授权。
+- risk classifier 由 builder 最终裁决，review/security 只提供输入。官方 Codex Review 是否等待由 PR Evidence `official_review.decision` 决定：`required` 等待官方 review，`skip_risk_low` 跳过低风险官方 review，`skip_user_authorized` 表示用户显式授权跳过官方 review，且只记录 `authorized_by + evidence`。
 - P2/P3 accepted findings 不影响 `risk_level`，也不阻断合并；所有来源的 P2/P3 统一写入 PR Evidence `retained`。
 - 官方 Codex P2/P3 review thread 在 severity 可靠识别时，由 `pr_flow` 用固定模板自动接受、resolve、重新读取确认 resolved，并写入 PR Evidence `retained`。官方 Codex P0/P1 在缺少结构化 `fixed` / `false_positive` evidence 时阻断；有绑定当前 head/diff/thread ID 的证据时可由 `pr_flow` 自动回复并 resolve。无 severity thread 和人工 reviewer thread 不自动 resolve。
 - 官方 Codex Review 状态由 `PR Flow / review-status` 复核；官方 Codex 未返回时 pending，不写失败。

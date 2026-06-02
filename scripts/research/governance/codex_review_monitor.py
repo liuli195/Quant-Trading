@@ -24,6 +24,7 @@ from scripts.research.governance.pr_review_evidence import (
     CONTEXT_HOSTILE_TRIGGER_PATTERN,
     CODEX_REVIEW_AUTHORS,
     _extract_contract_v1_evidence,
+    _contract_v1_evidence_errors,
     _fetch_pr_review_threads,
     _fetch_issue_metadata,
     _fetch_pr_changed_files,
@@ -88,6 +89,7 @@ def build_monitor_report(
     if contract_payload is not None or contract_errors:
         official_required, official_errors = _contract_v1_official_codex_requirement(
             pr_body,
+            contract_payload=contract_payload,
             contract_errors=contract_errors,
             changed_files=changed_files,
             labels=labels,
@@ -235,13 +237,34 @@ def build_monitor_report(
 def _contract_v1_official_codex_requirement(
     body: str,
     *,
+    contract_payload: Mapping[str, object] | None,
     contract_errors: Sequence[str],
     changed_files: Sequence[str] | None,
     labels: Sequence[str] | None,
 ) -> tuple[bool, list[str]]:
     errors = list(contract_errors)
+    if contract_payload is not None:
+        errors.extend(
+            _contract_v1_evidence_errors(
+                body,
+                dict(contract_payload),
+                expected_head_sha=None,
+                expected_diff_hash=None,
+                expected_commit_shas=None,
+            )
+        )
     if errors:
         return True, errors
+    if contract_payload is not None:
+        official_review = contract_payload.get("official_review")
+        if isinstance(official_review, Mapping):
+            decision = str(official_review.get("decision") or "").strip()
+            if decision in {"skip_risk_low", "skip_user_authorized"}:
+                return False, []
+            if decision == "required":
+                return True, []
+        if "official_review" not in contract_payload:
+            return True, []
     required, body_errors = _official_codex_required(
         body,
         changed_files=changed_files,

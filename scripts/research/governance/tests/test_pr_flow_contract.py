@@ -5,7 +5,6 @@ import hashlib
 from pathlib import Path
 
 from scripts.research.governance import (
-    ai_review_gate,
     codex_review_monitor,
     pr_flow,
     pr_flow_contract,
@@ -512,6 +511,15 @@ def test_contract_loads_required_checks_and_writes_submit_status(tmp_path: Path)
         "Research Governance / verify-full",
         "PR Flow / evidence",
     )
+    assert contract.pr_evidence_fields == (
+        "schema",
+        "head",
+        "diff",
+        "reviews",
+        "official_review",
+        "issues",
+        "retained",
+    )
 
     status_path = pr_flow_contract.write_submit_status(
         tmp_path,
@@ -673,6 +681,56 @@ def test_pr_review_evidence_accepts_contract_v1_managed_json() -> None:
     assert report.ok, report.errors
 
 
+def test_pr_review_evidence_accepts_legacy_contract_v1_without_official_review() -> (
+    None
+):
+    payload = _contract_evidence_payload()
+    payload.pop("official_review")
+    body = _managed_evidence_body(payload)
+
+    report = pr_review_evidence.validate_pr_body(
+        body,
+        expected_head_sha="a" * 40,
+        expected_diff_hash="diff-hash",
+        expected_commit_shas=("1" * 40, "2" * 40),
+    )
+
+    assert report.ok, report.errors
+
+
+def test_pr_review_evidence_rejects_invalid_official_review_shape() -> None:
+    payload = _contract_evidence_payload()
+    payload["official_review"] = {"decision": "required", "evidence": "extra"}
+    body = _managed_evidence_body(payload)
+
+    report = pr_review_evidence.validate_pr_body(
+        body,
+        expected_head_sha="a" * 40,
+        expected_diff_hash="diff-hash",
+        expected_commit_shas=("1" * 40, "2" * 40),
+    )
+
+    assert not report.ok
+    assert "PR Evidence official_review.required must only contain decision" in report.errors
+
+    payload = _contract_evidence_payload()
+    payload["official_review"] = {
+        "decision": "skip_user_authorized",
+        "authorized_by": "liuli195",
+    }
+    body = _managed_evidence_body(payload)
+
+    report = pr_review_evidence.validate_pr_body(
+        body,
+        expected_head_sha="a" * 40,
+        expected_diff_hash="diff-hash",
+        expected_commit_shas=("1" * 40, "2" * 40),
+    )
+
+    assert not report.ok
+    assert "PR Evidence official_review.skip_user_authorized missing evidence" in report.errors
+
+
 def test_pr_review_evidence_rejects_contract_v1_diff_mismatch() -> None:
     body = _managed_evidence_body(_contract_evidence_payload())
 
@@ -703,9 +761,15 @@ def test_pr_review_evidence_rejects_contract_v1_unresolved_threads() -> None:
 
 
 def test_submit_creates_draft_pr_with_contract_evidence_json(tmp_path: Path) -> None:
-    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_text = (
+        "diff --git a/scripts/research/governance/pr_flow.py "
+        "b/scripts/research/governance/pr_flow.py\n+hello\n"
+    )
     diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
-    runner = SubmitCreatePrRunner(diff_text=diff_text)
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        changed_files_output="scripts/research/governance/pr_flow.py\n",
+    )
     _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
     _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
     _write_fragment(
@@ -723,7 +787,15 @@ def test_submit_creates_draft_pr_with_contract_evidence_json(tmp_path: Path) -> 
     body = runner.created_bodies[-1]
     assert "## AI Review 风险分级" not in body
     payload = _payload_from_managed_body(body)
-    assert list(payload) == ["schema", "head", "diff", "reviews", "issues", "retained"]
+    assert list(payload) == [
+        "schema",
+        "head",
+        "diff",
+        "reviews",
+        "official_review",
+        "issues",
+        "retained",
+    ]
     assert payload["head"] == "1" * 40
     assert payload["diff"] == diff_hash
     assert payload["reviews"] == {
@@ -731,6 +803,7 @@ def test_submit_creates_draft_pr_with_contract_evidence_json(tmp_path: Path) -> 
         "spec": {"head": "1" * 40, "diff": diff_hash},
         "security": {"head": "1" * 40, "diff": diff_hash},
     }
+    assert payload["official_review"] == {"decision": "required"}
     issues = payload["issues"]
     assert isinstance(issues, dict)
     assert issues["commits"] == [
@@ -750,7 +823,7 @@ def test_submit_creates_draft_pr_with_contract_evidence_json(tmp_path: Path) -> 
     assert "1" * 40 in runner.comments[-1]
 
 
-def test_submit_skips_official_codex_request_for_low_risk_report(
+def test_submit_skips_official_codex_request_for_low_risk_fragments(
     tmp_path: Path,
 ) -> None:
     diff_text = "diff --git a/docs/guides/example.md b/docs/guides/example.md\n+hello\n"
@@ -760,11 +833,12 @@ def test_submit_skips_official_codex_request_for_low_risk_report(
     _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
     _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
     _write_branch_intent(tmp_path)
-    _write_ai_review_report(tmp_path)
 
     code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
 
     assert code == pr_flow.SUCCESS_EXIT_CODE
+    payload = _payload_from_managed_body(runner.created_bodies[-1])
+    assert payload["official_review"] == {"decision": "skip_risk_low"}
     assert runner.comments == []
     assert not any(call[:3] == ["gh", "pr", "comment"] for call in runner.calls)
 
@@ -785,19 +859,70 @@ def test_submit_skips_official_codex_request_with_user_authorization(
     _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
     _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
     _write_branch_intent(tmp_path)
-    _write_ai_review_report(
-        tmp_path,
-        risk_level="high",
-        requires_official=True,
-        changed_files=["scripts/research/governance/pr_flow.py"],
-        skip_official=True,
+
+    code = pr_flow.submit(
+        repo_root=tmp_path,
+        title="PR automation",
+        runner=runner,
+        official_review_skip_authorized_by="liuli195",
+        official_review_skip_evidence=(
+            "user explicitly authorized official review skip for current HEAD"
+        ),
     )
 
-    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
-
     assert code == pr_flow.SUCCESS_EXIT_CODE
+    payload = _payload_from_managed_body(runner.created_bodies[-1])
+    assert payload["official_review"] == {
+        "decision": "skip_user_authorized",
+        "authorized_by": "liuli195",
+        "evidence": "user explicitly authorized official review skip for current HEAD",
+    }
     assert runner.comments == []
     assert not any(call[:3] == ["gh", "pr", "comment"] for call in runner.calls)
+
+
+def test_submit_cli_accepts_official_review_skip_authorization() -> None:
+    args = pr_flow.build_parser().parse_args(
+        [
+            "submit",
+            "--official-review-skip-authorized-by",
+            "liuli195",
+            "--official-review-skip-evidence",
+            "current conversation",
+        ]
+    )
+
+    assert args.official_review_skip_authorized_by == "liuli195"
+    assert args.official_review_skip_evidence == "current conversation"
+
+
+def test_submit_rejects_partial_official_review_skip_authorization(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitCreatePrRunner(
+        diff_text="diff --git a/docs/guides/example.md b/docs/guides/example.md\n+hello\n"
+    )
+
+    code = pr_flow.submit(
+        repo_root=tmp_path,
+        title="PR automation",
+        runner=runner,
+        official_review_skip_authorized_by="liuli195",
+    )
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert runner.created_bodies == []
+    status = json.loads((tmp_path / ".local" / "pr-flow" / "status.json").read_text())
+    assert status["failures"] == [
+        {
+            "check": "PR Flow / evidence",
+            "source": "official_review",
+            "detail": (
+                "official review skip authorization requires both "
+                "authorized_by and evidence"
+            ),
+        }
+    ]
 
 
 def test_submit_accepts_official_codex_p2_thread_into_retained(
@@ -1033,20 +1158,40 @@ def test_codex_review_monitor_waits_for_trigger_with_contract_v1_evidence() -> N
 def test_codex_review_monitor_skips_low_risk_contract_v1_without_official_review() -> (
     None
 ):
-    body = (
-        _managed_evidence_body(_contract_evidence_payload())
-        + "\n"
-        + ai_review_gate.render_pr_body(_ai_review_payload())
-    )
+    payload = _contract_evidence_payload()
+    payload["official_review"] = {"decision": "skip_risk_low"}
     report = codex_review_monitor.build_monitor_report(
         repo="liuli195/Quant-Trading",
         pr_number="88",
-        pr={"head": {"sha": "a" * 40}, "body": body},
+        pr={"head": {"sha": "a" * 40}, "body": _managed_evidence_body(payload)},
         issue_comments=[],
         reviews=[],
         review_comments=[],
         changed_files=("docs/guides/example.md",),
         labels=(),
+    )
+
+    assert report.status == "skipped"
+
+
+def test_codex_review_monitor_skips_contract_v1_user_authorized_official_review() -> (
+    None
+):
+    payload = _contract_evidence_payload()
+    payload["official_review"] = {
+        "decision": "skip_user_authorized",
+        "authorized_by": "liuli195",
+        "evidence": "user explicitly authorized official review skip for current HEAD",
+    }
+    report = codex_review_monitor.build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="88",
+        pr={"head": {"sha": "a" * 40}, "body": _managed_evidence_body(payload)},
+        issue_comments=[],
+        reviews=[],
+        review_comments=[],
+        changed_files=("scripts/research/governance/pr_flow.py",),
+        labels=("ai-risk-review",),
     )
 
     assert report.status == "skipped"
@@ -1205,6 +1350,7 @@ def _contract_evidence_payload() -> dict[str, object]:
             "spec": {"head": "a" * 40, "diff": "diff-hash"},
             "security": {"head": "a" * 40, "diff": "diff-hash"},
         },
+        "official_review": {"decision": "required"},
         "issues": {
             "commits": [
                 {
