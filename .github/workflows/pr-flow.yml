@@ -12,6 +12,7 @@ permissions:
   contents: read
   issues: read
   pull-requests: read
+  statuses: write
 
 jobs:
   evidence:
@@ -45,3 +46,18 @@ jobs:
           --head-sha-env PR_HEAD_SHA
           --head-updated-at-env PR_HEAD_UPDATED_AT
           --github-token-env GITHUB_TOKEN
+      - name: Publish PR Flow evidence status
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          JOB_STATUS: ${{ job.status }}
+          TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: pwsh
+        run: |
+          $state = if ($env:JOB_STATUS -eq 'success') { 'success' } elseif ($env:JOB_STATUS -eq 'cancelled') { 'error' } else { 'failure' }
+          gh api "repos/$env:GITHUB_REPOSITORY/statuses/$env:PR_HEAD_SHA" `
+            -f state="$state" `
+            -f context="PR Flow / evidence" `
+            -f description="PR Evidence validation $state" `
+            -f target_url="$env:TARGET_URL"
