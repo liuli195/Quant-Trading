@@ -252,8 +252,6 @@ SKILL_FIXTURES = (
             "make verify-fast",
             "make verify-full",
             "make pr-submit",
-            "make ai-review",
-            "make risk-check",
             ".\\.venv\\Scripts\\python.exe -m scripts.research.governance",
             ".\\.venv\\Scripts\\python.exe -m scripts.research.governance.pr_flow submit",
         ],
@@ -1402,8 +1400,6 @@ def _write_minimal_repo(root: Path) -> None:
         "verify-fast:\n\t$(PYTHON) -m scripts.research.governance verify fast --staged\n"
         "verify-full:\n\t$(PYTHON) -m scripts.research.governance verify full\n"
         "pre-pr:\n\t$(PYTHON) -m pre_commit run --all-files\n\t$(MAKE) verify-full\n"
-        "ai-review:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate validate --report .local/ai-review/latest.json\n"
-        "risk-check:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate risk --report .local/ai-review/latest.json\n"
         'pr-submit:\n\t$(PYTHON) -m scripts.research.governance.pr_flow submit --title "$(TITLE)"\n',
         encoding="utf-8",
     )
@@ -1790,8 +1786,6 @@ def test_local_review_entrypoints_are_tracked(tmp_path: Path) -> None:
         "verify-fast:\n\t$(PYTHON) -m scripts.research.governance verify fast --staged\n"
         "verify-full:\n\t$(PYTHON) -m scripts.research.governance verify full\n"
         "pre-pr:\n\t$(PYTHON) -m pre_commit run --all-files\n\t$(MAKE) verify-full\n"
-        "ai-review:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate validate --report .local/ai-review/latest.json\n"
-        "risk-check:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate risk --report .local/ai-review/latest.json\n"
         'pr-submit:\n\t$(PYTHON) -m scripts.research.governance.pr_flow submit --title "$(TITLE)"\n',
         encoding="utf-8",
     )
@@ -1878,8 +1872,7 @@ def test_local_review_entrypoints_reject_wrapper_make_python(
     (tmp_path / "Makefile").write_text(
         "PYTHON := powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./.githooks/run-python.ps1\n"
         "pre-pr:\n\t$(PYTHON) -m pre_commit run --all-files\n"
-        "ai-review:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate validate --report .local/ai-review/latest.json\n"
-        "risk-check:\n\t$(PYTHON) -m scripts.research.governance.ai_review_gate risk --report .local/ai-review/latest.json\n",
+        'pr-submit:\n\t$(PYTHON) -m scripts.research.governance.pr_flow submit --title "$(TITLE)"\n',
         encoding="utf-8",
     )
 

@@ -373,7 +373,9 @@ def decide_official_review_action(
 ) -> OfficialReviewDecision:
     validation = validate_report(payload)
     if not validation.requires_official_codex_review:
-        return OfficialReviewDecision("not_required", "low-risk PR does not require official review")
+        return OfficialReviewDecision(
+            "not_required", "low-risk PR does not require official review"
+        )
     if github_blockers:
         return OfficialReviewDecision("blocked", "GitHub state has review blockers")
     if current_head_present:

@@ -27,6 +27,4 @@ make verify-full
 make pr-submit TITLE="<PR标题>"
 make pr-diagnose PR=<PR号>
 make pr-resolve-threads THREADS="<thread-id> [<thread-id>...]"
-make ai-review
-make risk-check
 ```

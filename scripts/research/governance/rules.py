@@ -942,12 +942,9 @@ def _audit_local_review_entrypoints(root: Path) -> list[AuditFinding]:
         "pre-pr",
         "verify-fast",
         "verify-full",
-        "ai-review",
-        "risk-check",
         "pr-submit",
         "scripts.research.governance verify fast --staged",
         "scripts.research.governance verify full",
-        "scripts.research.governance.ai_review_gate",
         "scripts.research.governance.pr_flow",
     ):
         if token not in make_text:

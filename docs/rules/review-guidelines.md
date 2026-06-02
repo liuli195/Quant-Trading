@@ -14,11 +14,12 @@
 - 本地 AI review 默认 `review_mode=complete`；`complete_review.iterations` 必须证明每个 reviewer 最后一轮 `no_new_findings=true` 且 `new_findings=[]`。
 - `review_mode=partial` 只在用户显式授权时可用，并记录 `authorized_by`、`reason`、`evidence`。
 - P0/P1 未以 `fixed` 或 `false_positive` 关闭前，不得进入下一阶段。
-- `pr-submit` 对所有 PR 触发官方 Codex Code Review；高风险或 unknown PR 仍加 `ai-risk-review` label，用于标记风险和收窄 Review Scope，不作为是否触发官方 review 的开关。
+- `risk=low` 且标记“官方 Codex Review=否”时，可以不触发官方 Codex Code Review；高风险、unknown、命中高风险路径或带 `ai-risk-review` label 的 PR 默认必须触发官方 Codex Code Review。
+- 用户显式授权时可以跳过官方 Codex Review，但必须记录 `authorized_by`、`reason`、`evidence`；该授权不能绕过 unresolved thread、P0/P1 或 GitHub required checks 的其它阻断。
 - 官方 Codex Review 触发评论必须包含 `@codex review`、当前 PR、当前 head SHA、Review Scope（可为空）和审查重点；禁止模板外文案，禁止写“不要执行命令”“只做静态 diff review”等切断仓库、diff 或命令上下文的指令。
-- 官方 Codex Review 按 Review Scope 聚焦 P0/P1 合并阻断风险；无法生成明确 scope 的大型 PR 应拆分，否则按全量高风险 PR 处理，但仍必须使用当前 head 的官方 review。
+- 需要官方 Codex Review 时，Review Scope 聚焦 P0/P1 合并阻断风险；无法生成明确 scope 的大型 PR 应拆分，否则按全量高风险 PR 处理。
 - 官方 Codex P2/P3 是非阻断 retained finding；`pr_flow` 只能写入 PR Evidence `retained`，不得扩展 PR body 机器字段。
-- 自动写入不等于跳过 review；证据必须来自当前 PR、当前 head、当前 trigger 之后的 Codex 结果。
+- 自动写入不等于跳过 review；需要官方 Codex Review 时，证据必须来自当前 PR、当前 head、当前 trigger 之后的 Codex 结果。
 - `PR Flow / evidence` 和 `PR Flow / review-status` 必须读取 review thread 状态；未 resolved human thread、无 severity thread 和官方 P0/P1 阻断。官方 P2/P3 只能由 `pr_flow` 写入固定接受模板和 PR Evidence retained 后 resolve。
 - `PR Flow / review-status` 是 GitHub `main` 全局 required status check；官方 Codex review 未返回时保持 pending，不写失败。`pr-submit` 开始和成功时 `status.json` 可留下 `failures: []`，它不是成功证明。
 - 如果 Codex review 无法读取当前 PR diff、要求额外提供 unified diff、引用不存在或非当前 head，按 review 上下文失效阻断。

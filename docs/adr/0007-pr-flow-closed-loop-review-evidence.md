@@ -30,7 +30,7 @@ PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pa
 - PR Evidence JSON v1 写入 current head、diff hash、review fingerprints、Issue intent 和 retained findings；过渡期可读旧 schema，但新写出只写契约 v1。
 - PR Evidence JSON 的 `issues.commits` 必须覆盖每个 PR commit；每个 commit 要么有关联 Issue，要么记录 `no_issue: true`。`issues.refs` 只保留 closes/reference 和 closes Issue 的 AC checked 状态。
 - `target scheme review authority`: 当 PR 的目标 Issue/PRD 与旧仓库规则冲突时，Standards/Spec reviewer 以目标方案为裁判基准；旧规则冲突归类为规则/ADR drift，不归类为实现违规。
-- risk classifier 由 builder 最终裁决，review/security 只提供输入。风险分级只影响本地关注重点、label 和 Review Scope，不影响是否触发官方 Codex Review。
+- risk classifier 由 builder 最终裁决，review/security 只提供输入。`risk=low + 官方 Review=否` 可以不触发官方 Codex Review；高风险、unknown、命中高风险路径或带 `ai-risk-review` label 的 PR 默认触发官方 Codex Review；用户显式授权可跳过官方 Codex Review。
 - P2/P3 accepted findings 不影响 `risk_level`，也不阻断合并；所有来源的 P2/P3 统一写入 PR Evidence `retained`。
 - 官方 Codex P2/P3 review thread 在 severity 可靠识别时，由 `pr_flow` 用固定模板自动接受、resolve、重新读取确认 resolved，并写入 PR Evidence `retained`。官方 Codex P0/P1 在缺少结构化 `fixed` / `false_positive` evidence 时阻断；有绑定当前 head/diff/thread ID 的证据时可由 `pr_flow` 自动回复并 resolve。无 severity thread 和人工 reviewer thread 不自动 resolve。
 - 官方 Codex Review 状态由 `PR Flow / review-status` 复核；官方 Codex 未返回时 pending，不写失败。
@@ -45,7 +45,7 @@ PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pa
 - 本地缓存提高恢复能力，但不会成为 CI 或合并门禁的信任来源。
 - `$review` 成为本地非安全 review 的统一入口；security review 继续独立存在。
 - P2/P3 的仓库语义与 GitHub conversation resolution 规则统一：可以不修复，但必须结构化接受并 resolve thread。
-- 所有 PR 仍保持官方 Codex Review 质量边界；大型 PR 通过 scope 收窄、delta review 和 evidence 复用提效，而不是绕过 current-head 审查要求。
+- 官方 Codex Review 质量边界按风险/授权执行；大型 PR 通过 scope 收窄、delta review 和 evidence 复用提效，不能用未记录授权绕过 current-head 审查要求。
 - `PR Flow / evidence`、`PR Flow / review-status`、PR body renderer、`pr_flow diagnose` 和 governance tests 必须同步升级，避免规则、文档和工具漂移。
 
 ## Issue Intent Extension
