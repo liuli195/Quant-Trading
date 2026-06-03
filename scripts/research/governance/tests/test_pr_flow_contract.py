@@ -889,7 +889,7 @@ def test_contract_loads_required_checks_and_writes_submit_status(tmp_path: Path)
     payload = json.loads(status_path.read_text(encoding="utf-8"))
     assert list(payload) == ["schema", "head", "failures"]
     assert list(payload["failures"][0]) == ["check", "source", "detail"]
-    assert payload["schema"] == 1
+    assert payload["schema"] == contract.version
     assert payload["head"] == "1" * 40
     assert "\n" not in payload["failures"][0]["detail"]
     assert len(payload["failures"][0]["detail"]) <= contract.detail_max_chars
@@ -920,6 +920,38 @@ def test_submit_fails_fast_when_github_contract_preflight_is_missing(
             "detail": "missing required checks: Research Governance / verify-full, PR Flow / evidence",
         },
     ]
+    # Handoff status must also be written
+    handoff = json.loads(
+        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
+    )
+    assert handoff["state"] in ("DISPATCH_REQUIRED", "EXCEPTION_REQUIRED")
+    assert handoff["reason_code"]
+    assert handoff["phase"]
+    assert handoff["blocking_items"]
+
+
+def test_submit_writes_handoff_status_on_all_non_zero_exits(
+    tmp_path: Path,
+) -> None:
+    """Every non-zero exit must write structured handoff status."""
+    runner = SubmitPreflightRunner(valid_contract=True)
+    # missing fragments should cause DISPATCH_REQUIRED
+    code = pr_flow.submit(repo_root=tmp_path, title="PR 自动化", runner=runner)
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    handoff = json.loads(
+        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
+    )
+    assert handoff["state"] == "DISPATCH_REQUIRED"
+    assert handoff["reason_code"]
+    assert handoff["phase"] != "unknown"
+    assert "retryable" in handoff
+    assert "dispatch_target" in handoff
+    assert "blocking_items" in handoff
+    assert "evidence_refs" in handoff
+    assert "next_actions" in handoff
+    # blocking_items must be non-empty
+    assert len(handoff["blocking_items"]) > 0
 
 
 def test_submit_reports_missing_first_stage_review_fragments(tmp_path: Path) -> None:
@@ -1753,7 +1785,7 @@ def test_submit_reuses_current_diff_fragments_after_pr_body_update(
     diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
     stale_body = _managed_evidence_body(
         {
-            "schema": 1,
+            "schema": 2,
             "head": "0" * 40,
             "diff": "old-diff",
             "reviews": {},
@@ -1813,7 +1845,7 @@ def test_submit_refreshes_same_diff_review_fragment_heads(tmp_path: Path) -> Non
             ).read_text(encoding="utf-8")
         )
         assert fragment == {
-            "schema": 1,
+            "schema": 2,
             "head": "1" * 40,
             "diff": diff_hash,
             "findings": [],
@@ -2088,6 +2120,126 @@ def test_codex_review_status_uses_contract_context_and_workflow_target(
     )
 
 
+def test_contract_defines_stop_state_schema() -> None:
+    """Stop state fields must be defined in the interface contract."""
+    contract = pr_flow_contract.load_contract(Path("."))
+
+    assert isinstance(contract.stop_state_fields, tuple)
+    assert len(contract.stop_state_fields) >= 7
+    assert "schema_version" in contract.stop_state_fields
+    assert "state" in contract.stop_state_fields
+    assert "message" in contract.stop_state_fields
+    assert "reason_code" in contract.stop_state_fields
+    assert "phase" in contract.stop_state_fields
+    assert "retryable" in contract.stop_state_fields
+    assert "dispatch_target" in contract.stop_state_fields
+    assert "blocking_items" in contract.stop_state_fields
+    assert "evidence_refs" in contract.stop_state_fields
+    assert "next_actions" in contract.stop_state_fields
+
+
+def test_contract_defines_handoff_status_path() -> None:
+    """Handoff status path must be defined in the interface contract."""
+    contract = pr_flow_contract.load_contract(Path("."))
+
+    assert isinstance(contract.handoff_status_path, Path)
+    assert contract.handoff_status_path == Path(".local/pr-flow/last-status.json")
+
+
+def test_contract_defines_target_spec_wins_rule() -> None:
+    """Target spec wins rule must be machine-readable in the contract."""
+    contract = pr_flow_contract.load_contract(Path("."))
+
+    assert contract.target_spec_wins is True
+
+
+def test_contract_defines_fragment_freshness_rule() -> None:
+    """Fragment freshness semantics must be explicit in the contract."""
+    contract = pr_flow_contract.load_contract(Path("."))
+
+    assert isinstance(contract.fragment_freshness_same_diff_head_refresh, bool)
+    assert contract.fragment_freshness_same_diff_head_refresh is True
+
+
+def test_contract_defines_github_native_closing_links_rule() -> None:
+    """GitHub native closing links must come from per-commit evidence."""
+    contract = pr_flow_contract.load_contract(Path("."))
+
+    assert isinstance(contract.github_native_closing_links_from_per_commit_evidence, bool)
+    assert contract.github_native_closing_links_from_per_commit_evidence is True
+
+
+def test_contract_defines_codex_thread_automation_rules() -> None:
+    """Codex thread automation boundaries must be defined in the contract."""
+    contract = pr_flow_contract.load_contract(Path("."))
+
+    assert isinstance(contract.codex_thread_auto_resolve_outdated, bool)
+    assert contract.codex_thread_auto_resolve_outdated is True
+    assert isinstance(contract.codex_thread_p0_p1_requires_closure_evidence, bool)
+    assert contract.codex_thread_p0_p1_requires_closure_evidence is True
+    assert isinstance(contract.codex_thread_human_never_auto_resolve, bool)
+    assert contract.codex_thread_human_never_auto_resolve is True
+    assert isinstance(contract.codex_thread_no_severity_never_auto_resolve, bool)
+    assert contract.codex_thread_no_severity_never_auto_resolve is True
+    assert isinstance(contract.codex_thread_p2_p3_auto_accept, bool)
+    assert contract.codex_thread_p2_p3_auto_accept is True
+
+
+def test_contract_defines_workflow_pending_rule() -> None:
+    """Workflow must publish pending status before execution."""
+    contract = pr_flow_contract.load_contract(Path("."))
+
+    assert isinstance(contract.workflow_pending_before_execution, bool)
+    assert contract.workflow_pending_before_execution is True
+
+
+def test_workflow_files_publish_pending_before_validation() -> None:
+    """Each required-check workflow must publish pending before time-consuming work."""
+    import yaml
+
+    repo_root = Path(".")
+    workflow_dir = repo_root / ".github" / "workflows"
+
+    contexts = {
+        "pr-flow.yml": "PR Flow / evidence",
+        "codex-review-monitor.yml": "PR Flow / review-status",
+        "research-governance.yml": "Research Governance / verify-full",
+    }
+
+    for filename, expected_context in contexts.items():
+        path = workflow_dir / filename
+        content = path.read_text(encoding="utf-8")
+        doc = yaml.safe_load(content)
+
+        jobs = doc.get("jobs", {}) if isinstance(doc, dict) else {}
+        for job_name, job_def in jobs.items():
+            if not isinstance(job_def, dict):
+                continue
+            steps = job_def.get("steps", [])
+            if not isinstance(steps, list):
+                continue
+
+            pending_step = None
+            for step in steps:
+                if not isinstance(step, dict):
+                    continue
+                if step.get("name") == "Publish pending status":
+                    pending_step = step
+                    break
+
+            assert pending_step is not None, (
+                f"{filename}:{job_name} missing 'Publish pending status' step"
+            )
+            # Verify the step publishes pending for the correct context
+            run_script = str(pending_step.get("run", ""))
+            assert expected_context in run_script, (
+                f"{filename}:{job_name} must publish pending for {expected_context}"
+            )
+            assert "pending" in run_script, (
+                f"{filename}:{job_name} must set state to pending"
+            )
+
+
 def _write_fragment(
     root: Path,
     role: str,
@@ -2101,7 +2253,7 @@ def _write_fragment(
     path.write_text(
         json.dumps(
             {
-                "schema": 1,
+                "schema": 2,
                 "head": head,
                 "diff": diff,
                 "findings": findings,
@@ -2201,7 +2353,7 @@ def _managed_evidence_body(payload: dict[str, object]) -> str:
 
 def _contract_evidence_payload() -> dict[str, object]:
     return {
-        "schema": 1,
+        "schema": 2,
         "head": "a" * 40,
         "diff": "diff-hash",
         "reviews": {

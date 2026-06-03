@@ -1034,7 +1034,14 @@ def submit(
             failures=[auth_failure],
         )
         print(f"error: {auth_failure.check}: {auth_failure.detail}", file=sys.stderr)
-        return EXCEPTION_REQUIRED_EXIT_CODE
+        return _fail_submit(
+            root, contract, EXCEPTION_REQUIRED_EXIT_CODE,
+            head_sha=head_sha,
+            reason_code="OFFICIAL_REVIEW_SKIP_AUTH_INCOMPLETE",
+            phase="submit_preflight",
+            retryable=False,
+            failures=[auth_failure],
+        )
     try:
         failures = _submit_preflight_failures(
             root=root,
@@ -1058,7 +1065,14 @@ def submit(
         )
         for failure in failures:
             print(f"error: {failure.check}: {failure.detail}", file=sys.stderr)
-        return EXCEPTION_REQUIRED_EXIT_CODE
+        return _fail_submit(
+            root, contract, EXCEPTION_REQUIRED_EXIT_CODE,
+            head_sha=head_sha,
+            reason_code="PREFLIGHT_CHECK_FAILED",
+            phase="submit_preflight",
+            retryable=False,
+            failures=failures,
+        )
     failures = _submit_branch_intent_failures(root=root, runner=runner)
     if failures:
         pr_flow_contract.write_submit_status(
@@ -1069,23 +1083,35 @@ def submit(
         )
         for failure in failures:
             print(f"error: {failure.check}: {failure.detail}", file=sys.stderr)
-        return DISPATCH_REQUIRED_EXIT_CODE
+        return _fail_submit(
+            root, contract, DISPATCH_REQUIRED_EXIT_CODE,
+            head_sha=head_sha,
+            reason_code="BRANCH_INTENT_COVERAGE_INCOMPLETE",
+            phase="submit_branch_intent",
+            retryable=True,
+            failures=failures,
+        )
     try:
         diff_hash = _submit_current_diff_hash(root, runner)
     except GitHubDataUnavailable as exc:
+        diff_failures = [
+            pr_flow_contract.SubmitFailure(
+                check="github",
+                source="",
+                detail=str(exc),
+            )
+        ]
         pr_flow_contract.write_submit_status(
-            root,
-            contract,
-            head=head_sha,
-            failures=[
-                pr_flow_contract.SubmitFailure(
-                    check="github",
-                    source="",
-                    detail=str(exc),
-                )
-            ],
+            root, contract, head=head_sha, failures=diff_failures,
         )
-        return EXCEPTION_REQUIRED_EXIT_CODE
+        return _fail_submit(
+            root, contract, EXCEPTION_REQUIRED_EXIT_CODE,
+            head_sha=head_sha,
+            reason_code="DIFF_HASH_UNAVAILABLE",
+            phase="submit_diff",
+            retryable=True,
+            failures=diff_failures,
+        )
     failures, has_blocking = _submit_first_stage_fragment_failures(
         root=root,
         contract=contract,
@@ -1101,10 +1127,14 @@ def submit(
         )
         for failure in failures:
             print(f"error: {failure.check}: {failure.detail}", file=sys.stderr)
-        return (
-            REPLY_OR_FIX_REQUIRED_EXIT_CODE
-            if has_blocking
-            else DISPATCH_REQUIRED_EXIT_CODE
+        return _fail_submit(
+            root, contract,
+            REPLY_OR_FIX_REQUIRED_EXIT_CODE if has_blocking else DISPATCH_REQUIRED_EXIT_CODE,
+            head_sha=head_sha,
+            reason_code="FRAGMENT_BLOCKING" if has_blocking else "FRAGMENT_MISSING",
+            phase="submit_fragments",
+            retryable=not has_blocking,
+            failures=failures,
         )
     failures, has_blocking = _submit_security_fragment_failures(
         root=root,
@@ -1121,10 +1151,14 @@ def submit(
         )
         for failure in failures:
             print(f"error: {failure.check}: {failure.detail}", file=sys.stderr)
-        return (
-            REPLY_OR_FIX_REQUIRED_EXIT_CODE
-            if has_blocking
-            else DISPATCH_REQUIRED_EXIT_CODE
+        return _fail_submit(
+            root, contract,
+            REPLY_OR_FIX_REQUIRED_EXIT_CODE if has_blocking else DISPATCH_REQUIRED_EXIT_CODE,
+            head_sha=head_sha,
+            reason_code="SECURITY_BLOCKING" if has_blocking else "SECURITY_FRAGMENT_MISSING",
+            phase="submit_security",
+            retryable=not has_blocking,
+            failures=failures,
         )
     try:
         review_state, failures = _submit_review_state(
@@ -1143,7 +1177,14 @@ def submit(
                 head=head_sha,
                 failures=failures,
             )
-            return DISPATCH_REQUIRED_EXIT_CODE
+            return _fail_submit(
+                root, contract, DISPATCH_REQUIRED_EXIT_CODE,
+                head_sha=head_sha,
+                reason_code="REVIEW_STATE_INCOMPLETE",
+                phase="submit_review_state",
+                retryable=True,
+                failures=failures,
+            )
         evidence = _submit_pr_evidence(
             root=root,
             runner=runner,
@@ -1161,37 +1202,47 @@ def submit(
             evidence=evidence,
         )
     except CommitIntentError as exc:
+        intent_failures = [
+            pr_flow_contract.SubmitFailure(
+                check="issue-intent",
+                source=".local/pr-flow/intents",
+                detail=_commit_intent_failure_detail(exc),
+            )
+        ]
         pr_flow_contract.write_submit_status(
-            root,
-            contract,
-            head=head_sha,
-            failures=[
-                pr_flow_contract.SubmitFailure(
-                    check="issue-intent",
-                    source=".local/pr-flow/intents",
-                    detail=_commit_intent_failure_detail(exc),
-                )
-            ],
+            root, contract, head=head_sha, failures=intent_failures,
         )
         print(
             f"error: issue-intent: {_commit_intent_failure_detail(exc)}",
             file=sys.stderr,
         )
-        return DISPATCH_REQUIRED_EXIT_CODE
-    except GitHubDataUnavailable as exc:
-        pr_flow_contract.write_submit_status(
-            root,
-            contract,
-            head=head_sha,
-            failures=[
-                pr_flow_contract.SubmitFailure(
-                    check="github",
-                    source="",
-                    detail=str(exc),
-                )
-            ],
+        return _fail_submit(
+            root, contract, DISPATCH_REQUIRED_EXIT_CODE,
+            head_sha=head_sha,
+            reason_code="COMMIT_INTENT_INVALID",
+            phase="submit_evidence",
+            retryable=True,
+            failures=intent_failures,
         )
-        return EXCEPTION_REQUIRED_EXIT_CODE
+    except GitHubDataUnavailable as exc:
+        github_failures = [
+            pr_flow_contract.SubmitFailure(
+                check="github",
+                source="",
+                detail=str(exc),
+            )
+        ]
+        pr_flow_contract.write_submit_status(
+            root, contract, head=head_sha, failures=github_failures,
+        )
+        return _fail_submit(
+            root, contract, EXCEPTION_REQUIRED_EXIT_CODE,
+            head_sha=head_sha,
+            reason_code="GITHUB_DATA_UNAVAILABLE",
+            phase="submit_sync",
+            retryable=exc.retryable,
+            failures=github_failures,
+        )
     if sync_code != SUCCESS_EXIT_CODE:
         return sync_code
     try:
@@ -1216,7 +1267,14 @@ def submit(
             head=head_sha,
             failures=head_failures,
         )
-        return EXCEPTION_REQUIRED_EXIT_CODE
+        return _fail_submit(
+            root, contract, EXCEPTION_REQUIRED_EXIT_CODE,
+            head_sha=head_sha,
+            reason_code="PR_HEAD_MISMATCH",
+            phase="submit_verify",
+            retryable=True,
+            failures=head_failures,
+        )
     merged_metadata = _submit_merged_pr_metadata(
         root=root,
         runner=runner,
@@ -1273,7 +1331,14 @@ def submit(
             head=head_sha,
             failures=watch_failures,
         )
-        return EXCEPTION_REQUIRED_EXIT_CODE
+        return _fail_submit(
+            root, contract, EXCEPTION_REQUIRED_EXIT_CODE,
+            head_sha=head_sha,
+            reason_code="REQUIRED_CHECKS_FAILED",
+            phase="submit_wait_checks",
+            retryable=True,
+            failures=watch_failures,
+        )
     lifecycle_code = _submit_complete_lifecycle(
         root=root,
         runner=runner,
@@ -1283,7 +1348,9 @@ def submit(
         poll_seconds=watch_poll_seconds,
     )
     if lifecycle_code != SUCCESS_EXIT_CODE:
-        return lifecycle_code
+        return lifecycle_code  # _submit_complete_lifecycle emits its own stop status
+    # Clear submit status on success
+    pr_flow_contract.write_submit_status(root, contract, head=head_sha, failures=[])
     return SUCCESS_EXIT_CODE
 
 
@@ -4400,16 +4467,19 @@ def _auto_process_official_codex_review_threads(
         thread_id = _thread_id(thread)
         if not thread_id:
             continue
-        finding = (
-            _external_finding_for_review_thread(
+        if action == "accept":
+            finding = _external_finding_for_review_thread(
                 repo=repo,
                 pr_number=pr_number,
                 thread=thread,
                 status="accepted",
             )
-            if action == "accept"
-            else _closed_external_finding_for_thread(updated, thread)
-        )
+        else:
+            finding = _closed_external_finding_for_thread(updated, thread)
+            if finding is None and _thread_is_outdated(thread):
+                # Outdated official Codex thread without pre-seeded evidence:
+                # synthesize a minimal finding so the thread can be closed.
+                finding = _synthesize_outdated_thread_finding(thread)
         if finding is None:
             continue
         reply_body = (
@@ -4453,6 +4523,11 @@ def _auto_review_thread_action(
     severity = _codex_thread_severity(thread)
     if severity in AUTO_ACCEPTED_REVIEW_THREAD_SEVERITIES:
         return "accept"
+    # Outdated official Codex threads are auto-closed (thread no longer
+    # applies to current head/diff).  Human and non-severity threads are
+    # never auto-resolved — they continue to block.
+    if _thread_is_outdated(thread) and _thread_is_official_codex(thread):
+        return "close"
     if (
         severity in {"P0", "P1"}
         and _closed_external_finding_for_thread(payload, thread) is not None
@@ -4627,6 +4702,34 @@ def _closed_external_finding_for_thread(
         )
         return closed
     return None
+
+
+def _synthesize_outdated_thread_finding(thread: dict[str, Any]) -> dict[str, Any]:
+    """Build a minimal finding for an outdated official Codex thread.
+
+    Used when the thread is outdated and no pre-seeded closure evidence
+    exists in the payload.  The thread is stale and no longer applies to
+    the current head/diff, so we synthesize just enough for the reply
+    and resolution.
+    """
+    thread_id = _thread_id(thread)
+    severity = _codex_thread_severity(thread)
+    body = _codex_thread_body(thread)
+    return {
+        "id": f"EXT-CODEX-THREAD-{thread_id}",
+        "source": "official_codex_review_thread",
+        "thread_id": thread_id,
+        "severity": severity or "P1",
+        "title": "Outdated Codex finding",
+        "path": "",
+        "status": "fixed",
+        "evidence": "thread is outdated and no longer applies to current head",
+        "head_sha": "",
+        "diff_files_hash": "",
+        "fix_commit": "",
+        "verification_command": "",
+        "handling": f"outdated official Codex thread resolved; original: {_single_line_text(body)}",
+    }
 
 
 def _accepted_review_thread_reply(finding: dict[str, Any]) -> str:
@@ -4876,6 +4979,17 @@ def _thread_is_resolved(thread: dict[str, Any]) -> bool:
 
 def _thread_is_outdated(thread: dict[str, Any]) -> bool:
     return bool(thread.get("isOutdated") or thread.get("is_outdated"))
+
+
+def _thread_is_official_codex(thread: dict[str, Any]) -> bool:
+    """Return True if the thread is from an official Codex reviewer."""
+    comment = _codex_thread_comment(thread)
+    if not isinstance(comment, dict):
+        return False
+    author = comment.get("author")
+    if not isinstance(author, dict):
+        return False
+    return _single_line_text(author.get("login")) in CODEX_REVIEW_AUTHORS
 
 
 def _thread_id(thread: dict[str, Any]) -> str:
@@ -5950,6 +6064,94 @@ def _print_github_data_unavailable(exc: GitHubDataUnavailable) -> None:
     )
 
 
+def _fail_submit(
+    root: str | Path,
+    contract: pr_flow_contract.PRFlowContract,
+    exit_code: int,
+    *,
+    head_sha: str,
+    reason_code: str,
+    phase: str,
+    retryable: bool = False,
+    failures: Sequence[pr_flow_contract.SubmitFailure] = (),
+) -> int:
+    """Write submit status and emit structured stop status, then return exit code."""
+    if failures:
+        pr_flow_contract.write_submit_status(
+            root, contract, head=head_sha, failures=failures
+        )
+    return _stop_submit(
+        root,
+        exit_code,
+        reason_code=reason_code,
+        phase=phase,
+        retryable=retryable,
+        failures=failures,
+    )
+
+
+def _stop_submit(
+    root: str | Path,
+    exit_code: int,
+    *,
+    reason_code: str,
+    phase: str,
+    retryable: bool = False,
+    failures: Sequence[pr_flow_contract.SubmitFailure] = (),
+) -> int:
+    """Emit structured stop status and return exit code.
+
+    Ensures every non-zero exit from submit produces both CLI stop summary
+    and local handoff status file.
+    """
+    blocking_items = tuple(
+        f"{f.check}: {f.detail}" for f in failures
+    ) if failures else ()
+    evidence_refs = tuple(
+        f.source for f in failures if f.source
+    )
+    message = reason_code.replace("_", " ").title()
+    if failures:
+        message = "; ".join(blocking_items) if blocking_items else message
+    state = {
+        DISPATCH_REQUIRED_EXIT_CODE: "DISPATCH_REQUIRED",
+        REPLY_OR_FIX_REQUIRED_EXIT_CODE: "REPLY_OR_FIX_REQUIRED",
+        EXCEPTION_REQUIRED_EXIT_CODE: "EXCEPTION_REQUIRED",
+    }.get(exit_code, "EXCEPTION_REQUIRED")
+
+    _print_state(
+        state,
+        message,
+        repo_root=root,
+        reason_code=reason_code,
+        phase=phase,
+        retryable=retryable,
+        dispatch_target=_default_dispatch_target(state),
+        blocking_items=blocking_items,
+        evidence_refs=evidence_refs,
+        next_actions=_stop_next_actions(exit_code, failures),
+    )
+    return exit_code
+
+
+def _stop_next_actions(
+    exit_code: int,
+    failures: Sequence[pr_flow_contract.SubmitFailure],
+) -> tuple[str, ...]:
+    if exit_code == DISPATCH_REQUIRED_EXIT_CODE:
+        return ("dispatch review agents to regenerate fragments",)
+    if exit_code == REPLY_OR_FIX_REQUIRED_EXIT_CODE:
+        return ("address blocking findings and re-run pr-submit",)
+    if exit_code == EXCEPTION_REQUIRED_EXIT_CODE:
+        if any("github" in f.check.casefold() for f in failures):
+            return (
+                "verify GitHub API access and re-run pr-submit",
+                "check .local/pr-flow/status.json for details",
+            )
+        return ("inspect .local/pr-flow/status.json for details",)
+    return ()
+
+
 def _print_state(
     state: str,
     message: str,
@@ -6032,7 +6234,8 @@ def _emit_stop_status(
 
 
 def _write_last_status(repo_root: str | Path, status: StopStatus) -> None:
-    path = Path(repo_root).resolve() / ".local" / "pr-flow" / "last-status.json"
+    contract = pr_flow_contract.load_contract(repo_root)
+    path = Path(repo_root).resolve() / contract.handoff_status_path
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(status.as_json(), ensure_ascii=False, indent=2) + "\n",

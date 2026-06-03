@@ -22,6 +22,19 @@ jobs:
   verify-full:
     runs-on: windows-latest
     steps:
+      - name: Publish pending status
+        if: ${{ (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'pull_request_review_comment') && github.event.pull_request.state == 'open' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: pwsh
+        run: |
+          gh api "repos/$env:GITHUB_REPOSITORY/statuses/$env:PR_HEAD_SHA" `
+            -f state="pending" `
+            -f context="Research Governance / verify-full" `
+            -f description="Full governance verification is running" `
+            -f target_url="$env:TARGET_URL"
       - uses: actions/checkout@v4
       - name: Ensure skill Junction
         shell: pwsh

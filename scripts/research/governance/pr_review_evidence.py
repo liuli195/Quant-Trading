@@ -297,7 +297,7 @@ def _contract_v1_evidence_errors(
             + "/".join(contract.pr_evidence_fields)
         )
     if payload.get("schema") != contract.version:
-        errors.append("PR Evidence JSON schema must be 1")
+        errors.append(f"PR Evidence JSON schema must be {contract.version}")
     head = _single_line_text(payload.get("head"))
     diff = _single_line_text(payload.get("diff"))
     if expected_head_sha and head != expected_head_sha:

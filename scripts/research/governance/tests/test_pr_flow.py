@@ -4777,3 +4777,117 @@ def test_ready_resolves_threads_after_sync_before_wait(
 
     assert code == pr_flow.SUCCESS_EXIT_CODE
     assert calls == ["resolve", "blockers", "wait"]
+
+
+def test_ready_auto_resolves_outdated_official_codex_thread_without_pre_seeded_evidence(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    """Outdated official Codex threads auto-resolve even without pre-seeded evidence."""
+    _write_valid_report(
+        tmp_path,
+        risk_level="low",
+        requires_official=False,
+        changed_files=["docs/guides/example.md"],
+    )
+    runner = FakeRunner(
+        existing_pr=True,
+        api_review_threads=[
+            {
+                "id": "PRRT_outdated_codex",
+                "isResolved": False,
+                "isOutdated": True,
+                "comments": {
+                    "nodes": [
+                        {
+                            "body": "P1 Badge: stale finding from old diff.",
+                            "author": {"login": "chatgpt-codex-connector"},
+                        }
+                    ]
+                },
+            }
+        ],
+    )
+    monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["docs/guides/example.md"],
+        },
+    )
+
+    code = pr_flow.ready(
+        repo_root=tmp_path,
+        title="governance automation",
+        runner=runner,
+        codex_review_timeout_seconds=0,
+        codex_review_poll_seconds=0,
+    )
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert "closed official Codex review thread: PRRT_outdated_codex" in capsys.readouterr().out
+    assert runner.thread_replies
+    assert "outdated" in runner.thread_replies[-1]["body"].casefold()
+
+
+def test_ready_does_not_auto_resolve_outdated_human_reviewer_thread(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    """Outdated threads from human reviewers must NOT be auto-resolved."""
+    _write_valid_report(
+        tmp_path,
+        risk_level="low",
+        requires_official=False,
+        changed_files=["docs/guides/example.md"],
+    )
+    runner = FakeRunner(
+        existing_pr=True,
+        api_review_threads=[
+            {
+                "id": "PRRT_human_outdated",
+                "isResolved": False,
+                "isOutdated": True,
+                "comments": {
+                    "nodes": [
+                        {
+                            "body": "Please fix this issue.",
+                            "author": {"login": "human-reviewer"},
+                        }
+                    ]
+                },
+            }
+        ],
+    )
+    monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["docs/guides/example.md"],
+        },
+    )
+
+    code = pr_flow.ready(
+        repo_root=tmp_path,
+        title="governance automation",
+        runner=runner,
+        codex_review_timeout_seconds=0,
+        codex_review_poll_seconds=0,
+    )
+
+    assert code != pr_flow.SUCCESS_EXIT_CODE
+    # Human reviewer thread should block
+    assert code == pr_flow.REPLY_OR_FIX_REQUIRED_EXIT_CODE
+    # No auto-reply to human thread
+    human_replies = [r for r in runner.thread_replies if "PRRT_human_outdated" in r["thread_id"]]
+    assert not human_replies

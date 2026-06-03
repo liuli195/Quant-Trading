@@ -23,6 +23,8 @@ class PRFlowContract:
     required_checks: tuple[str, ...]
     reviewer_fragments: dict[str, Path]
     submit_status_path: Path
+    handoff_status_path: Path
+    stop_state_fields: tuple[str, ...]
     marker_start: str
     marker_end: str
     fenced_language: str
@@ -38,6 +40,15 @@ class PRFlowContract:
     detail_single_line: bool
     official_codex_command: str
     official_codex_fields: tuple[str, ...]
+    target_spec_wins: bool
+    fragment_freshness_same_diff_head_refresh: bool
+    github_native_closing_links_from_per_commit_evidence: bool
+    codex_thread_auto_resolve_outdated: bool
+    codex_thread_p0_p1_requires_closure_evidence: bool
+    codex_thread_human_never_auto_resolve: bool
+    codex_thread_no_severity_never_auto_resolve: bool
+    codex_thread_p2_p3_auto_accept: bool
+    workflow_pending_before_execution: bool
 
 
 @dataclass(frozen=True)
@@ -62,6 +73,9 @@ def load_contract(repo_root: str | Path = ".") -> PRFlowContract:
         "artifacts.reviewer_fragments",
     )
     submit_status = _single_line(artifacts.get("submit_status"))
+    handoff_status = _single_line(artifacts.get("handoff_status"))
+    stop_state = _mapping(payload.get("stop_state"), "stop_state")
+    rules = _mapping(payload.get("rules"), "rules")
     pr_evidence = _mapping(payload.get("pr_evidence"), "pr_evidence")
     fragment = _mapping(payload.get("fragment"), "fragment")
     status = _mapping(payload.get("submit_status"), "submit_status")
@@ -70,6 +84,20 @@ def load_contract(repo_root: str | Path = ".") -> PRFlowContract:
     detail = _mapping(payload.get("detail"), "detail")
     github = _mapping(payload.get("github"), "github")
     official = _mapping(payload.get("official_codex_request"), "official_codex_request")
+
+    fragment_freshness = _mapping(rules.get("fragment_freshness"), "rules.fragment_freshness")
+    closing_links = _mapping(
+        rules.get("github_native_closing_links"),
+        "rules.github_native_closing_links",
+    )
+    codex_thread = _mapping(
+        rules.get("codex_thread_automation"),
+        "rules.codex_thread_automation",
+    )
+    workflow_pending = _mapping(
+        rules.get("workflow_pending"),
+        "rules.workflow_pending",
+    )
 
     return PRFlowContract(
         version=_int(payload.get("version"), "version"),
@@ -90,6 +118,8 @@ def load_contract(repo_root: str | Path = ".") -> PRFlowContract:
             for role, path_value in reviewer_fragments.items()
         },
         submit_status_path=Path(submit_status),
+        handoff_status_path=Path(handoff_status) if handoff_status else Path(".local/pr-flow/last-status.json"),
+        stop_state_fields=_string_tuple(stop_state.get("fields")),
         marker_start=_single_line(pr_evidence.get("marker_start")),
         marker_end=_single_line(pr_evidence.get("marker_end")),
         fenced_language=_single_line(pr_evidence.get("fenced_language")),
@@ -105,6 +135,31 @@ def load_contract(repo_root: str | Path = ".") -> PRFlowContract:
         detail_single_line=bool(detail.get("single_line")),
         official_codex_command=_single_line(official.get("command")),
         official_codex_fields=_string_tuple(official.get("fields")),
+        target_spec_wins=bool(rules.get("target_spec_wins")),
+        fragment_freshness_same_diff_head_refresh=bool(
+            fragment_freshness.get("same_diff_head_refresh")
+        ),
+        github_native_closing_links_from_per_commit_evidence=bool(
+            closing_links.get("from_per_commit_evidence")
+        ),
+        codex_thread_auto_resolve_outdated=bool(
+            codex_thread.get("auto_resolve_outdated")
+        ),
+        codex_thread_p0_p1_requires_closure_evidence=bool(
+            codex_thread.get("p0_p1_requires_closure_evidence")
+        ),
+        codex_thread_human_never_auto_resolve=bool(
+            codex_thread.get("human_never_auto_resolve")
+        ),
+        codex_thread_no_severity_never_auto_resolve=bool(
+            codex_thread.get("no_severity_never_auto_resolve")
+        ),
+        codex_thread_p2_p3_auto_accept=bool(
+            codex_thread.get("p2_p3_auto_accept")
+        ),
+        workflow_pending_before_execution=bool(
+            workflow_pending.get("before_execution")
+        ),
     )
 
 

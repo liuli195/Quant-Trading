@@ -1,4 +1,4 @@
-version: 1
+version: 2
 encoding: utf-8
 
 json:
@@ -21,6 +21,53 @@ artifacts:
     spec: .local/ai-review/fragments/spec.json
     security: .local/ai-review/fragments/security.json
   submit_status: .local/pr-flow/status.json
+  handoff_status: .local/pr-flow/last-status.json
+
+stop_state:
+  schema_version: 1
+  fields:
+    - schema_version
+    - state
+    - message
+    - reason_code
+    - phase
+    - retryable
+    - dispatch_target
+    - blocking_items
+    - evidence_refs
+    - next_actions
+
+rules:
+  target_spec_wins: true
+  fragment_freshness:
+    same_diff_head_refresh: true
+    description: "same-diff current-head review refresh updates fragment head without invalidating existing findings"
+  github_native_closing_links:
+    from_per_commit_evidence: true
+    description: "closing links must derive from validated per-commit issue evidence, not from stale aggregate issue refs"
+  codex_thread_automation:
+    auto_resolve_outdated: true
+    p0_p1_requires_closure_evidence: true
+    human_never_auto_resolve: true
+    no_severity_never_auto_resolve: true
+    p2_p3_auto_accept: true
+    description: "official Codex thread processing as a decision layer based on thread state, severity, and closure evidence"
+  workflow_pending:
+    before_execution: true
+    description: "workflow jobs must publish pending status for owned required status contexts at job start, before time-consuming validation"
+
+pr_evidence:
+  marker_start: "<!-- pr-flow:start -->"
+  marker_end: "<!-- pr-flow:end -->"
+  fenced_language: json
+  fields:
+    - schema
+    - head
+    - diff
+    - reviews
+    - official_review
+    - issues
+    - retained
 
 pr_evidence:
   marker_start: "<!-- pr-flow:start -->"
