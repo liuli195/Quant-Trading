@@ -68,19 +68,6 @@ pr_evidence:
     - official_review
     - issues
     - retained
-
-pr_evidence:
-  marker_start: "<!-- pr-flow:start -->"
-  marker_end: "<!-- pr-flow:end -->"
-  fenced_language: json
-  fields:
-    - schema
-    - head
-    - diff
-    - reviews
-    - official_review
-    - issues
-    - retained
   official_review:
     required:
       fields:
