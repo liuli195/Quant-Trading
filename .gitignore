@@ -187,5 +187,10 @@ feishu_relay_outbox/
 /data/
 
 # ========================
+# Claude Code 工作树
+# ========================
+.claude/worktrees/
+
+# ========================
 # 数据文件 → 由 Git LFS 管理（规则见 .gitattributes）
 # ========================

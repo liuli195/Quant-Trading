@@ -17,5 +17,8 @@
         ]
       }
     ]
+  },
+  "worktree": {
+    "symlinkDirectories": [".venv", "data"]
   }
 }
