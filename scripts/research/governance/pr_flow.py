@@ -23,6 +23,8 @@ from .codex_review_contract import is_codex_review_request, render_codex_review_
 
 MANAGED_BLOCK_START = "<!-- pr-flow:start -->"
 MANAGED_BLOCK_END = "<!-- pr-flow:end -->"
+GITHUB_NATIVE_LINKS_START = "<!-- github-native-links:start -->"
+GITHUB_NATIVE_LINKS_END = "<!-- github-native-links:end -->"
 AI_RISK_REVIEW_LABEL = "ai-risk-review"
 SUCCESS_EXIT_CODE = 0
 GENERAL_FAILURE_EXIT_CODE = 1
@@ -1192,6 +1194,29 @@ def submit(
         return EXCEPTION_REQUIRED_EXIT_CODE
     if sync_code != SUCCESS_EXIT_CODE:
         return sync_code
+    try:
+        head_failures = _submit_pr_head_failures(
+            root=root,
+            runner=runner,
+            pr_number=pr or pr_number,
+            expected_head_sha=head_sha,
+        )
+    except GitHubDataUnavailable as exc:
+        head_failures = [
+            pr_flow_contract.SubmitFailure(
+                check="github",
+                source="",
+                detail=str(exc),
+            )
+        ]
+    if head_failures:
+        pr_flow_contract.write_submit_status(
+            root,
+            contract,
+            head=head_sha,
+            failures=head_failures,
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
     merged_metadata = _submit_merged_pr_metadata(
         root=root,
         runner=runner,
@@ -1429,6 +1454,27 @@ def _submit_fragment_failures_for_role(
             )
         )
     if (
+        not failures
+        and expected_head_sha is not None
+        and expected_diff_hash is not None
+        and _single_line_text(payload.get("head")) != expected_head_sha
+        and _single_line_text(payload.get("diff")) == expected_diff_hash
+    ):
+        payload["head"] = expected_head_sha
+        try:
+            path.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except OSError:
+            failures.append(
+                pr_flow_contract.SubmitFailure(
+                    check="local-review",
+                    source=source,
+                    detail=f"{role} fragment head refresh failed",
+                )
+            )
+    if (
         expected_head_sha is not None
         and _single_line_text(payload.get("head")) != expected_head_sha
     ):
@@ -1450,6 +1496,11 @@ def _submit_fragment_failures_for_role(
                 detail=f"{role} fragment diff is stale",
             )
         )
+    freshness_failed = any(
+        failure.detail
+        in {f"{role} fragment head is stale", f"{role} fragment diff is stale"}
+        for failure in failures
+    )
     findings = payload.get("findings")
     if not isinstance(findings, list):
         failures.append(
@@ -1505,7 +1556,8 @@ def _submit_fragment_failures_for_role(
             )
             continue
         if severity in contract.blocking_severities:
-            has_blocking = True
+            if not freshness_failed:
+                has_blocking = True
             failures.append(
                 pr_flow_contract.SubmitFailure(
                     check="local-review",
@@ -1772,14 +1824,23 @@ def _submit_issue_evidence(*, root: Path, runner: Runner) -> dict[str, Any]:
             details=(sha,),
         )
     refs: list[dict[str, Any]] = []
-    for item in branch_intent.get("issues", []):
-        if not isinstance(item, dict):
+    seen_refs: set[tuple[int, str]] = set()
+    for item in evidence_commits:
+        commit_issues = item.get("issues")
+        if not isinstance(commit_issues, list):
             continue
-        number = _positive_int_from_payload(item.get("number"))
-        role = _single_line_text(item.get("role"))
-        if number is None or role not in VALID_INTENT_ROLES:
-            continue
-        refs.append({"number": number, "role": role})
+        for issue in commit_issues:
+            if not isinstance(issue, dict):
+                continue
+            number = _positive_int_from_payload(issue.get("number"))
+            role = _single_line_text(issue.get("role"))
+            if number is None or role not in VALID_INTENT_ROLES:
+                continue
+            key = (number, role)
+            if key in seen_refs:
+                continue
+            seen_refs.add(key)
+            refs.append({"number": number, "role": role})
     return {"commits": evidence_commits, "refs": refs}
 
 
@@ -1803,6 +1864,7 @@ def _sync_submit_pr_evidence(
 ) -> tuple[int, str, str]:
     local = root / ".local" / "pr-flow"
     managed_body = _render_submit_managed_body(contract, evidence)
+    native_links_body = _render_submit_github_native_links(evidence)
     view = _run_github_read_command(
         root,
         runner,
@@ -1821,7 +1883,12 @@ def _sync_submit_pr_evidence(
             _print_command_failure("gh pr view --json body", body_view)
             return body_view.returncode, pr_number, pr_url
         existing_body = str(_json_from_result(body_view).get("body") or "")
-        body_file = _write_managed_body_file(local, existing_body, managed_body)
+        body_file = _write_managed_body_file(
+            local,
+            existing_body,
+            managed_body,
+            native_links_body,
+        )
         edit = runner.run(
             ["gh", "pr", "edit", pr_number, "--body-file", str(body_file)],
             cwd=root,
@@ -1851,7 +1918,12 @@ def _sync_submit_pr_evidence(
             next_actions=(f"git push -u origin {branch}",),
         )
         return EXCEPTION_REQUIRED_EXIT_CODE, "", ""
-    body_file = _write_managed_body_file(local, _pr_template_body(root), managed_body)
+    body_file = _write_managed_body_file(
+        local,
+        _pr_template_body(root),
+        managed_body,
+        native_links_body,
+    )
     create = runner.run(
         [
             "gh",
@@ -2161,8 +2233,13 @@ def _submit_required_check_failures(
         ],
         cwd=root,
     )
-    latest = _latest_required_check_results(result.stdout) or []
-    if result.returncode != 0 and not latest:
+    latest = _latest_required_check_results(result.stdout)
+    if (
+        result.returncode != 0
+        and latest is None
+        and "no required checks reported"
+        not in f"{result.stdout}\n{result.stderr}".casefold()
+    ):
         return [
             pr_flow_contract.SubmitFailure(
                 check="required-checks",
@@ -2170,6 +2247,7 @@ def _submit_required_check_failures(
                 detail="required checks unavailable",
             )
         ], []
+    latest = latest or []
     by_name = {_json_check_display_name(check): check for check in latest}
     failures: list[pr_flow_contract.SubmitFailure] = []
     pending: list[pr_flow_contract.SubmitFailure] = []
@@ -2202,6 +2280,42 @@ def _submit_required_check_failures(
                 )
             )
     return failures, pending
+
+
+def _submit_pr_head_failures(
+    *,
+    root: Path,
+    runner: Runner,
+    pr_number: str,
+    expected_head_sha: str,
+) -> list[pr_flow_contract.SubmitFailure]:
+    view = _run_github_read_command(
+        root,
+        runner,
+        _gh_pr_view_command(pr_number, "headRefOid"),
+    )
+    if view.returncode != 0:
+        raise _github_data_unavailable(
+            "GitHub PR head unavailable",
+            "gh pr view --json headRefOid",
+            view,
+        )
+    metadata = _json_object_from_result(view, "gh pr view --json headRefOid")
+    actual_head = _single_line_text(metadata.get("headRefOid"))
+    if not actual_head:
+        raise GitHubDataUnavailable(
+            "GitHub PR head unavailable",
+            details=("gh pr view --json headRefOid",),
+        )
+    if actual_head == expected_head_sha:
+        return []
+    return [
+        pr_flow_contract.SubmitFailure(
+            check="github",
+            source="",
+            detail="PR head does not match local HEAD",
+        )
+    ]
 
 
 def _submit_complete_lifecycle(
@@ -2437,6 +2551,25 @@ def _render_submit_managed_body(
         )
         + "\n```"
     )
+
+
+def _render_submit_github_native_links(evidence: dict[str, Any]) -> str:
+    issues = evidence.get("issues")
+    refs = issues.get("refs") if isinstance(issues, dict) else None
+    if not isinstance(refs, list):
+        return ""
+    closes = sorted(
+        {
+            number
+            for item in refs
+            if isinstance(item, dict)
+            and _single_line_text(item.get("role")) == "closes"
+            and (number := _positive_int_from_payload(item.get("number"))) is not None
+        }
+    )
+    if not closes:
+        return ""
+    return "Closes " + ", closes ".join(f"#{number}" for number in closes)
 
 
 def resolve_review_threads(
@@ -3871,9 +4004,11 @@ def _write_managed_body_file(
     local: Path,
     existing_body: str,
     managed_body: str,
+    native_links_body: str = "",
 ) -> Path:
     local.mkdir(parents=True, exist_ok=True)
     merged = _replace_managed_block(existing_body, managed_body)
+    merged = _replace_github_native_links_block(merged, native_links_body)
     body_file = local / "pr-body.managed.md"
     body_file.write_text(merged, encoding="utf-8")
     return body_file
@@ -3890,6 +4025,28 @@ def _replace_managed_block(existing_body: str, managed_body: str) -> str:
     if existing_body.strip():
         return f"{existing_body.rstrip()}\n\n{block}\n"
     return f"{block}\n"
+
+
+def _replace_github_native_links_block(existing_body: str, links_body: str) -> str:
+    pattern = re.compile(
+        rf"{re.escape(GITHUB_NATIVE_LINKS_START)}.*?"
+        rf"{re.escape(GITHUB_NATIVE_LINKS_END)}",
+        re.DOTALL,
+    )
+    if links_body.strip():
+        block = (
+            f"{GITHUB_NATIVE_LINKS_START}\n"
+            f"{links_body.strip()}\n"
+            f"{GITHUB_NATIVE_LINKS_END}"
+        )
+        if GITHUB_NATIVE_LINKS_START in existing_body and GITHUB_NATIVE_LINKS_END in existing_body:
+            return pattern.sub(lambda _match: block, existing_body)
+        if existing_body.strip():
+            return f"{existing_body.rstrip()}\n\n{block}\n"
+        return f"{block}\n"
+    if GITHUB_NATIVE_LINKS_START in existing_body and GITHUB_NATIVE_LINKS_END in existing_body:
+        return pattern.sub("", existing_body).strip() + "\n"
+    return existing_body
 
 
 def _current_pr_metadata(

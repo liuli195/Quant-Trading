@@ -47,7 +47,7 @@ jobs:
           --head-updated-at-env PR_HEAD_UPDATED_AT
           --github-token-env GITHUB_TOKEN
       - name: Publish PR Flow evidence status
-        if: ${{ always() }}
+        if: ${{ always() && github.event.pull_request.state == 'open' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
