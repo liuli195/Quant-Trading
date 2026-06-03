@@ -55,7 +55,18 @@ jobs:
             -f context="PR Flow / review-status" `
             -f description="Codex review status is running" `
             -f target_url="$env:TARGET_URL"
+      - name: Resolve PR head SHA
+        id: pr-head
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        shell: pwsh
+        run: |
+          $sha = gh api "repos/$env:GITHUB_REPOSITORY/pulls/$env:PR_NUMBER" --jq '.head.sha'
+          echo "sha=$sha" >> $env:GITHUB_OUTPUT
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr-head.outputs.sha || github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

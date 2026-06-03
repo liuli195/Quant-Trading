@@ -2415,6 +2415,50 @@ def test_workflow_files_publish_pending_before_validation() -> None:
             )
 
 
+def test_codex_review_monitor_checks_out_pr_head_ref() -> None:
+    """codex-review-monitor checkout must use PR head ref, not default branch.
+
+    When triggered by issue_comment events, actions/checkout@v4 without a
+    ref checks out the default branch (main), which may have a different
+    contract version than the PR branch.  This causes spurious evidence
+    validation failures.
+    """
+    import yaml
+
+    path = Path(".github/workflows/codex-review-monitor.yml")
+    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+
+    jobs = doc.get("jobs", {}) if isinstance(doc, dict) else {}
+    for job_name, job_def in jobs.items():
+        if not isinstance(job_def, dict):
+            continue
+        steps = job_def.get("steps", [])
+        if not isinstance(steps, list):
+            continue
+
+        checkout_step = None
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            uses = str(step.get("uses", ""))
+            if uses.startswith("actions/checkout@"):
+                checkout_step = step
+                break
+
+        assert checkout_step is not None, (
+            f"{job_name} missing actions/checkout step"
+        )
+        ref = checkout_step.get("with", {}).get("ref", "")
+        assert ref, (
+            f"{job_name} checkout step must specify ref (PR head SHA), "
+            f"not default to the event's default branch"
+        )
+        # ref must resolve to PR head, not a literal branch name
+        assert "head" in str(ref).casefold() or "steps" in str(ref), (
+            f"{job_name} checkout ref must derive from PR head, got: {ref}"
+        )
+
+
 def _write_fragment(
     root: Path,
     role: str,
