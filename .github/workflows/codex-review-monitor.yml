@@ -42,14 +42,15 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Publish pending status
-        if: ${{ github.event_name != 'workflow_dispatch' && github.event.pull_request.state == 'open' }}
+        if: ${{ github.event_name != 'workflow_dispatch' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
           TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         shell: pwsh
         run: |
-          gh api "repos/$env:GITHUB_REPOSITORY/statuses/$env:PR_HEAD_SHA" `
+          $pr = gh api "repos/$env:GITHUB_REPOSITORY/pulls/$env:PR_NUMBER" --jq '.head.sha'
+          gh api "repos/$env:GITHUB_REPOSITORY/statuses/$pr" `
             -f state="pending" `
             -f context="PR Flow / review-status" `
             -f description="Codex review status is running" `

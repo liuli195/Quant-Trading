@@ -4475,12 +4475,14 @@ def _auto_process_official_codex_review_threads(
                 thread=thread,
                 status="accepted",
             )
-        else:
+        elif action == "close":
             finding = _closed_external_finding_for_thread(updated, thread)
             if finding is None and _thread_is_outdated(thread):
                 # Outdated official Codex thread without pre-seeded evidence:
                 # synthesize a minimal finding so the thread can be closed.
                 finding = _synthesize_outdated_thread_finding(thread)
+        else:
+            continue
         if finding is None:
             continue
         reply_body = (
@@ -4524,10 +4526,14 @@ def _auto_review_thread_action(
     severity = _codex_thread_severity(thread)
     if severity in AUTO_ACCEPTED_REVIEW_THREAD_SEVERITIES:
         return "accept"
-    # Outdated official Codex threads are auto-closed (thread no longer
-    # applies to current head/diff).  Human and non-severity threads are
-    # never auto-resolved — they continue to block.
-    if _thread_is_outdated(thread) and _thread_is_official_codex(thread):
+    # Outdated official Codex threads with a known severity are auto-closed
+    # (thread no longer applies to current head/diff).  No-severity and
+    # human threads are never auto-resolved — they continue to block.
+    if (
+        _thread_is_outdated(thread)
+        and _thread_is_official_codex(thread)
+        and severity
+    ):
         return "close"
     if (
         severity in {"P0", "P1"}

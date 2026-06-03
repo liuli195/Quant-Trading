@@ -4891,3 +4891,63 @@ def test_ready_does_not_auto_resolve_outdated_human_reviewer_thread(
     # No auto-reply to human thread
     human_replies = [r for r in runner.thread_replies if "PRRT_human_outdated" in r["thread_id"]]
     assert not human_replies
+
+
+def test_ready_does_not_auto_resolve_outdated_codex_thread_without_severity(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    """Outdated official Codex threads without severity must NOT be auto-resolved."""
+    _write_valid_report(
+        tmp_path,
+        risk_level="low",
+        requires_official=False,
+        changed_files=["docs/guides/example.md"],
+    )
+    runner = FakeRunner(
+        existing_pr=True,
+        api_review_threads=[
+            {
+                "id": "PRRT_outdated_nosev",
+                "isResolved": False,
+                "isOutdated": True,
+                "comments": {
+                    "nodes": [
+                        {
+                            "body": "Some Codex feedback without severity badge.",
+                            "author": {"login": "chatgpt-codex-connector"},
+                        }
+                    ]
+                },
+            }
+        ],
+    )
+    monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["docs/guides/example.md"],
+        },
+    )
+
+    code = pr_flow.ready(
+        repo_root=tmp_path,
+        title="governance automation",
+        runner=runner,
+        codex_review_timeout_seconds=0,
+        codex_review_poll_seconds=0,
+    )
+
+    # No-severity outdated Codex thread should still block
+    assert code != pr_flow.SUCCESS_EXIT_CODE
+    assert code == pr_flow.REPLY_OR_FIX_REQUIRED_EXIT_CODE
+    # No auto-reply to no-severity thread
+    nosev_replies = [
+        r for r in runner.thread_replies if "PRRT_outdated_nosev" in r["thread_id"]
+    ]
+    assert not nosev_replies
