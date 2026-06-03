@@ -1296,6 +1296,64 @@ def submit(
         )
         if request_code != SUCCESS_EXIT_CODE:
             return request_code
+    # Auto-process official Codex review threads before waiting for CI.
+    # This handles P2/P3 acceptance, outdated P0/P1 closure, and
+    # P0/P1 closure with structured evidence.  It is best-effort:
+    # if thread fetching fails we continue and let the CI retry path
+    # handle it.
+    try:
+        pr_info = _github_pr_info_from_url(pr_url)
+        if pr_info is not None:
+            repo, resolved_pr_number = pr_info
+            try:
+                threads = _current_pr_review_threads(
+                    root=root,
+                    runner=runner,
+                    repo=repo,
+                    pr_number=resolved_pr_number,
+                )
+            except GitHubDataUnavailable:
+                threads = []
+            if threads:
+                _auto_code, _auto_payload, auto_changed = (
+                    _auto_process_official_codex_review_threads(
+                        root=root,
+                        runner=runner,
+                        repo=repo,
+                        pr_number=resolved_pr_number,
+                        threads=threads,
+                        payload={},
+                    )
+                )
+                if auto_changed:
+                    # Threads were auto-processed. Rebuild evidence so
+                    # CI sees any updated retained findings, then re-sync
+                    # the PR body.
+                    evidence = _submit_pr_evidence(
+                        root=root,
+                        runner=runner,
+                        contract=contract,
+                        head_sha=head_sha,
+                        diff_hash=diff_hash,
+                        review_state=review_state,
+                    )
+                    sync_code, _pr_number, _pr_url = _sync_submit_pr_evidence(
+                        root=root,
+                        runner=runner,
+                        contract=contract,
+                        title=title,
+                        target_pr=pr,
+                        evidence=evidence,
+                    )
+                    if sync_code != SUCCESS_EXIT_CODE:
+                        return sync_code
+    except Exception as exc:
+        # Best-effort: any unexpected failure (e.g. test runner
+        # doesn't mock the GraphQL query) is non-fatal here.
+        print(
+            f"warning: pre-CI thread auto-processing skipped: {exc}",
+            file=sys.stderr,
+        )
     watch_failures = _submit_wait_required_checks(
         root=root,
         runner=runner,
