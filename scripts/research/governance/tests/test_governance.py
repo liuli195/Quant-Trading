@@ -2849,6 +2849,7 @@ def test_governance_audit_flags_pre_push_without_lfs_handoff(tmp_path) -> None:
 
 def test_governance_audit_flags_missing_hooks_path(tmp_path, monkeypatch) -> None:
     """core.hooksPath must be set to .githooks."""
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     _write_minimal_repo(tmp_path)
     (tmp_path / ".git").mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(
@@ -2867,6 +2868,7 @@ def test_governance_audit_flags_missing_hooks_path(tmp_path, monkeypatch) -> Non
 
 def test_governance_audit_accepts_correct_hooks_path(tmp_path, monkeypatch) -> None:
     """No finding when core.hooksPath is .githooks."""
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     _write_minimal_repo(tmp_path)
     (tmp_path / ".git").mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(
