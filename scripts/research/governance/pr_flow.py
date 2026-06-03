@@ -1296,6 +1296,7 @@ def submit(
         )
         if request_code != SUCCESS_EXIT_CODE:
             return request_code
+    current_fingerprint = ai_review_gate.current_diff_fingerprint(root)
     # Auto-process official Codex review threads before waiting for CI.
     # This handles P2/P3 acceptance, outdated P0/P1 closure, and
     # P0/P1 closure with structured evidence.  It is best-effort:
@@ -1324,6 +1325,10 @@ def submit(
                         pr_number=resolved_pr_number,
                         threads=threads,
                         payload=auto_payload,
+                        current_head_sha=head_sha,
+                        current_diff_hash=_fingerprint_diff_files_hash(
+                            current_fingerprint
+                        ),
                     )
                 )
                 if auto_changed:
@@ -1409,6 +1414,7 @@ def submit(
     lifecycle_code = _submit_complete_lifecycle(
         root=root,
         runner=runner,
+        contract=contract,
         pr_number=pr or pr_number,
         head_sha=head_sha,
         timeout_seconds=watch_timeout_seconds,
@@ -1903,6 +1909,12 @@ def _submit_thread_payload(root: Path) -> dict[str, Any]:
         repo_root=root,
         changed_files=changed_files,
     )
+
+
+def _fingerprint_diff_files_hash(fingerprint: dict[str, Any] | None) -> str:
+    if not isinstance(fingerprint, dict):
+        return ""
+    return _single_line_text(fingerprint.get("diff_files_hash"))
 
 
 def _submit_official_codex_retained_from_payload(
@@ -2531,6 +2543,7 @@ def _submit_complete_lifecycle(
     *,
     root: Path,
     runner: Runner,
+    contract: pr_flow_contract.PRFlowContract,
     pr_number: str,
     head_sha: str,
     timeout_seconds: float,
@@ -2538,8 +2551,14 @@ def _submit_complete_lifecycle(
 ) -> int:
     ready = runner.run(["gh", "pr", "ready", pr_number], cwd=root)
     if ready.returncode != 0 and not _pr_ready_already_ready(ready):
-        _print_command_failure("gh pr ready", ready)
-        return EXCEPTION_REQUIRED_EXIT_CODE
+        return _submit_lifecycle_command_failure(
+            root=root,
+            contract=contract,
+            head_sha=head_sha,
+            command_label="gh pr ready",
+            phase="submit_ready",
+            result=ready,
+        )
     merge = runner.run(
         [
             "gh",
@@ -2554,8 +2573,14 @@ def _submit_complete_lifecycle(
         cwd=root,
     )
     if merge.returncode != 0 and not _auto_merge_already_enabled(merge):
-        _print_command_failure("gh pr merge --auto", merge)
-        return EXCEPTION_REQUIRED_EXIT_CODE
+        return _submit_lifecycle_command_failure(
+            root=root,
+            contract=contract,
+            head_sha=head_sha,
+            command_label="gh pr merge --auto",
+            phase="submit_merge",
+            result=merge,
+        )
     metadata = _submit_wait_for_merged_pr(
         root=root,
         runner=runner,
@@ -2577,6 +2602,43 @@ def _submit_complete_lifecycle(
         )
         return EXCEPTION_REQUIRED_EXIT_CODE
     return _submit_cleanup_merged_pr(root=root, runner=runner, metadata=metadata)
+
+
+def _submit_lifecycle_command_failure(
+    *,
+    root: Path,
+    contract: pr_flow_contract.PRFlowContract,
+    head_sha: str,
+    command_label: str,
+    phase: str,
+    result: CommandResult,
+) -> int:
+    _print_command_failure(command_label, result)
+    return _fail_submit(
+        root,
+        contract,
+        EXCEPTION_REQUIRED_EXIT_CODE,
+        head_sha=head_sha,
+        reason_code="PR_LIFECYCLE_COMMAND_FAILED",
+        phase=phase,
+        retryable=True,
+        failures=(
+            pr_flow_contract.SubmitFailure(
+                check="pr-lifecycle",
+                source=command_label,
+                detail=_command_failure_detail(command_label, result),
+            ),
+        ),
+    )
+
+
+def _command_failure_detail(command_label: str, result: CommandResult) -> str:
+    detail = (
+        _single_line_text(result.stderr)
+        or _single_line_text(result.stdout)
+        or f"exit_code={result.returncode}"
+    )
+    return f"{command_label} failed: {detail}"
 
 
 def _submit_merged_pr_metadata(
@@ -3299,6 +3361,8 @@ def ready(
                 pr_number=pr_number,
                 threads=threads,
                 payload=payload,
+                current_head_sha=head_sha,
+                current_diff_hash=_fingerprint_diff_files_hash(current_fingerprint),
             )
             if code != SUCCESS_EXIT_CODE:
                 return code
@@ -4599,11 +4663,18 @@ def _auto_process_official_codex_review_threads(
     pr_number: str,
     threads: Sequence[dict[str, Any]],
     payload: dict[str, Any],
+    current_head_sha: str = "",
+    current_diff_hash: str = "",
 ) -> tuple[int, dict[str, Any], bool]:
     updated = payload
     changed = False
     for thread in threads:
-        action = _auto_review_thread_action(thread, updated)
+        action = _auto_review_thread_action(
+            thread,
+            updated,
+            current_head_sha=current_head_sha,
+            current_diff_hash=current_diff_hash,
+        )
         if action not in {"accept", "close"}:
             continue
         thread_id = _thread_id(thread)
@@ -4618,7 +4689,12 @@ def _auto_process_official_codex_review_threads(
                 status="accepted",
             )
         elif action == "close":
-            finding = _closed_external_finding_for_thread(updated, thread)
+            finding = _closed_external_finding_for_thread(
+                updated,
+                thread,
+                current_head_sha=current_head_sha,
+                current_diff_hash=current_diff_hash,
+            )
             if finding is None and _thread_is_outdated(thread):
                 # Outdated official Codex thread without pre-seeded evidence:
                 # synthesize a minimal finding so the thread can be closed.
@@ -4662,6 +4738,9 @@ def _auto_process_official_codex_review_threads(
 def _auto_review_thread_action(
     thread: dict[str, Any],
     payload: dict[str, Any],
+    *,
+    current_head_sha: str = "",
+    current_diff_hash: str = "",
 ) -> str:
     if _thread_is_resolved(thread) or not _thread_is_official_codex(thread):
         return ""
@@ -4678,7 +4757,13 @@ def _auto_review_thread_action(
         return "close"
     if (
         severity in {"P0", "P1"}
-        and _closed_external_finding_for_thread(payload, thread) is not None
+        and _closed_external_finding_for_thread(
+            payload,
+            thread,
+            current_head_sha=current_head_sha,
+            current_diff_hash=current_diff_hash,
+        )
+        is not None
     ):
         return "close"
     return ""
@@ -4809,9 +4894,24 @@ def _external_finding_for_review_thread(
 def _closed_external_finding_for_thread(
     payload: dict[str, Any],
     thread: dict[str, Any],
+    *,
+    current_head_sha: str = "",
+    current_diff_hash: str = "",
 ) -> dict[str, Any] | None:
     thread_id = _thread_id(thread)
     if not thread_id:
+        return None
+    expected_head = _single_line_text(current_head_sha)
+    expected_diff = _single_line_text(current_diff_hash)
+    if not expected_head or not expected_diff:
+        fingerprint = payload.get("diff_fingerprint")
+        if not isinstance(fingerprint, dict):
+            return None
+        expected_head = expected_head or _single_line_text(fingerprint.get("head_sha"))
+        expected_diff = expected_diff or _single_line_text(
+            fingerprint.get("diff_files_hash")
+        )
+    if not expected_head or not expected_diff:
         return None
     for item in payload.get("external_findings") or []:
         if not isinstance(item, dict):
@@ -4826,16 +4926,11 @@ def _closed_external_finding_for_thread(
             continue
         if not _single_line_text(item.get("evidence")):
             continue
-        fingerprint = payload.get("diff_fingerprint")
-        if not isinstance(fingerprint, dict):
-            continue
         finding_head = _single_line_text(item.get("head_sha"))
-        current_head = _single_line_text(fingerprint.get("head_sha"))
-        if not finding_head or finding_head != current_head:
+        if not finding_head or finding_head != expected_head:
             continue
         finding_diff = _single_line_text(item.get("diff_files_hash"))
-        current_diff = _single_line_text(fingerprint.get("diff_files_hash"))
-        if not finding_diff or finding_diff != current_diff:
+        if not finding_diff or finding_diff != expected_diff:
             continue
         if not _single_line_text(item.get("fix_commit") or item.get("commit_sha")):
             continue
@@ -5138,13 +5233,10 @@ def _thread_is_outdated(thread: dict[str, Any]) -> bool:
 
 def _thread_is_official_codex(thread: dict[str, Any]) -> bool:
     """Return True if the thread is from an official Codex reviewer."""
-    comment = _codex_thread_comment(thread)
+    comment = _thread_root_comment(thread)
     if not isinstance(comment, dict):
         return False
-    author = comment.get("author")
-    if not isinstance(author, dict):
-        return False
-    return _single_line_text(author.get("login")) in CODEX_REVIEW_AUTHORS
+    return _comment_author_login(comment) in CODEX_REVIEW_AUTHORS
 
 
 def _thread_id(thread: dict[str, Any]) -> str:
@@ -5167,14 +5259,17 @@ def _codex_thread_severity(thread: dict[str, Any]) -> str:
 
 
 def _codex_thread_comment(thread: dict[str, Any]) -> dict[str, Any] | None:
-    return next(
-        (
-            comment
-            for comment in _thread_comments(thread)
-            if _comment_author_login(comment) in CODEX_REVIEW_AUTHORS
-        ),
-        None,
-    )
+    comment = _thread_root_comment(thread)
+    if comment is None:
+        return None
+    if _comment_author_login(comment) not in CODEX_REVIEW_AUTHORS:
+        return None
+    return comment
+
+
+def _thread_root_comment(thread: dict[str, Any]) -> dict[str, Any] | None:
+    comments = _thread_comments(thread)
+    return comments[0] if comments else None
 
 
 def _thread_comments(thread: dict[str, Any]) -> tuple[dict[str, Any], ...]:

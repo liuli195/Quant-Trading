@@ -906,6 +906,83 @@ def test_contract_loads_required_checks_and_writes_submit_status(tmp_path: Path)
     assert len(payload["failures"][0]["detail"]) <= contract.detail_max_chars
 
 
+def test_auto_review_thread_action_requires_codex_root_comment() -> None:
+    thread = {
+        "id": "PRRT_human_root",
+        "isResolved": False,
+        "isOutdated": False,
+        "comments": {
+            "nodes": [
+                {
+                    "body": "human reviewer opened this thread",
+                    "author": {"login": "liuli195"},
+                },
+                {
+                    "body": "**P2** official Codex later replied",
+                    "author": {"login": "chatgpt-codex-connector"},
+                },
+            ]
+        },
+    }
+
+    assert pr_flow._thread_is_official_codex(thread) is False
+    assert pr_flow._auto_review_thread_action(thread, {}) == ""
+
+
+def test_auto_review_thread_action_rejects_stale_closure_evidence() -> None:
+    thread = {
+        "id": "PRRT_codex_p1",
+        "isResolved": False,
+        "isOutdated": False,
+        "comments": {
+            "nodes": [
+                {
+                    "body": "**P1** current head blocker",
+                    "author": {"login": "chatgpt-codex-connector"},
+                }
+            ]
+        },
+    }
+    payload = {
+        "diff_fingerprint": {
+            "head_sha": "1" * 40,
+            "diff_files_hash": "old-diff",
+        },
+        "external_findings": [
+            {
+                "source": "official_codex_review_thread",
+                "thread_id": "PRRT_codex_p1",
+                "severity": "P1",
+                "status": "fixed",
+                "evidence": "fixed in old head",
+                "head_sha": "1" * 40,
+                "diff_files_hash": "old-diff",
+                "fix_commit": "1" * 40,
+                "verification_command": "pytest old",
+            }
+        ],
+    }
+
+    assert (
+        pr_flow._closed_external_finding_for_thread(
+            payload,
+            thread,
+            current_head_sha="2" * 40,
+            current_diff_hash="new-diff",
+        )
+        is None
+    )
+    assert (
+        pr_flow._auto_review_thread_action(
+            thread,
+            payload,
+            current_head_sha="2" * 40,
+            current_diff_hash="new-diff",
+        )
+        == ""
+    )
+
+
 def test_submit_fails_fast_when_github_contract_preflight_is_missing(
     tmp_path: Path,
 ) -> None:
@@ -963,6 +1040,41 @@ def test_submit_writes_handoff_status_on_all_non_zero_exits(
     assert "next_actions" in handoff
     # blocking_items must be non-empty
     assert len(handoff["blocking_items"]) > 0
+
+
+def test_submit_writes_handoff_status_when_auto_merge_fails(tmp_path: Path) -> None:
+    diff_text = "diff --git a/docs/guides/example.md b/docs/guides/example.md\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        merge_returncode=1,
+        merge_stdout="",
+        merge_stderr="GraphQL: merge blocked by ruleset",
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"] == [
+        {
+            "check": "pr-lifecycle",
+            "source": "gh pr merge --auto",
+            "detail": "gh pr merge --auto failed: GraphQL: merge blocked by ruleset",
+        }
+    ]
+    handoff = json.loads(
+        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
+    )
+    assert handoff["state"] == "EXCEPTION_REQUIRED"
+    assert handoff["reason_code"] == "PR_LIFECYCLE_COMMAND_FAILED"
+    assert handoff["phase"] == "submit_merge"
 
 
 def test_submit_reports_missing_first_stage_review_fragments(tmp_path: Path) -> None:
@@ -1671,6 +1783,7 @@ def test_submit_auto_closes_outdated_codex_thread_before_ci(
 
 def test_submit_auto_closes_current_codex_p1_thread_with_structured_evidence(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
     """submit() must pass current review payload into pre-CI thread handling."""
     diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
@@ -1679,6 +1792,16 @@ def test_submit_auto_closes_current_codex_p1_thread_with_structured_evidence(
     runner.thread_id = "PRRT_current_p1"
     runner.thread_is_outdated = False
     runner.thread_body = "![P1 Badge] current finding fixed by evidence"
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["a.txt"],
+        },
+    )
     _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
     _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
     _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
