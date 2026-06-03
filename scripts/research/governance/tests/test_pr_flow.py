@@ -371,6 +371,24 @@ class FakeRunner:
                     ),
                     "",
                 )
+            if "node(id:$threadId)" in query:
+                thread_id = _command_field(command, "threadId")
+                node = next(
+                    (
+                        {
+                            "id": thread_id,
+                            "isResolved": bool(thread.get("isResolved")),
+                        }
+                        for thread in self.api_review_threads
+                        if str(thread.get("id") or "") == thread_id
+                    ),
+                    None,
+                )
+                return pr_flow.CommandResult(
+                    0,
+                    json.dumps({"data": {"node": node}}),
+                    "",
+                )
             return pr_flow.CommandResult(
                 0,
                 json.dumps(
@@ -1220,11 +1238,13 @@ class ResolveThreadsRunner:
     def __init__(
         self,
         *,
-        is_resolved: bool = True,
+        mutation_is_resolved: bool = True,
+        reread_is_resolved: bool = True,
         returncode: int = 0,
     ) -> None:
         self.calls: list[list[str]] = []
-        self.is_resolved = is_resolved
+        self.mutation_is_resolved = mutation_is_resolved
+        self.reread_is_resolved = reread_is_resolved
         self.returncode = returncode
 
     def run(
@@ -1240,6 +1260,22 @@ class ResolveThreadsRunner:
         if self.returncode != 0:
             return pr_flow.CommandResult(self.returncode, "", "graphql failed")
         thread_id = command[-1].removeprefix("threadId=")
+        query = _graphql_query(command)
+        if "node(id:$threadId)" in query:
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "data": {
+                            "node": {
+                                "id": thread_id,
+                                "isResolved": self.reread_is_resolved,
+                            }
+                        }
+                    }
+                ),
+                "",
+            )
         return pr_flow.CommandResult(
             0,
             json.dumps(
@@ -1248,7 +1284,7 @@ class ResolveThreadsRunner:
                         "resolveReviewThread": {
                             "thread": {
                                 "id": thread_id,
-                                "isResolved": self.is_resolved,
+                                "isResolved": self.mutation_is_resolved,
                             }
                         }
                     }
@@ -1283,12 +1319,14 @@ def test_resolve_review_threads_resolves_each_thread(tmp_path: Path, capsys) -> 
     assert code == pr_flow.SUCCESS_EXIT_CODE
     assert "resolved review thread: PRRT_one" in captured.out
     assert "resolved review thread: PRRT_two" in captured.out
-    assert len(runner.calls) == 2
+    assert len(runner.calls) == 4
     assert all(call[:3] == ["gh", "api", "graphql"] for call in runner.calls)
     assert ["-F", "threadId=PRRT_one"] in [
         runner.calls[0][index : index + 2]
         for index in range(len(runner.calls[0]) - 1)
     ]
+    assert "resolveReviewThread" in _graphql_query(runner.calls[0])
+    assert "node(id:$threadId)" in _graphql_query(runner.calls[1])
 
 
 def test_resolve_review_threads_fails_closed_on_graphql_error(
@@ -1312,7 +1350,7 @@ def test_resolve_review_threads_fails_closed_when_thread_remains_unresolved(
     tmp_path: Path,
     capsys,
 ) -> None:
-    runner = ResolveThreadsRunner(is_resolved=False)
+    runner = ResolveThreadsRunner(mutation_is_resolved=False)
 
     code = pr_flow.resolve_review_threads(
         repo_root=tmp_path,
@@ -1323,6 +1361,23 @@ def test_resolve_review_threads_fails_closed_when_thread_remains_unresolved(
     captured = capsys.readouterr()
     assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
     assert "review thread was not resolved" in captured.err
+
+
+def test_resolve_review_threads_fails_closed_when_reread_remains_unresolved(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = ResolveThreadsRunner(reread_is_resolved=False)
+
+    code = pr_flow.resolve_review_threads(
+        repo_root=tmp_path,
+        thread_ids=("PRRT_one",),
+        runner=runner,
+    )
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "review thread was not resolved after re-read" in captured.err
 
 
 def test_wait_blocks_latest_duplicate_required_check_failure(
@@ -4261,6 +4316,81 @@ def test_ready_auto_closes_current_p1_thread_with_structured_evidence(
     assert "fix_commit: `" in runner.thread_replies[-1]["body"]
     assert "current_head: `" in runner.thread_replies[-1]["body"]
     assert "verification: `" in runner.thread_replies[-1]["body"]
+
+
+def test_ready_auto_closes_false_positive_p1_thread_with_rationale(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_valid_report(
+        tmp_path,
+        risk_level="low",
+        requires_official=False,
+        changed_files=["docs/guides/example.md"],
+    )
+    latest = tmp_path / ".local" / "ai-review" / "latest.json"
+    payload = json.loads(latest.read_text(encoding="utf-8"))
+    payload["external_findings"] = [
+        {
+            "id": "EXT-CODEX-THREAD-PRRT_false_positive",
+            "source": "official_codex_review_thread",
+            "thread_id": "PRRT_false_positive",
+            "severity": "P1",
+            "title": "False positive blocker",
+            "path": "scripts/research/governance/pr_flow.py",
+            "status": "false_positive",
+            "evidence": "GraphQL mutation re-read now proves resolved state",
+            "rationale": "The finding describes stale behavior not present in current head",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+        }
+    ]
+    latest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    runner = FakeRunner(
+        existing_pr=True,
+        api_review_threads=[
+            {
+                "id": "PRRT_false_positive",
+                "isResolved": False,
+                "isOutdated": False,
+                "comments": {
+                    "nodes": [
+                        {
+                            "body": "P1 Badge: false positive blocker.",
+                            "author": {"login": "chatgpt-codex-connector"},
+                        }
+                    ]
+                },
+            }
+        ],
+    )
+    monkeypatch.setattr(pr_flow, "prepare", lambda **_kwargs: 0)
+    monkeypatch.setattr(
+        pr_flow.ai_review_gate,
+        "current_diff_fingerprint",
+        lambda _root: {
+            "base_ref": "origin/main",
+            "head_sha": "1" * 40,
+            "diff_files_hash": "current-diff",
+            "changed_files": ["docs/guides/example.md"],
+        },
+    )
+
+    code = pr_flow.ready(
+        repo_root=tmp_path,
+        title="governance automation",
+        runner=runner,
+        codex_review_timeout_seconds=0,
+        codex_review_poll_seconds=0,
+    )
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert "closed official Codex review thread: PRRT_false_positive" in capsys.readouterr().out
+    assert runner.thread_replies
+    assert "status: `false_positive`" in runner.thread_replies[-1]["body"]
+    assert "rationale:" in runner.thread_replies[-1]["body"]
+    assert "fix_commit" not in runner.thread_replies[-1]["body"]
 
 
 def test_ready_blocks_p1_thread_when_closed_evidence_lacks_current_binding(

@@ -2889,8 +2889,46 @@ def resolve_review_threads(
                 details=[thread_id],
             )
             return EXCEPTION_REQUIRED_EXIT_CODE
+        reread_thread = _read_review_thread_resolution(
+            root=root,
+            runner=runner,
+            thread_id=thread_id,
+        )
+        if reread_thread is None or not bool(reread_thread.get("isResolved")):
+            _print_state(
+                "EXCEPTION_REQUIRED",
+                "review thread was not resolved after re-read",
+                details=[thread_id],
+            )
+            return EXCEPTION_REQUIRED_EXIT_CODE
         print(f"resolved review thread: {thread_id}")
     return SUCCESS_EXIT_CODE
+
+
+def _read_review_thread_resolution(
+    *,
+    root: Path,
+    runner: Runner,
+    thread_id: str,
+) -> dict[str, Any] | None:
+    result = runner.run(
+        [
+            "gh",
+            "api",
+            "graphql",
+            "-f",
+            "query=query($threadId:ID!){node(id:$threadId){... on PullRequestReviewThread{id isResolved}}}",
+            "-F",
+            f"threadId={thread_id}",
+        ],
+        cwd=root,
+    )
+    if result.returncode != 0:
+        _print_command_failure("gh api graphql reviewThread re-read", result)
+        return None
+    payload = _json_object_from_result(result, "gh api graphql reviewThread re-read")
+    node = payload.get("data", {}).get("node", {})
+    return node if isinstance(node, dict) else None
 
 
 def diagnose(
@@ -4932,11 +4970,15 @@ def _closed_external_finding_for_thread(
         finding_diff = _single_line_text(item.get("diff_files_hash"))
         if not finding_diff or finding_diff != expected_diff:
             continue
-        if not _single_line_text(item.get("fix_commit") or item.get("commit_sha")):
-            continue
-        if not _single_line_text(
-            item.get("verification_command") or item.get("verification")
-        ):
+        status = _single_line_text(item.get("status"))
+        if status == "fixed":
+            if not _single_line_text(item.get("fix_commit") or item.get("commit_sha")):
+                continue
+            if not _single_line_text(
+                item.get("verification_command") or item.get("verification")
+            ):
+                continue
+        elif status == "false_positive" and not _false_positive_rationale(item):
             continue
         closed = dict(item)
         closed.setdefault(
@@ -4945,6 +4987,14 @@ def _closed_external_finding_for_thread(
         )
         return closed
     return None
+
+
+def _false_positive_rationale(finding: dict[str, Any]) -> str:
+    return (
+        _single_line_text(finding.get("rationale"))
+        or _single_line_text(finding.get("reason"))
+        or _single_line_text(finding.get("false_positive_reason"))
+    )
 
 
 def _synthesize_outdated_thread_finding(thread: dict[str, Any]) -> dict[str, Any]:
@@ -4992,6 +5042,18 @@ def _closed_review_thread_reply(finding: dict[str, Any]) -> str:
             f"- thread_id: `{_single_line_text(finding.get('thread_id'))}`\n"
             f"- severity: `{_single_line_text(finding.get('severity'))}`\n"
             "- status: `outdated`\n"
+            f"- evidence: {_single_line_text(finding.get('evidence'))}\n"
+            f"- handling: {_single_line_text(finding.get('handling'))}\n"
+        )
+    if _single_line_text(finding.get("status")) == "false_positive":
+        return (
+            "已按 PR review 规则关闭官方 Codex false positive 阻断项。\n\n"
+            f"- finding: `{_single_line_text(finding.get('id'))}`\n"
+            f"- thread_id: `{_single_line_text(finding.get('thread_id'))}`\n"
+            f"- severity: `{_single_line_text(finding.get('severity'))}`\n"
+            "- status: `false_positive`\n"
+            f"- current_head: `{_single_line_text(finding.get('head_sha'))}`\n"
+            f"- rationale: {_false_positive_rationale(finding)}\n"
             f"- evidence: {_single_line_text(finding.get('evidence'))}\n"
             f"- handling: {_single_line_text(finding.get('handling'))}\n"
         )

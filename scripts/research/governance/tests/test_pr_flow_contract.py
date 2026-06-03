@@ -825,6 +825,26 @@ class SubmitOfficialCodexRetainedRunner(SubmitCreatePrRunner):
                 ),
                 "",
             )
+        if "node(id:$threadId)" in joined:
+            thread_id = next(
+                (
+                    item.removeprefix("threadId=")
+                    for item in command
+                    if item.startswith("threadId=")
+                ),
+                "",
+            )
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "data": {
+                            "node": {"id": thread_id, "isResolved": True}
+                        }
+                    }
+                ),
+                "",
+            )
         if "reviewThreads" in joined:
             return pr_flow.CommandResult(
                 0,
@@ -1703,6 +1723,26 @@ class SubmitAutoCloseOutdatedThreadRunner(SubmitCreatePrRunner):
                             "resolveReviewThread": {
                                 "thread": {"id": thread_id, "isResolved": True}
                             }
+                        }
+                    }
+                ),
+                "",
+            )
+        if "node(id:$threadId)" in joined:
+            thread_id = next(
+                (
+                    item.removeprefix("threadId=")
+                    for item in command
+                    if item.startswith("threadId=")
+                ),
+                "",
+            )
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "data": {
+                            "node": {"id": thread_id, "isResolved": self._thread_resolved}
                         }
                     }
                 ),
