@@ -583,7 +583,9 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         if "powershell.exe" in text or ".githooks/run-python.sh" not in text:
             findings.append(
                 AuditFinding(
-                    "governance_gate", "error", "post-commit hook must use run-python.sh"
+                    "governance_gate",
+                    "error",
+                    "post-commit hook must use run-python.sh",
                 )
             )
 
@@ -605,7 +607,9 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         if "scripts.research.governance verify full" not in text:
             findings.append(
                 AuditFinding(
-                    "governance_gate", "error", "pre-push hook missing full governance verification"
+                    "governance_gate",
+                    "error",
+                    "pre-push hook missing full governance verification",
                 )
             )
         if "scripts.research.governance gate" in text or (
@@ -697,7 +701,9 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         if "scripts.research.governance verify full" not in text:
             findings.append(
                 AuditFinding(
-                    "governance_gate", "error", "CI workflow missing verify full entrypoint"
+                    "governance_gate",
+                    "error",
+                    "CI workflow missing verify full entrypoint",
                 )
             )
         junction_setup_index = text.find("ensure-skill-junction.ps1")
@@ -752,11 +758,17 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
     pr_flow_workflow = root / ".github" / "workflows" / "pr-flow.yml"
     if not pr_flow_workflow.is_file():
         findings.append(
-            AuditFinding("governance_gate", "error", ".github/workflows/pr-flow.yml missing")
+            AuditFinding(
+                "governance_gate", "error", ".github/workflows/pr-flow.yml missing"
+            )
         )
     else:
         text = pr_flow_workflow.read_text(encoding="utf-8", errors="ignore")
-        for token in ("name: PR Flow", "evidence:", "scripts.research.governance.pr_review_evidence"):
+        for token in (
+            "name: PR Flow",
+            "evidence:",
+            "scripts.research.governance.pr_review_evidence",
+        ):
             if token not in text:
                 findings.append(
                     AuditFinding(
@@ -766,7 +778,10 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     )
                 )
         workflow_tokens = (
-            ("actions/checkout@v4", "PR Flow evidence workflow must checkout the PR head"),
+            (
+                "actions/checkout@v4",
+                "PR Flow evidence workflow must checkout the PR head",
+            ),
             (
                 "github.event.pull_request.head.sha",
                 "PR Flow evidence workflow must checkout the current PR head",
@@ -962,7 +977,36 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                         "governance_gate", "error", f"governance.md missing {token}"
                     )
                 )
+    if (root / ".git").is_dir():
+        hooks_path = _read_git_hooks_path(root)
+        if hooks_path != ".githooks":
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    f"core.hooksPath must be set to .githooks (current: {hooks_path or 'not set'})",
+                )
+            )
     return findings
+
+
+def _read_git_hooks_path(root: Path) -> str | None:
+    """Read the current core.hooksPath git config value.
+
+    Returns the trimmed config value or None if not set / not a git repo.
+    """
+    result = subprocess.run(
+        ["git", "config", "--get", "core.hooksPath"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip()
 
 
 def _audit_local_review_entrypoints(root: Path) -> list[AuditFinding]:
@@ -1083,7 +1127,9 @@ def _audit_rule_sources(root: Path) -> list[AuditFinding]:
         adr_index = adr_root / "index.md"
         if not adr_index.is_file():
             findings.append(AuditFinding("adr", "error", "docs/adr/index.md missing"))
-        elif adr_index.read_text(encoding="utf-8", errors="ignore") != render_adr_index(root):
+        elif adr_index.read_text(encoding="utf-8", errors="ignore") != render_adr_index(
+            root
+        ):
             findings.append(
                 AuditFinding(
                     "adr",
@@ -1126,7 +1172,11 @@ def _audit_rule_sources(root: Path) -> list[AuditFinding]:
     governance_readme = root / "scripts" / "research" / "governance" / "README.md"
     if governance_readme.is_file():
         text = governance_readme.read_text(encoding="utf-8", errors="ignore")
-        for token in ("docs/rules/index.md", "docs/adr/index.md", "PR Flow / review-status"):
+        for token in (
+            "docs/rules/index.md",
+            "docs/adr/index.md",
+            "PR Flow / review-status",
+        ):
             if token not in text:
                 findings.append(
                     AuditFinding(

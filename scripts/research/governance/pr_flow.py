@@ -4467,6 +4467,7 @@ def _auto_process_official_codex_review_threads(
         thread_id = _thread_id(thread)
         if not thread_id:
             continue
+        finding: dict[str, Any] | None
         if action == "accept":
             finding = _external_finding_for_review_thread(
                 repo=repo,

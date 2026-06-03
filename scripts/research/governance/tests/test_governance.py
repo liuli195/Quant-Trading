@@ -168,7 +168,9 @@ def test_official_review_pr_flow_contract_is_documented() -> None:
 
     old_drift = "risk=low + 官方 Review=否"
     for path, text in texts.items():
-        assert old_drift not in text, f"{path} still documents old official review drift"
+        assert old_drift not in text, (
+            f"{path} still documents old official review drift"
+        )
 
 
 def test_gitignore_audit_rejects_broad_data_ignore_patterns(tmp_path: Path) -> None:
@@ -630,6 +632,7 @@ def test_skill_ownership_discovers_repo_skill_governance(tmp_path: Path) -> None
     assert [match.skill for match in result.matches] == ["repo-skill-governance"]
     assert result.matches[0].read_rules == ("docs/rules/skills.md",)
 
+
 def test_skill_ownership_discovers_all_owner_examples() -> None:
     from scripts.research.governance.skill_ownership import discover_owner
 
@@ -686,15 +689,14 @@ def test_skill_ownership_rejects_unowned_skill(tmp_path: Path) -> None:
     owner = tmp_path / ".agents/skills/unowned/SKILL.md"
     owner.parent.mkdir(parents=True)
     owner.write_text(
-            "---\nname: unowned\ndescription: 未登记 Skill。\n---\n",
+        "---\nname: unowned\ndescription: 未登记 Skill。\n---\n",
         encoding="utf-8",
     )
 
     errors = validate_ownerships(tmp_path)
 
     assert any(
-        "unowned skill: .agents/skills/unowned/SKILL.md" in error
-        for error in errors
+        "unowned skill: .agents/skills/unowned/SKILL.md" in error for error in errors
     )
 
 
@@ -809,6 +811,7 @@ def test_skill_ownership_rejects_missing_frontmatter_name_or_description(
         for error in errors
     )
 
+
 def test_skill_ownership_rejects_duplicate_trigger_phrase(tmp_path: Path) -> None:
     from scripts.research.governance.skill_ownership import validate_ownerships
 
@@ -844,7 +847,8 @@ def test_skill_ownership_rejects_non_active_required_owner(tmp_path: Path) -> No
     errors = validate_ownerships(tmp_path)
 
     assert any(
-        "required skill must be active: repo-skill-governance" in error for error in errors
+        "required skill must be active: repo-skill-governance" in error
+        for error in errors
     )
 
 
@@ -865,7 +869,8 @@ def test_skill_ownership_rejects_unsupported_recommended_command(
     errors = validate_ownerships(tmp_path)
 
     assert any(
-        "unsupported recommended command for repo-skill-governance" in error for error in errors
+        "unsupported recommended command for repo-skill-governance" in error
+        for error in errors
     )
 
 
@@ -886,7 +891,8 @@ def test_skill_ownership_rejects_unsupported_owned_command_prefix(
     errors = validate_ownerships(tmp_path)
 
     assert any(
-        "unsupported owned command for repo-skill-governance: python -m not.real.module" in error
+        "unsupported owned command for repo-skill-governance: python -m not.real.module"
+        in error
         for error in errors
     )
 
@@ -972,7 +978,9 @@ def test_skill_ownership_rejects_owned_command_runtime_options(
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    path = tmp_path / ".agents/skills/research-report-analysis/references/ownership.yaml"
+    path = (
+        tmp_path / ".agents/skills/research-report-analysis/references/ownership.yaml"
+    )
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     data["owned_commands"] = [
         ".\\.venv\\Scripts\\python.exe -m scripts.research.docs index --reports"
@@ -1126,7 +1134,8 @@ def test_skill_ownership_rejects_trigger_phrase_not_covered_by_description(
     errors = validate_ownerships(tmp_path)
 
     assert any(
-        "trigger phrase not covered by skill description for repo-skill-governance" in error
+        "trigger phrase not covered by skill description for repo-skill-governance"
+        in error
         for error in errors
     )
 
@@ -1168,7 +1177,9 @@ def test_skill_ownership_rejects_skills_doc_without_human_summary(
 
 def test_governance_audit_flags_missing_owner_skill(tmp_path: Path) -> None:
     _write_minimal_repo(tmp_path)
-    (tmp_path / ".agents/skills/repo-skill-governance/references/ownership.yaml").unlink()
+    (
+        tmp_path / ".agents/skills/repo-skill-governance/references/ownership.yaml"
+    ).unlink()
 
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
 
@@ -1564,8 +1575,7 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / ".codex/environments").mkdir(parents=True, exist_ok=True)
     (root / ".codex/environments/environment.toml").write_text(
-        ".\\.githooks\\setup-python.ps1\n"
-        ".\\.githooks\\ensure-skill-junction.ps1\n",
+        ".\\.githooks\\setup-python.ps1\n.\\.githooks\\ensure-skill-junction.ps1\n",
         encoding="utf-8",
     )
     (root / "scripts/research/governance/README.md").write_text(
@@ -2544,7 +2554,9 @@ def test_governance_audit_flags_missing_adr_index(tmp_path) -> None:
 
 def test_governance_audit_flags_stale_adr_index(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
-    (tmp_path / "docs/adr/index.md").write_text("# ADR 索引\n\nstale\n", encoding="utf-8")
+    (tmp_path / "docs/adr/index.md").write_text(
+        "# ADR 索引\n\nstale\n", encoding="utf-8"
+    )
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
@@ -2833,6 +2845,38 @@ def test_governance_audit_flags_pre_push_without_lfs_handoff(tmp_path) -> None:
         finding.rule_id == "governance_gate" and "Git LFS handoff" in finding.message
         for finding in report.findings
     )
+
+
+def test_governance_audit_flags_missing_hooks_path(tmp_path, monkeypatch) -> None:
+    """core.hooksPath must be set to .githooks."""
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".git").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(
+        governance_rules,
+        "_read_git_hooks_path",
+        lambda _root: None,
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "core.hooksPath must be set to .githooks" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_accepts_correct_hooks_path(tmp_path, monkeypatch) -> None:
+    """No finding when core.hooksPath is .githooks."""
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".git").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(
+        governance_rules,
+        "_read_git_hooks_path",
+        lambda _root: ".githooks",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    hooks_path_findings = [f for f in report.findings if "core.hooksPath" in f.message]
+    assert not hooks_path_findings
 
 
 def test_governance_audit_flags_missing_reference_transaction_hook(tmp_path) -> None:
@@ -3305,7 +3349,9 @@ def test_pr_review_evidence_rejects_mismatched_current_head_summary() -> None:
     assert "current diff summary head SHA must match current PR head" in report.errors
 
 
-def test_pr_review_evidence_requires_current_head_summary_when_metadata_available() -> None:
+def test_pr_review_evidence_requires_current_head_summary_when_metadata_available() -> (
+    None
+):
     body = _valid_codex_review_body().replace(
         "\n".join(
             [
@@ -3841,7 +3887,10 @@ def test_pr_review_evidence_rejects_matching_count_with_wrong_file_set() -> None
     )
 
     assert not report.ok
-    assert "current diff summary changed files must match current PR files" in report.errors
+    assert (
+        "current diff summary changed files must match current PR files"
+        in report.errors
+    )
 
 
 def test_pr_review_evidence_accepts_incremental_review_mode() -> None:
@@ -6234,7 +6283,9 @@ def test_codex_review_monitor_passes_low_risk_without_official_review() -> None:
     assert "无需执行" in render_monitor_comment(report)
 
 
-def test_codex_review_monitor_rejects_unverified_reused_official_review_evidence() -> None:
+def test_codex_review_monitor_rejects_unverified_reused_official_review_evidence() -> (
+    None
+):
     head_sha = "1" * 40
     report = build_monitor_report(
         repo="liuli195/Quant-Trading",
