@@ -1213,7 +1213,6 @@ def test_submit_creates_draft_pr_with_contract_evidence_json(tmp_path: Path) -> 
         {"sha": "2" * 40, "no_issue": True},
     ]
     assert issues["refs"] == [
-        {"number": 65, "role": "reference"},
         {"number": 66, "role": "closes"},
     ]
     assert "<!-- github-native-links:start -->" in body
@@ -1279,6 +1278,33 @@ def test_submit_removes_github_native_links_when_no_closing_refs(
     body = runner.edited_bodies[-1]
     assert "<!-- github-native-links:start -->" not in body
     assert "Closes #66" not in body
+    payload = _payload_from_managed_body(body)
+    issues = payload["issues"]
+    assert isinstance(issues, dict)
+    assert issues["refs"] == [{"number": 65, "role": "reference"}]
+
+
+def test_submit_ignores_stale_aggregate_closing_refs_for_native_links(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/docs/guides/example.md b/docs/guides/example.md\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(
+        tmp_path,
+        commit_issues=[{"number": 65, "role": "reference"}],
+        refs=[{"number": 83, "role": "closes"}],
+    )
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    body = runner.created_bodies[-1]
+    assert "<!-- github-native-links:start -->" not in body
+    assert "Closes #83" not in body
     payload = _payload_from_managed_body(body)
     issues = payload["issues"]
     assert isinstance(issues, dict)
@@ -1441,7 +1467,6 @@ def test_submit_auto_covers_github_update_branch_merge_commit(
     refs = issues["refs"]
     assert {"sha": runner.update_branch_sha, "no_issue": True} in commits
     assert refs == [
-        {"number": 65, "role": "reference"},
         {"number": 66, "role": "closes"},
     ]
 

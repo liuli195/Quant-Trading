@@ -1824,14 +1824,23 @@ def _submit_issue_evidence(*, root: Path, runner: Runner) -> dict[str, Any]:
             details=(sha,),
         )
     refs: list[dict[str, Any]] = []
-    for item in branch_intent.get("issues", []):
-        if not isinstance(item, dict):
+    seen_refs: set[tuple[int, str]] = set()
+    for item in evidence_commits:
+        commit_issues = item.get("issues")
+        if not isinstance(commit_issues, list):
             continue
-        number = _positive_int_from_payload(item.get("number"))
-        role = _single_line_text(item.get("role"))
-        if number is None or role not in VALID_INTENT_ROLES:
-            continue
-        refs.append({"number": number, "role": role})
+        for issue in commit_issues:
+            if not isinstance(issue, dict):
+                continue
+            number = _positive_int_from_payload(issue.get("number"))
+            role = _single_line_text(issue.get("role"))
+            if number is None or role not in VALID_INTENT_ROLES:
+                continue
+            key = (number, role)
+            if key in seen_refs:
+                continue
+            seen_refs.add(key)
+            refs.append({"number": number, "role": role})
     return {"commits": evidence_commits, "refs": refs}
 
 
