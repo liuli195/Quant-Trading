@@ -721,10 +721,18 @@ class SubmitMixedFailingPendingChecksRunner(SubmitCreatePrRunner):
 
 
 class SubmitOfficialCodexRetainedRunner(SubmitCreatePrRunner):
-    def __init__(self, *, diff_text: str) -> None:
+    def __init__(
+        self,
+        *,
+        diff_text: str,
+        thread_author: str = "chatgpt-codex-connector[bot]",
+        thread_body: str = "**P2** retain as follow-up",
+    ) -> None:
         super().__init__(diff_text=diff_text)
         self.checks_calls = 0
         self.thread_id = "PRRT_official_p2"
+        self.thread_author = thread_author
+        self.thread_body = thread_body
         self.replies: list[str] = []
         self.resolved_threads: list[str] = []
 
@@ -834,9 +842,9 @@ class SubmitOfficialCodexRetainedRunner(SubmitCreatePrRunner):
                                                 "comments": {
                                                     "nodes": [
                                                         {
-                                                            "body": "**P2** retain as follow-up",
+                                                            "body": self.thread_body,
                                                             "author": {
-                                                                "login": "chatgpt-codex-connector[bot]"
+                                                                "login": self.thread_author
                                                             },
                                                         }
                                                     ]
@@ -1451,7 +1459,34 @@ def test_submit_accepts_official_codex_p2_thread_into_retained(
     assert runner.checks_calls == 1
     assert runner.replies
     assert runner.resolved_threads == [runner.thread_id]
-    # P2 thread was auto-accepted before CI — resolved without blocking
+    payload = _payload_from_managed_body(runner.created_bodies[-1])
+    assert payload["retained"] == [
+        {
+            "severity": "P2",
+            "source": "official_codex",
+            "detail": "**P2** retain as follow-up",
+        }
+    ]
+
+
+def test_submit_does_not_auto_accept_human_p2_thread(tmp_path: Path) -> None:
+    """Human review threads remain manual even when their text has P2 severity."""
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitOfficialCodexRetainedRunner(
+        diff_text=diff_text,
+        thread_author="human-reviewer",
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert not runner.replies
+    assert not runner.resolved_threads
 
 
 class SubmitAutoCloseOutdatedThreadRunner(SubmitCreatePrRunner):
@@ -1469,6 +1504,8 @@ class SubmitAutoCloseOutdatedThreadRunner(SubmitCreatePrRunner):
         self._thread_query_count = 0
         self._thread_resolved = False
         self._call_sequence: list[str] = []
+        self.thread_is_outdated = True
+        self.thread_body = "![P1 Badge] outdated finding"
 
     def run(
         self,
@@ -1574,11 +1611,11 @@ class SubmitAutoCloseOutdatedThreadRunner(SubmitCreatePrRunner):
                                             {
                                                 "id": self.thread_id,
                                                 "isResolved": False,
-                                                "isOutdated": True,
+                                                "isOutdated": self.thread_is_outdated,
                                                 "comments": {
                                                     "nodes": [
                                                         {
-                                                            "body": "![P1 Badge] outdated finding",
+                                                            "body": self.thread_body,
                                                             "author": {
                                                                 "login": "chatgpt-codex-connector[bot]"
                                                             },
@@ -1630,6 +1667,62 @@ def test_submit_auto_closes_outdated_codex_thread_before_ci(
     )
     # CI checks ran exactly once (thread was resolved before first CI call)
     assert runner.checks_calls == 1
+
+
+def test_submit_auto_closes_current_codex_p1_thread_with_structured_evidence(
+    tmp_path: Path,
+) -> None:
+    """submit() must pass current review payload into pre-CI thread handling."""
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitAutoCloseOutdatedThreadRunner(diff_text=diff_text)
+    runner.thread_id = "PRRT_current_p1"
+    runner.thread_is_outdated = False
+    runner.thread_body = "![P1 Badge] current finding fixed by evidence"
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+    local = tmp_path / ".local" / "ai-review"
+    local.mkdir(parents=True, exist_ok=True)
+    (local / "latest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 4,
+                "changed_files": ["a.txt"],
+                "diff_fingerprint": {
+                    "base_ref": "origin/main",
+                    "head_sha": "1" * 40,
+                    "diff_files_hash": "current-diff",
+                    "changed_files": ["a.txt"],
+                },
+                "external_findings": [
+                    {
+                        "id": "EXT-CODEX-THREAD-PRRT_current_p1",
+                        "source": "official_codex_review_thread",
+                        "thread_id": "PRRT_current_p1",
+                        "severity": "P1",
+                        "title": "Current blocker",
+                        "path": "a.txt",
+                        "status": "fixed",
+                        "evidence": "fixed by current diff",
+                        "head_sha": "1" * 40,
+                        "diff_files_hash": "current-diff",
+                        "fix_commit": "1" * 40,
+                        "verification_command": ".\\.venv\\Scripts\\python.exe -m pytest scripts\\research\\governance\\tests\\test_pr_flow_contract.py -q",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert runner.resolved_threads == [runner.thread_id]
+    assert runner.replies
+    assert "fix_commit" in runner.replies[0]
 
 
 def test_submit_rejects_missing_commit_intent_before_creating_pr(
@@ -2457,6 +2550,23 @@ def test_codex_review_monitor_checks_out_pr_head_ref() -> None:
         assert "head" in str(ref).casefold() or "steps" in str(ref), (
             f"{job_name} checkout ref must derive from PR head, got: {ref}"
         )
+
+
+def test_codex_review_monitor_workflow_dispatch_resolves_input_pr_number() -> None:
+    """workflow_dispatch must inspect the manually requested PR number."""
+    import yaml
+
+    path = Path(".github/workflows/codex-review-monitor.yml")
+    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+
+    steps = doc["jobs"]["monitor"]["steps"]
+    resolve_step = next(
+        step for step in steps if step.get("name") == "Resolve PR head SHA"
+    )
+    assert (
+        resolve_step["env"]["PR_NUMBER"]
+        == "${{ inputs.pr_number || github.event.pull_request.number || github.event.issue.number }}"
+    )
 
 
 def _write_fragment(

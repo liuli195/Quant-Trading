@@ -1315,6 +1315,7 @@ def submit(
             except GitHubDataUnavailable:
                 threads = []
             if threads:
+                auto_payload = _submit_thread_payload(root)
                 _auto_code, _auto_payload, auto_changed = (
                     _auto_process_official_codex_review_threads(
                         root=root,
@@ -1322,10 +1323,18 @@ def submit(
                         repo=repo,
                         pr_number=resolved_pr_number,
                         threads=threads,
-                        payload={},
+                        payload=auto_payload,
                     )
                 )
                 if auto_changed:
+                    _write_ai_review_payload(root, _auto_payload)
+                    review_state = _review_state_with_retained(
+                        review_state,
+                        _submit_official_codex_retained_from_payload(
+                            _auto_payload,
+                            contract=contract,
+                        ),
+                    )
                     # Threads were auto-processed. Rebuild evidence so
                     # CI sees any updated retained findings, then re-sync
                     # the PR body.
@@ -1881,6 +1890,81 @@ def _submit_pr_evidence(
         "issues": _submit_issue_evidence(root=root, runner=runner),
         "retained": review_state.retained,
     }
+
+
+def _submit_thread_payload(root: Path) -> dict[str, Any]:
+    """Read optional AI review payload used only for thread closure evidence."""
+    payload = _read_json_object(root / ".local" / "ai-review" / "latest.json") or {}
+    if payload.get("schema_version") == ai_review_gate.CURRENT_SCHEMA_VERSION:
+        return dict(payload)
+    changed_files = ai_review_gate._string_list(payload.get("changed_files"))
+    return ai_review_gate.payload_as_schema_v4(
+        payload,
+        repo_root=root,
+        changed_files=changed_files,
+    )
+
+
+def _submit_official_codex_retained_from_payload(
+    payload: dict[str, Any],
+    *,
+    contract: pr_flow_contract.PRFlowContract,
+) -> list[dict[str, str]]:
+    retained: list[dict[str, str]] = []
+    for item in payload.get("external_findings") or []:
+        if not isinstance(item, dict):
+            continue
+        if _single_line_text(item.get("source")) != "official_codex_review_thread":
+            continue
+        severity = _single_line_text(item.get("severity"))
+        if severity not in contract.retained_severities:
+            continue
+        detail = pr_flow_contract.normalize_detail(
+            item.get("body") or item.get("detail") or item.get("title"),
+            max_chars=contract.detail_max_chars,
+        )
+        if not detail:
+            detail = f"official Codex {severity} retained finding"
+        retained.append(
+            {
+                "severity": severity,
+                "source": "official_codex",
+                "detail": detail,
+            }
+        )
+    return retained
+
+
+def _review_state_with_retained(
+    review_state: SubmitReviewState,
+    retained: Sequence[dict[str, str]],
+) -> SubmitReviewState:
+    if not retained:
+        return review_state
+    merged = [dict(item) for item in review_state.retained]
+    seen = {
+        (
+            _single_line_text(item.get("severity")),
+            _single_line_text(item.get("source")),
+            _single_line_text(item.get("detail")),
+        )
+        for item in merged
+    }
+    for entry in retained:
+        key = (
+            _single_line_text(entry.get("severity")),
+            _single_line_text(entry.get("source")),
+            _single_line_text(entry.get("detail")),
+        )
+        if key in seen:
+            continue
+        merged.append(dict(entry))
+        seen.add(key)
+    return SubmitReviewState(
+        reviews=review_state.reviews,
+        retained=merged,
+        official_review=review_state.official_review,
+    )
 
 
 def _submit_issue_evidence(*, root: Path, runner: Runner) -> dict[str, Any]:
@@ -4579,7 +4663,7 @@ def _auto_review_thread_action(
     thread: dict[str, Any],
     payload: dict[str, Any],
 ) -> str:
-    if _thread_is_resolved(thread):
+    if _thread_is_resolved(thread) or not _thread_is_official_codex(thread):
         return ""
     severity = _codex_thread_severity(thread)
     if severity in AUTO_ACCEPTED_REVIEW_THREAD_SEVERITIES:
@@ -4589,7 +4673,6 @@ def _auto_review_thread_action(
     # human threads are never auto-resolved — they continue to block.
     if (
         _thread_is_outdated(thread)
-        and _thread_is_official_codex(thread)
         and severity
     ):
         return "close"
@@ -4787,12 +4870,9 @@ def _synthesize_outdated_thread_finding(thread: dict[str, Any]) -> dict[str, Any
         "severity": severity or "P1",
         "title": "Outdated Codex finding",
         "path": "",
-        "status": "fixed",
+        "status": "false_positive",
+        "disposition": "outdated",
         "evidence": "thread is outdated and no longer applies to current head",
-        "head_sha": "",
-        "diff_files_hash": "",
-        "fix_commit": "",
-        "verification_command": "",
         "handling": f"outdated official Codex thread resolved; original: {_single_line_text(body)}",
     }
 
@@ -4810,6 +4890,16 @@ def _accepted_review_thread_reply(finding: dict[str, Any]) -> str:
 
 
 def _closed_review_thread_reply(finding: dict[str, Any]) -> str:
+    if _single_line_text(finding.get("disposition")) == "outdated":
+        return (
+            "已按 PR review 规则关闭过期官方 Codex 线程。\n\n"
+            f"- finding: `{_single_line_text(finding.get('id'))}`\n"
+            f"- thread_id: `{_single_line_text(finding.get('thread_id'))}`\n"
+            f"- severity: `{_single_line_text(finding.get('severity'))}`\n"
+            "- status: `outdated`\n"
+            f"- evidence: {_single_line_text(finding.get('evidence'))}\n"
+            f"- handling: {_single_line_text(finding.get('handling'))}\n"
+        )
     fix_commit = _single_line_text(finding.get("fix_commit") or finding.get("commit_sha"))
     verification = _single_line_text(
         finding.get("verification_command") or finding.get("verification")
