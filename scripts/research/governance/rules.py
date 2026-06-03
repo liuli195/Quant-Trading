@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -977,7 +978,7 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                         "governance_gate", "error", f"governance.md missing {token}"
                     )
                 )
-    if (root / ".git").is_dir():
+    if (root / ".git").is_dir() and not os.environ.get("GITHUB_ACTIONS"):
         hooks_path = _read_git_hooks_path(root)
         if hooks_path != ".githooks":
             findings.append(

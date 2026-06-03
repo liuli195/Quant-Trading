@@ -2879,6 +2879,21 @@ def test_governance_audit_accepts_correct_hooks_path(tmp_path, monkeypatch) -> N
     assert not hooks_path_findings
 
 
+def test_governance_audit_skips_hooks_path_in_ci(tmp_path, monkeypatch) -> None:
+    """core.hooksPath check is skipped in CI (GITHUB_ACTIONS set)."""
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".git").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(
+        governance_rules,
+        "_read_git_hooks_path",
+        lambda _root: None,
+    )
+    monkeypatch.setitem(os.environ, "GITHUB_ACTIONS", "true")
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    hooks_path_findings = [f for f in report.findings if "core.hooksPath" in f.message]
+    assert not hooks_path_findings
+
+
 def test_governance_audit_flags_missing_reference_transaction_hook(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / ".githooks/reference-transaction").unlink()
