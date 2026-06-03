@@ -1496,6 +1496,12 @@ def _submit_fragment_failures_for_role(
                 detail=f"{role} fragment diff is stale",
             )
         )
+    if any(
+        failure.detail
+        in {f"{role} fragment head is stale", f"{role} fragment diff is stale"}
+        for failure in failures
+    ):
+        return failures, False
     findings = payload.get("findings")
     if not isinstance(findings, list):
         failures.append(

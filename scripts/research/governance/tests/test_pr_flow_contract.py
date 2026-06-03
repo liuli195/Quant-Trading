@@ -987,6 +987,33 @@ def test_submit_rejects_stale_first_stage_fragment_before_security(
     ]
 
 
+def test_submit_rejects_stale_diff_before_old_blocking_findings(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+    _write_fragment(
+        tmp_path,
+        "standards",
+        findings=[{"severity": "P1", "detail": "old blocker"}],
+        diff="stale-diff",
+    )
+    _write_fragment(tmp_path, "spec", findings=[])
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"] == [
+        {
+            "check": "local-review",
+            "source": ".local/ai-review/fragments/standards.json",
+            "detail": "standards fragment diff is stale",
+        }
+    ]
+
+
 def test_submit_aggregates_first_stage_blockers_before_security(tmp_path: Path) -> None:
     runner = SubmitPreflightRunner(valid_contract=True)
     _write_fragment(
