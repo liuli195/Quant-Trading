@@ -987,7 +987,7 @@ def test_submit_rejects_stale_first_stage_fragment_before_security(
     ]
 
 
-def test_submit_rejects_stale_diff_before_old_blocking_findings(
+def test_submit_reports_stale_diff_old_blockers_without_reply_or_fix(
     tmp_path: Path,
 ) -> None:
     runner = SubmitPreflightRunner(valid_contract=True)
@@ -1010,6 +1010,11 @@ def test_submit_rejects_stale_diff_before_old_blocking_findings(
             "check": "local-review",
             "source": ".local/ai-review/fragments/standards.json",
             "detail": "standards fragment diff is stale",
+        },
+        {
+            "check": "local-review",
+            "source": ".local/ai-review/fragments/standards.json",
+            "detail": "standards P1: old blocker",
         }
     ]
 
