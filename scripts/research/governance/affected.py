@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -86,7 +85,6 @@ def collect_changed_files(
     staged: bool = False,
     base: str | None = None,
     files: Sequence[str | Path] | None = None,
-    ai_review_report: str | Path | None = None,
 ) -> ChangedFileSource:
     root = Path(repo_root).resolve()
     changed: list[str] = []
@@ -108,13 +106,6 @@ def collect_changed_files(
     if not files and not base and not staged:
         changed.extend(_git_changed_files(root, []))
         source_parts.append("worktree")
-
-    report_path = Path(ai_review_report) if ai_review_report else None
-    if report_path is None:
-        report_path = root / ".local" / "ai-review" / "latest.json"
-    if report_path.is_file():
-        changed.extend(_changed_files_from_ai_review(report_path))
-        source_parts.append("ai-review")
 
     normalized = tuple(sorted(dict.fromkeys(item for item in changed if item)))
     return ChangedFileSource(source="+".join(source_parts) or "none", files=normalized)
@@ -320,17 +311,6 @@ def _git_changed_files(root: Path, args: Sequence[str]) -> list[str]:
         detail = (result.stderr or result.stdout or f"exit {result.returncode}").strip()
         raise ChangedFileCollectionError(f"git diff failed: {detail}")
     return [_normalize_path(line) for line in result.stdout.splitlines() if line.strip()]
-
-
-def _changed_files_from_ai_review(path: Path) -> list[str]:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return []
-    files = payload.get("changed_files")
-    if not isinstance(files, list):
-        return []
-    return [_normalize_path(item) for item in files if isinstance(item, str)]
 
 
 def _strategy_changes(paths: Sequence[str], root: Path) -> tuple[StrategyChange, ...]:

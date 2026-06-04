@@ -41,7 +41,32 @@ jobs:
       )
     runs-on: windows-latest
     steps:
+      - name: Publish pending status
+        if: ${{ github.event_name != 'workflow_dispatch' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+          TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: pwsh
+        run: |
+          $pr = gh api "repos/$env:GITHUB_REPOSITORY/pulls/$env:PR_NUMBER" --jq '.head.sha'
+          gh api "repos/$env:GITHUB_REPOSITORY/statuses/$pr" `
+            -f state="pending" `
+            -f context="PR Flow / review-status" `
+            -f description="Codex review status is running" `
+            -f target_url="$env:TARGET_URL"
+      - name: Resolve PR head SHA
+        id: pr-head
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number || github.event.issue.number }}
+        shell: pwsh
+        run: |
+          $sha = gh api "repos/$env:GITHUB_REPOSITORY/pulls/$env:PR_NUMBER" --jq '.head.sha'
+          echo "sha=$sha" >> $env:GITHUB_OUTPUT
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr-head.outputs.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -56,3 +81,19 @@ jobs:
           python -m scripts.research.governance.codex_review_monitor
           --head-updated-at-env PR_HEAD_UPDATED_AT
           --sync-status
+      - name: Publish monitor failure status
+        if: ${{ always() && github.event_name != 'workflow_dispatch' && (failure() || cancelled()) }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+          JOB_STATUS: ${{ job.status }}
+          TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: pwsh
+        run: |
+          $pr = gh api "repos/$env:GITHUB_REPOSITORY/pulls/$env:PR_NUMBER" --jq '.head.sha'
+          $state = if ($env:JOB_STATUS -eq 'cancelled') { 'error' } else { 'failure' }
+          gh api "repos/$env:GITHUB_REPOSITORY/statuses/$pr" `
+            -f state="$state" `
+            -f context="PR Flow / review-status" `
+            -f description="Codex review status $state" `
+            -f target_url="$env:TARGET_URL"

@@ -2,7 +2,7 @@
 
 | category | strategy | title | path | pathrefs |
 | --- | --- | --- | --- | ---: |
-| docs |  | 文档入口 | `docs/README.md` | 23 |
+| docs |  | 文档入口 | `docs/README.md` | 21 |
 | docs |  | ADR 0001: 规则来源和治理模型 | `docs/adr/0001-rule-source-and-governance-model.md` | 6 |
 | docs |  | ADR 0002: 多 AI Agent 并行工作使用 Git 分支 | `docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md` | 0 |
 | docs |  | ADR 0003: Governance Gate 和主干保护 | `docs/adr/0003-governance-gate-and-main-branch-protection.md` | 0 |
@@ -11,7 +11,8 @@
 | docs |  | ADR 0006: PR 风险分级评审流程 | `docs/adr/0006-risk-tiered-pr-review.md` | 0 |
 | docs |  | ADR 0007: PR 强闭环状态机与 Review Evidence 边界 | `docs/adr/0007-pr-flow-closed-loop-review-evidence.md` | 1 |
 | docs |  | ADR 0008: Skill 使用 `.agents/skills/` 单一来源 | `docs/adr/0008-skill-single-source-agents.md` | 0 |
-| docs |  | ADR 索引 | `docs/adr/index.md` | 8 |
+| docs |  | ADR 0009: 子 agent 派发使用持续显式授权 | `docs/adr/0009-subagent-delegation-continuous-authorization.md` | 2 |
+| docs |  | ADR 索引 | `docs/adr/index.md` | 9 |
 | docs |  | 领域文档 | `docs/agents/domain.md` | 4 |
 | docs |  | Issue 跟踪：GitHub | `docs/agents/issue-tracker.md` | 0 |
 | docs |  | Triage 标签 | `docs/agents/triage-labels.md` | 0 |
@@ -43,8 +44,6 @@
 | docs |  | 输出平安银行信息的中文名称 | `docs/joinquant-data/JQ_股票数据.md` | 0 |
 | docs |  | JQ_舆情数据 | `docs/joinquant-data/JQ_舆情数据.md` | 0 |
 | docs |  | JQ_行业概念数据 | `docs/joinquant-data/JQ_行业概念数据.md` | 0 |
-| docs |  | PR #21/#22 流程问题复盘 | `docs/problems/2026-05-29-pr21-flow-retrospective.md` | 6 |
-| docs |  | PR #25/#26 流程问题复盘 | `docs/problems/2026-05-30-pr25-flow-retrospective.md` | 6 |
 | docs |  | 定义一个全局变量, 保存要操作的股票 | `docs/reference/joinquant-api.md` | 28 |
 | docs |  | JoinQuant 参数分析框架分析报告 | `docs/reference/joinquant-parameter-analysis-framework.md` | 2 |
 | docs |  | 代码风格和策略实现规则 | `docs/rules/code-style.md` | 2 |
@@ -52,20 +51,15 @@
 | docs |  | 命令和本地环境规则 | `docs/rules/commands.md` | 4 |
 | docs |  | 文档和 Pathref 规则 | `docs/rules/docs-and-pathref.md` | 0 |
 | docs |  | 本地与聚宽环境差异 | `docs/rules/environments.md` | 0 |
-| docs |  | 治理门禁规则 | `docs/rules/governance.md` | 1 |
-| docs |  | 仓库规则总索引 | `docs/rules/index.md` | 14 |
-| docs |  | PR 工作流规则 | `docs/rules/pr-workflow.md` | 3 |
+| docs |  | 治理门禁规则 | `docs/rules/governance.md` | 3 |
+| docs |  | 仓库规则总索引 | `docs/rules/index.md` | 15 |
+| docs |  | PR 工作流规则 | `docs/rules/pr-workflow.md` | 4 |
 | docs |  | 研究流程规则 | `docs/rules/research-workflow.md` | 0 |
-| docs |  | PR Review 指南 | `docs/rules/review-guidelines.md` | 11 |
+| docs |  | PR Review 指南 | `docs/rules/review-guidelines.md` | 12 |
 | docs |  | Skill 规则 | `docs/rules/skills.md` | 2 |
 | docs |  | 回测数据冗余压缩实施计划 | `docs/superpowers/plans/2026-05-20-backtest-data-redundancy-compaction.md` | 7 |
 | docs |  | Feishu Relay Tools Implementation Plan | `docs/superpowers/plans/2026-05-20-feishu-relay-tools-implementation.md` | 5 |
-| docs |  | PR 风险分级评审流程 Implementation Plan | `docs/superpowers/plans/2026-05-20-pr-risk-tiered-review-workflow.md` | 1 |
 | docs |  | ETF Vol Relief A/B Test Implementation Plan | `docs/superpowers/plans/2026-05-26-etf-vol-relief-ab-test.md` | 3 |
-| docs |  | PR Flow Automation Implementation Plan | `docs/superpowers/plans/2026-05-28-pr-flow-automation.md` | 0 |
-| docs |  | PR Flow Handsfree Automation Implementation Plan | `docs/superpowers/plans/2026-05-28-pr-flow-handsfree-automation.md` | 0 |
-| docs |  | 日常增量验证提速 Implementation Plan | `docs/superpowers/plans/2026-05-29-incremental-governance-validation-speedup.md` | 6 |
-| docs |  | Skill System Refactor Implementation Plan | `docs/superpowers/plans/2026-05-29-skill-system-refactor-implementation.md` | 6 |
 | docs |  | 飞书交易通知工具设计 | `docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md` | 2 |
 | backtest_run | etf_dynamic_rebalance | 回测归因分析 — ETF 动态调仓策略 | `strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/attribution-analysis.md` | 0 |
 | backtest_run | etf_dynamic_rebalance | 回测报告 — ETF 动态调仓策略 | `strategies/etf_dynamic_rebalance/backtest_runs/20260504_1/report/backtest_report.md` | 3 |

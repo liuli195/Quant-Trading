@@ -15,10 +15,6 @@ owned_commands:
   - .\.venv\Scripts\python.exe -m scripts.research.governance
   - .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow submit
   - .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow resolve-threads
-  - .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow ready-for-review
-  - .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow merge
-  - .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow cleanup
-  - .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow complete
 owned_scripts:
   - scripts/research/governance/pr_flow.py
   - scripts/research/governance/pr_review_evidence.py

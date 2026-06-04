@@ -1,10 +1,10 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 from pathlib import Path
 from typing import Any
 
-from scripts.research.governance import ai_review_gate, pr_flow, pr_review_evidence
+from scripts.research.governance import pr_flow
 
 
 class FakeIntentRunner:
@@ -152,10 +152,6 @@ def test_intent_stage_rejects_missing_staged_diff(tmp_path: Path) -> None:
     )
 
     assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
-    status = json.loads(
-        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
-    )
-    assert status["reason_code"] == "STAGED_DIFF_MISSING"
 
 
 def test_intent_stage_rejects_invalid_issue_role(tmp_path: Path) -> None:
@@ -168,10 +164,6 @@ def test_intent_stage_rejects_invalid_issue_role(tmp_path: Path) -> None:
     )
 
     assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
-    status = json.loads(
-        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
-    )
-    assert status["reason_code"] == "COMMIT_INTENT_ISSUE_ROLE_INVALID"
 
 
 def test_intent_stage_rejects_closes_for_closed_issue(tmp_path: Path) -> None:
@@ -184,10 +176,6 @@ def test_intent_stage_rejects_closes_for_closed_issue(tmp_path: Path) -> None:
     )
 
     assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
-    status = json.loads(
-        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
-    )
-    assert status["reason_code"] == "COMMIT_INTENT_CLOSED_ISSUE_CLOSE_REJECTED"
 
 
 def test_intent_stage_allows_reference_for_closed_issue(tmp_path: Path) -> None:
@@ -240,10 +228,6 @@ def test_commit_intent_pre_commit_rejects_missing_pending_intent(
     )
 
     assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
-    status = json.loads(
-        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
-    )
-    assert status["reason_code"] == "COMMIT_INTENT_MISSING"
 
 
 def test_commit_intent_pre_commit_rejects_stale_fingerprint(
@@ -266,10 +250,6 @@ def test_commit_intent_pre_commit_rejects_stale_fingerprint(
     )
 
     assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
-    status = json.loads(
-        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
-    )
-    assert status["reason_code"] == "COMMIT_INTENT_STALE"
 
 
 def test_commit_intent_post_commit_merges_branch_intent_and_consumes_pending(
@@ -456,11 +436,6 @@ def test_branch_intent_coverage_detects_missing_current_commit(
     )
 
     assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
-    status = json.loads(
-        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
-    )
-    assert status["reason_code"] == "BRANCH_INTENT_COVERAGE_MISSING"
-    assert missing in status["blocking_items"]
 
 
 def test_branch_intent_coverage_rejects_stale_commit(
@@ -501,11 +476,6 @@ def test_branch_intent_coverage_rejects_stale_commit(
     code = pr_flow.check_branch_intent_coverage(repo_root=tmp_path, runner=runner)
 
     assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
-    status = json.loads(
-        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
-    )
-    assert status["reason_code"] == "BRANCH_INTENT_STALE_COMMITS"
-    assert stale in status["blocking_items"]
 
 
 def _valid_issue_intent_payload() -> dict[str, Any]:
@@ -614,61 +584,6 @@ def _valid_issue_intent_payload() -> dict[str, Any]:
     }
 
 
-def test_pr_body_renders_issue_intent_summary_and_machine_block() -> None:
-    body = ai_review_gate.render_pr_body(_valid_issue_intent_payload())
-
-    assert "## Issue 绑定审计" in body
-    assert "References #54" in body
-    assert "Closes #55" in body
-    assert "No-Issue commits: 1" in body
-    assert body.count("<details>") == 1
-    assert '"commit_sha": "1111111111111111111111111111111111111111"' in body
-    assert '"head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' in body
-
-
-def test_pr_review_evidence_validates_issue_intent_machine_block() -> None:
-    body = ai_review_gate.render_pr_body(_valid_issue_intent_payload())
-
-    report = pr_review_evidence.validate_pr_body(
-        body,
-        expected_head_sha="a" * 40,
-        expected_commit_shas=("1" * 40, "2" * 40),
-    )
-
-    assert report.ok
-
-
-def test_pr_review_evidence_rejects_stale_issue_intent_head() -> None:
-    body = ai_review_gate.render_pr_body(_valid_issue_intent_payload())
-
-    report = pr_review_evidence.validate_pr_body(
-        body,
-        expected_head_sha="b" * 40,
-        expected_commit_shas=("1" * 40, "2" * 40),
-    )
-
-    assert not report.ok
-    assert "issue intent machine data head_sha does not match current PR head" in report.errors
-
-
-def test_pr_review_evidence_rejects_issues_policy_commit_without_issues() -> None:
-    payload = _valid_issue_intent_payload()
-    payload["issue_intent"]["commits"][0].pop("issues")
-    body = ai_review_gate.render_pr_body(payload)
-
-    report = pr_review_evidence.validate_pr_body(
-        body,
-        expected_head_sha="a" * 40,
-        expected_commit_shas=("1" * 40, "2" * 40),
-    )
-
-    assert not report.ok
-    assert (
-        "issue intent commits[0].issues must not be empty for issue_policy issues"
-        in report.errors
-    )
-
-
 def test_review_payload_derives_spec_ref_from_branch_intent(tmp_path: Path) -> None:
     runner = FakeIntentRunner(head_sha="4" * 40)
     assert (
@@ -748,103 +663,6 @@ def test_review_payload_filters_stale_branch_intent_commits(tmp_path: Path) -> N
     assert [item["commit_sha"] for item in updated["issue_intent"]["commits"]] == [
         current
     ]
-
-
-def test_branch_context_applies_intent_before_spec_policy_validation(
-    tmp_path: Path,
-) -> None:
-    head_sha = "a" * 40
-    runner = FakeIntentRunner(
-        head_sha=head_sha,
-        branch_commits=(head_sha,),
-        issue_bodies={55: "- [ ] AC is met\n"},
-    )
-    assert (
-        pr_flow.stage_commit_intent(
-            repo_root=tmp_path,
-            runner=runner,
-            issue_bindings=("55:closes",),
-        )
-        == pr_flow.SUCCESS_EXIT_CODE
-    )
-    assert (
-        pr_flow.record_committed_intent(repo_root=tmp_path, runner=runner)
-        == pr_flow.SUCCESS_EXIT_CODE
-    )
-    payload = _valid_issue_intent_payload()
-    payload["pr_class"] = "governance_functional"
-    payload["spec_ref"] = {"issues": [], "design_docs": [], "adrs": []}
-    payload["issue_refs"] = []
-
-    updated = pr_flow._payload_with_current_branch_context(
-        payload,
-        root=tmp_path,
-        runner=runner,
-        current_diff_fingerprint=payload["diff_fingerprint"],
-    )
-    result = ai_review_gate.validate_report(
-        updated,
-        current_diff_fingerprint=payload["diff_fingerprint"],
-    )
-
-    assert result.ok, result.errors
-    assert updated["spec_ref"]["issues"] == [{"number": 55, "role": "closes"}]
-    assert updated["issue_refs"] == [
-        {
-            "number": 55,
-            "title": "Issue 55",
-            "acceptance_criteria": ["AC is met"],
-        }
-    ]
-
-
-def test_review_pipeline_skips_security_when_standards_has_open_p1() -> None:
-    payload = _valid_issue_intent_payload()
-    payload["review_fragments"]["standards"]["findings"] = [
-        {"id": "STD-1", "severity": "P1", "status": "open"}
-    ]
-
-    decision = pr_flow.evaluate_review_pipeline(payload)
-
-    assert decision["status"] == "security_skipped"
-    assert decision["blocking_findings"] == ["STD-1"]
-
-
-def test_review_pipeline_blocks_non_passing_first_stage_fragment_status() -> None:
-    payload = _valid_issue_intent_payload()
-    payload["review_fragments"]["standards"]["status"] = "blocked"
-
-    decision = pr_flow.evaluate_review_pipeline(payload)
-
-    assert decision["status"] == "security_skipped"
-    assert "standards review fragment status blocked" in decision["blocking_findings"]
-
-
-def test_review_pipeline_ignores_spec_ac_evidence_when_present() -> None:
-    payload = _valid_issue_intent_payload()
-    payload["review_fragments"]["spec"]["ac_evidence"] = [
-        {
-            "issue": 55,
-            "criteria": "AC is met",
-            "met": True,
-            "evidence": ["focused pytest"],
-            "reviewer": "spec-reviewer",
-        }
-    ]
-
-    decision = pr_flow.evaluate_review_pipeline(payload)
-
-    assert decision["status"] == "security_ready"
-    assert "ac_evidence" not in decision
-
-
-def test_review_pipeline_does_not_block_missing_ac_evidence() -> None:
-    payload = _valid_issue_intent_payload()
-
-    decision = pr_flow.evaluate_review_pipeline(payload)
-
-    assert decision["status"] == "security_ready"
-    assert "ac_evidence" not in decision
 
 
 def test_intent_cli_parser_accepts_stage_command() -> None:

@@ -191,7 +191,7 @@ TOOL_DEFINITIONS: tuple[ToolDefinition, ...] = (
         readme_path="scripts/research/governance/README.md",
         docs_path="docs/rules/governance.md",
         tests=("scripts/research/governance/tests/test_verify.py",),
-        inputs=("changed files", "staged diff", ".local/ai-review/latest.json"),
+        inputs=("changed files", "staged diff", "explicit --files", "optional --base"),
         outputs=("checked/skipped/cache-hit/full-not-run verification report",),
     ),
     ToolDefinition(
@@ -204,15 +204,16 @@ TOOL_DEFINITIONS: tuple[ToolDefinition, ...] = (
         description="Local PR preparation, draft PR synchronization, Codex review trigger, explicit review-thread resolution, diagnostics, required-check waiting, merge and cleanup.",
         readme_path="scripts/research/governance/README.md",
         docs_path="docs/rules/pr-workflow.md",
-        tests=("scripts/research/governance/tests/test_pr_flow.py",),
+        tests=("scripts/research/governance/tests/test_pr_flow_contract.py",),
         inputs=(
-            ".local/ai-review/latest.json",
+            ".local/ai-review/fragments/*.json",
+            ".local/pr-flow/status.json",
+            "PR Evidence JSON",
             "git diff",
             "explicit resolved review thread IDs",
             "gh authenticated session",
         ),
         outputs=(
-            ".local/ai-review/pr-body.md",
             "draft pull request",
             "resolved review threads",
             "required check summary",

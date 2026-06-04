@@ -153,6 +153,7 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
         self.auto_merge_requested = existing_state.upper() == "MERGED"
         self.created_bodies: list[str] = []
         self.edited_bodies: list[str] = []
+        self.body_file_names: list[str] = []
         self.comments: list[str] = []
         self.lifecycle_calls: list[list[str]] = []
         self.cwd_calls: list[tuple[list[str], Path | None]] = []
@@ -230,6 +231,7 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             return pr_flow.CommandResult(0, json.dumps({"headRefOid": "1" * 40}), "")
         if command[:4] == ["gh", "pr", "edit", "88"]:
             body_file = Path(command[command.index("--body-file") + 1])
+            self.body_file_names.append(body_file.name)
             self.edited_bodies.append(body_file.read_text(encoding="utf-8"))
             return pr_flow.CommandResult(0, "", "")
         if command == [
@@ -246,6 +248,7 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             )
         if command[:3] == ["gh", "pr", "create"]:
             body_file = Path(command[command.index("--body-file") + 1])
+            self.body_file_names.append(body_file.name)
             self.created_bodies.append(body_file.read_text(encoding="utf-8"))
             return pr_flow.CommandResult(
                 0,
@@ -256,6 +259,28 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             body_file = Path(command[command.index("--body-file") + 1])
             self.comments.append(body_file.read_text(encoding="utf-8"))
             return pr_flow.CommandResult(0, "", "")
+        if command[:3] == ["gh", "api", "graphql"]:
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "data": {
+                            "repository": {
+                                "pullRequest": {
+                                    "reviewThreads": {
+                                        "nodes": [],
+                                        "pageInfo": {
+                                            "hasNextPage": False,
+                                            "endCursor": None,
+                                        },
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ),
+                "",
+            )
         if command == [
             "gh",
             "api",
@@ -721,10 +746,18 @@ class SubmitMixedFailingPendingChecksRunner(SubmitCreatePrRunner):
 
 
 class SubmitOfficialCodexRetainedRunner(SubmitCreatePrRunner):
-    def __init__(self, *, diff_text: str) -> None:
+    def __init__(
+        self,
+        *,
+        diff_text: str,
+        thread_author: str = "chatgpt-codex-connector[bot]",
+        thread_body: str = "**P2** retain as follow-up",
+    ) -> None:
         super().__init__(diff_text=diff_text)
         self.checks_calls = 0
         self.thread_id = "PRRT_official_p2"
+        self.thread_author = thread_author
+        self.thread_body = thread_body
         self.replies: list[str] = []
         self.resolved_threads: list[str] = []
 
@@ -741,8 +774,11 @@ class SubmitOfficialCodexRetainedRunner(SubmitCreatePrRunner):
             == ["gh", "pr", "checks", "88", "--required", "--json"]
         ):
             self.checks_calls += 1
-            review_bucket = "fail" if self.checks_calls == 1 else "pass"
-            review_state = "FAILURE" if self.checks_calls == 1 else "SUCCESS"
+            # If thread was already resolved by pre-CI auto-processing,
+            # return success on the first call. Otherwise fail and retry.
+            already_resolved = bool(self.resolved_threads)
+            review_bucket = "fail" if (self.checks_calls == 1 and not already_resolved) else "pass"
+            review_state = "FAILURE" if (self.checks_calls == 1 and not already_resolved) else "SUCCESS"
             return pr_flow.CommandResult(
                 0,
                 json.dumps(
@@ -814,6 +850,26 @@ class SubmitOfficialCodexRetainedRunner(SubmitCreatePrRunner):
                 ),
                 "",
             )
+        if "node(id:$threadId)" in joined:
+            thread_id = next(
+                (
+                    item.removeprefix("threadId=")
+                    for item in command
+                    if item.startswith("threadId=")
+                ),
+                "",
+            )
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "data": {
+                            "node": {"id": thread_id, "isResolved": True}
+                        }
+                    }
+                ),
+                "",
+            )
         if "reviewThreads" in joined:
             return pr_flow.CommandResult(
                 0,
@@ -831,9 +887,9 @@ class SubmitOfficialCodexRetainedRunner(SubmitCreatePrRunner):
                                                 "comments": {
                                                     "nodes": [
                                                         {
-                                                            "body": "**P2** retain as follow-up",
+                                                            "body": self.thread_body,
                                                             "author": {
-                                                                "login": "chatgpt-codex-connector[bot]"
+                                                                "login": self.thread_author
                                                             },
                                                         }
                                                     ]
@@ -889,10 +945,87 @@ def test_contract_loads_required_checks_and_writes_submit_status(tmp_path: Path)
     payload = json.loads(status_path.read_text(encoding="utf-8"))
     assert list(payload) == ["schema", "head", "failures"]
     assert list(payload["failures"][0]) == ["check", "source", "detail"]
-    assert payload["schema"] == 1
+    assert payload["schema"] == contract.version
     assert payload["head"] == "1" * 40
     assert "\n" not in payload["failures"][0]["detail"]
     assert len(payload["failures"][0]["detail"]) <= contract.detail_max_chars
+
+
+def test_auto_review_thread_action_requires_codex_root_comment() -> None:
+    thread = {
+        "id": "PRRT_human_root",
+        "isResolved": False,
+        "isOutdated": False,
+        "comments": {
+            "nodes": [
+                {
+                    "body": "human reviewer opened this thread",
+                    "author": {"login": "liuli195"},
+                },
+                {
+                    "body": "**P2** official Codex later replied",
+                    "author": {"login": "chatgpt-codex-connector"},
+                },
+            ]
+        },
+    }
+
+    assert pr_flow._thread_is_official_codex(thread) is False
+    assert pr_flow._auto_review_thread_action(thread, {}) == ""
+
+
+def test_auto_review_thread_action_rejects_stale_closure_evidence() -> None:
+    thread = {
+        "id": "PRRT_codex_p1",
+        "isResolved": False,
+        "isOutdated": False,
+        "comments": {
+            "nodes": [
+                {
+                    "body": "**P1** current head blocker",
+                    "author": {"login": "chatgpt-codex-connector"},
+                }
+            ]
+        },
+    }
+    payload = {
+        "diff_fingerprint": {
+            "head_sha": "1" * 40,
+            "diff_files_hash": "old-diff",
+        },
+        "external_findings": [
+            {
+                "source": "official_codex_review_thread",
+                "thread_id": "PRRT_codex_p1",
+                "severity": "P1",
+                "status": "fixed",
+                "evidence": "fixed in old head",
+                "head_sha": "1" * 40,
+                "diff_files_hash": "old-diff",
+                "fix_commit": "1" * 40,
+                "verification_command": "pytest old",
+            }
+        ],
+    }
+
+    assert (
+        pr_flow._closed_external_finding_for_thread(
+            payload,
+            thread,
+            current_head_sha="2" * 40,
+            current_diff_hash="new-diff",
+        )
+        is None
+    )
+    assert (
+        pr_flow._auto_review_thread_action(
+            thread,
+            payload,
+            current_head_sha="2" * 40,
+            current_diff_hash="new-diff",
+        )
+        == ""
+    )
 
 
 def test_submit_fails_fast_when_github_contract_preflight_is_missing(
@@ -919,6 +1052,222 @@ def test_submit_fails_fast_when_github_contract_preflight_is_missing(
             "source": "main",
             "detail": "missing required checks: Research Governance / verify-full, PR Flow / evidence",
         },
+    ]
+
+
+def test_submit_writes_submit_status_on_non_zero_exit(
+    tmp_path: Path,
+) -> None:
+    """Non-zero pr-submit exits write the #65 submit status interface."""
+    runner = SubmitPreflightRunner(valid_contract=True)
+    # missing fragments should cause DISPATCH_REQUIRED
+    code = pr_flow.submit(repo_root=tmp_path, title="PR 自动化", runner=runner)
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert list(status) == ["schema", "head", "failures"]
+    assert status["head"] == "1" * 40
+    assert status["failures"]
+    assert set(status["failures"][0]) == {"check", "source", "detail"}
+
+
+def test_submit_writes_submit_status_when_auto_merge_fails(tmp_path: Path) -> None:
+    diff_text = "diff --git a/docs/guides/example.md b/docs/guides/example.md\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        merge_returncode=1,
+        merge_stdout="",
+        merge_stderr="GraphQL: merge blocked by ruleset",
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"] == [
+        {
+            "check": "pr-lifecycle",
+            "source": "gh pr merge --auto",
+            "detail": "gh pr merge --auto failed: GraphQL: merge blocked by ruleset",
+        }
+    ]
+
+
+def test_submit_writes_submit_status_when_codex_request_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    diff_text = (
+        "diff --git a/scripts/research/governance/pr_flow.py "
+        "b/scripts/research/governance/pr_flow.py\n+hello\n"
+    )
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        changed_files_output="scripts/research/governance/pr_flow.py\n",
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+    monkeypatch.setattr(
+        pr_flow,
+        "_submit_request_codex_review",
+        lambda **_kwargs: pr_flow.EXCEPTION_REQUIRED_EXIT_CODE,
+    )
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"] == [
+        {
+            "check": "official-codex-review",
+            "source": "https://github.com/liuli195/Quant-Trading/pull/88",
+            "detail": "official Codex review request failed",
+        }
+    ]
+
+
+def test_submit_writes_submit_status_when_retained_thread_retry_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitFailingChecksRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+    monkeypatch.setattr(
+        pr_flow,
+        "_submit_accept_official_codex_retained_threads",
+        lambda **_kwargs: (pr_flow.EXCEPTION_REQUIRED_EXIT_CODE, False),
+    )
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"] == [
+        {
+            "check": "official-codex-review-thread",
+            "source": "https://github.com/liuli195/Quant-Trading/pull/88",
+            "detail": "official Codex retained thread auto-processing failed",
+        }
+    ]
+
+
+def test_submit_writes_submit_status_when_retained_thread_read_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitFailingChecksRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    def fail_review_threads(**_kwargs):
+        raise pr_flow.GitHubDataUnavailable("GitHub review threads unavailable")
+
+    monkeypatch.setattr(pr_flow, "_current_pr_review_threads", fail_review_threads)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"] == [
+        {
+            "check": "official-codex-review-thread",
+            "source": "https://github.com/liuli195/Quant-Trading/pull/88",
+            "detail": (
+                "official Codex review thread read failed: "
+                "GitHub review threads unavailable"
+            ),
+        }
+    ]
+
+
+def test_submit_writes_submit_status_when_merge_wait_times_out(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+    monkeypatch.setattr(pr_flow, "_submit_wait_for_merged_pr", lambda **_kwargs: None)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"] == [
+        {
+            "check": "pr-lifecycle",
+            "source": "PR #88",
+            "detail": "PR merge timed out",
+        }
+    ]
+
+
+def test_submit_writes_submit_status_when_cleanup_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        existing_pr=True,
+        existing_state="MERGED",
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+    monkeypatch.setattr(
+        pr_flow,
+        "_cleanup_merged_pr_metadata",
+        lambda **_kwargs: pr_flow.EXCEPTION_REQUIRED_EXIT_CODE,
+    )
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"] == [
+        {
+            "check": "pr-lifecycle",
+            "source": "PR #88",
+            "detail": "post-merge cleanup failed",
+        }
     ]
 
 
@@ -1065,10 +1414,11 @@ def test_pr_review_evidence_accepts_contract_v1_managed_json() -> None:
     assert report.ok, report.errors
 
 
-def test_pr_review_evidence_accepts_legacy_contract_v1_without_official_review() -> (
+def test_pr_review_evidence_rejects_contract_without_official_review() -> (
     None
 ):
     payload = _contract_evidence_payload()
+    payload["schema"] = 1
     payload.pop("official_review")
     body = _managed_evidence_body(payload)
 
@@ -1079,7 +1429,9 @@ def test_pr_review_evidence_accepts_legacy_contract_v1_without_official_review()
         expected_commit_shas=("1" * 40, "2" * 40),
     )
 
-    assert report.ok, report.errors
+    assert not report.ok
+    assert "PR Evidence JSON schema must be 2" in report.errors
+    assert "PR Evidence official_review must be an object" in report.errors
 
 
 def test_pr_review_evidence_rejects_invalid_official_review_shape() -> None:
@@ -1191,6 +1543,7 @@ def test_submit_creates_draft_pr_with_contract_evidence_json(tmp_path: Path) -> 
 
     assert code == pr_flow.SUCCESS_EXIT_CODE
     assert runner.created_bodies
+    assert runner.body_file_names == ["pr-evidence-body.md"]
     body = runner.created_bodies[-1]
     assert "## AI Review 风险分级" not in body
     payload = _payload_from_managed_body(body)
@@ -1412,17 +1765,271 @@ def test_submit_accepts_official_codex_p2_thread_into_retained(
     code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
 
     assert code == pr_flow.SUCCESS_EXIT_CODE
-    assert runner.checks_calls == 2
+    # Thread accepted pre-CI: only 1 CI checks call (passes first time)
+    assert runner.checks_calls == 1
     assert runner.replies
     assert runner.resolved_threads == [runner.thread_id]
-    payload = _payload_from_managed_body(runner.edited_bodies[-1])
-    retained = payload["retained"]
-    assert isinstance(retained, list)
-    assert {
-        "severity": "P2",
-        "source": "official_codex",
-        "detail": "**P2** retain as follow-up",
-    } in retained
+    payload = _payload_from_managed_body(runner.created_bodies[-1])
+    assert payload["retained"] == [
+        {
+            "severity": "P2",
+            "source": "official_codex",
+            "detail": "**P2** retain as follow-up",
+        }
+    ]
+
+
+def test_submit_does_not_auto_accept_human_p2_thread(tmp_path: Path) -> None:
+    """Human review threads remain manual even when their text has P2 severity."""
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitOfficialCodexRetainedRunner(
+        diff_text=diff_text,
+        thread_author="human-reviewer",
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert not runner.replies
+    assert not runner.resolved_threads
+
+
+class SubmitAutoCloseOutdatedThreadRunner(SubmitCreatePrRunner):
+    """submit() inspects outdated P1 Codex threads before waiting for CI.
+
+    Tracks call order: thread must be queried before CI checks are interpreted.
+    """
+
+    def __init__(self, *, diff_text: str) -> None:
+        super().__init__(diff_text=diff_text)
+        self.checks_calls = 0
+        self.thread_id = "PRRT_outdated_p1"
+        self.replies: list[str] = []
+        self.resolved_threads: list[str] = []
+        self._thread_query_count = 0
+        self._thread_resolved = False
+        self._call_sequence: list[str] = []
+        self.thread_is_outdated = True
+        self.thread_body = "![P1 Badge] outdated finding"
+        self.review_threads_unavailable = False
+
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        joined = "\n".join(command)
+        if (
+            command[:6]
+            == ["gh", "pr", "checks", "88", "--required", "--json"]
+        ):
+            self.checks_calls += 1
+            self._call_sequence.append("checks")
+            # CI only returns success AFTER thread is resolved
+            state = "SUCCESS" if self._thread_resolved else "FAILURE"
+            bucket = "pass" if self._thread_resolved else "fail"
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    [
+                        {
+                            "name": "PR Flow / review-status",
+                            "workflow": "",
+                            "state": state,
+                            "bucket": bucket,
+                            "link": "https://github.com/checks/review",
+                        },
+                        {
+                            "name": "verify-full",
+                            "workflow": "Research Governance",
+                            "state": "SUCCESS",
+                            "bucket": "pass",
+                            "link": "https://github.com/runs/1",
+                        },
+                        {
+                            "name": "evidence",
+                            "workflow": "PR Flow",
+                            "state": state,
+                            "bucket": bucket,
+                            "link": "https://github.com/runs/2",
+                        },
+                    ]
+                ),
+                "",
+            )
+        if "addPullRequestReviewThreadReply" in joined:
+            body = next(
+                (item.removeprefix("body=") for item in command if item.startswith("body=")),
+                "",
+            )
+            self.replies.append(body)
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "data": {
+                            "addPullRequestReviewThreadReply": {
+                                "comment": {"id": "comment-id"}
+                            }
+                        }
+                    }
+                ),
+                "",
+            )
+        if "resolveReviewThread" in joined:
+            thread_id = next(
+                (
+                    item.removeprefix("threadId=")
+                    for item in command
+                    if item.startswith("threadId=")
+                ),
+                "",
+            )
+            self.resolved_threads.append(thread_id)
+            self._thread_resolved = True
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "data": {
+                            "resolveReviewThread": {
+                                "thread": {"id": thread_id, "isResolved": True}
+                            }
+                        }
+                    }
+                ),
+                "",
+            )
+        if "node(id:$threadId)" in joined:
+            thread_id = next(
+                (
+                    item.removeprefix("threadId=")
+                    for item in command
+                    if item.startswith("threadId=")
+                ),
+                "",
+            )
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "data": {
+                            "node": {"id": thread_id, "isResolved": self._thread_resolved}
+                        }
+                    }
+                ),
+                "",
+            )
+        if "reviewThreads" in joined:
+            self._thread_query_count += 1
+            self._call_sequence.append("reviewThreads")
+            if self.review_threads_unavailable:
+                return pr_flow.CommandResult(1, "", "review threads unavailable")
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "data": {
+                            "repository": {
+                                "pullRequest": {
+                                    "reviewThreads": {
+                                        "nodes": [
+                                            {
+                                                "id": self.thread_id,
+                                                "isResolved": False,
+                                                "isOutdated": self.thread_is_outdated,
+                                                "comments": {
+                                                    "nodes": [
+                                                        {
+                                                            "body": self.thread_body,
+                                                            "author": {
+                                                                "login": "chatgpt-codex-connector[bot]"
+                                                            },
+                                                        }
+                                                    ]
+                                                },
+                                            }
+                                        ],
+                                        "pageInfo": {
+                                            "hasNextPage": False,
+                                            "endCursor": None,
+                                        },
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ),
+                "",
+            )
+        return super().run(command, cwd=cwd, input_text=input_text)
+
+
+def test_submit_blocks_outdated_codex_p1_thread_without_closure_evidence(
+    tmp_path: Path,
+) -> None:
+    """submit() must not auto-close outdated P1 Codex threads without evidence."""
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitAutoCloseOutdatedThreadRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert runner.resolved_threads == []
+    assert runner.replies == []
+    # Thread was queried and resolved BEFORE CI checks ran
+    assert "reviewThreads" in runner._call_sequence
+    review_idx = runner._call_sequence.index("reviewThreads")
+    checks_idx = runner._call_sequence.index("checks")
+    assert review_idx < checks_idx, (
+        "thread must be auto-processed BEFORE CI checks"
+    )
+    # CI checks still run once and report the review-status blocker.
+    assert runner.checks_calls == 1
+
+
+def test_submit_fails_closed_when_pre_ci_review_threads_are_unreadable(
+    tmp_path: Path,
+) -> None:
+    """submit() must not continue toward merge when review threads are unreadable."""
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitAutoCloseOutdatedThreadRunner(diff_text=diff_text)
+    runner.review_threads_unavailable = True
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert runner.checks_calls == 0
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"] == [
+        {
+            "check": "official-codex-review-thread",
+            "source": "https://github.com/liuli195/Quant-Trading/pull/88",
+            "detail": (
+                "official Codex review thread read failed: "
+                "GitHub review threads unavailable"
+            ),
+        }
+    ]
 
 
 def test_submit_rejects_missing_commit_intent_before_creating_pr(
@@ -1753,7 +2360,7 @@ def test_submit_reuses_current_diff_fragments_after_pr_body_update(
     diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
     stale_body = _managed_evidence_body(
         {
-            "schema": 1,
+            "schema": 2,
             "head": "0" * 40,
             "diff": "old-diff",
             "reviews": {},
@@ -1813,7 +2420,7 @@ def test_submit_refreshes_same_diff_review_fragment_heads(tmp_path: Path) -> Non
             ).read_text(encoding="utf-8")
         )
         assert fragment == {
-            "schema": 1,
+            "schema": 2,
             "head": "1" * 40,
             "diff": diff_hash,
             "findings": [],
@@ -2088,6 +2695,188 @@ def test_codex_review_status_uses_contract_context_and_workflow_target(
     )
 
 
+def test_contract_defines_target_spec_wins_rule() -> None:
+    """Target spec wins rule must be machine-readable in the contract."""
+    contract = pr_flow_contract.load_contract(Path("."))
+
+    assert contract.target_spec_wins is True
+
+
+def test_contract_defines_fragment_freshness_rule() -> None:
+    """Fragment freshness semantics must be explicit in the contract."""
+    contract = pr_flow_contract.load_contract(Path("."))
+
+    assert isinstance(contract.fragment_freshness_same_diff_head_refresh, bool)
+    assert contract.fragment_freshness_same_diff_head_refresh is True
+
+
+def test_contract_defines_github_native_closing_links_rule() -> None:
+    """GitHub native closing links must come from per-commit evidence."""
+    contract = pr_flow_contract.load_contract(Path("."))
+
+    assert isinstance(contract.github_native_closing_links_from_per_commit_evidence, bool)
+    assert contract.github_native_closing_links_from_per_commit_evidence is True
+
+
+def test_contract_defines_codex_thread_automation_rules() -> None:
+    """Codex thread automation boundaries must be defined in the contract."""
+    contract = pr_flow_contract.load_contract(Path("."))
+
+    assert isinstance(contract.codex_thread_p0_p1_requires_closure_evidence, bool)
+    assert contract.codex_thread_p0_p1_requires_closure_evidence is True
+    assert isinstance(contract.codex_thread_human_never_auto_resolve, bool)
+    assert contract.codex_thread_human_never_auto_resolve is True
+    assert isinstance(contract.codex_thread_no_severity_never_auto_resolve, bool)
+    assert contract.codex_thread_no_severity_never_auto_resolve is True
+    assert isinstance(contract.codex_thread_p2_p3_auto_accept, bool)
+    assert contract.codex_thread_p2_p3_auto_accept is True
+
+
+def test_contract_defines_workflow_pending_rule() -> None:
+    """Workflow must publish pending status before execution."""
+    contract = pr_flow_contract.load_contract(Path("."))
+
+    assert isinstance(contract.workflow_pending_before_execution, bool)
+    assert contract.workflow_pending_before_execution is True
+
+
+def test_workflow_files_publish_pending_before_validation() -> None:
+    """Each required-check workflow must publish pending before time-consuming work."""
+    import yaml
+
+    repo_root = Path(".")
+    workflow_dir = repo_root / ".github" / "workflows"
+
+    contexts = {
+        "pr-flow.yml": "PR Flow / evidence",
+        "codex-review-monitor.yml": "PR Flow / review-status",
+        "research-governance.yml": "Research Governance / verify-full",
+    }
+
+    for filename, expected_context in contexts.items():
+        path = workflow_dir / filename
+        content = path.read_text(encoding="utf-8")
+        doc = yaml.safe_load(content)
+
+        jobs = doc.get("jobs", {}) if isinstance(doc, dict) else {}
+        for job_name, job_def in jobs.items():
+            if not isinstance(job_def, dict):
+                continue
+            steps = job_def.get("steps", [])
+            if not isinstance(steps, list):
+                continue
+
+            pending_step = None
+            for step in steps:
+                if not isinstance(step, dict):
+                    continue
+                if step.get("name") == "Publish pending status":
+                    pending_step = step
+                    break
+
+            assert pending_step is not None, (
+                f"{filename}:{job_name} missing 'Publish pending status' step"
+            )
+            # Verify the step publishes pending for the correct context
+            run_script = str(pending_step.get("run", ""))
+            assert expected_context in run_script, (
+                f"{filename}:{job_name} must publish pending for {expected_context}"
+            )
+            assert "pending" in run_script, (
+                f"{filename}:{job_name} must set state to pending"
+            )
+
+
+def test_codex_review_monitor_has_failure_finalizer_for_pending_status() -> None:
+    """The monitor must not leave review-status pending after infrastructure failure."""
+    import yaml
+
+    path = Path(".github/workflows/codex-review-monitor.yml")
+    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+
+    steps = doc["jobs"]["monitor"]["steps"]
+    finalizer = next(
+        (
+            step
+            for step in steps
+            if isinstance(step, dict)
+            and step.get("name") == "Publish monitor failure status"
+        ),
+        None,
+    )
+
+    assert finalizer is not None
+    condition = str(finalizer.get("if", ""))
+    assert "always()" in condition
+    assert "failure()" in condition
+    assert "cancelled()" in condition
+    run_script = str(finalizer.get("run", ""))
+    assert "PR Flow / review-status" in run_script
+    assert "failure" in run_script
+    assert "error" in run_script
+    assert "pulls/$env:PR_NUMBER" in run_script
+
+
+def test_codex_review_monitor_uses_event_appropriate_checkout_ref() -> None:
+    """issue_comment runs trusted code; PR events run PR-compatible code."""
+    import yaml
+
+    path = Path(".github/workflows/codex-review-monitor.yml")
+    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+
+    jobs = doc.get("jobs", {}) if isinstance(doc, dict) else {}
+    for job_name, job_def in jobs.items():
+        if not isinstance(job_def, dict):
+            continue
+        steps = job_def.get("steps", [])
+        if not isinstance(steps, list):
+            continue
+
+        checkout_step = None
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            uses = str(step.get("uses", ""))
+            if uses.startswith("actions/checkout@"):
+                checkout_step = step
+                break
+
+        assert checkout_step is not None, (
+            f"{job_name} missing actions/checkout step"
+        )
+        ref = checkout_step.get("with", {}).get("ref", "")
+        assert "steps.pr-head.outputs.sha" in ref, (
+            f"{job_name} checkout must use PR-compatible head code, got: {ref}"
+        )
+        assert "github.event.repository.default_branch" not in ref, (
+            f"{job_name} checkout must not pin issue_comment to default branch, got: {ref}"
+        )
+
+        resolve_step = next(
+            step for step in steps if isinstance(step, dict) and step.get("id") == "pr-head"
+        )
+        assert "pulls/$env:PR_NUMBER" in str(resolve_step.get("run", "")), (
+            f"{job_name} must resolve PR head SHA as data before monitoring"
+        )
+
+
+def test_codex_review_monitor_workflow_dispatch_resolves_input_pr_number() -> None:
+    """workflow_dispatch must inspect the manually requested PR number."""
+    import yaml
+
+    path = Path(".github/workflows/codex-review-monitor.yml")
+    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+
+    steps = doc["jobs"]["monitor"]["steps"]
+    resolve_step = next(
+        step for step in steps if step.get("name") == "Resolve PR head SHA"
+    )
+    assert (
+        resolve_step["env"]["PR_NUMBER"]
+        == "${{ inputs.pr_number || github.event.pull_request.number || github.event.issue.number }}"
+    )
+
+
 def _write_fragment(
     root: Path,
     role: str,
@@ -2101,7 +2890,7 @@ def _write_fragment(
     path.write_text(
         json.dumps(
             {
-                "schema": 1,
+                "schema": 2,
                 "head": head,
                 "diff": diff,
                 "findings": findings,
@@ -2109,84 +2898,6 @@ def _write_fragment(
         ),
         encoding="utf-8",
     )
-
-
-def _write_ai_review_report(
-    root: Path,
-    *,
-    risk_level: str = "low",
-    requires_official: bool = False,
-    changed_files: list[str] | None = None,
-    skip_official: bool = False,
-) -> None:
-    payload = _ai_review_payload(
-        risk_level=risk_level,
-        requires_official=requires_official,
-        changed_files=changed_files,
-        skip_official=skip_official,
-    )
-    local = root / ".local" / "ai-review"
-    local.mkdir(parents=True, exist_ok=True)
-    (local / "latest.json").write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-
-def _ai_review_payload(
-    *,
-    risk_level: str = "low",
-    requires_official: bool = False,
-    changed_files: list[str] | None = None,
-    skip_official: bool = False,
-) -> dict[str, object]:
-    payload: dict[str, object] = {
-        "schema_version": 2,
-        "tool": "codex",
-        "reviewers": ["standards-reviewer", "spec-reviewer"],
-        "risk_level": risk_level,
-        "requires_official_codex_review": requires_official,
-        "security_review": {
-            "tool": "codex-security",
-            "evidence": "local security review completed",
-        },
-        "cross_review": {
-            "delegated_to_subagents": True,
-            "review_skills": [
-                "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
-                "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
-            ],
-            "evidence": "standards and spec reviewers completed",
-        },
-        "complete_review": {
-            "evidence": "reviewers reached no new findings",
-            "iterations": [
-                {
-                    "reviewer": "standards-reviewer",
-                    "round": 1,
-                    "new_findings": [],
-                    "no_new_findings": True,
-                },
-                {
-                    "reviewer": "spec-reviewer",
-                    "round": 1,
-                    "new_findings": [],
-                    "no_new_findings": True,
-                },
-            ],
-        },
-        "changed_files": changed_files or ["docs/guides/example.md"],
-        "findings": [],
-        "checks": {},
-    }
-    if skip_official:
-        payload["skip_official_codex_review"] = True
-        payload["official_codex_review_skip_authorization"] = {
-            "authorized_by": "liuli195",
-            "reason": "current PR official review cost is higher than risk",
-            "evidence": "user explicitly authorized skipping official review",
-        }
-    return payload
 
 
 def _managed_evidence_body(payload: dict[str, object]) -> str:
@@ -2201,7 +2912,7 @@ def _managed_evidence_body(payload: dict[str, object]) -> str:
 
 def _contract_evidence_payload() -> dict[str, object]:
     return {
-        "schema": 1,
+        "schema": 2,
         "head": "a" * 40,
         "diff": "diff-hash",
         "reviews": {

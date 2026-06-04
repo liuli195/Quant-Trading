@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
   "catalog_type": "docs",
-  "generated_at": "2026-06-01T08:49:10+00:00",
-  "count": 65,
+  "generated_at": "2026-06-04T12:07:55+00:00",
+  "count": 59,
   "reports": [
     {
       "path": "docs/README.md",
       "title": "文档入口",
       "category": "docs",
       "strategy": null,
-      "date": "2026-05-29",
+      "date": null,
       "tags": [],
       "pathrefs": [
         "repo/AGENTS.md",
@@ -27,8 +27,6 @@
         "docs/reference/joinquant-api.md",
         "docs/joinquant-data",
         "docs/joinquant-data/JQ_场内基金数据.md",
-        "docs/problems",
-        "docs/problems/2026-05-29-pr21-flow-retrospective.md",
         "docs/indexes",
         "docs/indexes/docs_catalog.json",
         "docs/guides/feishu-relay-tools.md",
@@ -36,7 +34,7 @@
         "docs/rules/governance.md",
         "docs/adr/0007-pr-flow-closed-loop-review-evidence.md"
       ],
-      "updated_at": "2026-05-31T20:57:02+00:00"
+      "updated_at": "2026-06-04T11:40:31+00:00"
     },
     {
       "path": "docs/adr/0001-rule-source-and-governance-model.md",
@@ -92,7 +90,7 @@
         "repo/CLAUDE.md",
         "docs/adr/0005-ai-entry-progressive-disclosure.md"
       ],
-      "updated_at": "2026-05-31T20:57:02+00:00"
+      "updated_at": "2026-06-02T03:02:52+00:00"
     },
     {
       "path": "docs/adr/0005-ai-entry-progressive-disclosure.md",
@@ -122,7 +120,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-29T16:49:17+00:00"
+      "updated_at": "2026-06-02T10:50:43+00:00"
     },
     {
       "path": "docs/adr/0007-pr-flow-closed-loop-review-evidence.md",
@@ -134,7 +132,7 @@
       "pathrefs": [
         "docs/adr/0006-risk-tiered-pr-review.md"
       ],
-      "updated_at": "2026-05-31T20:57:02+00:00"
+      "updated_at": "2026-06-04T11:48:44+00:00"
     },
     {
       "path": "docs/adr/0008-skill-single-source-agents.md",
@@ -144,7 +142,20 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-06-01T07:58:53+00:00"
+      "updated_at": "2026-06-01T09:47:59+00:00"
+    },
+    {
+      "path": "docs/adr/0009-subagent-delegation-continuous-authorization.md",
+      "title": "ADR 0009: 子 agent 派发使用持续显式授权",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [
+        "docs/rules/review-guidelines.md",
+        "docs/rules/collaboration.md"
+      ],
+      "updated_at": "2026-06-02T04:01:57+00:00"
     },
     {
       "path": "docs/adr/index.md",
@@ -161,9 +172,10 @@
         "docs/adr/0005-ai-entry-progressive-disclosure.md",
         "docs/adr/0006-risk-tiered-pr-review.md",
         "docs/adr/0007-pr-flow-closed-loop-review-evidence.md",
-        "docs/adr/0008-skill-single-source-agents.md"
+        "docs/adr/0008-skill-single-source-agents.md",
+        "docs/adr/0009-subagent-delegation-continuous-authorization.md"
       ],
-      "updated_at": "2026-06-01T08:49:10+00:00"
+      "updated_at": "2026-06-04T12:07:55+00:00"
     },
     {
       "path": "docs/agents/domain.md",
@@ -228,7 +240,7 @@
         "docs/indexes/reports.md",
         "scripts/research/layers"
       ],
-      "updated_at": "2026-06-01T08:48:36+00:00"
+      "updated_at": "2026-06-01T09:47:59+00:00"
     },
     {
       "path": "docs/design/cc-switch-cli.md",
@@ -261,7 +273,7 @@
         "repo/AGENTS.md",
         "repo/CLAUDE.md"
       ],
-      "updated_at": "2026-06-01T08:02:57+00:00"
+      "updated_at": "2026-06-01T09:47:59+00:00"
     },
     {
       "path": "docs/design/skill-system-migration-review.md",
@@ -281,7 +293,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-31T20:57:02+00:00"
+      "updated_at": "2026-06-02T20:03:29+00:00"
     },
     {
       "path": "docs/design/日常增量验证提速方案设计.md",
@@ -291,7 +303,7 @@
       "date": "2026-05-29",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-29T12:26:17+00:00"
+      "updated_at": "2026-06-04T05:01:49+00:00"
     },
     {
       "path": "docs/design/本地研究平台重构.md",
@@ -546,40 +558,6 @@
       "updated_at": "2026-05-02T13:52:02+00:00"
     },
     {
-      "path": "docs/problems/2026-05-29-pr21-flow-retrospective.md",
-      "title": "PR #21/#22 流程问题复盘",
-      "category": "docs",
-      "strategy": null,
-      "date": "2026-05-29",
-      "tags": [],
-      "pathrefs": [
-        "docs/rules/pr-workflow.md",
-        "docs/rules/review-guidelines.md",
-        "docs/rules/governance.md",
-        "scripts/research/governance/pr_flow.py",
-        "scripts/research/governance/pr_review_evidence.py",
-        "scripts/research/governance/skill_ownership.py"
-      ],
-      "updated_at": "2026-05-29T16:49:17+00:00"
-    },
-    {
-      "path": "docs/problems/2026-05-30-pr25-flow-retrospective.md",
-      "title": "PR #25/#26 流程问题复盘",
-      "category": "docs",
-      "strategy": null,
-      "date": "2026-05-30",
-      "tags": [],
-      "pathrefs": [
-        "docs/rules/pr-workflow.md",
-        "docs/rules/review-guidelines.md",
-        "docs/rules/governance.md",
-        "docs/rules/docs-and-pathref.md",
-        "scripts/research/governance/pr_flow.py",
-        "scripts/research/governance/ai_review_gate.py"
-      ],
-      "updated_at": "2026-05-30T19:41:43+00:00"
-    },
-    {
       "path": "docs/reference/joinquant-api.md",
       "title": "定义一个全局变量, 保存要操作的股票",
       "category": "docs",
@@ -652,7 +630,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-28T07:57:23+00:00"
+      "updated_at": "2026-06-01T11:03:01+00:00"
     },
     {
       "path": "docs/rules/commands.md",
@@ -667,7 +645,7 @@
         "scripts/tools/jq_automation/README.md",
         "scripts/tools/path_tools/README.md"
       ],
-      "updated_at": "2026-05-31T20:57:02+00:00"
+      "updated_at": "2026-06-02T20:03:29+00:00"
     },
     {
       "path": "docs/rules/docs-and-pathref.md",
@@ -697,9 +675,11 @@
       "date": null,
       "tags": [],
       "pathrefs": [
-        "repo/AGENTS.md"
+        "repo/AGENTS.md",
+        "docs/rules/pr-workflow.md",
+        "docs/rules/pr-flow-interface-contract.yaml"
       ],
-      "updated_at": "2026-06-01T08:48:29+00:00"
+      "updated_at": "2026-06-04T12:07:47+00:00"
     },
     {
       "path": "docs/rules/index.md",
@@ -720,11 +700,12 @@
         "docs/rules/collaboration.md",
         "docs/rules/docs-and-pathref.md",
         "docs/rules/pr-workflow.md",
+        "docs/rules/pr-flow-interface-contract.yaml",
         "docs/rules/review-guidelines.md",
         "docs/rules/governance.md",
         "docs/adr/index.md"
       ],
-      "updated_at": "2026-06-01T07:59:45+00:00"
+      "updated_at": "2026-06-02T03:02:52+00:00"
     },
     {
       "path": "docs/rules/pr-workflow.md",
@@ -736,9 +717,10 @@
       "pathrefs": [
         "docs/rules/review-guidelines.md",
         "docs/rules/governance.md",
-        "docs/rules/review-guidelines.md"
+        "docs/rules/pr-flow-interface-contract.yaml",
+        "docs/rules/pr-flow-interface-contract.yaml"
       ],
-      "updated_at": "2026-05-31T20:57:02+00:00"
+      "updated_at": "2026-06-02T20:03:29+00:00"
     },
     {
       "path": "docs/rules/research-workflow.md",
@@ -768,9 +750,10 @@
         "docs/rules/docs-and-pathref.md",
         "docs/rules/pr-workflow.md",
         "docs/rules/governance.md",
-        "docs/rules/review-guidelines.md"
+        "docs/rules/review-guidelines.md",
+        "docs/rules/pr-flow-interface-contract.yaml"
       ],
-      "updated_at": "2026-05-31T20:57:02+00:00"
+      "updated_at": "2026-06-04T11:48:44+00:00"
     },
     {
       "path": "docs/rules/skills.md",
@@ -783,7 +766,7 @@
         "repo/AGENTS.md",
         "docs/rules/index.md"
       ],
-      "updated_at": "2026-06-01T07:57:40+00:00"
+      "updated_at": "2026-06-02T11:39:37+00:00"
     },
     {
       "path": "docs/superpowers/plans/2026-05-20-backtest-data-redundancy-compaction.md",
@@ -820,18 +803,6 @@
       "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
-      "path": "docs/superpowers/plans/2026-05-20-pr-risk-tiered-review-workflow.md",
-      "title": "PR 风险分级评审流程 Implementation Plan",
-      "category": "docs",
-      "strategy": null,
-      "date": "2026-05-20",
-      "tags": [],
-      "pathrefs": [
-        "docs/rules/review-guidelines.md"
-      ],
-      "updated_at": "2026-05-28T07:57:23+00:00"
-    },
-    {
       "path": "docs/superpowers/plans/2026-05-26-etf-vol-relief-ab-test.md",
       "title": "ETF Vol Relief A/B Test Implementation Plan",
       "category": "docs",
@@ -844,60 +815,6 @@
         "scripts/tools/jq_automation/README.md"
       ],
       "updated_at": "2026-05-28T07:57:23+00:00"
-    },
-    {
-      "path": "docs/superpowers/plans/2026-05-28-pr-flow-automation.md",
-      "title": "PR Flow Automation Implementation Plan",
-      "category": "docs",
-      "strategy": null,
-      "date": "2026-05-28",
-      "tags": [],
-      "pathrefs": [],
-      "updated_at": "2026-05-29T12:26:17+00:00"
-    },
-    {
-      "path": "docs/superpowers/plans/2026-05-28-pr-flow-handsfree-automation.md",
-      "title": "PR Flow Handsfree Automation Implementation Plan",
-      "category": "docs",
-      "strategy": null,
-      "date": "2026-05-28",
-      "tags": [],
-      "pathrefs": [],
-      "updated_at": "2026-05-28T12:19:27+00:00"
-    },
-    {
-      "path": "docs/superpowers/plans/2026-05-29-incremental-governance-validation-speedup.md",
-      "title": "日常增量验证提速 Implementation Plan",
-      "category": "docs",
-      "strategy": null,
-      "date": "2026-05-29",
-      "tags": [],
-      "pathrefs": [
-        "docs/design/日常增量验证提速方案设计.md",
-        "repo/AGENTS.md",
-        "docs/rules/commands.md",
-        "docs/rules/governance.md",
-        "docs/rules/docs-and-pathref.md",
-        "scripts/research/governance/README.md"
-      ],
-      "updated_at": "2026-05-29T12:26:17+00:00"
-    },
-    {
-      "path": "docs/superpowers/plans/2026-05-29-skill-system-refactor-implementation.md",
-      "title": "Skill System Refactor Implementation Plan",
-      "category": "docs",
-      "strategy": null,
-      "date": "2026-05-29",
-      "tags": [],
-      "pathrefs": [
-        "docs/design/skill-system-refactor.md",
-        "docs/design/cross-ai-skill-management.md",
-        "repo/AGENTS.md",
-        "repo/CLAUDE.md",
-        "docs/rules/governance.md",
-        "docs/rules/docs-and-pathref.md"
-      ],
-      "updated_at": "2026-05-29T12:26:17+00:00"
     },
     {
       "path": "docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md",
