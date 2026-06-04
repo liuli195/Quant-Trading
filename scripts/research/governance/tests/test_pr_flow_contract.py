@@ -1169,6 +1169,41 @@ def test_submit_writes_submit_status_when_retained_thread_retry_fails(
     ]
 
 
+def test_submit_writes_submit_status_when_retained_thread_read_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitFailingChecksRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    def fail_review_threads(**_kwargs):
+        raise pr_flow.GitHubDataUnavailable("GitHub review threads unavailable")
+
+    monkeypatch.setattr(pr_flow, "_current_pr_review_threads", fail_review_threads)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"] == [
+        {
+            "check": "official-codex-review-thread",
+            "source": "https://github.com/liuli195/Quant-Trading/pull/88",
+            "detail": (
+                "official Codex retained thread read failed: "
+                "GitHub review threads unavailable"
+            ),
+        }
+    ]
+
+
 def test_submit_writes_submit_status_when_merge_wait_times_out(
     tmp_path: Path,
     monkeypatch,

@@ -1459,14 +1459,34 @@ def submit(
         poll_seconds=watch_poll_seconds,
     )
     if watch_failures:
-        retry_code, retry_checks = _submit_accept_official_codex_retained_threads(
-            root=root,
-            runner=runner,
-            contract=contract,
-            pr_number=pr or pr_number,
-            pr_url=pr_url,
-            failures=watch_failures,
-        )
+        try:
+            retry_code, retry_checks = _submit_accept_official_codex_retained_threads(
+                root=root,
+                runner=runner,
+                contract=contract,
+                pr_number=pr or pr_number,
+                pr_url=pr_url,
+                failures=watch_failures,
+            )
+        except GitHubDataUnavailable as exc:
+            _print_github_data_unavailable(exc)
+            failures = [
+                pr_flow_contract.SubmitFailure(
+                    check="official-codex-review-thread",
+                    source=pr_url,
+                    detail=f"official Codex retained thread read failed: {exc}",
+                ),
+            ]
+            return _fail_submit(
+                root,
+                contract,
+                EXCEPTION_REQUIRED_EXIT_CODE,
+                head_sha=head_sha,
+                reason_code="CODEX_THREAD_RETRY_UNAVAILABLE",
+                phase="submit_review_threads",
+                retryable=exc.retryable,
+                failures=failures,
+            )
         if retry_code != SUCCESS_EXIT_CODE:
             _ensure_submit_status_failure(
                 root,
