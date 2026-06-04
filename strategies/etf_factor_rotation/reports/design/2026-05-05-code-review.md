@@ -7,7 +7,7 @@
 
 - [JoinQuant API 离线文档](../../../../docs/reference/joinquant-api.md) <!-- pathref: docs/reference/joinquant-api.md -->
 - [JoinQuant 场内基金数据文档](../../../../docs/joinquant-data/JQ_场内基金数据.md) <!-- pathref: joinquant_data/JQ_场内基金数据.md -->
-- [项目开发规范 CLAUDE.md](../../../../CLAUDE.md) <!-- pathref: repo/CLAUDE.md -->
+- [项目开发规范 CLAUDE.md](../../../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->
 - 本地可执行校验：`py_compile`、`pathref check`
 
 本评审只基于本地代码、离线文档和静态推导。涉及聚宽云端运行时返回结构、数据最后日期、复权口径的部分，本地无法完全确认，均标注为“依据不足”并给出下一步验证动作。

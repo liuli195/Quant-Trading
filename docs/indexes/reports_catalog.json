@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "catalog_type": "reports",
-  "generated_at": "2026-06-04T12:07:55+00:00",
+  "generated_at": "2026-06-04T15:14:43+00:00",
   "count": 381,
   "reports": [
     {
@@ -2885,9 +2885,9 @@
         "strategy_reports(strategy=etf_factor_rotation)/design/ETF轮动策略方案说明书.md",
         "docs/reference/joinquant-api.md",
         "joinquant_data/JQ_场内基金数据.md",
-        "repo/CLAUDE.md"
+        "repo/AGENTS.md"
       ],
-      "updated_at": "2026-05-28T07:57:25+00:00"
+      "updated_at": "2026-06-04T15:12:31+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/reports/design/2026-05-17-cash-utilization-optimization-plan.md",
