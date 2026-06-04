@@ -63,7 +63,9 @@ CODEX_CONTEXT_INVALID_PATTERN = re.compile(
     r"could\s+not\s+read.*diff|"
     r"(?:provide|paste)\s+(?:the\s+)?(?:unified\s+)?diff\s+"
     r"(?:to|before|for|so\s+I\s+can)\s+(?:complete|perform|review)|"
-    r"(?:provide|paste)\s+(?:the\s+)?PR\s+diff\s+so\s+I\s+can\s+review"
+    r"(?:provide|paste)\s+(?:the\s+)?PR\s+diff\s+so\s+I\s+can\s+review|"
+    r"无法.*?(?:审查|完成|读取|获取|查看).*?(?:diff|差异|统一\s*diff)|"
+    r"(?:缺少|未包含).*?(?:diff|差异|统一\s*diff)"
     r")",
     re.IGNORECASE | re.DOTALL,
 )
@@ -77,7 +79,11 @@ CONTEXT_HOSTILE_TRIGGER_PATTERN = re.compile(
     r"(?:commands?|checks?|tests?)|"
     r"(?:do\s+not|don(?:'|\u2019)t)\s+use\s+tools?|"
     r"(?:do\s+not|don(?:'|\u2019)t)\s+read\s+(?:the\s+)?(?:repository|repo|GitHub\s+diff|diff)|"
-    r"only\s+do\s+a\s+static\s+diff\s+review"
+    r"only\s+do\s+a\s+static\s+diff\s+review|"
+    r"(?:不要|不)(?:执行|运行)(?![^。；;\n]*(?:破坏性|危险)).*?(?:命令|本地命令|检查|测试)|"
+    r"(?:不要|不)(?:使用|读取).*?(?:工具|仓库|代码库|GitHub\s*diff|diff)|"
+    r"(?:只|仅)(?:做|看|查看).*?(?:静态\s*)?(?:diff|差异|统一\s*diff)\s*(?:review|评审)?|"
+    r"只做静态\s*diff\s*review"
     r")",
     re.IGNORECASE,
 )

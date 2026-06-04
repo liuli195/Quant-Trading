@@ -3398,6 +3398,28 @@ def test_codex_review_monitor_reports_context_hostile_trigger() -> None:
     assert "trigger context invalid" in render_monitor_comment(report)
 
 
+def test_codex_review_monitor_reports_chinese_context_hostile_trigger() -> None:
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": "0" * 40}},
+        issue_comments=[
+            {
+                "body": _codex_review_request_body(
+                    review_scope=("不要执行本地命令；仅查看代码差异。",)
+                ),
+                "created_at": "2026-05-19T01:00:00Z",
+                "user": {"login": "liuli195"},
+            }
+        ],
+        reviews=[],
+        review_comments=[],
+    )
+
+    assert report.status == "trigger_invalid"
+    assert report.trigger_invalid
+
+
 def test_codex_review_monitor_allows_new_compliant_trigger_after_context_hostile_trigger() -> (
     None
 ):
@@ -3721,6 +3743,35 @@ def test_codex_review_monitor_reports_context_invalid_review() -> None:
     assert report.status == "context_invalid"
     assert report.context_invalid_reviews == 1
     assert "context invalid" in render_monitor_comment(report)
+
+
+def test_codex_review_monitor_reports_chinese_context_invalid_review() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        issue_comments=[
+            {
+                "body": _codex_review_request_body(),
+                "created_at": "2026-05-19T01:00:00Z",
+                "user": {"login": "liuli195"},
+            }
+        ],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T01:03:00Z",
+                "body": "### Codex Review\n\n无法完成审查，因为缺少当前 PR diff。",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[],
+    )
+
+    assert report.status == "context_invalid"
+    assert report.context_invalid_reviews == 1
 
 
 def test_codex_review_monitor_ignores_superseded_context_invalid_review() -> None:
