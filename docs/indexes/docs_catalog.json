@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "catalog_type": "docs",
-  "generated_at": "2026-06-04T11:40:43+00:00",
+  "generated_at": "2026-06-04T11:50:37+00:00",
   "count": 59,
   "reports": [
     {
@@ -132,7 +132,7 @@
       "pathrefs": [
         "docs/adr/0006-risk-tiered-pr-review.md"
       ],
-      "updated_at": "2026-06-03T23:44:19+00:00"
+      "updated_at": "2026-06-04T11:48:44+00:00"
     },
     {
       "path": "docs/adr/0008-skill-single-source-agents.md",
@@ -175,7 +175,7 @@
         "docs/adr/0008-skill-single-source-agents.md",
         "docs/adr/0009-subagent-delegation-continuous-authorization.md"
       ],
-      "updated_at": "2026-06-04T11:40:43+00:00"
+      "updated_at": "2026-06-04T11:50:36+00:00"
     },
     {
       "path": "docs/agents/domain.md",
@@ -753,7 +753,7 @@
         "docs/rules/review-guidelines.md",
         "docs/rules/pr-flow-interface-contract.yaml"
       ],
-      "updated_at": "2026-06-03T23:44:03+00:00"
+      "updated_at": "2026-06-04T11:48:44+00:00"
     },
     {
       "path": "docs/rules/skills.md",

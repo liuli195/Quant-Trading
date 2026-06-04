@@ -70,7 +70,7 @@ Review Scope：
 
 - PR body 托管区只写 fenced PR Evidence JSON v2，字段为 `schema/head/diff/reviews/official_review/issues/retained`，来源见 [pr-flow-interface-contract.yaml](pr-flow-interface-contract.yaml) <!-- pathref: docs/rules/pr-flow-interface-contract.yaml -->。
 - `reviews` 只保存 Standards、Spec、Security 的通过指纹。
-- `official_review.decision` 只允许 `required`、`skip_risk_low`、`skip_user_authorized`；旧 evidence 缺失 `official_review` 时按 `required` 读取，新写出必须包含 `schema=2` 和 `official_review`。
+- `official_review.decision` 只允许 `required`、`skip_risk_low`、`skip_user_authorized`；PR Evidence 只接受 `schema=2`，缺失 `official_review` 直接无效。
 - `issues.commits` 覆盖每个 PR commit；每个 commit 要么有关联 Issue，要么明确 `no_issue`。
 - `issues.refs` 仅记录 closes/reference 角色；GitHub Issue AC checkbox 仅作为人工记录，不参与 PR gate。
 - `retained` 只允许 P2/P3，来源只能是 standards/spec/security/official_codex。

@@ -167,6 +167,22 @@ def test_official_review_pr_flow_contract_is_documented() -> None:
         )
 
 
+def test_pr_evidence_v2_contract_does_not_document_legacy_schema_fallback() -> None:
+    paths = [
+        Path("docs/rules/review-guidelines.md"),
+        Path("docs/adr/0007-pr-flow-closed-loop-review-evidence.md"),
+    ]
+    forbidden_tokens = [
+        "过渡期可读旧",
+        "旧 evidence 缺失 `official_review` 时按 `required` 读取",
+    ]
+
+    for path in paths:
+        text = path.read_text(encoding="utf-8")
+        leaked = [token for token in forbidden_tokens if token in text]
+        assert not leaked, f"{path} still documents legacy PR Evidence fallback: {leaked}"
+
+
 def test_gitignore_audit_rejects_broad_data_ignore_patterns(tmp_path: Path) -> None:
     (tmp_path / ".gitignore").write_text(
         "data/\n**/data/\n/data/\n",
@@ -1621,6 +1637,9 @@ def _write_minimal_repo(root: Path) -> None:
         "  pull_request_review_comment:\n"
         "    types: [created, edited, deleted]\n"
         "permissions:\n  statuses: write\nsteps:\n"
+        "  - uses: actions/checkout@v4\n"
+        "    with:\n"
+        "      ref: ${{ steps.pr-head.outputs.sha }}\n"
         "  - run: python -m pip install -r requirements-dev.txt\n"
         "  - run: python -m scripts.research.governance.codex_review_monitor --sync-status\n",
         encoding="utf-8",
@@ -2554,6 +2573,30 @@ def test_governance_audit_flags_monitor_without_label_events(tmp_path) -> None:
     assert any(
         finding.rule_id == "codex_review_monitor"
         and "pull_request labeled and unlabeled events" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_monitor_checkout_default_branch_for_comments(
+    tmp_path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    workflow = tmp_path / ".github/workflows/codex-review-monitor.yml"
+    text = workflow.read_text(encoding="utf-8")
+    workflow.write_text(
+        text.replace(
+            "ref: ${{ steps.pr-head.outputs.sha }}",
+            "ref: ${{ github.event_name == 'issue_comment' && github.event.repository.default_branch || steps.pr-head.outputs.sha }}",
+        ),
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "codex_review_monitor"
+        and "must checkout PR head" in finding.message
         for finding in report.findings
     )
 

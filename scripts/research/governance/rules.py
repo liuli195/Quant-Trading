@@ -884,6 +884,22 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "monitor workflow must not sync PR Flow status comments",
                 )
             )
+        if "github.event.repository.default_branch" in text:
+            findings.append(
+                AuditFinding(
+                    "codex_review_monitor",
+                    "error",
+                    "monitor workflow must checkout PR head instead of default branch for issue_comment events",
+                )
+            )
+        if "ref: ${{ steps.pr-head.outputs.sha }}" not in text:
+            findings.append(
+                AuditFinding(
+                    "codex_review_monitor",
+                    "error",
+                    "monitor workflow must checkout PR head with steps.pr-head.outputs.sha",
+                )
+            )
         if not re.search(
             r"pull_request_review_comment:\s*\n\s*types:\s*\[[^\]]*deleted", text
         ):

@@ -66,7 +66,7 @@ jobs:
           echo "sha=$sha" >> $env:GITHUB_OUTPUT
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'issue_comment' && github.event.repository.default_branch || steps.pr-head.outputs.sha }}
+          ref: ${{ steps.pr-head.outputs.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

@@ -2815,14 +2815,11 @@ def test_codex_review_monitor_uses_event_appropriate_checkout_ref() -> None:
             f"{job_name} missing actions/checkout step"
         )
         ref = checkout_step.get("with", {}).get("ref", "")
-        assert "github.event_name == 'issue_comment'" in ref, (
-            f"{job_name} checkout must special-case issue_comment, got: {ref}"
-        )
-        assert "github.event.repository.default_branch" in ref, (
-            f"{job_name} issue_comment checkout must use trusted default branch, got: {ref}"
-        )
         assert "steps.pr-head.outputs.sha" in ref, (
-            f"{job_name} non-issue_comment checkout must use PR-compatible code, got: {ref}"
+            f"{job_name} checkout must use PR-compatible head code, got: {ref}"
+        )
+        assert "github.event.repository.default_branch" not in ref, (
+            f"{job_name} checkout must not pin issue_comment to default branch, got: {ref}"
         )
 
         resolve_step = next(

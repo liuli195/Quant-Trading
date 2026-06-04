@@ -27,7 +27,7 @@ PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pa
 - review coverage 必须绑定当前 diff fingerprint。`base_sha`、`head_sha`、`diff_hash` 或文件集变化后，旧 evidence 失效；允许 delta review，但最终 evidence 必须证明覆盖当前完整 diff。
 - `pr-submit is not a sub-agent dispatcher`: `pr-submit` 只校验 fragments 并在缺失时输出 `DISPATCH_REQUIRED`；主 agent 使用 `repo-pr-governance wrapper for $review` 调用 `$review` 默认审查，并把文本结论映射为 Standards / Spec fragments。Security review 仍单独必需，不能被 `$review` 替代。
 - evidence builder 只读取结构化 fragments、security fragment、external findings、authorizations 和 diff facts；不得从聊天总结或自然语言结论中推断 review 通过。
-- PR Evidence JSON v2 写入 current head、diff hash、review fingerprints、`official_review`、Issue intent 和 retained findings；过渡期可读旧 schema 缺失 `official_review` 时按 `required` 读取，新写出只写契约 v2 且必须包含 `schema=2` 和 `official_review`。
+- PR Evidence JSON 只接受 v2：写入 current head、diff hash、review fingerprints、`official_review`、Issue intent 和 retained findings；新旧入口都不得回退读取 schema 1，缺失 `official_review` 直接无效。
 - PR Evidence JSON 的 `issues.commits` 必须覆盖每个 PR commit；每个 commit 要么有关联 Issue，要么记录 `no_issue: true`。`issues.refs` 只保留 closes/reference 角色；GitHub Issue AC checkbox 仅作为人工记录，不参与 PR gate。
 - `target scheme review authority`: `target spec wins`。当 PR 的目标 Issue/PRD 与旧仓库规则冲突时，Standards/Spec reviewer 以目标方案为裁判基准；旧规则冲突归类为 rule/ADR drift，不归类为实现违规；规则或 ADR 修改仍必须先获得用户显式授权。
 - risk classifier 由 builder 最终裁决，review/security 只提供输入。官方 Codex Review 是否等待由 PR Evidence `official_review.decision` 决定：`required` 等待官方 review，`skip_risk_low` 跳过低风险官方 review，`skip_user_authorized` 表示用户显式授权跳过官方 review，且只记录 `authorized_by + evidence`。
