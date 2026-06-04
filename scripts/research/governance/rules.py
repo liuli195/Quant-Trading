@@ -851,9 +851,12 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         for token in (
             "pull_request",
             "synchronize",
-            "issue_comment",
             "pull_request_review",
             "pull_request_review_comment",
+            "workflow_dispatch",
+            "expected_head_sha",
+            "trigger_event",
+            "trigger_run_id",
             "statuses: write",
             "python -m pip install -r requirements-dev.txt",
             "scripts.research.governance.codex_review_monitor",
@@ -867,6 +870,22 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                         f"monitor workflow missing {token}",
                     )
                 )
+        if "issue_comment" in text:
+            findings.append(
+                AuditFinding(
+                    "codex_review_monitor",
+                    "error",
+                    "monitor worker workflow must not listen to issue_comment; use codex-review-router.yml",
+                )
+            )
+        if "actions: write" in text:
+            findings.append(
+                AuditFinding(
+                    "codex_review_monitor",
+                    "error",
+                    "monitor worker workflow must not have actions: write permission",
+                )
+            )
         if "--sync-comment" in text:
             findings.append(
                 AuditFinding(
@@ -889,6 +908,33 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "codex_review_monitor",
                     "error",
                     "monitor workflow must checkout PR head with steps.pr-head.outputs.sha",
+                )
+            )
+        if "Publish pending status" not in text or "pending" not in text:
+            findings.append(
+                AuditFinding(
+                    "codex_review_monitor",
+                    "error",
+                    "monitor worker workflow must publish pending for PR Flow / review-status",
+                )
+            )
+        if "github.event_name != 'workflow_dispatch'" in text:
+            findings.append(
+                AuditFinding(
+                    "codex_review_monitor",
+                    "error",
+                    "monitor worker workflow_dispatch must be covered by pending and failure finalizer",
+                )
+            )
+        if (
+            "PR head changed before monitor completed" not in text
+            or 'state="error"' not in text
+        ):
+            findings.append(
+                AuditFinding(
+                    "codex_review_monitor",
+                    "error",
+                    "monitor worker workflow must write error when expected_head_sha does not match current PR head",
                 )
             )
         if (
@@ -932,6 +978,62 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "codex_review_monitor",
                     "error",
                     "monitor workflow must listen to pull_request labeled and unlabeled events",
+                )
+            )
+
+    router_workflow = root / ".github" / "workflows" / "codex-review-router.yml"
+    if not router_workflow.is_file():
+        findings.append(
+            AuditFinding(
+                "codex_review_router",
+                "error",
+                ".github/workflows/codex-review-router.yml missing",
+            )
+        )
+    else:
+        text = router_workflow.read_text(encoding="utf-8", errors="ignore")
+        for token in (
+            "issue_comment",
+            "created",
+            "edited",
+            "deleted",
+            "actions: write",
+            "pull-requests: read",
+            "statuses: write",
+            "github.event.issue.pull_request",
+            "@codex review",
+            "Codex Review:",
+            "PR Flow / review-status",
+            'state="pending"',
+            "actions/workflows/codex-review-monitor.yml/dispatches",
+            'ref="$env:PR_HEAD_REF"',
+            "inputs[pr_number]",
+            "inputs[expected_head_sha]",
+            "inputs[trigger_event]=issue_comment",
+            "inputs[trigger_run_id]",
+        ):
+            if token not in text:
+                findings.append(
+                    AuditFinding(
+                        "codex_review_router",
+                        "error",
+                        f"review-status router workflow missing {token}",
+                    )
+                )
+        if "actions/checkout" in text:
+            findings.append(
+                AuditFinding(
+                    "codex_review_router",
+                    "error",
+                    "review-status router workflow must not checkout PR branch code",
+                )
+            )
+        if 'state="success"' in text:
+            findings.append(
+                AuditFinding(
+                    "codex_review_router",
+                    "error",
+                    "review-status router workflow must not publish success after dispatch",
                 )
             )
 

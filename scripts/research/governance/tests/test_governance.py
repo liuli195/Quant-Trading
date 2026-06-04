@@ -1607,19 +1607,42 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / ".github/workflows/codex-review-monitor.yml").write_text(
         "on:\n  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
-        "  issue_comment:\n  pull_request_review:\n"
+        "  pull_request_review:\n"
         "    types: [submitted, edited, dismissed]\n"
         "  pull_request_review_comment:\n"
         "    types: [created, edited, deleted]\n"
+        "  workflow_dispatch:\n"
+        "    inputs:\n"
+        "      pr_number:\n"
+        "      expected_head_sha:\n"
+        "      trigger_event:\n"
+        "      trigger_run_id:\n"
         "permissions:\n  statuses: write\nsteps:\n"
+        "  - name: Publish pending status\n"
+        "    run: gh api statuses/$env:PR_HEAD_SHA -f context='PR Flow / review-status' -f state=\"pending\"\n"
+        "  - name: Guard expected PR head\n"
+        "    run: gh api statuses/$env:EXPECTED_HEAD_SHA -f context='PR Flow / review-status' -f state=\"error\" -f description='PR head changed before monitor completed'\n"
         "  - uses: actions/checkout@v4\n"
         "    with:\n"
         "      ref: ${{ steps.pr-head.outputs.sha }}\n"
         "  - run: python -m pip install -r requirements-dev.txt\n"
         "  - run: python -m scripts.research.governance.codex_review_monitor --sync-status\n"
         "  - name: Publish monitor failure status\n"
-        "    if: ${{ always() && github.event_name != 'workflow_dispatch' && (failure() || cancelled()) }}\n"
+        "    if: ${{ always() && (failure() || cancelled()) }}\n"
         "    run: gh api pulls/$env:PR_NUMBER -f context='PR Flow / review-status' -f state=failure -f state=error\n",
+        encoding="utf-8",
+    )
+    (root / ".github/workflows/codex-review-router.yml").write_text(
+        "on:\n  issue_comment:\n    types: [created, edited, deleted]\n"
+        "permissions:\n  actions: write\n  pull-requests: read\n  statuses: write\n"
+        "jobs:\n"
+        "  route-review-status:\n"
+        "    if: github.event.issue.pull_request && (github.event.action == 'deleted' || github.event.action == 'edited' || contains(github.event.comment.body, '@codex review') || contains(github.event.comment.body, 'Codex Review:'))\n"
+        "    steps:\n"
+        "      - name: Publish router pending status\n"
+        "        run: gh api statuses/$env:PR_HEAD_SHA -f context='PR Flow / review-status' -f state=\"pending\"\n"
+        "      - name: Dispatch PR branch worker\n"
+        "        run: gh api repos/$env:GITHUB_REPOSITORY/actions/workflows/codex-review-monitor.yml/dispatches -f ref=\"$env:PR_HEAD_REF\" -f \"inputs[pr_number]=$env:PR_NUMBER\" -f \"inputs[expected_head_sha]=$env:PR_HEAD_SHA\" -f \"inputs[trigger_event]=issue_comment\" -f \"inputs[trigger_run_id]=$env:TRIGGER_RUN_ID\"\n",
         encoding="utf-8",
     )
     (root / ".codex/environments").mkdir(parents=True, exist_ok=True)
@@ -2453,6 +2476,38 @@ def test_governance_audit_flags_missing_codex_review_monitor(tmp_path) -> None:
     assert any(finding.rule_id == "codex_review_monitor" for finding in report.findings)
 
 
+def test_governance_audit_flags_missing_codex_review_router(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".github/workflows/codex-review-router.yml").unlink()
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(finding.rule_id == "codex_review_router" for finding in report.findings)
+
+
+def test_governance_audit_flags_monitor_that_listens_to_issue_comment(
+    tmp_path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    workflow = tmp_path / ".github/workflows/codex-review-monitor.yml"
+    text = workflow.read_text(encoding="utf-8")
+    workflow.write_text(
+        text.replace(
+            "  pull_request_review:\n",
+            "  issue_comment:\n    types: [created, edited, deleted]\n  pull_request_review:\n",
+        ),
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "codex_review_monitor"
+        and "must not listen to issue_comment" in finding.message
+        for finding in report.findings
+    )
+
+
 def test_governance_audit_flags_governance_docs_without_required_monitor_status(
     tmp_path,
 ) -> None:
@@ -2587,7 +2642,7 @@ def test_governance_audit_flags_monitor_without_failure_finalizer(tmp_path) -> N
     workflow.write_text(
         text.replace(
             "  - name: Publish monitor failure status\n"
-            "    if: ${{ always() && github.event_name != 'workflow_dispatch' && (failure() || cancelled()) }}\n"
+            "    if: ${{ always() && (failure() || cancelled()) }}\n"
             "    run: gh api pulls/$env:PR_NUMBER -f context='PR Flow / review-status' -f state=failure -f state=error\n",
             "",
         ),

@@ -18,7 +18,7 @@ PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pa
 - GitHub API / GraphQL 瞬时错误会中断无问题路径。
 - 多入口 PR 流程、远端 merge policy 和 cleanup 收尾仍有人工切换成本。
 
-本 ADR 对应 PRD Issue：<https://github.com/liuli195/Quant-Trading/issues/27>；Commit Intent 门禁来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/54>；PR 自动化简化来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/65>；PR Flow 闭环与官方 Codex thread 自动处理扩展见 Issue：<https://github.com/liuli195/Quant-Trading/issues/90>。
+本 ADR 对应 PRD Issue：<https://github.com/liuli195/Quant-Trading/issues/27>；Commit Intent 门禁来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/54>；PR 自动化简化来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/65>；PR Flow 闭环与官方 Codex thread 自动处理扩展见 Issue：<https://github.com/liuli195/Quant-Trading/issues/90>；`issue_comment` 默认分支自举问题和 router/worker 拆分来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/94>。
 
 ## 决策
 
@@ -34,6 +34,9 @@ PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pa
 - P2/P3 accepted findings 不影响 `risk_level`，也不阻断合并；所有来源的 P2/P3 统一写入 PR Evidence `retained`。
 - 官方 Codex P2/P3 review thread 在 severity 可靠识别时，由 `pr_flow` 用固定模板自动接受、resolve、重新读取确认 resolved，并写入 PR Evidence `retained`。官方 Codex P0/P1 在缺少结构化 `fixed` / `false_positive` evidence 时阻断；有绑定当前 head/diff/thread ID 的证据时可由 `pr_flow` 自动回复、resolve 并重新读取确认 resolved。无 severity thread 和人工 reviewer thread 不自动 resolve。
 - 官方 Codex Review 状态由 `PR Flow / review-status` 复核；官方 Codex 未返回时 pending，不写失败。
+- GitHub `issue_comment` 事件由默认分支 `codex-review-router.yml` 处理。router 只识别 review 相关 PR 评论、写 pending、按 PR head branch dispatch `codex-review-monitor.yml` worker；router dispatch 成功不写 success。最终 `PR Flow / review-status` verdict 由 PR branch worker 使用当前 PR 分支 workflow 和治理代码计算。
+- worker 的 `workflow_dispatch` 是正式入口，必须接收 `pr_number`、`expected_head_sha`、`trigger_event`、`trigger_run_id`，并覆盖 pending 和 failure finalizer。`expected_head_sha` 不匹配时写 `PR head changed before monitor completed` error 并停止，避免旧 run 覆盖新 head。
+- `pr-submit` 不负责 workflow 自举补救，不维护 PR Flow changed-files 白名单，不直接覆盖 GitHub status，不扩展 `.local/pr-flow/status.json`。
 - PR body 继续作为 CI 可见 evidence surface；CI 不读取 `.local`。CI 通过 PR body 和 GitHub API 校验 current head、PR Evidence JSON、thread 状态和 required checks。
 - `pr_flow` 顶层停止状态保持三类：`DISPATCH_REQUIRED`、`REPLY_OR_FIX_REQUIRED`、`EXCEPTION_REQUIRED`。所有非 0 退出必须输出 `reason_code`、phase、retryable、dispatch target、blocking items、evidence refs 和 next actions。
 - `diagnose` 只保留为 `pr-submit` 内部归因和开发测试面；用户接手失败统一读取 `.local/pr-flow/status.json`。

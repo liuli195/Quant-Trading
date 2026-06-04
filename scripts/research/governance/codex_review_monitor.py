@@ -289,6 +289,7 @@ def render_monitor_comment(report: MonitorReport) -> str:
         "blocked": "阻断",
         "passed": "可更新通过证据",
         "skipped": "授权跳过",
+        "stale_head": "head 已变化",
     }.get(report.status, report.status)
     latest_review = report.latest_review_url or "未发现"
     latest_sha = (
@@ -353,6 +354,7 @@ def sync_commit_status(
         "blocked": "failure",
         "passed": "success",
         "skipped": "success",
+        "stale_head": "error",
     }.get(report.status, "error")
     pr_url = (
         str(pr.get("html_url", ""))
@@ -368,6 +370,7 @@ def sync_commit_status(
         "blocked": "Codex review has blockers",
         "passed": "Codex review has no blockers",
         "skipped": "Official Codex review not required or skipped",
+        "stale_head": "PR head changed before monitor completed",
     }.get(report.status, "Codex review monitor status unavailable")
     _request_json(
         method="POST",
@@ -832,6 +835,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--review-threads-file", type=Path)
     parser.add_argument("--head-updated-at-env")
     parser.add_argument("--head-created-at-env", help=argparse.SUPPRESS)
+    parser.add_argument("--expected-head-sha-env")
     return parser
 
 
@@ -841,6 +845,7 @@ def main(argv: list[str] | None = None) -> int:
     repo = _read_env(args.repo_env)
     pr_number = _read_env(args.pr_number_env)
     token = _read_env(args.github_token_env)
+    expected_head_sha = _read_env(args.expected_head_sha_env)
     if not repo or not pr_number:
         print("error: repo and PR number are required", file=sys.stderr)
         return 2
@@ -903,6 +908,59 @@ def main(argv: list[str] | None = None) -> int:
             issue_comments,
             expected_head_sha=_head_sha(pr),
         )
+
+    actual_head_sha = _head_sha(pr)
+    if expected_head_sha and actual_head_sha and expected_head_sha != actual_head_sha:
+        report = MonitorReport(
+            status="stale_head",
+            pr_number=pr_number,
+            head_sha=expected_head_sha,
+            trigger_found=False,
+            latest_review_url=None,
+            latest_review_sha=None,
+            blocking_findings=0,
+            advisory_findings=0,
+            message=(
+                "PR head changed before monitor completed: "
+                f"expected {_short_sha(expected_head_sha)}, "
+                f"current {_short_sha(actual_head_sha)}."
+            ),
+            head_updated_at=head_created_at,
+        )
+        body = render_monitor_comment(report)
+        print(body)
+
+        summary_file = _read_env(args.summary_file_env)
+        if summary_file:
+            Path(summary_file).write_text(body + "\n", encoding="utf-8")
+
+        if args.sync_status:
+            if not token:
+                print(
+                    "error: GITHUB_TOKEN is required when --sync-status is used",
+                    file=sys.stderr,
+                )
+                return 2
+            sync_commit_status(repo=repo, pr=pr, token=token, report=report)
+        if args.sync_comment:
+            if not token:
+                print(
+                    "error: GITHUB_TOKEN is required when --sync-comment is used",
+                    file=sys.stderr,
+                )
+                return 2
+            try:
+                sync_monitor_comment(
+                    repo=repo, pr_number=pr_number, token=token, report=report
+                )
+            except urllib.error.HTTPError as error:
+                if error.code != 403:
+                    raise
+                print(
+                    "warning: unable to sync monitor PR comment: HTTP 403",
+                    file=sys.stderr,
+                )
+        return 0
 
     report = build_monitor_report(
         repo=repo,
