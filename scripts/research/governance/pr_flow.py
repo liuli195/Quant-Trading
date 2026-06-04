@@ -1303,11 +1303,25 @@ def submit(
         pr_number=pr or pr_number,
     )
     if merged_metadata is not None:
-        return _submit_cleanup_merged_pr(
+        cleanup_code = _submit_cleanup_merged_pr(
             root=root,
             runner=runner,
+            contract=contract,
+            head_sha=head_sha,
             metadata=merged_metadata,
         )
+        if cleanup_code != SUCCESS_EXIT_CODE:
+            _ensure_submit_status_failure(
+                root,
+                contract,
+                head_sha=head_sha,
+                failure=pr_flow_contract.SubmitFailure(
+                    check="pr-lifecycle",
+                    source=f"PR #{pr or pr_number}",
+                    detail="post-merge cleanup failed",
+                ),
+            )
+        return cleanup_code
     if review_state.requires_official_codex_review:
         request_code = _submit_request_codex_review(
             root=root,
@@ -1317,6 +1331,16 @@ def submit(
             head_sha=head_sha,
         )
         if request_code != SUCCESS_EXIT_CODE:
+            _ensure_submit_status_failure(
+                root,
+                contract,
+                head_sha=head_sha,
+                failure=pr_flow_contract.SubmitFailure(
+                    check="official-codex-review",
+                    source=pr_url,
+                    detail="official Codex review request failed",
+                ),
+            )
             return request_code
     current_fingerprint = ai_review_gate.current_diff_fingerprint(root)
     # Auto-process official Codex review threads before waiting for CI.
@@ -1444,6 +1468,16 @@ def submit(
             failures=watch_failures,
         )
         if retry_code != SUCCESS_EXIT_CODE:
+            _ensure_submit_status_failure(
+                root,
+                contract,
+                head_sha=head_sha,
+                failure=pr_flow_contract.SubmitFailure(
+                    check="official-codex-review-thread",
+                    source=pr_url,
+                    detail="official Codex retained thread auto-processing failed",
+                ),
+            )
             return retry_code
         if retry_checks:
             watch_failures = _submit_wait_required_checks(
@@ -1479,6 +1513,16 @@ def submit(
         poll_seconds=watch_poll_seconds,
     )
     if lifecycle_code != SUCCESS_EXIT_CODE:
+        _ensure_submit_status_failure(
+            root,
+            contract,
+            head_sha=head_sha,
+            failure=pr_flow_contract.SubmitFailure(
+                check="pr-lifecycle",
+                source=f"PR #{pr or pr_number}",
+                detail="PR lifecycle or cleanup failed",
+            ),
+        )
         return lifecycle_code  # _submit_complete_lifecycle emits its own stop status
     # Clear submit status on success
     pr_flow_contract.write_submit_status(root, contract, head=head_sha, failures=[])
@@ -2715,19 +2759,30 @@ def _submit_complete_lifecycle(
         poll_seconds=poll_seconds,
     )
     if metadata is None:
-        _print_state(
-            "EXCEPTION_REQUIRED",
-            "PR merge timed out",
-            repo_root=root,
+        failures = (
+            pr_flow_contract.SubmitFailure(
+                check="pr-lifecycle",
+                source=f"PR #{pr_number}",
+                detail="PR merge timed out",
+            ),
+        )
+        return _fail_submit(
+            root,
+            contract,
+            EXCEPTION_REQUIRED_EXIT_CODE,
+            head_sha=head_sha,
             reason_code="PR_MERGE_TIMEOUT",
             phase="submit_merge",
             retryable=True,
-            dispatch_target="github",
-            details=(f"PR #{pr_number}",),
-            next_actions=("wait for GitHub auto-merge or inspect merge blockers",),
+            failures=failures,
         )
-        return EXCEPTION_REQUIRED_EXIT_CODE
-    return _submit_cleanup_merged_pr(root=root, runner=runner, metadata=metadata)
+    return _submit_cleanup_merged_pr(
+        root=root,
+        runner=runner,
+        contract=contract,
+        head_sha=head_sha,
+        metadata=metadata,
+    )
 
 
 def _submit_lifecycle_command_failure(
@@ -2831,15 +2886,33 @@ def _submit_cleanup_merged_pr(
     *,
     root: Path,
     runner: Runner,
+    contract: pr_flow_contract.PRFlowContract | None = None,
+    head_sha: str = "",
     metadata: dict[str, Any],
 ) -> int:
     pr_ref = _single_line_text(metadata.get("number")) or "unknown"
-    return _cleanup_merged_pr_metadata(
+    code = _cleanup_merged_pr_metadata(
         root=root,
         runner=runner,
         metadata=metadata,
         pr_ref=pr_ref,
     )
+    if (
+        code != SUCCESS_EXIT_CODE
+        and contract is not None
+        and _single_line_text(head_sha)
+    ):
+        _ensure_submit_status_failure(
+            root,
+            contract,
+            head_sha=head_sha,
+            failure=pr_flow_contract.SubmitFailure(
+                check="pr-lifecycle",
+                source=f"PR #{pr_ref}",
+                detail="post-merge cleanup failed",
+            ),
+        )
+    return code
 
 
 def _cleanup_merged_pr_metadata(
@@ -6480,6 +6553,20 @@ def _fail_submit(
         retryable=retryable,
         failures=failures,
     )
+
+
+def _ensure_submit_status_failure(
+    root: str | Path,
+    contract: pr_flow_contract.PRFlowContract,
+    *,
+    head_sha: str,
+    failure: pr_flow_contract.SubmitFailure,
+) -> None:
+    status = _read_json_object(Path(root).resolve() / contract.submit_status_path) or {}
+    failures = status.get("failures")
+    if isinstance(failures, list) and failures:
+        return
+    pr_flow_contract.write_submit_status(root, contract, head=head_sha, failures=[failure])
 
 
 def _stop_submit(

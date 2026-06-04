@@ -1099,6 +1099,140 @@ def test_submit_writes_submit_status_when_auto_merge_fails(tmp_path: Path) -> No
     ]
 
 
+def test_submit_writes_submit_status_when_codex_request_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    diff_text = (
+        "diff --git a/scripts/research/governance/pr_flow.py "
+        "b/scripts/research/governance/pr_flow.py\n+hello\n"
+    )
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        changed_files_output="scripts/research/governance/pr_flow.py\n",
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+    monkeypatch.setattr(
+        pr_flow,
+        "_submit_request_codex_review",
+        lambda **_kwargs: pr_flow.EXCEPTION_REQUIRED_EXIT_CODE,
+    )
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"] == [
+        {
+            "check": "official-codex-review",
+            "source": "https://github.com/liuli195/Quant-Trading/pull/88",
+            "detail": "official Codex review request failed",
+        }
+    ]
+
+
+def test_submit_writes_submit_status_when_retained_thread_retry_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitFailingChecksRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+    monkeypatch.setattr(
+        pr_flow,
+        "_submit_accept_official_codex_retained_threads",
+        lambda **_kwargs: (pr_flow.EXCEPTION_REQUIRED_EXIT_CODE, False),
+    )
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"] == [
+        {
+            "check": "official-codex-review-thread",
+            "source": "https://github.com/liuli195/Quant-Trading/pull/88",
+            "detail": "official Codex retained thread auto-processing failed",
+        }
+    ]
+
+
+def test_submit_writes_submit_status_when_merge_wait_times_out(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+    monkeypatch.setattr(pr_flow, "_submit_wait_for_merged_pr", lambda **_kwargs: None)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"] == [
+        {
+            "check": "pr-lifecycle",
+            "source": "PR #88",
+            "detail": "PR merge timed out",
+        }
+    ]
+
+
+def test_submit_writes_submit_status_when_cleanup_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        existing_pr=True,
+        existing_state="MERGED",
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+    monkeypatch.setattr(
+        pr_flow,
+        "_cleanup_merged_pr_metadata",
+        lambda **_kwargs: pr_flow.EXCEPTION_REQUIRED_EXIT_CODE,
+    )
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"] == [
+        {
+            "check": "pr-lifecycle",
+            "source": "PR #88",
+            "detail": "post-merge cleanup failed",
+        }
+    ]
+
+
 def test_submit_reports_missing_first_stage_review_fragments(tmp_path: Path) -> None:
     runner = SubmitPreflightRunner(valid_contract=True)
 
@@ -2643,14 +2777,8 @@ def test_workflow_files_publish_pending_before_validation() -> None:
             )
 
 
-def test_codex_review_monitor_checks_out_pr_head_ref() -> None:
-    """codex-review-monitor checkout must use PR head ref, not default branch.
-
-    When triggered by issue_comment events, actions/checkout@v4 without a
-    ref checks out the default branch (main), which may have a different
-    contract version than the PR branch.  This causes spurious evidence
-    validation failures.
-    """
+def test_codex_review_monitor_runs_trusted_default_branch_code() -> None:
+    """codex-review-monitor must not execute PR head code with status token."""
     import yaml
 
     path = Path(".github/workflows/codex-review-monitor.yml")
@@ -2677,13 +2805,15 @@ def test_codex_review_monitor_checks_out_pr_head_ref() -> None:
             f"{job_name} missing actions/checkout step"
         )
         ref = checkout_step.get("with", {}).get("ref", "")
-        assert ref, (
-            f"{job_name} checkout step must specify ref (PR head SHA), "
-            f"not default to the event's default branch"
+        assert ref == "${{ github.event.repository.default_branch }}", (
+            f"{job_name} checkout must run trusted default-branch code, got: {ref}"
         )
-        # ref must resolve to PR head, not a literal branch name
-        assert "head" in str(ref).casefold() or "steps" in str(ref), (
-            f"{job_name} checkout ref must derive from PR head, got: {ref}"
+
+        resolve_step = next(
+            step for step in steps if isinstance(step, dict) and step.get("id") == "pr-head"
+        )
+        assert "pulls/$env:PR_NUMBER" in str(resolve_step.get("run", "")), (
+            f"{job_name} must resolve PR head SHA as data before monitoring"
         )
 
 
