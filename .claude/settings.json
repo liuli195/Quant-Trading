@@ -6,18 +6,6 @@
       "PowerShell(cd *)"
     ]
   },
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\ensure-skill-junction.ps1"
-          }
-        ]
-      }
-    ]
-  },
   "worktree": {
     "symlinkDirectories": [".venv", "data"]
   }

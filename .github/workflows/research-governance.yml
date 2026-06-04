@@ -36,9 +36,8 @@ jobs:
             -f description="Full governance verification is running" `
             -f target_url="$env:TARGET_URL"
       - uses: actions/checkout@v4
-      - name: Ensure skill Junction
-        shell: pwsh
-        run: .\.githooks\ensure-skill-junction.ps1
+      - name: Enable symlink support
+        run: git config core.symlinks true
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
