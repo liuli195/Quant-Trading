@@ -473,23 +473,6 @@ def _fixture_list(fixture: Mapping[str, object], key: str) -> list[str]:
     return [str(value)]
 
 
-def _write_skill_junction(root: Path) -> None:
-    """Create .claude/skills as a directory symlink to .agents/skills.
-
-    Historical name retained for test compatibility; now delegates to symlink
-    creation instead of Windows Junction.
-    """
-    _write_skill_symlink(root)
-
-
-def _remove_skill_junction(root: Path) -> None:
-    """Remove .claude/skills symlink.
-
-    Historical name retained for test compatibility.
-    """
-    _remove_skill_symlink(root)
-
-
 def _write_owner_skill(root: Path, fixture: Mapping[str, object]) -> None:
     skill = str(fixture["skill"])
     description = str(fixture["description"])
@@ -754,18 +737,18 @@ def test_skill_ownership_rejects_missing_owned_rule_anchor(tmp_path: Path) -> No
     )
 
 
-def test_skill_ownership_rejects_missing_claude_symlink_legacy(
+def test_skill_ownership_rejects_missing_claude_symlink_post_86(
     tmp_path: Path,
 ) -> None:
     """When .claude/skills symlink is missing, validate_ownerships must error.
 
-    This test replaces the old ``test_skill_ownership_rejects_missing_claude_junction``
+    This test replaces the old ``test_skill_ownership_rejects_missing_claude_skill link``
     with symlink semantics (post-#86).
     """
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    _remove_skill_junction(tmp_path)
+    _remove_skill_symlink(tmp_path)
 
     errors = validate_ownerships(tmp_path)
 
@@ -1761,7 +1744,7 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     _write_all_owner_skills(root)
-    _write_skill_junction(root)
+    _write_skill_symlink(root)
     (root / "path_aliases.json").write_text(
         json.dumps(
             {
@@ -4189,46 +4172,15 @@ def _remove_claude_md_symlink(root: Path) -> None:
 def _write_minimal_repo_symlink(root: Path) -> None:
     """Minimal repo set up for symlink-based governance (post-#86).
 
-    Calls _write_minimal_repo then migrates junction → symlink,
-    updates setup scripts to include ``git config core.symlinks true``,
-    and replaces the CLAUDE.md file with a symlink to AGENTS.md.
+    Calls _write_minimal_repo then ensures both tracked symlink surfaces exist.
     """
     _write_minimal_repo(root)
-    # Replace junction with symlink
-    _remove_skill_junction(root)
+    _remove_skill_symlink(root)
     _write_skill_symlink(root)
-    # Replace CLAUDE.md file with symlink
     claude_md = root / "CLAUDE.md"
     if claude_md.exists() and not claude_md.is_symlink():
         claude_md.unlink()
     _write_claude_md_symlink(root)
-    # Add git config core.symlinks true to setup-python.ps1
-    ps1 = root / ".githooks" / "setup-python.ps1"
-    ps1_text = ps1.read_text(encoding="utf-8")
-    ps1_text = ps1_text.replace("ensure-skill-junction.ps1", "git config core.symlinks true")
-    ps1.write_text(ps1_text, encoding="utf-8")
-    # Add git config core.symlinks true to setup-python.sh
-    sh = root / ".githooks" / "setup-python.sh"
-    sh_text = sh.read_text(encoding="utf-8")
-    if "git config core.symlinks true" not in sh_text:
-        sh_text += "\ngit config core.symlinks true\n"
-    sh.write_text(sh_text, encoding="utf-8")
-    # Update environment.toml: remove junction, add symlinks config
-    toml = root / ".codex" / "environments" / "environment.toml"
-    toml_text = toml.read_text(encoding="utf-8")
-    toml_text = toml_text.replace(
-        ".\\.githooks\\ensure-skill-junction.ps1",
-        "git config core.symlinks true",
-    )
-    toml.write_text(toml_text, encoding="utf-8")
-    # Update CI workflow: remove junction step
-    workflow = root / ".github" / "workflows" / "research-governance.yml"
-    workflow_text = workflow.read_text(encoding="utf-8")
-    workflow_text = workflow_text.replace(
-        "  - run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\ensure-skill-junction.ps1\n",
-        "",
-    )
-    workflow.write_text(workflow_text, encoding="utf-8")
 
 
 # ── #86 RED: symlink audit tests (skill_ownership.py) ────────────────────────
@@ -4370,31 +4322,31 @@ def test_governance_audit_requires_core_symlinks_in_environment_toml(
     )
 
 
-def test_governance_audit_ci_without_junction_setup_is_ok(
+def test_governance_audit_ci_symlink_setup_is_ok(
     tmp_path: Path,
 ) -> None:
-    """CI workflow must NOT require ensure-skill-junction.ps1 step (post-#86)."""
+    """CI workflow must accept the symlink setup model (post-#86)."""
     _write_minimal_repo_symlink(tmp_path)
 
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
 
     assert not any(
-        "CI workflow must create .claude/skills Junction before verify full"
-        in finding.message
+        finding.rule_id == "governance_gate" and "CI workflow" in finding.message
         for finding in report.findings
     )
 
 
-def test_governance_audit_setup_ps1_without_junction_is_ok(
+def test_governance_audit_setup_ps1_symlink_config_is_ok(
     tmp_path: Path,
 ) -> None:
-    """setup-python.ps1 must NOT require ensure-skill-junction.ps1 (post-#86)."""
+    """setup-python.ps1 must accept the symlink setup model (post-#86)."""
     _write_minimal_repo_symlink(tmp_path)
 
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
 
     assert not any(
-        "ensure-skill-junction.ps1" in finding.message
+        finding.rule_id == "governance_gate"
+        and "setup-python.ps1" in finding.message
         for finding in report.findings
     )
 

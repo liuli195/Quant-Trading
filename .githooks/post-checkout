@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 set -eu
 
-# post-checkout no longer calls ensure-skill-junction.ps1.
+# post-checkout no longer repairs skill links.
 # Symlinks are tracked by Git (core.symlinks=true) and resolve automatically.
 exit 0
