@@ -153,6 +153,7 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
         self.auto_merge_requested = existing_state.upper() == "MERGED"
         self.created_bodies: list[str] = []
         self.edited_bodies: list[str] = []
+        self.body_file_names: list[str] = []
         self.comments: list[str] = []
         self.lifecycle_calls: list[list[str]] = []
         self.cwd_calls: list[tuple[list[str], Path | None]] = []
@@ -230,6 +231,7 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             return pr_flow.CommandResult(0, json.dumps({"headRefOid": "1" * 40}), "")
         if command[:4] == ["gh", "pr", "edit", "88"]:
             body_file = Path(command[command.index("--body-file") + 1])
+            self.body_file_names.append(body_file.name)
             self.edited_bodies.append(body_file.read_text(encoding="utf-8"))
             return pr_flow.CommandResult(0, "", "")
         if command == [
@@ -246,6 +248,7 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             )
         if command[:3] == ["gh", "pr", "create"]:
             body_file = Path(command[command.index("--body-file") + 1])
+            self.body_file_names.append(body_file.name)
             self.created_bodies.append(body_file.read_text(encoding="utf-8"))
             return pr_flow.CommandResult(
                 0,
@@ -1540,6 +1543,7 @@ def test_submit_creates_draft_pr_with_contract_evidence_json(tmp_path: Path) -> 
 
     assert code == pr_flow.SUCCESS_EXIT_CODE
     assert runner.created_bodies
+    assert runner.body_file_names == ["pr-evidence-body.md"]
     body = runner.created_bodies[-1]
     assert "## AI Review 风险分级" not in body
     payload = _payload_from_managed_body(body)

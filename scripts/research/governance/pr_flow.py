@@ -3077,7 +3077,7 @@ def _write_managed_body_file(
     local.mkdir(parents=True, exist_ok=True)
     merged = _replace_managed_block(existing_body, managed_body)
     merged = _replace_github_native_links_block(merged, native_links_body)
-    body_file = local / "pr-body.managed.md"
+    body_file = local / "pr-evidence-body.md"
     body_file.write_text(merged, encoding="utf-8")
     return body_file
 
