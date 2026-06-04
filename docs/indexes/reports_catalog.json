@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "catalog_type": "reports",
-  "generated_at": "2026-06-04T15:14:43+00:00",
+  "generated_at": "2026-06-04T16:25:05+00:00",
   "count": 381,
   "reports": [
     {
@@ -2874,7 +2874,7 @@
     },
     {
       "path": "strategies/etf_factor_rotation/reports/design/2026-05-05-code-review.md",
-      "title": "使用项目 .venv 环境",
+      "title": "ETF Factor Rotation 代码评审与优化方案",
       "category": "design",
       "strategy": "etf_factor_rotation",
       "date": "2026-05-05",
@@ -2887,7 +2887,7 @@
         "joinquant_data/JQ_场内基金数据.md",
         "repo/AGENTS.md"
       ],
-      "updated_at": "2026-06-04T15:12:31+00:00"
+      "updated_at": "2026-06-04T16:23:10+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/reports/design/2026-05-17-cash-utilization-optimization-plan.md",

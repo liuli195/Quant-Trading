@@ -1,4 +1,4 @@
-﻿# 仓库规则总索引
+# 仓库规则总索引
 
 本目录是仓库级规则正文。通用入口见 [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->；Claude 侧入口见 [CLAUDE.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->；规则来源见 [ADR 索引](../adr/index.md) <!-- pathref: docs/adr/index.md -->。
 

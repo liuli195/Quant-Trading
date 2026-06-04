@@ -1,4 +1,4 @@
-﻿# ETF Factor Rotation 代码评审与优化方案
+# ETF Factor Rotation 代码评审与优化方案
 
 评审日期：2026-05-05  
 评审对象：[策略主文件](../../etf_factor_rotation.py) <!-- pathref: strategy_dir(strategy=etf_factor_rotation)/etf_factor_rotation.py -->、[单元测试](../../tests/test_etf_factor_rotation.py) <!-- pathref: strategy_tests(strategy=etf_factor_rotation)/test_etf_factor_rotation.py -->、[策略方案说明书](ETF轮动策略方案说明书.md) <!-- pathref: strategy_reports(strategy=etf_factor_rotation)/design/ETF轮动策略方案说明书.md -->

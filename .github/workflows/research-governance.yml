@@ -35,8 +35,10 @@ jobs:
             -f context="Research Governance / verify-full" `
             -f description="Full governance verification is running" `
             -f target_url="$env:TARGET_URL"
-      - uses: actions/checkout@v4
       - name: Enable symlink support
+        run: git config --global core.symlinks true
+      - uses: actions/checkout@v4
+      - name: Record repository symlink support
         run: git config core.symlinks true
       - uses: actions/setup-python@v5
         with:

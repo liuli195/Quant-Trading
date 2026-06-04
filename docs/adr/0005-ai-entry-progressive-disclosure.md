@@ -1,4 +1,4 @@
-﻿# ADR 0005: AI 入口采用渐进式披露
+# ADR 0005: AI 入口采用渐进式披露
 
 ## 状态
 
@@ -15,7 +15,7 @@ Accepted
 - [CLAUDE.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 是 File Symlink 指向 [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->，内容即 `AGENTS.md`，无需独立维护。
 - 仓库级规则正文继续放在 [docs/rules](../rules) <!-- pathref: docs/rules -->。
 - 命令和本地环境规则独立为 [commands.md](../rules/commands.md) <!-- pathref: docs/rules/commands.md -->。
-- 沙箱/权限提权规则暂时上提到 [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->，不放入 `CLAUDE.md`。
+- 沙箱/权限提权规则暂时上提到 [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->，由 `CLAUDE.md` Symlink 同步读取。
 - `scripts.research.governance gate` 必须检查新的入口模型，避免 `AGENTS.md`、`CLAUDE.md`、规则正文、ADR 索引和 review 入口漂移。
 
 ## 删除或合并的指令

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "catalog_type": "documents",
-  "generated_at": "2026-06-04T15:14:43+00:00",
+  "generated_at": "2026-06-04T16:25:05+00:00",
   "count": 440,
   "reports": [
     {
@@ -38,7 +38,7 @@
     },
     {
       "path": "docs/adr/0001-rule-source-and-governance-model.md",
-      "title": "0001-rule-source-and-governance-model",
+      "title": "ADR 0001: 规则来源和治理模型",
       "category": "docs",
       "strategy": null,
       "date": null,
@@ -51,7 +51,7 @@
         "docs/rules",
         "docs/adr/index.md"
       ],
-      "updated_at": "2026-06-04T15:12:31+00:00"
+      "updated_at": "2026-06-04T16:23:10+00:00"
     },
     {
       "path": "docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md",
@@ -75,7 +75,7 @@
     },
     {
       "path": "docs/adr/0004-codex-code-review-governance.md",
-      "title": "0004-codex-code-review-governance",
+      "title": "ADR 0004: 使用官方 Codex Code Review 作为 PR 评审门禁",
       "category": "docs",
       "strategy": null,
       "date": null,
@@ -90,11 +90,11 @@
         "repo/AGENTS.md",
         "docs/adr/0005-ai-entry-progressive-disclosure.md"
       ],
-      "updated_at": "2026-06-04T15:12:31+00:00"
+      "updated_at": "2026-06-04T16:23:10+00:00"
     },
     {
       "path": "docs/adr/0005-ai-entry-progressive-disclosure.md",
-      "title": "0005-ai-entry-progressive-disclosure",
+      "title": "ADR 0005: AI 入口采用渐进式披露",
       "category": "docs",
       "strategy": null,
       "date": null,
@@ -111,7 +111,7 @@
         "docs/rules/commands.md",
         "docs/rules/index.md"
       ],
-      "updated_at": "2026-06-04T15:12:31+00:00"
+      "updated_at": "2026-06-04T16:23:10+00:00"
     },
     {
       "path": "docs/adr/0006-risk-tiered-pr-review.md",
@@ -176,7 +176,7 @@
         "docs/adr/0008-skill-single-source-agents.md",
         "docs/adr/0009-subagent-delegation-continuous-authorization.md"
       ],
-      "updated_at": "2026-06-04T15:14:43+00:00"
+      "updated_at": "2026-06-04T16:25:05+00:00"
     },
     {
       "path": "docs/agents/domain.md",
@@ -255,7 +255,7 @@
     },
     {
       "path": "docs/design/cross-ai-skill-management.md",
-      "title": "在仓库内通过 PR 修改 .agents/skills/<skill>/SKILL.md",
+      "title": "跨 AI 工具 Skill 管理实施计划",
       "category": "docs",
       "strategy": null,
       "date": null,
@@ -274,7 +274,7 @@
         "repo/AGENTS.md",
         "repo/AGENTS.md"
       ],
-      "updated_at": "2026-06-04T15:12:31+00:00"
+      "updated_at": "2026-06-04T16:23:10+00:00"
     },
     {
       "path": "docs/design/skill-system-migration-review.md",
@@ -331,7 +331,7 @@
         "docs/guides/research-workflow-migration.md",
         "repo/AGENTS.md"
       ],
-      "updated_at": "2026-06-04T15:12:31+00:00"
+      "updated_at": "2026-06-04T16:23:10+00:00"
     },
     {
       "path": "docs/design/长期项目防止开发规则漂移方案.md",
@@ -350,7 +350,7 @@
         "docs/exceptions/active-waivers.yaml",
         "scripts/research/governance"
       ],
-      "updated_at": "2026-06-04T15:12:31+00:00"
+      "updated_at": "2026-06-04T16:24:50+00:00"
     },
     {
       "path": "docs/guides/feishu-relay-tools.md",
@@ -684,7 +684,7 @@
     },
     {
       "path": "docs/rules/index.md",
-      "title": "index",
+      "title": "仓库规则总索引",
       "category": "docs",
       "strategy": null,
       "date": null,
@@ -706,7 +706,7 @@
         "docs/rules/governance.md",
         "docs/adr/index.md"
       ],
-      "updated_at": "2026-06-04T15:12:31+00:00"
+      "updated_at": "2026-06-04T16:23:10+00:00"
     },
     {
       "path": "docs/rules/pr-workflow.md",
@@ -3700,7 +3700,7 @@
     },
     {
       "path": "strategies/etf_factor_rotation/reports/design/2026-05-05-code-review.md",
-      "title": "使用项目 .venv 环境",
+      "title": "ETF Factor Rotation 代码评审与优化方案",
       "category": "design",
       "strategy": "etf_factor_rotation",
       "date": "2026-05-05",
@@ -3713,7 +3713,7 @@
         "joinquant_data/JQ_场内基金数据.md",
         "repo/AGENTS.md"
       ],
-      "updated_at": "2026-06-04T15:12:31+00:00"
+      "updated_at": "2026-06-04T16:23:10+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/reports/design/2026-05-17-cash-utilization-optimization-plan.md",

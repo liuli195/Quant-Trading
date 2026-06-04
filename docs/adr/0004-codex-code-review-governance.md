@@ -1,4 +1,4 @@
-﻿# ADR 0004: 使用官方 Codex Code Review 作为 PR 评审门禁
+# ADR 0004: 使用官方 Codex Code Review 作为 PR 评审门禁
 
 ## 背景
 
