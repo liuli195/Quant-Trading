@@ -1641,7 +1641,10 @@ def _write_minimal_repo(root: Path) -> None:
         "    with:\n"
         "      ref: ${{ steps.pr-head.outputs.sha }}\n"
         "  - run: python -m pip install -r requirements-dev.txt\n"
-        "  - run: python -m scripts.research.governance.codex_review_monitor --sync-status\n",
+        "  - run: python -m scripts.research.governance.codex_review_monitor --sync-status\n"
+        "  - name: Publish monitor failure status\n"
+        "    if: ${{ always() && github.event_name != 'workflow_dispatch' && (failure() || cancelled()) }}\n"
+        "    run: gh api pulls/$env:PR_NUMBER -f context='PR Flow / review-status' -f state=failure -f state=error\n",
         encoding="utf-8",
     )
     (root / ".codex/environments").mkdir(parents=True, exist_ok=True)
@@ -2601,6 +2604,30 @@ def test_governance_audit_flags_monitor_checkout_default_branch_for_comments(
     )
 
 
+def test_governance_audit_flags_monitor_without_failure_finalizer(tmp_path) -> None:
+    _write_minimal_repo(tmp_path)
+    workflow = tmp_path / ".github/workflows/codex-review-monitor.yml"
+    text = workflow.read_text(encoding="utf-8")
+    workflow.write_text(
+        text.replace(
+            "  - name: Publish monitor failure status\n"
+            "    if: ${{ always() && github.event_name != 'workflow_dispatch' && (failure() || cancelled()) }}\n"
+            "    run: gh api pulls/$env:PR_NUMBER -f context='PR Flow / review-status' -f state=failure -f state=error\n",
+            "",
+        ),
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "codex_review_monitor"
+        and "failure status finalizer" in finding.message
+        for finding in report.findings
+    )
+
+
 def test_governance_audit_flags_expired_waiver(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / "docs/exceptions/active-waivers.yaml").write_text(
@@ -2950,6 +2977,27 @@ def test_governance_audit_flags_missing_hooks_path(tmp_path, monkeypatch) -> Non
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     _write_minimal_repo(tmp_path)
     (tmp_path / ".git").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(
+        governance_rules,
+        "_read_git_hooks_path",
+        lambda _root: None,
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "core.hooksPath must be set to .githooks" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_missing_hooks_path_in_linked_worktree(
+    tmp_path, monkeypatch
+) -> None:
+    """core.hooksPath is still required when .git is a linked-worktree file."""
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".git").write_text("gitdir: ../.git/worktrees/example\n", encoding="utf-8")
     monkeypatch.setattr(
         governance_rules,
         "_read_git_hooks_path",

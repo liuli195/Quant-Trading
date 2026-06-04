@@ -2787,6 +2787,36 @@ def test_workflow_files_publish_pending_before_validation() -> None:
             )
 
 
+def test_codex_review_monitor_has_failure_finalizer_for_pending_status() -> None:
+    """The monitor must not leave review-status pending after infrastructure failure."""
+    import yaml
+
+    path = Path(".github/workflows/codex-review-monitor.yml")
+    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+
+    steps = doc["jobs"]["monitor"]["steps"]
+    finalizer = next(
+        (
+            step
+            for step in steps
+            if isinstance(step, dict)
+            and step.get("name") == "Publish monitor failure status"
+        ),
+        None,
+    )
+
+    assert finalizer is not None
+    condition = str(finalizer.get("if", ""))
+    assert "always()" in condition
+    assert "failure()" in condition
+    assert "cancelled()" in condition
+    run_script = str(finalizer.get("run", ""))
+    assert "PR Flow / review-status" in run_script
+    assert "failure" in run_script
+    assert "error" in run_script
+    assert "pulls/$env:PR_NUMBER" in run_script
+
+
 def test_codex_review_monitor_uses_event_appropriate_checkout_ref() -> None:
     """issue_comment runs trusted code; PR events run PR-compatible code."""
     import yaml

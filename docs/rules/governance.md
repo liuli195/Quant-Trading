@@ -14,9 +14,10 @@
 - `Research Governance / verify-full` 通过 `verify full` 汇总静态扫描、类型检查、依赖漏洞扫描、测试、pathref 和 governance gate。
 - `PR Flow / evidence` 只校验 PR body 托管区中的 PR Evidence JSON v2；CI 不读取本地 `.local` 产物。
 - `PR Flow / review-status` 监听当前 head 的官方 Codex review、PR Evidence `official_review.decision` 和 unresolved threads。`official_review.decision=required` 且官方 Codex review 未返回时保持 pending；官方 P0/P1、无 severity thread 和 unresolved human thread 阻断；官方 P2/P3 由 `pr_flow` 接受、resolve、重新读取确认 resolved，并写入 PR Evidence `retained`。`skip_risk_low` 或 `skip_user_authorized` 时，该 check 可写 skipped success；用户授权只记录 `authorized_by + evidence`。
+- `PR Flow / review-status` workflow 发布 pending 后必须有 failure finalizer；checkout、setup 或依赖安装失败时必须把 required status 写成 failure/error，不得永久停在 pending。
 - 只要 GitHub conversation resolution ruleset 要求 resolved conversation，未 resolved 的 review thread 必须阻断；风险/授权跳过只影响是否等待官方 Codex review，不绕过其它 required checks。
 - 修复后的 review thread 只能由 `pr_flow resolve-threads` 或内部恢复命令显式 resolve，且必须显式传入 thread ID；不得猜测或批量 resolve 全部未处理 thread。官方 P2/P3 例外路径只能由 `pr_flow` 写入固定接受模板和 PR Evidence retained 后 resolve 并重新读取确认；官方 P0/P1 只有结构化 `fixed` / `false_positive` 证据且绑定当前 head/diff/thread ID 时才可自动关闭，reply/resolve 后也必须重新读取确认 resolved。
-- 本地仓库必须设置 `git config core.hooksPath .githooks`。
+- 本地仓库必须设置 `git config core.hooksPath .githooks`，普通 worktree 和 linked worktree 都必须检查。
 - `.githooks/pre-commit`、`.githooks/pre-push`、`.githooks/reference-transaction` 必须通过 `.githooks/run-python.sh` 选择项目虚拟环境，不硬编码单一平台解释器。
 - `.githooks/pre-push` 必须调用 `scripts.research.governance.branch_protection pre-push` 和 `scripts.research.governance verify full`，并保留 Git LFS pre-push 转交。
 - `.githooks/pre-push` 必须阻断推送到 `main` / `master`；直写主干只在用户当前对话授权时允许，并要求 `ALLOW_DIRECT_MAIN_WRITE=1` 和 `DIRECT_MAIN_WRITE_REASON=<reason>`。

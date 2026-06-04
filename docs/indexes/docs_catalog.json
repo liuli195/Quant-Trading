@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "catalog_type": "docs",
-  "generated_at": "2026-06-04T11:50:37+00:00",
+  "generated_at": "2026-06-04T12:07:55+00:00",
   "count": 59,
   "reports": [
     {
@@ -175,7 +175,7 @@
         "docs/adr/0008-skill-single-source-agents.md",
         "docs/adr/0009-subagent-delegation-continuous-authorization.md"
       ],
-      "updated_at": "2026-06-04T11:50:36+00:00"
+      "updated_at": "2026-06-04T12:07:55+00:00"
     },
     {
       "path": "docs/agents/domain.md",
@@ -679,7 +679,7 @@
         "docs/rules/pr-workflow.md",
         "docs/rules/pr-flow-interface-contract.yaml"
       ],
-      "updated_at": "2026-06-03T23:43:49+00:00"
+      "updated_at": "2026-06-04T12:07:47+00:00"
     },
     {
       "path": "docs/rules/index.md",

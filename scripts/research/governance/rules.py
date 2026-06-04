@@ -900,6 +900,19 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "monitor workflow must checkout PR head with steps.pr-head.outputs.sha",
                 )
             )
+        if (
+            "Publish monitor failure status" not in text
+            or "failure()" not in text
+            or "cancelled()" not in text
+            or "PR Flow / review-status" not in text
+        ):
+            findings.append(
+                AuditFinding(
+                    "codex_review_monitor",
+                    "error",
+                    "monitor workflow must include a failure status finalizer for PR Flow / review-status",
+                )
+            )
         if not re.search(
             r"pull_request_review_comment:\s*\n\s*types:\s*\[[^\]]*deleted", text
         ):
@@ -994,7 +1007,7 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                         "governance_gate", "error", f"governance.md missing {token}"
                     )
                 )
-    if (root / ".git").is_dir() and not os.environ.get("GITHUB_ACTIONS"):
+    if (root / ".git").exists() and not os.environ.get("GITHUB_ACTIONS"):
         hooks_path = _read_git_hooks_path(root)
         if hooks_path != ".githooks":
             findings.append(
