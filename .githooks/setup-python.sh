@@ -62,4 +62,15 @@ chmod +x .githooks/pre-commit .githooks/post-commit .githooks/pre-push .githooks
 git config core.hooksPath .githooks
 git config core.symlinks true
 
+repair_tracked_symlink() {
+  path="$1"
+  if [ -e "$path" ] && [ ! -L "$path" ]; then
+    rm -rf -- "$path"
+    git checkout -- "$path"
+  fi
+}
+
+repair_tracked_symlink "CLAUDE.md"
+repair_tracked_symlink ".claude/skills"
+
 printf '%s\n' "Python environment is ready: $VENV_PYTHON"

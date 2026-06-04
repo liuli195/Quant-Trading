@@ -78,4 +78,18 @@ if (-not (Test-Path -LiteralPath $Requirements)) {
 git config core.hooksPath .githooks
 git config core.symlinks true
 
+$TrackedSymlinks = @(
+    @{ Path = "CLAUDE.md"; GitPath = "CLAUDE.md" },
+    @{ Path = ".claude\skills"; GitPath = ".claude/skills" }
+)
+foreach ($Entry in $TrackedSymlinks) {
+    if (Test-Path -LiteralPath $Entry.Path) {
+        $Item = Get-Item -LiteralPath $Entry.Path -Force
+        if (-not ($Item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+            Remove-Item -LiteralPath $Entry.Path -Recurse -Force
+            git checkout -- $Entry.GitPath
+        }
+    }
+}
+
 Write-Output "Python environment is ready: $VenvPython"

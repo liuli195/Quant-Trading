@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
-import os
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -411,11 +410,7 @@ def _load_ownership(path: Path, root: Path) -> SkillOwnership:
 
 def _is_expected_skills_symlink(root: Path) -> bool:
     """Return True if .claude/skills is a valid Symlink to .agents/skills.
-
-    On non-Windows platforms the check is skipped (returns True).
     """
-    if os.name != "nt":
-        return True
     claude_skills = root / ".claude" / "skills"
     agents_skills = root / ".agents" / "skills"
     if not claude_skills.exists() or not agents_skills.is_dir():
@@ -430,11 +425,7 @@ def _is_expected_skills_symlink(root: Path) -> bool:
 
 def _is_expected_claude_md_symlink(root: Path) -> bool:
     """Return True if CLAUDE.md is a valid Symlink to AGENTS.md.
-
-    On non-Windows platforms the check is skipped (returns True).
     """
-    if os.name != "nt":
-        return True
     claude_md = root / "CLAUDE.md"
     agents_md = root / "AGENTS.md"
     if not claude_md.exists() or not agents_md.is_file():

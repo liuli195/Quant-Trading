@@ -1541,12 +1541,14 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / ".githooks/setup-python.ps1").write_text(
         "3.12\nrequirements-dev.txt\ngit config core.hooksPath .githooks\n"
-        "PYTHONUTF8\nPYTHONIOENCODING\ngit config core.symlinks true\n",
+        "PYTHONUTF8\nPYTHONIOENCODING\ngit config core.symlinks true\n"
+        "CLAUDE.md\n.claude/skills\ngit checkout --\n",
         encoding="utf-8",
     )
     (root / ".githooks/setup-python.sh").write_text(
         "python3.12\nrequirements-dev.txt\ngit config core.hooksPath .githooks\n"
-        "PYTHONUTF8\nPYTHONIOENCODING\n.githooks/post-commit\ngit config core.symlinks true\n",
+        "PYTHONUTF8\nPYTHONIOENCODING\n.githooks/post-commit\n"
+        "git config core.symlinks true\nCLAUDE.md\n.claude/skills\ngit checkout --\n",
         encoding="utf-8",
     )
     (root / ".githooks/pre-push").write_text(
@@ -1663,6 +1665,7 @@ def _write_minimal_repo(root: Path) -> None:
                 "docs/rules/** @research-platform",
                 "docs/adr/** @research-platform",
                 ".agents/skills/** @research-platform",
+                ".claude/skills @research-platform",
                 ".codex/environments/** @research-platform",
                 ".claude/settings.json @research-platform",
                 ".claude/settings.local.json @research-platform",
@@ -4221,29 +4224,20 @@ def test_skill_ownership_rejects_missing_claude_md_symlink(
     )
 
 
-def test_skill_ownership_symlink_skipped_on_non_windows(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+def test_skill_ownership_symlink_validation_is_not_platform_skipped(
+    tmp_path: Path,
 ) -> None:
-    """Symlink checks are platform-gated: non-Windows skips them.
-
-    We mock the platform guard at the function level rather than patching
-    ``os.name`` globally (which breaks pathlib on Windows).
-    """
-    from scripts.research.governance import skill_ownership as mod
+    """Symlink checks report missing links on every platform."""
+    from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo_symlink(tmp_path)
     _remove_skill_symlink(tmp_path)
     _remove_claude_md_symlink(tmp_path)
 
-    # Simulate non-Windows: the guard function returns True (valid) regardless
-    monkeypatch.setattr(mod, "_is_expected_skills_symlink", lambda _root: True)
-    monkeypatch.setattr(mod, "_is_expected_claude_md_symlink", lambda _root: True)
+    errors = validate_ownerships(tmp_path)
 
-    errors = mod.validate_ownerships(tmp_path)
-
-    assert not any(
-        "must be a Symlink" in error for error in errors
-    )
+    assert any(".claude/skills must be a Symlink" in error for error in errors)
+    assert any("CLAUDE.md must be a Symlink" in error for error in errors)
 
 
 def test_skill_ownership_symlink_passes(

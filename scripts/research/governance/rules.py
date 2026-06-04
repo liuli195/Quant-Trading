@@ -54,6 +54,7 @@ REQUIRED_CODEOWNER_PATTERNS = (
     "docs/rules/**",
     "docs/adr/**",
     ".agents/skills/**",
+    ".claude/skills",
     ".codex/environments/**",
     ".claude/settings.json",
     ".claude/settings.local.json",
@@ -455,6 +456,9 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             "PYTHONIOENCODING",
             "3.12",
             "git config core.symlinks true",
+            "CLAUDE.md",
+            ".claude/skills",
+            "git checkout --",
         ):
             if token not in text:
                 findings.append(
@@ -482,6 +486,9 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             "python3.12",
             ".githooks/post-commit",
             "git config core.symlinks true",
+            "CLAUDE.md",
+            ".claude/skills",
+            "git checkout --",
         ):
             if token not in text:
                 findings.append(
