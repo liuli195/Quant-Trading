@@ -109,7 +109,6 @@ def _add_affected_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--staged", action="store_true")
     parser.add_argument("--base")
     parser.add_argument("--files", nargs="+", default=None)
-    parser.add_argument("--ai-review-report")
 
 
 def _cmd_explain(args: argparse.Namespace) -> int:
@@ -152,7 +151,6 @@ def _collect_source(args: argparse.Namespace) -> ChangedFileSource:
         staged=args.staged,
         base=args.base,
         files=args.files,
-        ai_review_report=args.ai_review_report,
     )
 
 

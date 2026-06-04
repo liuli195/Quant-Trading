@@ -13,7 +13,7 @@
 | [design](design) <!-- pathref: docs/design --> | 实施方案、重构方案、治理方案草案 | [本地研究平台重构技术实施方案.md](design/本地研究平台重构技术实施方案.md) <!-- pathref: docs/design/本地研究平台重构技术实施方案.md --> |
 | [reference](reference) <!-- pathref: docs/reference --> | 外部平台资料和分析参考 | [joinquant-api.md](reference/joinquant-api.md) <!-- pathref: docs/reference/joinquant-api.md --> |
 | [joinquant-data](joinquant-data) <!-- pathref: docs/joinquant-data --> | 聚宽数据专题资料 | [JQ_场内基金数据.md](joinquant-data/JQ_场内基金数据.md) <!-- pathref: docs/joinquant-data/JQ_场内基金数据.md --> |
-| [problems](problems) <!-- pathref: docs/problems --> | PR 和流程问题复盘、阻断项、效率项和规则冲突记录 | [2026-05-29-pr21-flow-retrospective.md](problems/2026-05-29-pr21-flow-retrospective.md) <!-- pathref: docs/problems/2026-05-29-pr21-flow-retrospective.md --> |
+| [problems](problems) <!-- pathref: docs/problems --> | PR 和流程问题复盘、阻断项、效率项和规则冲突记录 | 按需新增 |
 | [indexes](indexes) <!-- pathref: docs/indexes --> | 机器生成的文档、报告、数据和变体索引 | [docs_catalog.json](indexes/docs_catalog.json) <!-- pathref: docs/indexes/docs_catalog.json --> |
 
 ## 常用指南

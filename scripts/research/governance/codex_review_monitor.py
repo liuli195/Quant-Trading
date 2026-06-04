@@ -18,7 +18,6 @@ from scripts.research.governance.codex_review_contract import (
     is_codex_review_request,
 )
 from scripts.research.governance.pr_review_evidence import (
-    AI_REVIEW_SECTION_HEADER,
     BLOCKING_CODEX_FINDING_PATTERN,
     CODEX_CONTEXT_INVALID_PATTERN,
     CONTEXT_HOSTILE_TRIGGER_PATTERN,
@@ -30,14 +29,12 @@ from scripts.research.governance.pr_review_evidence import (
     _fetch_issue_metadata,
     _fetch_pr_changed_files,
     _issue_label_names,
-    _official_codex_required,
     codex_context_invalid_review_count,
     codex_completion_effective_time,
     has_codex_completion_reaction,
     head_updated_at_from_monitor_state,
     is_codex_completion_comment,
     is_effective_codex_review,
-    official_codex_review_skip_authorized,
     render_monitor_head_state,
     unresolved_blocking_codex_thread_count,
 )
@@ -85,22 +82,15 @@ def build_monitor_report(
     head_sha = _head_sha(pr)
     pr_url = str(pr.get("html_url", "")) or f"https://github.com/{repo}/pull/{pr_number}"
     pr_body = str(pr.get("body", ""))
-    skip_authorized = official_codex_review_skip_authorized(pr_body)
     contract_payload, contract_errors = _extract_contract_v1_evidence(pr_body)
-    if contract_payload is not None or contract_errors:
-        official_required, official_errors = _contract_v1_official_codex_requirement(
-            pr_body,
-            contract_payload=contract_payload,
-            contract_errors=contract_errors,
-            changed_files=changed_files,
-            labels=labels,
-        )
-    else:
-        official_required, official_errors = _official_codex_required(
-            pr_body,
-            changed_files=changed_files,
-            labels=labels,
-        )
+    skip_authorized = _contract_v1_official_skip_authorized(contract_payload)
+    official_required, official_errors = _contract_v1_official_codex_requirement(
+        pr_body,
+        contract_payload=contract_payload,
+        contract_errors=contract_errors,
+        changed_files=changed_files,
+        labels=labels,
+    )
     if not pr_body.strip() and changed_files is None and labels is None:
         official_errors = []
     official_review_required = official_required or bool(official_errors)
@@ -273,17 +263,20 @@ def _contract_v1_official_codex_requirement(
                 return False, []
             if decision == "required":
                 return True, []
-        if "official_review" not in contract_payload:
-            return True, []
-    required, body_errors = _official_codex_required(
-        body,
-        changed_files=changed_files,
-        labels=labels,
+    return True, ["PR body missing PR Evidence JSON"]
+
+
+def _contract_v1_official_skip_authorized(
+    contract_payload: Mapping[str, object] | None,
+) -> bool:
+    if contract_payload is None:
+        return False
+    official_review = contract_payload.get("official_review")
+    return (
+        isinstance(official_review, Mapping)
+        and str(official_review.get("decision") or "").strip()
+        == "skip_user_authorized"
     )
-    missing_ai_review = f"PR body missing section: {AI_REVIEW_SECTION_HEADER}"
-    if body_errors == [missing_ai_review]:
-        return True, []
-    return required, body_errors
 
 
 def render_monitor_comment(report: MonitorReport) -> str:

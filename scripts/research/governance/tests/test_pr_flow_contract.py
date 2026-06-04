@@ -1411,7 +1411,7 @@ def test_pr_review_evidence_accepts_contract_v1_managed_json() -> None:
     assert report.ok, report.errors
 
 
-def test_pr_review_evidence_accepts_legacy_contract_v1_without_official_review() -> (
+def test_pr_review_evidence_rejects_contract_without_official_review() -> (
     None
 ):
     payload = _contract_evidence_payload()
@@ -1426,7 +1426,9 @@ def test_pr_review_evidence_accepts_legacy_contract_v1_without_official_review()
         expected_commit_shas=("1" * 40, "2" * 40),
     )
 
-    assert report.ok, report.errors
+    assert not report.ok
+    assert "PR Evidence JSON schema must be 2" in report.errors
+    assert "PR Evidence official_review must be an object" in report.errors
 
 
 def test_pr_review_evidence_rejects_invalid_official_review_shape() -> None:
@@ -2024,73 +2026,6 @@ def test_submit_fails_closed_when_pre_ci_review_threads_are_unreadable(
             ),
         }
     ]
-
-
-def test_submit_auto_closes_current_codex_p1_thread_with_structured_evidence(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    """submit() must pass current review payload into pre-CI thread handling."""
-    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
-    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
-    runner = SubmitAutoCloseOutdatedThreadRunner(diff_text=diff_text)
-    runner.thread_id = "PRRT_current_p1"
-    runner.thread_is_outdated = False
-    runner.thread_body = "![P1 Badge] current finding fixed by evidence"
-    monkeypatch.setattr(
-        pr_flow.ai_review_gate,
-        "current_diff_fingerprint",
-        lambda _root: {
-            "base_ref": "origin/main",
-            "head_sha": "1" * 40,
-            "diff_files_hash": "current-diff",
-            "changed_files": ["a.txt"],
-        },
-    )
-    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
-    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
-    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
-    _write_branch_intent(tmp_path)
-    local = tmp_path / ".local" / "ai-review"
-    local.mkdir(parents=True, exist_ok=True)
-    (local / "latest.json").write_text(
-        json.dumps(
-            {
-                "schema_version": 4,
-                "changed_files": ["a.txt"],
-                "diff_fingerprint": {
-                    "base_ref": "origin/main",
-                    "head_sha": "1" * 40,
-                    "diff_files_hash": "current-diff",
-                    "changed_files": ["a.txt"],
-                },
-                "external_findings": [
-                    {
-                        "id": "EXT-CODEX-THREAD-PRRT_current_p1",
-                        "source": "official_codex_review_thread",
-                        "thread_id": "PRRT_current_p1",
-                        "severity": "P1",
-                        "title": "Current blocker",
-                        "path": "a.txt",
-                        "status": "fixed",
-                        "evidence": "fixed by current diff",
-                        "head_sha": "1" * 40,
-                        "diff_files_hash": "current-diff",
-                        "fix_commit": "1" * 40,
-                        "verification_command": ".\\.venv\\Scripts\\python.exe -m pytest scripts\\research\\governance\\tests\\test_pr_flow_contract.py -q",
-                    }
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
-
-    assert code == pr_flow.SUCCESS_EXIT_CODE
-    assert runner.resolved_threads == [runner.thread_id]
-    assert runner.replies
-    assert "fix_commit" in runner.replies[0]
 
 
 def test_submit_rejects_missing_commit_intent_before_creating_pr(
@@ -2932,84 +2867,6 @@ def _write_fragment(
         ),
         encoding="utf-8",
     )
-
-
-def _write_ai_review_report(
-    root: Path,
-    *,
-    risk_level: str = "low",
-    requires_official: bool = False,
-    changed_files: list[str] | None = None,
-    skip_official: bool = False,
-) -> None:
-    payload = _ai_review_payload(
-        risk_level=risk_level,
-        requires_official=requires_official,
-        changed_files=changed_files,
-        skip_official=skip_official,
-    )
-    local = root / ".local" / "ai-review"
-    local.mkdir(parents=True, exist_ok=True)
-    (local / "latest.json").write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-
-def _ai_review_payload(
-    *,
-    risk_level: str = "low",
-    requires_official: bool = False,
-    changed_files: list[str] | None = None,
-    skip_official: bool = False,
-) -> dict[str, object]:
-    payload: dict[str, object] = {
-        "schema_version": 2,
-        "tool": "codex",
-        "reviewers": ["standards-reviewer", "spec-reviewer"],
-        "risk_level": risk_level,
-        "requires_official_codex_review": requires_official,
-        "security_review": {
-            "tool": "codex-security",
-            "evidence": "local security review completed",
-        },
-        "cross_review": {
-            "delegated_to_subagents": True,
-            "review_skills": [
-                "superpowers:subagent-driven-development/spec-reviewer-prompt.md",
-                "superpowers:subagent-driven-development/code-quality-reviewer-prompt.md",
-            ],
-            "evidence": "standards and spec reviewers completed",
-        },
-        "complete_review": {
-            "evidence": "reviewers reached no new findings",
-            "iterations": [
-                {
-                    "reviewer": "standards-reviewer",
-                    "round": 1,
-                    "new_findings": [],
-                    "no_new_findings": True,
-                },
-                {
-                    "reviewer": "spec-reviewer",
-                    "round": 1,
-                    "new_findings": [],
-                    "no_new_findings": True,
-                },
-            ],
-        },
-        "changed_files": changed_files or ["docs/guides/example.md"],
-        "findings": [],
-        "checks": {},
-    }
-    if skip_official:
-        payload["skip_official_codex_review"] = True
-        payload["official_codex_review_skip_authorization"] = {
-            "authorized_by": "liuli195",
-            "reason": "current PR official review cost is higher than risk",
-            "evidence": "user explicitly authorized skipping official review",
-        }
-    return payload
 
 
 def _managed_evidence_body(payload: dict[str, object]) -> str:
