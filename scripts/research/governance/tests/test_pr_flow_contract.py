@@ -1197,7 +1197,7 @@ def test_submit_writes_submit_status_when_retained_thread_read_fails(
             "check": "official-codex-review-thread",
             "source": "https://github.com/liuli195/Quant-Trading/pull/88",
             "detail": (
-                "official Codex retained thread read failed: "
+                "official Codex review thread read failed: "
                 "GitHub review threads unavailable"
             ),
         }
@@ -1415,6 +1415,7 @@ def test_pr_review_evidence_accepts_legacy_contract_v1_without_official_review()
     None
 ):
     payload = _contract_evidence_payload()
+    payload["schema"] = 1
     payload.pop("official_review")
     body = _managed_evidence_body(payload)
 
@@ -1809,6 +1810,7 @@ class SubmitAutoCloseOutdatedThreadRunner(SubmitCreatePrRunner):
         self._call_sequence: list[str] = []
         self.thread_is_outdated = True
         self.thread_body = "![P1 Badge] outdated finding"
+        self.review_threads_unavailable = False
 
     def run(
         self,
@@ -1922,6 +1924,8 @@ class SubmitAutoCloseOutdatedThreadRunner(SubmitCreatePrRunner):
         if "reviewThreads" in joined:
             self._thread_query_count += 1
             self._call_sequence.append("reviewThreads")
+            if self.review_threads_unavailable:
+                return pr_flow.CommandResult(1, "", "review threads unavailable")
             return pr_flow.CommandResult(
                 0,
                 json.dumps(
@@ -1988,6 +1992,38 @@ def test_submit_blocks_outdated_codex_p1_thread_without_closure_evidence(
     )
     # CI checks still run once and report the review-status blocker.
     assert runner.checks_calls == 1
+
+
+def test_submit_fails_closed_when_pre_ci_review_threads_are_unreadable(
+    tmp_path: Path,
+) -> None:
+    """submit() must not continue toward merge when review threads are unreadable."""
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitAutoCloseOutdatedThreadRunner(diff_text=diff_text)
+    runner.review_threads_unavailable = True
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert runner.checks_calls == 0
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
+    )
+    assert status["failures"] == [
+        {
+            "check": "official-codex-review-thread",
+            "source": "https://github.com/liuli195/Quant-Trading/pull/88",
+            "detail": (
+                "official Codex review thread read failed: "
+                "GitHub review threads unavailable"
+            ),
+        }
+    ]
 
 
 def test_submit_auto_closes_current_codex_p1_thread_with_structured_evidence(
@@ -2812,8 +2848,8 @@ def test_workflow_files_publish_pending_before_validation() -> None:
             )
 
 
-def test_codex_review_monitor_runs_trusted_default_branch_code() -> None:
-    """codex-review-monitor must not execute PR head code with status token."""
+def test_codex_review_monitor_uses_event_appropriate_checkout_ref() -> None:
+    """issue_comment runs trusted code; PR events run PR-compatible code."""
     import yaml
 
     path = Path(".github/workflows/codex-review-monitor.yml")
@@ -2840,8 +2876,14 @@ def test_codex_review_monitor_runs_trusted_default_branch_code() -> None:
             f"{job_name} missing actions/checkout step"
         )
         ref = checkout_step.get("with", {}).get("ref", "")
-        assert ref == "${{ github.event.repository.default_branch }}", (
-            f"{job_name} checkout must run trusted default-branch code, got: {ref}"
+        assert "github.event_name == 'issue_comment'" in ref, (
+            f"{job_name} checkout must special-case issue_comment, got: {ref}"
+        )
+        assert "github.event.repository.default_branch" in ref, (
+            f"{job_name} issue_comment checkout must use trusted default branch, got: {ref}"
+        )
+        assert "steps.pr-head.outputs.sha" in ref, (
+            f"{job_name} non-issue_comment checkout must use PR-compatible code, got: {ref}"
         )
 
         resolve_step = next(

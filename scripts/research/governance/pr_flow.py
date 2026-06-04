@@ -1357,8 +1357,25 @@ def submit(
                     repo=repo,
                     pr_number=resolved_pr_number,
                 )
-            except GitHubDataUnavailable:
-                threads = []
+            except GitHubDataUnavailable as exc:
+                _print_github_data_unavailable(exc)
+                failures = [
+                    pr_flow_contract.SubmitFailure(
+                        check="official-codex-review-thread",
+                        source=pr_url,
+                        detail=f"official Codex review thread read failed: {exc}",
+                    ),
+                ]
+                return _fail_submit(
+                    root,
+                    contract,
+                    EXCEPTION_REQUIRED_EXIT_CODE,
+                    head_sha=head_sha,
+                    reason_code="CODEX_THREAD_READ_UNAVAILABLE",
+                    phase="submit_review_threads",
+                    retryable=exc.retryable,
+                    failures=failures,
+                )
             if threads:
                 auto_payload = _submit_thread_payload(root)
                 auto_code, _auto_payload, auto_changed = (
