@@ -21,6 +21,7 @@
 - **运行边界**：策略只在聚宽云端运行；本地只做编写、测试、文档和回测分析。环境差异见 [environments.md](docs/rules/environments.md) <!-- pathref: docs/rules/environments.md -->。
 - **Python**：默认必须提权使用项目 `.venv`，不改用系统 Python。命令见 [commands.md](docs/rules/commands.md) <!-- pathref: docs/rules/commands.md -->。
 - **GitHub CLI**：`gh` CLI 默认提权执行，避免丢失沙箱外登录态。
+- **长期记忆**：本项目使用 agentmemory 作为 Claude Code 与 Codex 共享长期记忆系统；读写长期项目记忆时优先用已安装的 agentmemory 技能/MCP 工具，禁止记录密钥、token、密码和个人隐私。官方入口见 [rohitg00/agentmemory](https://github.com/rohitg00/agentmemory)。
 
 ### 工作边界
 

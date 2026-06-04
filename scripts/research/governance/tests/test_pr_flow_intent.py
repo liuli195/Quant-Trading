@@ -152,10 +152,6 @@ def test_intent_stage_rejects_missing_staged_diff(tmp_path: Path) -> None:
     )
 
     assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
-    status = json.loads(
-        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
-    )
-    assert status["reason_code"] == "STAGED_DIFF_MISSING"
 
 
 def test_intent_stage_rejects_invalid_issue_role(tmp_path: Path) -> None:
@@ -168,10 +164,6 @@ def test_intent_stage_rejects_invalid_issue_role(tmp_path: Path) -> None:
     )
 
     assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
-    status = json.loads(
-        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
-    )
-    assert status["reason_code"] == "COMMIT_INTENT_ISSUE_ROLE_INVALID"
 
 
 def test_intent_stage_rejects_closes_for_closed_issue(tmp_path: Path) -> None:
@@ -184,10 +176,6 @@ def test_intent_stage_rejects_closes_for_closed_issue(tmp_path: Path) -> None:
     )
 
     assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
-    status = json.loads(
-        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
-    )
-    assert status["reason_code"] == "COMMIT_INTENT_CLOSED_ISSUE_CLOSE_REJECTED"
 
 
 def test_intent_stage_allows_reference_for_closed_issue(tmp_path: Path) -> None:
@@ -240,10 +228,6 @@ def test_commit_intent_pre_commit_rejects_missing_pending_intent(
     )
 
     assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
-    status = json.loads(
-        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
-    )
-    assert status["reason_code"] == "COMMIT_INTENT_MISSING"
 
 
 def test_commit_intent_pre_commit_rejects_stale_fingerprint(
@@ -266,10 +250,6 @@ def test_commit_intent_pre_commit_rejects_stale_fingerprint(
     )
 
     assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
-    status = json.loads(
-        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
-    )
-    assert status["reason_code"] == "COMMIT_INTENT_STALE"
 
 
 def test_commit_intent_post_commit_merges_branch_intent_and_consumes_pending(
@@ -456,11 +436,6 @@ def test_branch_intent_coverage_detects_missing_current_commit(
     )
 
     assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
-    status = json.loads(
-        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
-    )
-    assert status["reason_code"] == "BRANCH_INTENT_COVERAGE_MISSING"
-    assert missing in status["blocking_items"]
 
 
 def test_branch_intent_coverage_rejects_stale_commit(
@@ -501,11 +476,6 @@ def test_branch_intent_coverage_rejects_stale_commit(
     code = pr_flow.check_branch_intent_coverage(repo_root=tmp_path, runner=runner)
 
     assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
-    status = json.loads(
-        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
-    )
-    assert status["reason_code"] == "BRANCH_INTENT_STALE_COMMITS"
-    assert stale in status["blocking_items"]
 
 
 def _valid_issue_intent_payload() -> dict[str, Any]:

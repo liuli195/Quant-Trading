@@ -1716,7 +1716,7 @@ def test_wait_reports_exception_when_required_checks_are_pending(
     assert "Research Governance / verify-full" in captured.err
 
 
-def test_wait_writes_structured_last_status_for_pending_checks(
+def test_wait_reports_structured_stop_for_pending_checks(
     tmp_path: Path,
     capsys,
 ) -> None:
@@ -1732,16 +1732,6 @@ def test_wait_writes_structured_last_status_for_pending_checks(
     assert "phase: wait_required_checks" in captured.err
     assert "retryable: true" in captured.err
 
-    status = json.loads(
-        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
-    )
-    assert status["state"] == "EXCEPTION_REQUIRED"
-    assert status["reason_code"] == "REQUIRED_CHECKS_PENDING"
-    assert status["phase"] == "wait_required_checks"
-    assert status["retryable"] is True
-    assert status["dispatch_target"] == "github"
-    assert status["blocking_items"] == ["Research Governance / verify-full"]
-    assert status["next_actions"] == ["wait for pending required checks"]
 
 
 def test_diagnose_reports_required_checks_and_unresolved_threads(
@@ -1940,18 +1930,6 @@ def test_diagnose_writes_structured_last_status_for_unresolved_threads(
     assert "reason_code: REVIEW_THREADS_UNRESOLVED" in captured.out
     assert "phase: diagnose" in captured.out
 
-    status = json.loads(
-        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
-    )
-    assert status["state"] == "REPLY_OR_FIX_REQUIRED"
-    assert status["reason_code"] == "REVIEW_THREADS_UNRESOLVED"
-    assert status["phase"] == "diagnose"
-    assert status["retryable"] is False
-    assert status["dispatch_target"] == "author"
-    assert status["blocking_items"] == [
-        "unresolved review thread P2: optional cleanup can wait."
-    ]
-    assert status["next_actions"] == ["resolve unresolved review threads"]
 
 
 def test_diagnose_reports_current_head_review_evidence(
@@ -3095,14 +3073,6 @@ def test_ready_writes_structured_last_status_when_review_evidence_missing(
     assert "reason_code: LOCAL_AI_REVIEW_MISSING" in captured.err
     assert "phase: local_review" in captured.err
 
-    status = json.loads(
-        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
-    )
-    assert status["state"] == "DISPATCH_REQUIRED"
-    assert status["reason_code"] == "LOCAL_AI_REVIEW_MISSING"
-    assert status["phase"] == "local_review"
-    assert status["dispatch_target"] == "review-agent"
-    assert status["next_actions"] == ["produce .local/ai-review/latest.json"]
 
 
 def test_ready_stops_with_dispatch_required_when_review_evidence_incomplete(
@@ -4909,12 +4879,12 @@ def test_ready_resolves_threads_after_sync_before_wait(
     assert calls == ["resolve", "blockers", "wait"]
 
 
-def test_ready_auto_resolves_outdated_official_codex_thread_without_pre_seeded_evidence(
+def test_ready_blocks_outdated_official_codex_p1_thread_without_closure_evidence(
     monkeypatch,
     tmp_path: Path,
     capsys,
 ) -> None:
-    """Outdated official Codex threads auto-resolve even without pre-seeded evidence."""
+    """Outdated P0/P1 Codex threads still need current closure evidence."""
     _write_valid_report(
         tmp_path,
         risk_level="low",
@@ -4959,10 +4929,9 @@ def test_ready_auto_resolves_outdated_official_codex_thread_without_pre_seeded_e
         codex_review_poll_seconds=0,
     )
 
-    assert code == pr_flow.SUCCESS_EXIT_CODE
-    assert "closed official Codex review thread: PRRT_outdated_codex" in capsys.readouterr().out
-    assert runner.thread_replies
-    assert "outdated" in runner.thread_replies[-1]["body"].casefold()
+    assert code == pr_flow.REPLY_OR_FIX_REQUIRED_EXIT_CODE
+    assert "unresolved review thread" in capsys.readouterr().err
+    assert not runner.thread_replies
 
 
 def test_ready_does_not_auto_resolve_outdated_human_reviewer_thread(

@@ -256,6 +256,28 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             body_file = Path(command[command.index("--body-file") + 1])
             self.comments.append(body_file.read_text(encoding="utf-8"))
             return pr_flow.CommandResult(0, "", "")
+        if command[:3] == ["gh", "api", "graphql"]:
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    {
+                        "data": {
+                            "repository": {
+                                "pullRequest": {
+                                    "reviewThreads": {
+                                        "nodes": [],
+                                        "pageInfo": {
+                                            "hasNextPage": False,
+                                            "endCursor": None,
+                                        },
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ),
+                "",
+            )
         if command == [
             "gh",
             "api",
@@ -1028,41 +1050,27 @@ def test_submit_fails_fast_when_github_contract_preflight_is_missing(
             "detail": "missing required checks: Research Governance / verify-full, PR Flow / evidence",
         },
     ]
-    # Handoff status must also be written
-    handoff = json.loads(
-        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
-    )
-    assert handoff["state"] in ("DISPATCH_REQUIRED", "EXCEPTION_REQUIRED")
-    assert handoff["reason_code"]
-    assert handoff["phase"]
-    assert handoff["blocking_items"]
 
 
-def test_submit_writes_handoff_status_on_all_non_zero_exits(
+def test_submit_writes_submit_status_on_non_zero_exit(
     tmp_path: Path,
 ) -> None:
-    """Every non-zero exit must write structured handoff status."""
+    """Non-zero pr-submit exits write the #65 submit status interface."""
     runner = SubmitPreflightRunner(valid_contract=True)
     # missing fragments should cause DISPATCH_REQUIRED
     code = pr_flow.submit(repo_root=tmp_path, title="PR 自动化", runner=runner)
 
     assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
-    handoff = json.loads(
-        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
+    status = json.loads(
+        (tmp_path / ".local/pr-flow/status.json").read_text(encoding="utf-8")
     )
-    assert handoff["state"] == "DISPATCH_REQUIRED"
-    assert handoff["reason_code"]
-    assert handoff["phase"] != "unknown"
-    assert "retryable" in handoff
-    assert "dispatch_target" in handoff
-    assert "blocking_items" in handoff
-    assert "evidence_refs" in handoff
-    assert "next_actions" in handoff
-    # blocking_items must be non-empty
-    assert len(handoff["blocking_items"]) > 0
+    assert list(status) == ["schema", "head", "failures"]
+    assert status["head"] == "1" * 40
+    assert status["failures"]
+    assert set(status["failures"][0]) == {"check", "source", "detail"}
 
 
-def test_submit_writes_handoff_status_when_auto_merge_fails(tmp_path: Path) -> None:
+def test_submit_writes_submit_status_when_auto_merge_fails(tmp_path: Path) -> None:
     diff_text = "diff --git a/docs/guides/example.md b/docs/guides/example.md\n+hello\n"
     diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
     runner = SubmitCreatePrRunner(
@@ -1089,12 +1097,6 @@ def test_submit_writes_handoff_status_when_auto_merge_fails(tmp_path: Path) -> N
             "detail": "gh pr merge --auto failed: GraphQL: merge blocked by ruleset",
         }
     ]
-    handoff = json.loads(
-        (tmp_path / ".local/pr-flow/last-status.json").read_text(encoding="utf-8")
-    )
-    assert handoff["state"] == "EXCEPTION_REQUIRED"
-    assert handoff["reason_code"] == "PR_LIFECYCLE_COMMAND_FAILED"
-    assert handoff["phase"] == "submit_merge"
 
 
 def test_submit_reports_missing_first_stage_review_fragments(tmp_path: Path) -> None:
@@ -1622,9 +1624,9 @@ def test_submit_does_not_auto_accept_human_p2_thread(tmp_path: Path) -> None:
 
 
 class SubmitAutoCloseOutdatedThreadRunner(SubmitCreatePrRunner):
-    """submit() auto-closes outdated P1 Codex threads before waiting for CI.
+    """submit() inspects outdated P1 Codex threads before waiting for CI.
 
-    Tracks call order: thread must be queried and resolved BEFORE CI checks pass.
+    Tracks call order: thread must be queried before CI checks are interpreted.
     """
 
     def __init__(self, *, diff_text: str) -> None:
@@ -1791,10 +1793,10 @@ class SubmitAutoCloseOutdatedThreadRunner(SubmitCreatePrRunner):
         return super().run(command, cwd=cwd, input_text=input_text)
 
 
-def test_submit_auto_closes_outdated_codex_thread_before_ci(
+def test_submit_blocks_outdated_codex_p1_thread_without_closure_evidence(
     tmp_path: Path,
 ) -> None:
-    """submit() must auto-close outdated P1 Codex threads before waiting for CI."""
+    """submit() must not auto-close outdated P1 Codex threads without evidence."""
     diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
     diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
     runner = SubmitAutoCloseOutdatedThreadRunner(diff_text=diff_text)
@@ -1805,11 +1807,9 @@ def test_submit_auto_closes_outdated_codex_thread_before_ci(
 
     code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
 
-    assert code == pr_flow.SUCCESS_EXIT_CODE
-    # Outdated P1 thread was auto-closed
-    assert runner.resolved_threads == [runner.thread_id]
-    assert runner.replies
-    assert "outdated" in runner.replies[0].casefold()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert runner.resolved_threads == []
+    assert runner.replies == []
     # Thread was queried and resolved BEFORE CI checks ran
     assert "reviewThreads" in runner._call_sequence
     review_idx = runner._call_sequence.index("reviewThreads")
@@ -1817,7 +1817,7 @@ def test_submit_auto_closes_outdated_codex_thread_before_ci(
     assert review_idx < checks_idx, (
         "thread must be auto-processed BEFORE CI checks"
     )
-    # CI checks ran exactly once (thread was resolved before first CI call)
+    # CI checks still run once and report the review-status blocker.
     assert runner.checks_calls == 1
 
 
@@ -2551,32 +2551,6 @@ def test_codex_review_status_uses_contract_context_and_workflow_target(
     )
 
 
-def test_contract_defines_stop_state_schema() -> None:
-    """Stop state fields must be defined in the interface contract."""
-    contract = pr_flow_contract.load_contract(Path("."))
-
-    assert isinstance(contract.stop_state_fields, tuple)
-    assert len(contract.stop_state_fields) >= 7
-    assert "schema_version" in contract.stop_state_fields
-    assert "state" in contract.stop_state_fields
-    assert "message" in contract.stop_state_fields
-    assert "reason_code" in contract.stop_state_fields
-    assert "phase" in contract.stop_state_fields
-    assert "retryable" in contract.stop_state_fields
-    assert "dispatch_target" in contract.stop_state_fields
-    assert "blocking_items" in contract.stop_state_fields
-    assert "evidence_refs" in contract.stop_state_fields
-    assert "next_actions" in contract.stop_state_fields
-
-
-def test_contract_defines_handoff_status_path() -> None:
-    """Handoff status path must be defined in the interface contract."""
-    contract = pr_flow_contract.load_contract(Path("."))
-
-    assert isinstance(contract.handoff_status_path, Path)
-    assert contract.handoff_status_path == Path(".local/pr-flow/last-status.json")
-
-
 def test_contract_defines_target_spec_wins_rule() -> None:
     """Target spec wins rule must be machine-readable in the contract."""
     contract = pr_flow_contract.load_contract(Path("."))
@@ -2604,8 +2578,6 @@ def test_contract_defines_codex_thread_automation_rules() -> None:
     """Codex thread automation boundaries must be defined in the contract."""
     contract = pr_flow_contract.load_contract(Path("."))
 
-    assert isinstance(contract.codex_thread_auto_resolve_outdated, bool)
-    assert contract.codex_thread_auto_resolve_outdated is True
     assert isinstance(contract.codex_thread_p0_p1_requires_closure_evidence, bool)
     assert contract.codex_thread_p0_p1_requires_closure_evidence is True
     assert isinstance(contract.codex_thread_human_never_auto_resolve, bool)

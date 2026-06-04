@@ -148,6 +148,17 @@ class SubmitReviewState:
         return self.official_review.get("decision") == "required"
 
 
+@dataclass(frozen=True)
+class SubmitSyncResult:
+    exit_code: int
+    pr_number: str = ""
+    pr_url: str = ""
+    reason_code: str = "PR_SYNC_FAILED"
+    phase: str = "submit_sync_pr"
+    retryable: bool = True
+    failures: tuple[pr_flow_contract.SubmitFailure, ...] = ()
+
+
 class GitHubDataUnavailable(RuntimeError):
     def __init__(
         self,
@@ -1193,7 +1204,7 @@ def submit(
             diff_hash=diff_hash,
             review_state=review_state,
         )
-        sync_code, pr_number, pr_url = _sync_submit_pr_evidence(
+        sync_result = _sync_submit_pr_evidence(
             root=root,
             runner=runner,
             contract=contract,
@@ -1243,8 +1254,19 @@ def submit(
             retryable=exc.retryable,
             failures=github_failures,
         )
-    if sync_code != SUCCESS_EXIT_CODE:
-        return sync_code
+    if sync_result.exit_code != SUCCESS_EXIT_CODE:
+        return _fail_submit(
+            root,
+            contract,
+            sync_result.exit_code,
+            head_sha=head_sha,
+            reason_code=sync_result.reason_code,
+            phase=sync_result.phase,
+            retryable=sync_result.retryable,
+            failures=sync_result.failures,
+        )
+    pr_number = sync_result.pr_number
+    pr_url = sync_result.pr_url
     try:
         head_failures = _submit_pr_head_failures(
             root=root,
@@ -1298,10 +1320,8 @@ def submit(
             return request_code
     current_fingerprint = ai_review_gate.current_diff_fingerprint(root)
     # Auto-process official Codex review threads before waiting for CI.
-    # This handles P2/P3 acceptance, outdated P0/P1 closure, and
-    # P0/P1 closure with structured evidence.  It is best-effort:
-    # if thread fetching fails we continue and let the CI retry path
-    # handle it.
+    # This handles P2/P3 acceptance and P0/P1 closure only when current
+    # structured evidence is already present.
     try:
         pr_info = _github_pr_info_from_url(pr_url)
         if pr_info is not None:
@@ -1317,7 +1337,7 @@ def submit(
                 threads = []
             if threads:
                 auto_payload = _submit_thread_payload(root)
-                _auto_code, _auto_payload, auto_changed = (
+                auto_code, _auto_payload, auto_changed = (
                     _auto_process_official_codex_review_threads(
                         root=root,
                         runner=runner,
@@ -1331,6 +1351,24 @@ def submit(
                         ),
                     )
                 )
+                if auto_code != SUCCESS_EXIT_CODE:
+                    failures = [
+                        pr_flow_contract.SubmitFailure(
+                            check="official-codex-review-thread",
+                            source=pr_url,
+                            detail="official Codex review thread auto-processing failed",
+                        ),
+                    ]
+                    return _fail_submit(
+                        root,
+                        contract,
+                        EXCEPTION_REQUIRED_EXIT_CODE,
+                        head_sha=head_sha,
+                        reason_code="CODEX_THREAD_AUTO_PROCESS_FAILED",
+                        phase="submit_review_threads",
+                        retryable=True,
+                        failures=failures,
+                    )
                 if auto_changed:
                     _write_ai_review_payload(root, _auto_payload)
                     review_state = _review_state_with_retained(
@@ -1351,7 +1389,7 @@ def submit(
                         diff_hash=diff_hash,
                         review_state=review_state,
                     )
-                    sync_code, _pr_number, _pr_url = _sync_submit_pr_evidence(
+                    sync_result = _sync_submit_pr_evidence(
                         root=root,
                         runner=runner,
                         contract=contract,
@@ -1359,14 +1397,34 @@ def submit(
                         target_pr=pr,
                         evidence=evidence,
                     )
-                    if sync_code != SUCCESS_EXIT_CODE:
-                        return sync_code
+                    if sync_result.exit_code != SUCCESS_EXIT_CODE:
+                        return _fail_submit(
+                            root,
+                            contract,
+                            sync_result.exit_code,
+                            head_sha=head_sha,
+                            reason_code=sync_result.reason_code,
+                            phase=sync_result.phase,
+                            retryable=sync_result.retryable,
+                            failures=sync_result.failures,
+                        )
     except Exception as exc:
-        # Best-effort: any unexpected failure (e.g. test runner
-        # doesn't mock the GraphQL query) is non-fatal here.
-        print(
-            f"warning: pre-CI thread auto-processing skipped: {exc}",
-            file=sys.stderr,
+        failures = [
+            pr_flow_contract.SubmitFailure(
+                check="official-codex-review-thread",
+                source=pr_url,
+                detail=f"official Codex review thread inspection failed: {exc}",
+            ),
+        ]
+        return _fail_submit(
+            root,
+            contract,
+            EXCEPTION_REQUIRED_EXIT_CODE,
+            head_sha=head_sha,
+            reason_code="CODEX_THREAD_INSPECTION_FAILED",
+            phase="submit_review_threads",
+            retryable=True,
+            failures=failures,
         )
     watch_failures = _submit_wait_required_checks(
         root=root,
@@ -2082,7 +2140,7 @@ def _sync_submit_pr_evidence(
     title: str | None,
     target_pr: str | None,
     evidence: dict[str, Any],
-) -> tuple[int, str, str]:
+) -> SubmitSyncResult:
     local = root / ".local" / "pr-flow"
     managed_body = _render_submit_managed_body(contract, evidence)
     native_links_body = _render_submit_github_native_links(evidence)
@@ -2102,7 +2160,15 @@ def _sync_submit_pr_evidence(
         )
         if body_view.returncode != 0:
             _print_command_failure("gh pr view --json body", body_view)
-            return body_view.returncode, pr_number, pr_url
+            return _submit_sync_failure(
+                body_view.returncode,
+                pr_number=pr_number,
+                pr_url=pr_url,
+                reason_code="PR_BODY_UNAVAILABLE",
+                check="github",
+                source="gh pr view --json body",
+                detail=_command_failure_detail("gh pr view --json body", body_view),
+            )
         existing_body = str(_json_from_result(body_view).get("body") or "")
         body_file = _write_managed_body_file(
             local,
@@ -2116,29 +2182,51 @@ def _sync_submit_pr_evidence(
         )
         if edit.returncode != 0:
             _print_command_failure("gh pr edit", edit)
-            return edit.returncode, pr_number, pr_url
-        return SUCCESS_EXIT_CODE, pr_number, pr_url
+            return _submit_sync_failure(
+                edit.returncode,
+                pr_number=pr_number,
+                pr_url=pr_url,
+                reason_code="PR_BODY_SYNC_FAILED",
+                check="github",
+                source="gh pr edit",
+                detail=_command_failure_detail("gh pr edit", edit),
+            )
+        return SubmitSyncResult(SUCCESS_EXIT_CODE, pr_number=pr_number, pr_url=pr_url)
     if target_pr:
         _print_command_failure("gh pr view", view)
-        return view.returncode, target_pr, ""
+        return _submit_sync_failure(
+            view.returncode,
+            pr_number=target_pr,
+            reason_code="PR_METADATA_UNAVAILABLE",
+            check="github",
+            source="gh pr view",
+            detail=_command_failure_detail("gh pr view", view),
+        )
     if not title:
         print("error: --title is required when no PR exists", file=sys.stderr)
-        return GENERAL_FAILURE_EXIT_CODE, "", ""
+        return _submit_sync_failure(
+            GENERAL_FAILURE_EXIT_CODE,
+            reason_code="PR_TITLE_REQUIRED",
+            check="pr-sync",
+            source="--title",
+            detail="--title is required when no PR exists",
+            retryable=True,
+        )
     branch = _current_branch(root, runner)
     remote_head = runner.run(["git", "ls-remote", "--heads", "origin", branch], cwd=root)
     if remote_head.returncode != 0 or not _command_stdout(remote_head):
-        _print_state(
-            "EXCEPTION_REQUIRED",
-            "remote branch missing for PR creation",
-            repo_root=root,
-            reason_code="REMOTE_BRANCH_MISSING",
-            phase="submit_sync_pr",
-            retryable=True,
-            dispatch_target="operator",
-            details=[f"git push -u origin {branch}"],
-            next_actions=(f"git push -u origin {branch}",),
+        detail = (
+            _command_failure_detail("git ls-remote --heads origin", remote_head)
+            if remote_head.returncode != 0
+            else f"remote branch missing: git push -u origin {branch}"
         )
-        return EXCEPTION_REQUIRED_EXIT_CODE, "", ""
+        return _submit_sync_failure(
+            EXCEPTION_REQUIRED_EXIT_CODE,
+            reason_code="REMOTE_BRANCH_MISSING",
+            check="git-remote",
+            source=f"origin/{branch}",
+            detail=detail,
+        )
     body_file = _write_managed_body_file(
         local,
         _pr_template_body(root),
@@ -2162,9 +2250,47 @@ def _sync_submit_pr_evidence(
     )
     if create.returncode != 0:
         _print_command_failure("gh pr create", create)
-        return create.returncode, "", ""
+        return _submit_sync_failure(
+            create.returncode,
+            reason_code="PR_CREATE_FAILED",
+            check="github",
+            source="gh pr create",
+            detail=_command_failure_detail("gh pr create", create),
+        )
     pr_url = _command_stdout(create)
-    return SUCCESS_EXIT_CODE, _pr_number_from_url(pr_url), pr_url
+    return SubmitSyncResult(
+        SUCCESS_EXIT_CODE,
+        pr_number=_pr_number_from_url(pr_url),
+        pr_url=pr_url,
+    )
+
+
+def _submit_sync_failure(
+    exit_code: int,
+    *,
+    reason_code: str,
+    check: str,
+    source: str,
+    detail: str,
+    pr_number: str = "",
+    pr_url: str = "",
+    retryable: bool = True,
+) -> SubmitSyncResult:
+    return SubmitSyncResult(
+        exit_code=exit_code or EXCEPTION_REQUIRED_EXIT_CODE,
+        pr_number=pr_number,
+        pr_url=pr_url,
+        reason_code=reason_code,
+        phase="submit_sync_pr",
+        retryable=retryable,
+        failures=(
+            pr_flow_contract.SubmitFailure(
+                check=check,
+                source=source,
+                detail=detail,
+            ),
+        ),
+    )
 
 
 def _gh_pr_view_command(pr_number: str | None, fields: str) -> list[str]:
@@ -4733,10 +4859,6 @@ def _auto_process_official_codex_review_threads(
                 current_head_sha=current_head_sha,
                 current_diff_hash=current_diff_hash,
             )
-            if finding is None and _thread_is_outdated(thread):
-                # Outdated official Codex thread without pre-seeded evidence:
-                # synthesize a minimal finding so the thread can be closed.
-                finding = _synthesize_outdated_thread_finding(thread)
         else:
             continue
         if finding is None:
@@ -4785,14 +4907,7 @@ def _auto_review_thread_action(
     severity = _codex_thread_severity(thread)
     if severity in AUTO_ACCEPTED_REVIEW_THREAD_SEVERITIES:
         return "accept"
-    # Outdated official Codex threads with a known severity are auto-closed
-    # (thread no longer applies to current head/diff).  No-severity and
     # human threads are never auto-resolved — they continue to block.
-    if (
-        _thread_is_outdated(thread)
-        and severity
-    ):
-        return "close"
     if (
         severity in {"P0", "P1"}
         and _closed_external_finding_for_thread(
@@ -4997,31 +5112,6 @@ def _false_positive_rationale(finding: dict[str, Any]) -> str:
     )
 
 
-def _synthesize_outdated_thread_finding(thread: dict[str, Any]) -> dict[str, Any]:
-    """Build a minimal finding for an outdated official Codex thread.
-
-    Used when the thread is outdated and no pre-seeded closure evidence
-    exists in the payload.  The thread is stale and no longer applies to
-    the current head/diff, so we synthesize just enough for the reply
-    and resolution.
-    """
-    thread_id = _thread_id(thread)
-    severity = _codex_thread_severity(thread)
-    body = _codex_thread_body(thread)
-    return {
-        "id": f"EXT-CODEX-THREAD-{thread_id}",
-        "source": "official_codex_review_thread",
-        "thread_id": thread_id,
-        "severity": severity or "P1",
-        "title": "Outdated Codex finding",
-        "path": "",
-        "status": "false_positive",
-        "disposition": "outdated",
-        "evidence": "thread is outdated and no longer applies to current head",
-        "handling": f"outdated official Codex thread resolved; original: {_single_line_text(body)}",
-    }
-
-
 def _accepted_review_thread_reply(finding: dict[str, Any]) -> str:
     return (
         "已按 PR review 规则接受该官方 Codex 建议。\n\n"
@@ -5035,16 +5125,6 @@ def _accepted_review_thread_reply(finding: dict[str, Any]) -> str:
 
 
 def _closed_review_thread_reply(finding: dict[str, Any]) -> str:
-    if _single_line_text(finding.get("disposition")) == "outdated":
-        return (
-            "已按 PR review 规则关闭过期官方 Codex 线程。\n\n"
-            f"- finding: `{_single_line_text(finding.get('id'))}`\n"
-            f"- thread_id: `{_single_line_text(finding.get('thread_id'))}`\n"
-            f"- severity: `{_single_line_text(finding.get('severity'))}`\n"
-            "- status: `outdated`\n"
-            f"- evidence: {_single_line_text(finding.get('evidence'))}\n"
-            f"- handling: {_single_line_text(finding.get('handling'))}\n"
-        )
     if _single_line_text(finding.get("status")) == "false_positive":
         return (
             "已按 PR review 规则关闭官方 Codex false positive 阻断项。\n\n"
@@ -6413,8 +6493,7 @@ def _stop_submit(
 ) -> int:
     """Emit structured stop status and return exit code.
 
-    Ensures every non-zero exit from submit produces both CLI stop summary
-    and local handoff status file.
+    Ensures every non-zero exit from submit produces a CLI stop summary.
     """
     blocking_items = tuple(
         f"{f.check}: {f.detail}" for f in failures
@@ -6541,18 +6620,6 @@ def _emit_stop_status(
         print("next_actions:", file=stream)
         for item in status.next_actions:
             print(f"- {item}", file=stream)
-    if repo_root is not None:
-        _write_last_status(repo_root, status)
-
-
-def _write_last_status(repo_root: str | Path, status: StopStatus) -> None:
-    contract = pr_flow_contract.load_contract(repo_root)
-    path = Path(repo_root).resolve() / contract.handoff_status_path
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(status.as_json(), ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
 
 
 def _record_pr_ready_phase(
