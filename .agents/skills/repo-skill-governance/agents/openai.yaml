@@ -1,4 +1,4 @@
 interface:
   display_name: "Repo Skill Governance"
-  short_description: "维护 .agents/skills 单一来源、Junction 分发和 ownership 发现治理。"
+  short_description: "维护 .agents/skills 单一来源、Symlink 分发和 ownership 发现治理。"
   default_prompt: "使用 $repo-skill-governance 修改或验证 Quant Trading 的 Skill 治理。"

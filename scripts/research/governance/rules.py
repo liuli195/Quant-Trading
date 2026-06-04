@@ -268,22 +268,9 @@ def _audit_claude_and_skills(root: Path) -> list[AuditFinding]:
     claude = root / "CLAUDE.md"
     if not claude.is_file():
         findings.append(AuditFinding("claude_sync", "error", "CLAUDE.md missing"))
-    else:
-        text = claude.read_text(encoding="utf-8", errors="ignore")
-        for token in ("AGENTS.md",):
-            if token not in text:
-                findings.append(
-                    AuditFinding("claude_sync", "error", f"CLAUDE.md missing {token}")
-                )
-        for token in FORBIDDEN_CLAUDE_TOKENS:
-            if token in text:
-                findings.append(
-                    AuditFinding(
-                        "claude_sync",
-                        "error",
-                        f"CLAUDE.md contains Codex-only or standard review rules: {token}",
-                    )
-                )
+    # CLAUDE.md is now a File Symlink to AGENTS.md — content audit is
+    # redundant since both resolve to the same file. Symlink validity is
+    # checked by skill_ownership.
 
     commands = root / "docs" / "rules" / "commands.md"
     if not commands.is_file():
@@ -467,7 +454,7 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             "PYTHONUTF8",
             "PYTHONIOENCODING",
             "3.12",
-            "ensure-skill-junction.ps1",
+            "git config core.symlinks true",
         ):
             if token not in text:
                 findings.append(
@@ -494,6 +481,7 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             "PYTHONIOENCODING",
             "python3.12",
             ".githooks/post-commit",
+            "git config core.symlinks true",
         ):
             if token not in text:
                 findings.append(
@@ -517,7 +505,7 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         text = codex_environment.read_text(encoding="utf-8", errors="ignore")
         for token in (
             ".\\.githooks\\setup-python.ps1",
-            ".\\.githooks\\ensure-skill-junction.ps1",
+            "git config core.symlinks true",
         ):
             if token not in text:
                 findings.append(
@@ -707,16 +695,12 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "CI workflow missing verify full entrypoint",
                 )
             )
-        junction_setup_index = text.find("ensure-skill-junction.ps1")
-        verify_full_index = text.find("scripts.research.governance verify full")
-        if junction_setup_index < 0 or (
-            verify_full_index >= 0 and junction_setup_index > verify_full_index
-        ):
+        if "git config core.symlinks true" not in text:
             findings.append(
                 AuditFinding(
                     "governance_gate",
                     "error",
-                    "CI workflow must create .claude/skills Junction before verify full",
+                    "CI workflow must configure core.symlinks true before verify full",
                 )
             )
         if "scripts.research.governance verify fast" in text:

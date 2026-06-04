@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import os
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -408,15 +409,40 @@ def _load_ownership(path: Path, root: Path) -> SkillOwnership:
     )
 
 
-def _is_expected_skills_junction(root: Path) -> bool:
+def _is_expected_skills_symlink(root: Path) -> bool:
+    """Return True if .claude/skills is a valid Symlink to .agents/skills.
+
+    On non-Windows platforms the check is skipped (returns True).
+    """
+    if os.name != "nt":
+        return True
     claude_skills = root / ".claude" / "skills"
     agents_skills = root / ".agents" / "skills"
     if not claude_skills.exists() or not agents_skills.is_dir():
         return False
-    if not (claude_skills.is_symlink() or getattr(claude_skills, "is_junction", lambda: False)()):
+    if not claude_skills.is_symlink():
         return False
     try:
         return claude_skills.resolve() == agents_skills.resolve()
+    except OSError:
+        return False
+
+
+def _is_expected_claude_md_symlink(root: Path) -> bool:
+    """Return True if CLAUDE.md is a valid Symlink to AGENTS.md.
+
+    On non-Windows platforms the check is skipped (returns True).
+    """
+    if os.name != "nt":
+        return True
+    claude_md = root / "CLAUDE.md"
+    agents_md = root / "AGENTS.md"
+    if not claude_md.exists() or not agents_md.is_file():
+        return False
+    if not claude_md.is_symlink():
+        return False
+    try:
+        return claude_md.resolve() == agents_md.resolve()
     except OSError:
         return False
 
@@ -557,8 +583,10 @@ def validate_ownerships(repo_root: str | Path = ".") -> list[str]:
 
     seen_owned: dict[tuple[str, str], str] = {}
     seen_triggers: dict[str, str] = {}
-    if any("claude-code" in ownership.tools for ownership in ownerships) and not _is_expected_skills_junction(root):
-        errors.append(".claude/skills must be a Junction to .agents/skills when tools includes claude-code")
+    if any("claude-code" in ownership.tools for ownership in ownerships) and not _is_expected_skills_symlink(root):
+        errors.append(".claude/skills must be a Symlink to .agents/skills when tools includes claude-code")
+    if not _is_expected_claude_md_symlink(root):
+        errors.append("CLAUDE.md must be a Symlink to AGENTS.md")
     owned_rule_paths = {
         _base_rule_path(rule)
         for ownership in ownerships
