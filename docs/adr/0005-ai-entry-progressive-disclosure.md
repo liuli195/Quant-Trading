@@ -1,4 +1,4 @@
-# ADR 0005: AI 入口采用渐进式披露
+﻿# ADR 0005: AI 入口采用渐进式披露
 
 ## 状态
 
@@ -12,7 +12,7 @@ Accepted
 
 - [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 是所有 AI 编码助手的通用入口。
 - 根目录不再保留重复文档索引；规则索引归 [docs/rules/index.md](../rules/index.md) <!-- pathref: docs/rules/index.md -->，ADR 入口归 [docs/adr/index.md](index.md) <!-- pathref: docs/adr/index.md -->。
-- [CLAUDE.md](../../CLAUDE.md) <!-- pathref: repo/CLAUDE.md --> 只保留到 `AGENTS.md` 的入口指针。
+- [CLAUDE.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 是 File Symlink 指向 [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->，内容即 `AGENTS.md`，无需独立维护。
 - 仓库级规则正文继续放在 [docs/rules](../rules) <!-- pathref: docs/rules -->。
 - 命令和本地环境规则独立为 [commands.md](../rules/commands.md) <!-- pathref: docs/rules/commands.md -->。
 - 沙箱/权限提权规则暂时上提到 [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->，不放入 `CLAUDE.md`。
