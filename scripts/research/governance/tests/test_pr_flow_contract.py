@@ -2695,6 +2695,84 @@ def test_codex_review_status_uses_contract_context_and_workflow_target(
     )
 
 
+def test_codex_review_status_writes_error_for_expected_head_mismatch(
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_request_json(**kwargs: object) -> object:
+        captured.update(kwargs)
+        return {}
+
+    monkeypatch.setattr(codex_review_monitor, "_request_json", fake_request_json)
+    monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.com")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "liuli195/Quant-Trading")
+    monkeypatch.setenv("GITHUB_RUN_ID", "123456789")
+    report = codex_review_monitor.MonitorReport(
+        status="stale_head",
+        pr_number="88",
+        head_sha="a" * 40,
+        trigger_found=False,
+        latest_review_url=None,
+        latest_review_sha=None,
+        blocking_findings=0,
+        advisory_findings=0,
+        message="PR head changed before monitor completed",
+    )
+
+    codex_review_monitor.sync_commit_status(
+        repo="liuli195/Quant-Trading",
+        pr={"html_url": "https://github.com/liuli195/Quant-Trading/pull/88"},
+        token="token",
+        report=report,
+    )
+
+    url = captured["url"]
+    assert isinstance(url, str)
+    assert url.endswith(f"/statuses/{'a' * 40}")
+    payload = captured["payload"]
+    assert isinstance(payload, dict)
+    assert payload["state"] == "error"
+    assert payload["description"] == "PR head changed before monitor completed"
+    assert payload["context"] == "PR Flow / review-status"
+
+
+def test_codex_review_monitor_cli_reports_expected_head_mismatch(
+    tmp_path,
+    monkeypatch,
+    capsys,
+) -> None:
+    pr_file = tmp_path / "pr.json"
+    pr_file.write_text(
+        json.dumps(
+            {
+                "html_url": "https://github.com/liuli195/Quant-Trading/pull/88",
+                "head": {"sha": "b" * 40},
+                "body": "",
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("GITHUB_REPOSITORY", "liuli195/Quant-Trading")
+    monkeypatch.setenv("PR_NUMBER", "88")
+    monkeypatch.setenv("EXPECTED_HEAD_SHA", "a" * 40)
+
+    code = codex_review_monitor.main(
+        [
+            "--pr-file",
+            str(pr_file),
+            "--expected-head-sha-env",
+            "EXPECTED_HEAD_SHA",
+        ]
+    )
+
+    assert code == 0
+    output = capsys.readouterr().out
+    assert "head 已变化" in output
+    assert "PR head changed before monitor completed" in output
+    assert f"当前 head: `{'a' * 7}`" in output
+
+
 def test_contract_defines_target_spec_wins_rule() -> None:
     """Target spec wins rule must be machine-readable in the contract."""
     contract = pr_flow_contract.load_contract(Path("."))
@@ -2873,8 +2951,143 @@ def test_codex_review_monitor_workflow_dispatch_resolves_input_pr_number() -> No
     )
     assert (
         resolve_step["env"]["PR_NUMBER"]
-        == "${{ inputs.pr_number || github.event.pull_request.number || github.event.issue.number }}"
+        == "${{ inputs.pr_number || github.event.pull_request.number }}"
     )
+
+
+def test_codex_review_status_uses_router_worker_event_split() -> None:
+    """issue_comment must route to the PR-branch worker instead of running it directly."""
+    import yaml
+
+    router_path = Path(".github/workflows/codex-review-router.yml")
+    worker_path = Path(".github/workflows/codex-review-monitor.yml")
+
+    assert router_path.is_file()
+    router_doc = yaml.safe_load(router_path.read_text(encoding="utf-8"))
+    worker_doc = yaml.safe_load(worker_path.read_text(encoding="utf-8"))
+
+    router_on = router_doc.get("on", router_doc.get(True))
+    worker_on = worker_doc.get("on", worker_doc.get(True))
+
+    assert set(router_on) == {"issue_comment"}
+    assert "issue_comment" not in worker_on
+    for event_name in (
+        "pull_request",
+        "pull_request_review",
+        "pull_request_review_comment",
+        "workflow_dispatch",
+    ):
+        assert event_name in worker_on
+
+
+def test_codex_review_router_dispatches_pr_branch_worker_with_head_lock() -> None:
+    """Router dispatch must load the PR branch worker and lock the expected head."""
+    import yaml
+
+    path = Path(".github/workflows/codex-review-router.yml")
+    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+    text = path.read_text(encoding="utf-8")
+
+    permissions = doc["permissions"]
+    assert permissions["actions"] == "write"
+    assert permissions["pull-requests"] == "read"
+    assert permissions["statuses"] == "write"
+    assert "actions/checkout" not in text
+    assert 'state="success"' not in text
+
+    steps = doc["jobs"]["route-review-status"]["steps"]
+    dispatch = next(step for step in steps if step.get("name") == "Dispatch PR branch worker")
+    run_script = str(dispatch["run"])
+    assert "actions/workflows/codex-review-monitor.yml/dispatches" in run_script
+    assert '-f ref="$env:PR_HEAD_REF"' in run_script
+    assert "inputs[pr_number]=$env:PR_NUMBER" in run_script
+    assert "inputs[expected_head_sha]=$env:PR_HEAD_SHA" in run_script
+    assert "inputs[trigger_event]=issue_comment" in run_script
+    assert "inputs[trigger_run_id]=$env:TRIGGER_RUN_ID" in run_script
+    assert "github.event.comment" not in run_script
+    assert "comment.body" not in run_script
+
+
+def test_codex_review_worker_workflow_dispatch_is_head_locked_and_finalized() -> None:
+    """workflow_dispatch is a first-class worker entrypoint with pending/finalizer behavior."""
+    import yaml
+
+    path = Path(".github/workflows/codex-review-monitor.yml")
+    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+    worker_on = doc.get("on", doc.get(True))
+    dispatch_inputs = worker_on["workflow_dispatch"]["inputs"]
+
+    assert set(dispatch_inputs) >= {
+        "pr_number",
+        "expected_head_sha",
+        "trigger_event",
+        "trigger_run_id",
+    }
+    assert "actions" not in doc["permissions"]
+
+    steps = doc["jobs"]["monitor"]["steps"]
+    pending = next(step for step in steps if step.get("name") == "Publish pending status")
+    assert "if" not in pending
+    assert (
+        pending["env"]["PR_HEAD_SHA"]
+        == "${{ inputs.expected_head_sha || steps.pr-head.outputs.sha || github.event.pull_request.head.sha }}"
+    )
+    assert "PR Flow / review-status" in str(pending["run"])
+
+    guard = next(step for step in steps if step.get("name") == "Guard expected PR head")
+    guard_script = str(guard["run"])
+    assert "EXPECTED_HEAD_SHA" in guard_script
+    assert "PR head changed before monitor completed" in guard_script
+    assert 'state="error"' in guard_script
+
+    finalizer = next(
+        step for step in steps if step.get("name") == "Publish monitor failure status"
+    )
+    condition = str(finalizer["if"])
+    assert "always()" in condition
+    assert "failure()" in condition
+    assert "cancelled()" in condition
+    assert "github.event_name != 'workflow_dispatch'" not in condition
+    assert (
+        finalizer["env"]["PR_HEAD_SHA"]
+        == "${{ inputs.expected_head_sha || steps.pr-head.outputs.sha || github.event.pull_request.head.sha }}"
+    )
+
+    monitor = next(step for step in steps if step.get("name") == "Update Codex review status")
+    assert monitor["env"]["EXPECTED_HEAD_SHA"] == "${{ inputs.expected_head_sha }}"
+    assert "--expected-head-sha-env EXPECTED_HEAD_SHA" in str(monitor["run"])
+
+
+def test_codex_review_router_worker_model_is_documented() -> None:
+    required_docs = {
+        Path("docs/rules/governance.md"): [
+            "codex-review-router.yml",
+            "codex-review-monitor.yml",
+            "expected_head_sha",
+            "PR head changed before monitor completed",
+        ],
+        Path("docs/rules/pr-workflow.md"): [
+            "PR head branch worker",
+            "不维护 PR Flow changed-files 白名单",
+            "不扩展 `.local/pr-flow/status.json`",
+        ],
+        Path("scripts/research/governance/README.md"): [
+            "codex-review-router.yml",
+            "codex-review-monitor.yml",
+            "trigger_run_id",
+            "router 成功调度后不写 success",
+        ],
+        Path("docs/adr/0007-pr-flow-closed-loop-review-evidence.md"): [
+            "https://github.com/liuli195/Quant-Trading/issues/94",
+            "router dispatch 成功不写 success",
+            "不维护 PR Flow changed-files 白名单",
+        ],
+    }
+
+    for path, tokens in required_docs.items():
+        text = path.read_text(encoding="utf-8")
+        for token in tokens:
+            assert token in text, f"{path} missing {token}"
 
 
 def _write_fragment(

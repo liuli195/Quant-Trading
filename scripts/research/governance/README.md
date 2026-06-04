@@ -50,6 +50,10 @@ GitHub `main` required checks 必须与契约完全一致：
 
 `PR Flow / evidence` 只读取 PR body 托管区里的 PR Evidence JSON。`PR Flow / review-status` 通过 commit status 表示官方 Codex review 和 unresolved thread 状态；官方 Codex 未返回时保持 pending，官方 P2/P3 进入 PR Evidence `retained` 后可 resolve。`Research Governance / verify-full` 在 GitHub 上执行完整治理验证，本地 PR 前置不重复运行完整验证。
 
+`issue_comment` 事件只进入默认分支 `codex-review-router.yml`。router 识别 `@codex review`、`Codex Review:`、edited 和 deleted PR 评论后，先把 `PR Flow / review-status` 写成 pending，再用 PR head branch dispatch `codex-review-monitor.yml` worker。router 成功调度后不写 success；最终 success、failure、error 或 skipped 只由 worker 写。
+
+`codex-review-monitor.yml` 是 PR branch worker，保留 `pull_request`、`pull_request_review`、`pull_request_review_comment` 和 `workflow_dispatch` 入口，不监听 `issue_comment`。`workflow_dispatch` 接收 `pr_number`、`expected_head_sha`、`trigger_event`、`trigger_run_id`；worker 对 `workflow_dispatch` 也必须写 pending，并用 finalizer 兜底 checkout、setup、依赖安装等基础设施失败。`expected_head_sha` 和当前 PR head 不一致时，worker 写 `PR head changed before monitor completed` error 并停止。
+
 ## Hooks 和主干保护
 
 本地 hook 需要在每个 checkout 启用：

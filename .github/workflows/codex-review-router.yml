@@ -1,0 +1,102 @@
+name: PR Flow Review Status Router
+
+on:
+  issue_comment:
+    types: [created, edited, deleted]
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+  statuses: write
+
+jobs:
+  route-review-status:
+    if: >-
+      github.event.issue.pull_request &&
+      github.event.comment.user.login != 'github-actions[bot]' &&
+      (
+        github.event.action == 'deleted' ||
+        github.event.action == 'edited' ||
+        contains(github.event.comment.body, '@codex review') ||
+        contains(github.event.comment.body, 'Codex Review:')
+      )
+    runs-on: windows-latest
+    steps:
+      - name: Resolve PR head
+        id: pr-head
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        shell: pwsh
+        run: |
+          $headSha = gh api "repos/$env:GITHUB_REPOSITORY/pulls/$env:PR_NUMBER" --jq '.head.sha'
+          $headRef = gh api "repos/$env:GITHUB_REPOSITORY/pulls/$env:PR_NUMBER" --jq '.head.ref'
+          $headRepo = gh api "repos/$env:GITHUB_REPOSITORY/pulls/$env:PR_NUMBER" --jq '.head.repo.full_name'
+          echo "sha=$headSha" >> $env:GITHUB_OUTPUT
+          echo "ref=$headRef" >> $env:GITHUB_OUTPUT
+          echo "repo=$headRepo" >> $env:GITHUB_OUTPUT
+      - name: Reject unsupported fork PR
+        id: fork-guard
+        if: ${{ steps.pr-head.outputs.repo != github.repository }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_HEAD_SHA: ${{ steps.pr-head.outputs.sha }}
+          TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: pwsh
+        run: |
+          gh api "repos/$env:GITHUB_REPOSITORY/statuses/$env:PR_HEAD_SHA" `
+            -f state="failure" `
+            -f context="PR Flow / review-status" `
+            -f description="Fork PR review-status routing is not supported" `
+            -f target_url="$env:TARGET_URL"
+          echo "unsupported=true" >> $env:GITHUB_OUTPUT
+      - name: Publish router pending status
+        if: ${{ steps.fork-guard.outputs.unsupported != 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_HEAD_SHA: ${{ steps.pr-head.outputs.sha }}
+          TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: pwsh
+        run: |
+          gh api "repos/$env:GITHUB_REPOSITORY/statuses/$env:PR_HEAD_SHA" `
+            -f state="pending" `
+            -f context="PR Flow / review-status" `
+            -f description="Routing Codex review status to PR branch worker" `
+            -f target_url="$env:TARGET_URL"
+      - name: Dispatch PR branch worker
+        if: ${{ steps.fork-guard.outputs.unsupported != 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          PR_HEAD_REF: ${{ steps.pr-head.outputs.ref }}
+          PR_HEAD_SHA: ${{ steps.pr-head.outputs.sha }}
+          TRIGGER_RUN_ID: ${{ github.run_id }}
+        shell: pwsh
+        run: |
+          gh api --method POST "repos/$env:GITHUB_REPOSITORY/actions/workflows/codex-review-monitor.yml/dispatches" `
+            -f ref="$env:PR_HEAD_REF" `
+            -f "inputs[pr_number]=$env:PR_NUMBER" `
+            -f "inputs[expected_head_sha]=$env:PR_HEAD_SHA" `
+            -f "inputs[trigger_event]=issue_comment" `
+            -f "inputs[trigger_run_id]=$env:TRIGGER_RUN_ID"
+      - name: Publish router failure status
+        if: ${{ always() && steps.fork-guard.outputs.unsupported != 'true' && (failure() || cancelled()) }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          PR_HEAD_SHA: ${{ steps.pr-head.outputs.sha }}
+          JOB_STATUS: ${{ job.status }}
+          TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: pwsh
+        run: |
+          $target = $env:PR_HEAD_SHA
+          if (-not $target) {
+            $target = gh api "repos/$env:GITHUB_REPOSITORY/pulls/$env:PR_NUMBER" --jq '.head.sha'
+          }
+          $state = if ($env:JOB_STATUS -eq 'cancelled') { 'error' } else { 'failure' }
+          gh api "repos/$env:GITHUB_REPOSITORY/statuses/$target" `
+            -f state="$state" `
+            -f context="PR Flow / review-status" `
+            -f description="Codex review status router $state" `
+            -f target_url="$env:TARGET_URL"
