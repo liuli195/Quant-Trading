@@ -172,8 +172,8 @@ scripts/joinquant_tools/FeishuRelayTools.private.py
 scripts/joinquant_tools/FeishuRelayTools.local.py
 feishu_relay_outbox/
 
-# Claude Code reads repository skills through a generated Junction.
-.claude/skills/
+# Claude Code reads repository skills through a Directory Symlink tracked by Git.
+# .claude/skills/ is no longer gitignored — it is committed as a symlink.
 
 # ========================
 # Jupyter

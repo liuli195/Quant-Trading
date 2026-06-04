@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 import json
@@ -473,40 +473,6 @@ def _fixture_list(fixture: Mapping[str, object], key: str) -> list[str]:
     return [str(value)]
 
 
-def _write_skill_junction(root: Path) -> None:
-    agents = root / ".agents" / "skills"
-    claude = root / ".claude" / "skills"
-    claude.parent.mkdir(parents=True, exist_ok=True)
-    if claude.exists() or claude.is_symlink():
-        return
-    if os.name == "nt":
-        subprocess.run(
-            ["cmd", "/c", "mklink", "/J", str(claude), str(agents)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    else:
-        claude.symlink_to(agents, target_is_directory=True)
-
-
-def _remove_skill_junction(root: Path) -> None:
-    claude = root / ".claude" / "skills"
-    if not claude.exists() and not claude.is_symlink():
-        return
-    if os.name == "nt" and getattr(claude, "is_junction", lambda: False)():
-        subprocess.run(
-            ["cmd", "/c", "rmdir", str(claude)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    elif claude.is_symlink():
-        claude.unlink()
-    else:
-        raise AssertionError(f"expected generated skills link, got {claude}")
-
-
 def _write_owner_skill(root: Path, fixture: Mapping[str, object]) -> None:
     skill = str(fixture["skill"])
     description = str(fixture["description"])
@@ -771,16 +737,23 @@ def test_skill_ownership_rejects_missing_owned_rule_anchor(tmp_path: Path) -> No
     )
 
 
-def test_skill_ownership_rejects_missing_claude_junction(tmp_path: Path) -> None:
+def test_skill_ownership_rejects_missing_claude_symlink_post_86(
+    tmp_path: Path,
+) -> None:
+    """When .claude/skills symlink is missing, validate_ownerships must error.
+
+    This test replaces the old ``test_skill_ownership_rejects_missing_claude_skill link``
+    with symlink semantics (post-#86).
+    """
     from scripts.research.governance.skill_ownership import validate_ownerships
 
     _write_minimal_repo(tmp_path)
-    _remove_skill_junction(tmp_path)
+    _remove_skill_symlink(tmp_path)
 
     errors = validate_ownerships(tmp_path)
 
     assert any(
-        ".claude/skills must be a Junction to .agents/skills" in error
+        ".claude/skills must be a Symlink to .agents/skills" in error
         for error in errors
     )
 
@@ -1432,10 +1405,10 @@ def _write_minimal_repo(root: Path) -> None:
 
     write_adr_index(root)
 
-    (root / "CLAUDE.md").write_text(
-        "先读 AGENTS.md。",
-        encoding="utf-8",
-    )
+    # CLAUDE.md is now a File Symlink to AGENTS.md (not a separate file).
+    # Content of both files is identical by design.
+    _remove_claude_md_symlink(root)
+    _write_claude_md_symlink(root)
     (root / "AGENTS.md").write_text(
         "所有 AI 编码助手统一以 AGENTS.md 为通用入口。\n\n"
         "本仓库是基于 Python 的 A 股/场内基金量化策略仓库。\n\n"
@@ -1568,12 +1541,14 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / ".githooks/setup-python.ps1").write_text(
         "3.12\nrequirements-dev.txt\ngit config core.hooksPath .githooks\n"
-        "PYTHONUTF8\nPYTHONIOENCODING\nensure-skill-junction.ps1\n",
+        "PYTHONUTF8\nPYTHONIOENCODING\ngit config core.symlinks true\n"
+        "CLAUDE.md\n.claude/skills\ngit checkout --\n",
         encoding="utf-8",
     )
     (root / ".githooks/setup-python.sh").write_text(
         "python3.12\nrequirements-dev.txt\ngit config core.hooksPath .githooks\n"
-        "PYTHONUTF8\nPYTHONIOENCODING\n.githooks/post-commit\n",
+        "PYTHONUTF8\nPYTHONIOENCODING\n.githooks/post-commit\n"
+        "git config core.symlinks true\nCLAUDE.md\n.claude/skills\ngit checkout --\n",
         encoding="utf-8",
     )
     (root / ".githooks/pre-push").write_text(
@@ -1609,7 +1584,7 @@ def _write_minimal_repo(root: Path) -> None:
         "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
         "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
         "steps:\n"
-        "  - run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\ensure-skill-junction.ps1\n"
+        "  - run: git config core.symlinks true\n"
         "  - run: python -m scripts.research.governance verify full\n",
         encoding="utf-8",
     )
@@ -1649,7 +1624,7 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / ".codex/environments").mkdir(parents=True, exist_ok=True)
     (root / ".codex/environments/environment.toml").write_text(
-        ".\\.githooks\\setup-python.ps1\n.\\.githooks\\ensure-skill-junction.ps1\n",
+        ".\\.githooks\\setup-python.ps1\ngit config core.symlinks true\n",
         encoding="utf-8",
     )
     (root / "scripts/research/governance/README.md").write_text(
@@ -1690,6 +1665,7 @@ def _write_minimal_repo(root: Path) -> None:
                 "docs/rules/** @research-platform",
                 "docs/adr/** @research-platform",
                 ".agents/skills/** @research-platform",
+                ".claude/skills @research-platform",
                 ".codex/environments/** @research-platform",
                 ".claude/settings.json @research-platform",
                 ".claude/settings.local.json @research-platform",
@@ -1771,7 +1747,7 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     _write_all_owner_skills(root)
-    _write_skill_junction(root)
+    _write_skill_symlink(root)
     (root / "path_aliases.json").write_text(
         json.dumps(
             {
@@ -2344,7 +2320,7 @@ def test_governance_workflow_uses_single_verify_full_entrypoint(tmp_path: Path) 
         "jobs:\n"
         "  verify-full:\n"
         "    steps:\n"
-        "      - run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.githooks\\ensure-skill-junction.ps1\n"
+        "      - run: git config core.symlinks true\n"
         "      - run: python -m scripts.research.governance verify full\n",
         encoding="utf-8",
     )
@@ -2410,9 +2386,10 @@ def test_governance_audit_flags_pr_flow_without_pr_head_checkout_and_base_fetch(
     assert "PR Flow evidence workflow must fetch the PR base branch" in messages
 
 
-def test_governance_audit_flags_workflow_without_skill_junction_setup(
+def test_governance_audit_flags_workflow_without_skill_symlink_config(
     tmp_path: Path,
 ) -> None:
+    """CI workflow must configure core.symlinks true before verify full (post-#86)."""
     _write_minimal_repo(tmp_path)
     workflow = tmp_path / ".github/workflows/research-governance.yml"
     workflow.write_text(
@@ -2425,8 +2402,7 @@ def test_governance_audit_flags_workflow_without_skill_junction_setup(
         "jobs:\n"
         "  governance:\n"
         "    steps:\n"
-        "      - run: python -m scripts.research.governance verify full\n"
-        "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
+        "      - run: python -m scripts.research.governance verify full\n",
         encoding="utf-8",
     )
 
@@ -2434,7 +2410,7 @@ def test_governance_audit_flags_workflow_without_skill_junction_setup(
 
     assert not report.ok
     assert any(
-        "CI workflow must create .claude/skills Junction before verify full"
+        "CI workflow must configure core.symlinks true before verify full"
         in finding.message
         for finding in report.findings
     )
@@ -2730,9 +2706,10 @@ def test_governance_audit_flags_missing_python_setup_scripts(tmp_path) -> None:
     )
 
 
-def test_governance_audit_flags_codex_environment_without_skill_junction(
+def test_governance_audit_flags_codex_environment_without_core_symlinks(
     tmp_path: Path,
 ) -> None:
+    """environment.toml must include git config core.symlinks true (post-#86)."""
     _write_minimal_repo(tmp_path)
     (tmp_path / ".codex/environments/environment.toml").write_text(
         ".\\.githooks\\setup-python.ps1\n",
@@ -2744,7 +2721,7 @@ def test_governance_audit_flags_codex_environment_without_skill_junction(
     assert not report.ok
     assert any(
         finding.rule_id == "governance_gate"
-        and "environment.toml missing .\\.githooks\\ensure-skill-junction.ps1"
+        and "environment.toml missing git config core.symlinks true"
         in finding.message
         for finding in report.findings
     )
@@ -3178,18 +3155,22 @@ def test_governance_audit_flags_agents_without_gh_cli_escalation_rule(
     )
 
 
-def test_governance_audit_flags_claude_with_codex_or_review_rules(tmp_path) -> None:
+def test_governance_audit_flags_claude_md_not_a_symlink(tmp_path: Path) -> None:
+    """CLAUDE.md must be a symlink to AGENTS.md (post-#86)."""
     _write_minimal_repo(tmp_path)
-    (tmp_path / "CLAUDE.md").write_text(
-        "先读 AGENTS.md。"
-        "遇到沙箱/权限阻断时申请提权。Claude Code 不能用自审替代官方 Codex Code Review。",
+    # Remove the symlink and write CLAUDE.md as a regular file
+    claude_md = tmp_path / "CLAUDE.md"
+    if claude_md.is_symlink():
+        claude_md.unlink()
+    claude_md.write_text(
+        "先读 AGENTS.md。遇到沙箱/权限阻断时申请提权。",
         encoding="utf-8",
     )
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
     assert not report.ok
     assert any(
-        finding.rule_id == "claude_sync"
-        and "Codex-only or standard review rules" in finding.message
+        finding.rule_id == "skill_ownership"
+        and "CLAUDE.md must be a Symlink to AGENTS.md" in finding.message
         for finding in report.findings
     )
 
@@ -4121,3 +4102,294 @@ def test_codex_review_monitor_blocks_on_any_current_head_codex_review() -> None:
         report.latest_review_url
         == "https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779360"
     )
+
+
+# ── #86 / #93 RED tests: Symlink governance ──────────────────────────────────
+
+
+def _write_skill_symlink(root: Path) -> None:
+    """Create .claude/skills as a directory symlink to .agents/skills."""
+    agents = root / ".agents" / "skills"
+    claude = root / ".claude" / "skills"
+    claude.parent.mkdir(parents=True, exist_ok=True)
+    if claude.is_symlink():
+        resolved = claude.resolve()
+        if resolved == agents.resolve():
+            return
+        claude.unlink()
+    elif claude.exists():
+        import shutil
+        shutil.rmtree(str(claude))
+    if os.name == "nt":
+        subprocess.run(
+            ["cmd", "/c", "mklink", "/D", str(claude), str(agents)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    else:
+        claude.symlink_to(agents, target_is_directory=True)
+
+
+def _remove_skill_symlink(root: Path) -> None:
+    """Remove .claude/skills symlink."""
+    claude = root / ".claude" / "skills"
+    if claude.is_symlink():
+        claude.unlink()
+    elif claude.exists():
+        import shutil
+        shutil.rmtree(str(claude))
+
+
+def _write_claude_md_symlink(root: Path) -> None:
+    """Create CLAUDE.md as a file symlink to AGENTS.md."""
+    agents_md = root / "AGENTS.md"
+    claude_md = root / "CLAUDE.md"
+    if claude_md.is_symlink():
+        resolved = claude_md.resolve()
+        if resolved == agents_md.resolve():
+            return
+        claude_md.unlink()
+    elif claude_md.exists():
+        claude_md.unlink()
+    if os.name == "nt":
+        subprocess.run(
+            ["cmd", "/c", "mklink", str(claude_md), str(agents_md)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    else:
+        claude_md.symlink_to(agents_md)
+
+
+def _remove_claude_md_symlink(root: Path) -> None:
+    """Remove CLAUDE.md symlink."""
+    claude_md = root / "CLAUDE.md"
+    if claude_md.is_symlink():
+        claude_md.unlink()
+    elif claude_md.exists():
+        claude_md.unlink()
+
+
+def _write_minimal_repo_symlink(root: Path) -> None:
+    """Minimal repo set up for symlink-based governance (post-#86).
+
+    Calls _write_minimal_repo then ensures both tracked symlink surfaces exist.
+    """
+    _write_minimal_repo(root)
+    _remove_skill_symlink(root)
+    _write_skill_symlink(root)
+    claude_md = root / "CLAUDE.md"
+    if claude_md.exists() and not claude_md.is_symlink():
+        claude_md.unlink()
+    _write_claude_md_symlink(root)
+
+
+# ── #86 RED: symlink audit tests (skill_ownership.py) ────────────────────────
+
+
+def test_skill_ownership_rejects_missing_claude_symlink(
+    tmp_path: Path,
+) -> None:
+    """When .claude/skills symlink is missing, validate_ownerships must error."""
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo_symlink(tmp_path)
+    _remove_skill_symlink(tmp_path)
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        ".claude/skills must be a Symlink to .agents/skills when tools includes claude-code"
+        in error
+        for error in errors
+    )
+
+
+def test_skill_ownership_rejects_missing_claude_md_symlink(
+    tmp_path: Path,
+) -> None:
+    """When CLAUDE.md symlink is missing, validate_ownerships must error."""
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo_symlink(tmp_path)
+    _remove_claude_md_symlink(tmp_path)
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(
+        "CLAUDE.md must be a Symlink to AGENTS.md" in error
+        for error in errors
+    )
+
+
+def test_skill_ownership_symlink_validation_is_not_platform_skipped(
+    tmp_path: Path,
+) -> None:
+    """Symlink checks report missing links on every platform."""
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo_symlink(tmp_path)
+    _remove_skill_symlink(tmp_path)
+    _remove_claude_md_symlink(tmp_path)
+
+    errors = validate_ownerships(tmp_path)
+
+    assert any(".claude/skills must be a Symlink" in error for error in errors)
+    assert any("CLAUDE.md must be a Symlink" in error for error in errors)
+
+
+def test_skill_ownership_symlink_passes(
+    tmp_path: Path,
+) -> None:
+    """When both symlinks are valid, validate_ownerships must pass for symlink checks."""
+    from scripts.research.governance.skill_ownership import validate_ownerships
+
+    _write_minimal_repo_symlink(tmp_path)
+
+    errors = validate_ownerships(tmp_path)
+
+    assert not any(
+        "must be a Symlink" in error for error in errors
+    )
+
+
+# ── #86 RED: governance audit tests (rules.py) ───────────────────────────────
+
+
+def test_governance_audit_requires_core_symlinks_in_setup_ps1(
+    tmp_path: Path,
+) -> None:
+    """setup-python.ps1 must include git config core.symlinks true."""
+    _write_minimal_repo_symlink(tmp_path)
+    text = (tmp_path / ".githooks/setup-python.ps1").read_text(encoding="utf-8")
+    text = text.replace("git config core.symlinks true", "")
+    (tmp_path / ".githooks/setup-python.ps1").write_text(text, encoding="utf-8")
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "setup-python.ps1 missing git config core.symlinks true" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_requires_core_symlinks_in_setup_sh(
+    tmp_path: Path,
+) -> None:
+    """setup-python.sh must include git config core.symlinks true."""
+    _write_minimal_repo_symlink(tmp_path)
+    text = (tmp_path / ".githooks/setup-python.sh").read_text(encoding="utf-8")
+    text = text.replace("git config core.symlinks true", "")
+    (tmp_path / ".githooks/setup-python.sh").write_text(text, encoding="utf-8")
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "setup-python.sh missing git config core.symlinks true" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_requires_core_symlinks_in_environment_toml(
+    tmp_path: Path,
+) -> None:
+    """environment.toml must include git config core.symlinks true."""
+    _write_minimal_repo_symlink(tmp_path)
+    (tmp_path / ".codex/environments/environment.toml").write_text(
+        ".\\.githooks\\setup-python.ps1\n",
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "environment.toml missing git config core.symlinks true" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_ci_symlink_setup_is_ok(
+    tmp_path: Path,
+) -> None:
+    """CI workflow must accept the symlink setup model (post-#86)."""
+    _write_minimal_repo_symlink(tmp_path)
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not any(
+        finding.rule_id == "governance_gate" and "CI workflow" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_setup_ps1_symlink_config_is_ok(
+    tmp_path: Path,
+) -> None:
+    """setup-python.ps1 must accept the symlink setup model (post-#86)."""
+    _write_minimal_repo_symlink(tmp_path)
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not any(
+        finding.rule_id == "governance_gate"
+        and "setup-python.ps1" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_passes_symlink_repo(
+    tmp_path: Path,
+) -> None:
+    """Full governance audit passes with symlink-based repo (post-#86)."""
+    _write_minimal_repo_symlink(tmp_path)
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert report.ok, [finding.message for finding in report.findings]
+
+
+# ── #93 RED: ADR source issue reference tests ────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "adr_path,expected_token",
+    [
+        ("docs/adr/0007-pr-flow-closed-loop-review-evidence.md", "https://github.com/liuli195/Quant-Trading/issues/54"),
+        ("docs/adr/0007-pr-flow-closed-loop-review-evidence.md", "https://github.com/liuli195/Quant-Trading/issues/65"),
+        ("docs/adr/0008-skill-single-source-agents.md", "https://github.com/liuli195/Quant-Trading/issues/44"),
+    ],
+)
+def test_adr_references_source_issue(
+    adr_path: str,
+    expected_token: str,
+) -> None:
+    """Each ADR that originated from a P1/P2 PRD must cite its source Issue URL."""
+    path = Path(adr_path)
+    text = path.read_text(encoding="utf-8")
+
+    assert expected_token in text, f"{adr_path} missing {expected_token}"
+
+
+def test_agents_md_contains_adr_drop_rule() -> None:
+    """AGENTS.md must include a concise ADR drop rule in the 工作边界 section."""
+    text = Path("AGENTS.md").read_text(encoding="utf-8")
+
+    relevant = text.split("### 工作边界", 1)
+    assert len(relevant) == 2, "AGENTS.md missing 工作边界 section"
+
+    section = relevant[1]  # Everything after 工作边界 up to the next ### heading
+    next_section = section.find("\n### ")
+    if next_section != -1:
+        section = section[:next_section]
+
+    assert (
+        "ADR" in section
+    ), "AGENTS.md 工作边界 missing ADR 落盘 rule"

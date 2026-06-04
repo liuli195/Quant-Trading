@@ -5,8 +5,8 @@
 ## 规则
 
 - `.agents/skills/<skill>/` 是仓库级 Skill 的唯一事实来源，版本控制完整 `SKILL.md`、`agents/openai.yaml` 和 `references/*`。
-- Codex 直接读取 `.agents/skills/`；Claude Code 通过 `.claude/skills` Windows Junction 指向 `.agents/skills` 读取同一份内容。
-- `.claude/skills/` 是生成产物，必须被 `.gitignore` 排除，不得双重追踪。
+- Codex 直接读取 `.agents/skills/`；Claude Code 通过 `.claude/skills` Directory Symlink 指向 `.agents/skills` 读取同一份内容。
+- `.claude/skills/` 是 Symlink，由 Git 通过 `core.symlinks=true` 直接追踪。
 - `.codex/skills/` 是旧路径，必须保持删除；`.codex/environments/environment.toml` 仍保留。
 - `ownership.yaml` 是机器可读 SSOT；本文只说明人类规则，不维护 ownership 明细。
 - `ownership.yaml` 使用 `tools` 声明使用方，当前允许值为 `claude-code`、`codex`。
@@ -27,7 +27,7 @@
 
 | Skill | 范围 |
 | --- | --- |
-| `repo-skill-governance` | Skill 创建/修改、单一来源、Junction、触发语义和 ownership 治理 |
+| `repo-skill-governance` | Skill 创建/修改、单一来源、Symlink、触发语义和 ownership 治理 |
 | `repo-python-env` | Python 环境、项目 `.venv`、UTF-8、本地/云端运行边界 |
 | `repo-docs-pathref` | Markdown 链接、pathref、文档索引、报告索引和 catalog |
 | `repo-pr-governance` | PR 准备、review 证据、required checks、Codex review、主干保护和分支清理 |

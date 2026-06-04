@@ -1,9 +1,6 @@
 #!/usr/bin/env sh
 set -eu
 
-repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-case "$(uname -s 2>/dev/null || echo Windows_NT)" in
-  *MINGW*|*MSYS*|*CYGWIN*|*Windows_NT*)
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$repo_root/.githooks/ensure-skill-junction.ps1"
-    ;;
-esac
+# post-checkout no longer repairs skill links.
+# Symlinks are tracked by Git (core.symlinks=true) and resolve automatically.
+exit 0

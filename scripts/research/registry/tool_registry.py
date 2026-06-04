@@ -174,7 +174,7 @@ TOOL_DEFINITIONS: tuple[ToolDefinition, ...] = (
             "tool registry",
             "CLAUDE.md",
             ".agents/skills",
-            ".claude/skills Junction",
+            ".claude/skills Symlink",
             ".codex/environments",
             "catalogs",
         ),

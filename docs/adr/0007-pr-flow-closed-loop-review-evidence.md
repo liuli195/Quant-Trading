@@ -18,7 +18,7 @@ PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pa
 - GitHub API / GraphQL 瞬时错误会中断无问题路径。
 - 多入口 PR 流程、远端 merge policy 和 cleanup 收尾仍有人工切换成本。
 
-本 ADR 对应 PRD Issue：<https://github.com/liuli195/Quant-Trading/issues/27>；PR Flow 闭环与官方 Codex thread 自动处理扩展见 Issue：<https://github.com/liuli195/Quant-Trading/issues/90>。
+本 ADR 对应 PRD Issue：<https://github.com/liuli195/Quant-Trading/issues/27>；Commit Intent 门禁来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/54>；PR 自动化简化来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/65>；PR Flow 闭环与官方 Codex thread 自动处理扩展见 Issue：<https://github.com/liuli195/Quant-Trading/issues/90>。
 
 ## 决策
 

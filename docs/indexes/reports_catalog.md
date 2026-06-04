@@ -267,7 +267,7 @@
 | report | etf_factor_rotation | 动量极端高位弱化 A/B 决策 | `strategies/etf_factor_rotation/reports/2026-05-17-momentum-extreme-tilt-ab-decision.md` | 4 |
 | report | etf_factor_rotation | `linear-035` 稳健性补充与本地研究平台验证 | `strategies/etf_factor_rotation/reports/2026-05-17-momentum-strength-035-robustness-and-platform-validation.md` | 5 |
 | report | etf_factor_rotation | 动量倾斜强度确认决策 | `strategies/etf_factor_rotation/reports/2026-05-17-momentum-strength-confirmation-decision.md` | 5 |
-| design | etf_factor_rotation | 使用项目 .venv 环境 | `strategies/etf_factor_rotation/reports/design/2026-05-05-code-review.md` | 6 |
+| design | etf_factor_rotation | ETF Factor Rotation 代码评审与优化方案 | `strategies/etf_factor_rotation/reports/design/2026-05-05-code-review.md` | 6 |
 | design | etf_factor_rotation | 现金利用率优化研究计划 | `strategies/etf_factor_rotation/reports/design/2026-05-17-cash-utilization-optimization-plan.md` | 6 |
 | design | etf_factor_rotation | 动量倾斜进一步研究计划 | `strategies/etf_factor_rotation/reports/design/2026-05-17-momentum-followup-research-plan.md` | 3 |
 | design | etf_factor_rotation | 执行时序影响研究计划 | `strategies/etf_factor_rotation/reports/design/2026-05-18-execution-timing-impact-study-plan.md` | 10 |

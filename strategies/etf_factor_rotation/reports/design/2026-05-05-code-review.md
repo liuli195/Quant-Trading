@@ -1,4 +1,4 @@
-﻿# ETF Factor Rotation 代码评审与优化方案
+# ETF Factor Rotation 代码评审与优化方案
 
 评审日期：2026-05-05  
 评审对象：[策略主文件](../../etf_factor_rotation.py) <!-- pathref: strategy_dir(strategy=etf_factor_rotation)/etf_factor_rotation.py -->、[单元测试](../../tests/test_etf_factor_rotation.py) <!-- pathref: strategy_tests(strategy=etf_factor_rotation)/test_etf_factor_rotation.py -->、[策略方案说明书](ETF轮动策略方案说明书.md) <!-- pathref: strategy_reports(strategy=etf_factor_rotation)/design/ETF轮动策略方案说明书.md -->
@@ -7,7 +7,7 @@
 
 - [JoinQuant API 离线文档](../../../../docs/reference/joinquant-api.md) <!-- pathref: docs/reference/joinquant-api.md -->
 - [JoinQuant 场内基金数据文档](../../../../docs/joinquant-data/JQ_场内基金数据.md) <!-- pathref: joinquant_data/JQ_场内基金数据.md -->
-- [项目开发规范 CLAUDE.md](../../../../CLAUDE.md) <!-- pathref: repo/CLAUDE.md -->
+- [项目开发规范 CLAUDE.md](../../../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->
 - 本地可执行校验：`py_compile`、`pathref check`
 
 本评审只基于本地代码、离线文档和静态推导。涉及聚宽云端运行时返回结构、数据最后日期、复权口径的部分，本地无法完全确认，均标注为“依据不足”并给出下一步验证动作。

@@ -7,7 +7,7 @@
 | docs |  | ADR 0002: 多 AI Agent 并行工作使用 Git 分支 | `docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md` | 0 |
 | docs |  | ADR 0003: Governance Gate 和主干保护 | `docs/adr/0003-governance-gate-and-main-branch-protection.md` | 0 |
 | docs |  | ADR 0004: 使用官方 Codex Code Review 作为 PR 评审门禁 | `docs/adr/0004-codex-code-review-governance.md` | 8 |
-| docs |  | ADR 0005: AI 入口采用渐进式披露 | `docs/adr/0005-ai-entry-progressive-disclosure.md` | 9 |
+| docs |  | ADR 0005: AI 入口采用渐进式披露 | `docs/adr/0005-ai-entry-progressive-disclosure.md` | 10 |
 | docs |  | ADR 0006: PR 风险分级评审流程 | `docs/adr/0006-risk-tiered-pr-review.md` | 0 |
 | docs |  | ADR 0007: PR 强闭环状态机与 Review Evidence 边界 | `docs/adr/0007-pr-flow-closed-loop-review-evidence.md` | 1 |
 | docs |  | ADR 0008: Skill 使用 `.agents/skills/` 单一来源 | `docs/adr/0008-skill-single-source-agents.md` | 0 |
@@ -326,7 +326,7 @@
 | report | etf_factor_rotation | 动量极端高位弱化 A/B 决策 | `strategies/etf_factor_rotation/reports/2026-05-17-momentum-extreme-tilt-ab-decision.md` | 4 |
 | report | etf_factor_rotation | `linear-035` 稳健性补充与本地研究平台验证 | `strategies/etf_factor_rotation/reports/2026-05-17-momentum-strength-035-robustness-and-platform-validation.md` | 5 |
 | report | etf_factor_rotation | 动量倾斜强度确认决策 | `strategies/etf_factor_rotation/reports/2026-05-17-momentum-strength-confirmation-decision.md` | 5 |
-| design | etf_factor_rotation | 使用项目 .venv 环境 | `strategies/etf_factor_rotation/reports/design/2026-05-05-code-review.md` | 6 |
+| design | etf_factor_rotation | ETF Factor Rotation 代码评审与优化方案 | `strategies/etf_factor_rotation/reports/design/2026-05-05-code-review.md` | 6 |
 | design | etf_factor_rotation | 现金利用率优化研究计划 | `strategies/etf_factor_rotation/reports/design/2026-05-17-cash-utilization-optimization-plan.md` | 6 |
 | design | etf_factor_rotation | 动量倾斜进一步研究计划 | `strategies/etf_factor_rotation/reports/design/2026-05-17-momentum-followup-research-plan.md` | 3 |
 | design | etf_factor_rotation | 执行时序影响研究计划 | `strategies/etf_factor_rotation/reports/design/2026-05-18-execution-timing-impact-study-plan.md` | 10 |

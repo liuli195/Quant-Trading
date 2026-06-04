@@ -14,7 +14,7 @@ if ($env:CODEX_WORKTREE_PATH) {
 }
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\setup-python.ps1
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\.githooks\ensure-skill-junction.ps1
+git config core.symlinks true
 .\.venv\Scripts\python.exe -c "import sys; print(sys.executable); print('中文')"
 git config core.hooksPath .githooks
 '''
