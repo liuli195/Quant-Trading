@@ -18,11 +18,12 @@
 - 官方 Codex Code Review 是否等待只看 PR Evidence `official_review.decision`：`required` 等待官方 review，`skip_risk_low` 跳过低风险官方 review，`skip_user_authorized` 表示用户显式授权跳过官方 review。
 - `skip_user_authorized` 只记录 `authorized_by + evidence`，不记录 `reason`；该授权不能绕过 unresolved thread、P0/P1 或 GitHub required checks 的其它阻断。
 - 官方 Codex Review 触发评论必须包含 `@codex review`、当前 PR、当前 head SHA、Review Scope（可为空）和审查重点；禁止模板外文案，禁止写“不要执行命令”“只做静态 diff review”等切断仓库、diff 或命令上下文的指令。
+- 触发评论必须在 3 分钟内出现 Codex bot 的 `eyes` reaction 才算远端已接收；超过 3 分钟无 `eyes` 时，`pr-submit` 必须重新触发一次 `@codex review`。Codex bot 的 `+1` reaction 只用于完成确认，不能替代 `eyes` 接收确认。
 - 需要官方 Codex Review 时，Review Scope 聚焦 P0/P1 合并阻断风险；无法生成明确 scope 的大型 PR 应拆分，否则按全量高风险 PR 处理。
 - 官方 Codex P2/P3 是非阻断 retained finding；`pr_flow` 只能写入 PR Evidence `retained`，不得扩展 PR body 机器字段。
 - 自动写入不等于跳过 review；需要官方 Codex Review 时，证据必须来自当前 PR、当前 head、当前 trigger 之后的 Codex 结果。
 - `PR Flow / evidence` 和 `PR Flow / review-status` 必须读取 review thread 状态；未 resolved human thread、无 severity thread 和官方 P0/P1 阻断。官方 P2/P3 只能由 `pr_flow` 写入固定接受模板和 PR Evidence retained 后 resolve。
-- `PR Flow / review-status` 是 GitHub `main` 全局 required status check；官方 Codex review 未返回时保持 pending，不写失败。`pr-submit` 开始和成功时 `status.json` 可留下 `failures: []`，它不是成功证明。
+- `PR Flow / review-status` 是 GitHub `main` 全局 required status check；官方 Codex review 未返回时保持 pending，不写失败。`status.json` 是接手快照 v3，不保留旧 `schema/head/failures` 字段，也不是成功证明。
 - 如果 Codex review 无法读取当前 PR diff、要求额外提供 unified diff、引用不存在或非当前 head，按 review 上下文失效阻断。
 - 本地不再把 `verify full` 作为 PR 前置证据；完整验证由 GitHub required check `Research Governance / verify-full` 执行。`verify fast` 只用于日常开发。
 

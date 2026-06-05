@@ -6,9 +6,10 @@ Review 细则见 [review-guidelines.md](review-guidelines.md) <!-- pathref: docs
 
 - 高频 PR 流程只使用 `make pr-submit TITLE="<PR标题>"`，等价于 `.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow submit --title "<PR标题>"`。
 - `pr-submit` 是前台有界自动流程：读取 `PR Flow Interface Contract`、检查 GitHub auto-merge / merge 后删远端分支 / required checks 配置、校验本地 review fragments、创建或更新 draft PR、刷新 PR Evidence JSON、按风险/授权判断是否触发官方 Codex review、等待 required checks、ready-for-review、head-locked auto-merge、等待 merged，并做本地收尾。
-- 官方 Codex completion comment 触发的 `PR Flow / review-status` 由默认分支 router 自动 dispatch 到 PR head branch worker；`pr-submit` 不维护 PR Flow changed-files 白名单、不直接触发 `workflow_dispatch`、不扩展 `.local/pr-flow/status.json`。
-- pending 是等待状态，不是失败状态。需要官方 Codex review 但未返回、或 required checks 未完成时，`pr-submit` 继续等待；只有 P0/P1、unresolved thread、CI failure、配置缺失、官方 Codex 不可用或 30 分钟超时才写 failures 并退出。
-- `.local/pr-flow/status.json` 是接手入口，不是成功证明。`pr-submit` 每次开始写当前 head 的空 `failures`，失败时覆盖为 failures，成功时可留下 `failures: []`；合并权威仍是 GitHub required checks、conversation resolution、ruleset 和 merged state。
+- 官方 Codex completion comment 触发的 `PR Flow / review-status` 由默认分支 router 自动 dispatch 到 PR head branch worker；`pr-submit` 不维护 PR Flow changed-files 白名单、不直接触发 `workflow_dispatch`、不新增公开 `diagnose`、`handoff` 或 `refresh` 入口。
+- `pr-submit` 触发 `@codex review` 后，必须用 Codex bot 对该 trigger comment 的 `eyes` reaction 确认远端已接收；当前 head trigger 超过 3 分钟仍无 `eyes` 时，必须重新发送一次 `@codex review`。`eyes` 只代表接收确认，不代表 review 完成。
+- pending 是等待状态，不是失败状态。需要官方 Codex review 但未返回、或 required checks 未完成时，`pr-submit` 继续等待；只有 P0/P1、unresolved thread、CI failure、配置缺失、官方 Codex 不可用或 10 分钟超时才写接手快照 v3 并退出。
+- `.local/pr-flow/status.json` 是接手入口，不是成功证明。运行时只写接手快照 v3：`schema_version`、`snapshot_subject`、`pr_submit_stop`、`checkpoint_statuses`、`blocking_signals`、`diagnostic_signals`、`suggested_next_actions` 和 `evidence_artifacts`；合并权威仍是 GitHub required checks、conversation resolution、ruleset 和 merged state。
 - `pr-cleanup`、`ready-for-review`、`merge`、`cleanup` 等旧底层能力只用于内部恢复或调试，不作为默认用户步骤；不得要求用户在多个 PR 入口间切换。
 
 ## 主干规则
@@ -29,7 +30,7 @@ Review 细则见 [review-guidelines.md](review-guidelines.md) <!-- pathref: docs
 - PR body 的 `pr-flow` 托管区只写 fenced PR Evidence JSON。CI 的 `PR Flow / evidence` 只信任 PR body，不读取本地 `.local`。
 - Issue intent 并入 PR Evidence JSON 的 `issues`，不再单独维护 Issue intent machine block。每个 PR commit 要么有关联 Issue，要么明确 `no_issue: true`。
 - GitHub update-branch 生成的同步主干 merge commit 由 `pr-submit` 自动按 commit 级 `no_issue: true` 覆盖；PR 级 `issues.refs` 仍只表达 closes/reference，不受该 synthetic merge commit 影响。
-- 手工排障先读 `.local/pr-flow/status.json`；GitHub 当前状态归因由 `pr-submit` 内部处理，`diagnose` 不作为用户流程入口。
+- 手工排障先读 `.local/pr-flow/status.json`；旧 required-check failure 只能进入 `diagnostic_signals`，当前阻断只进入 `blocking_signals`；GitHub 当前状态归因由 `pr-submit` 内部处理，`diagnose` 不作为用户流程入口。
 
 ## Commit Intent
 
