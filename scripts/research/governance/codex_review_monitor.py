@@ -784,31 +784,6 @@ def _fetch_github_list(*, repo: str, path: str, token: str) -> list[object]:
     return items
 
 
-def _enrich_required_trigger_reactions(
-    comments: Sequence[Mapping[str, object]],
-    *,
-    repo: str,
-    token: str,
-) -> list[Mapping[str, object]]:
-    enriched: list[Mapping[str, object]] = []
-    for comment in comments:
-        if not _is_required_trigger_comment(comment):
-            enriched.append(comment)
-            continue
-        comment_id = comment.get("id")
-        if comment_id is None:
-            enriched.append(comment)
-            continue
-        item = dict(comment)
-        item["reaction_items"] = _as_mapping_list(
-            _fetch_github_list(
-                repo=repo, path=f"issues/comments/{comment_id}/reactions", token=token
-            )
-        )
-        enriched.append(item)
-    return enriched
-
-
 def _parse_next_link(header: str) -> str | None:
     for part in header.split(","):
         pieces = part.split(";")
@@ -903,9 +878,6 @@ def main(argv: list[str] | None = None) -> int:
                     repo=repo, path=f"issues/{pr_number}/comments", token=token
                 )
             )
-        issue_comments = _enrich_required_trigger_reactions(
-            issue_comments, repo=repo, token=token
-        )
         if not reviews:
             reviews = _as_mapping_list(
                 _fetch_github_list(

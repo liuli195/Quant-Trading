@@ -971,42 +971,6 @@ def _fetch_pr_comments(
     payload = _fetch_github_list(
         repo=repo, path=f"issues/{pr_number}/comments", token=token
     )
-    return _enrich_required_trigger_reactions(
-        [item for item in payload if isinstance(item, Mapping)],
-        repo=repo,
-        token=token,
-    )
-
-
-def _enrich_required_trigger_reactions(
-    comments: Sequence[Mapping[str, object]],
-    *,
-    repo: str,
-    token: str,
-) -> list[Mapping[str, object]]:
-    enriched: list[Mapping[str, object]] = []
-    for comment in comments:
-        if not _is_required_trigger_comment(comment):
-            enriched.append(comment)
-            continue
-        comment_id = comment.get("id")
-        if comment_id is None:
-            enriched.append(comment)
-            continue
-        item = dict(comment)
-        item["reaction_items"] = _fetch_issue_comment_reactions(
-            repo=repo, comment_id=str(comment_id), token=token
-        )
-        enriched.append(item)
-    return enriched
-
-
-def _fetch_issue_comment_reactions(
-    *, repo: str, comment_id: str, token: str
-) -> list[Mapping[str, object]]:
-    payload = _fetch_github_list(
-        repo=repo, path=f"issues/comments/{comment_id}/reactions", token=token
-    )
     return [item for item in payload if isinstance(item, Mapping)]
 
 
