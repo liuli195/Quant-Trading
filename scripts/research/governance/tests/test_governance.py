@@ -1213,6 +1213,12 @@ def test_governance_audit_rejects_legacy_pr_flow_status_contract(
     )
 
 
+def test_requirements_dev_pins_pip_for_dependency_audit() -> None:
+    text = Path("requirements-dev.txt").read_text(encoding="utf-8")
+
+    assert "pip==26.1.2" in text
+
+
 def _codex_review_request_body(
     *,
     pr_url: str = "https://github.com/liuli195/Quant-Trading/pull/5",
