@@ -34,7 +34,7 @@ PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pa
 - P2/P3 accepted findings 不影响 `risk_level`，也不阻断合并；所有来源的 P2/P3 统一写入 PR Evidence `retained`。
 - 官方 Codex P2/P3 review thread 在 severity 可靠识别时，由 `pr_flow` 用固定模板自动接受、resolve、重新读取确认 resolved，并写入 PR Evidence `retained`。官方 Codex P0/P1 在缺少结构化 `fixed` / `false_positive` evidence 时阻断；有绑定当前 head/diff/thread ID 的证据时可由 `pr_flow` 自动回复、resolve 并重新读取确认 resolved。无 severity thread 和人工 reviewer thread 不自动 resolve。
 - 官方 Codex Review 状态由 `PR Flow / review-status` 复核；官方 Codex 未返回时 pending，不写失败。
-- 官方 Codex trigger comment 必须用 Codex bot 的 `eyes` reaction 作为远端接收确认；当前 head trigger 超过 3 分钟仍无 `eyes` 时，`pr-submit` 重新发送一次 `@codex review`。如果 latest current-head trigger 后已经出现 current-head verdict，则视为触发成功，不因缺 `eyes` 重发。`+1` reaction 仍只表示 completion，不表示接收。
+- 官方 Codex trigger comment 必须用 Codex bot 的 `eyes` reaction 作为远端接收确认；当前 head trigger 超过 3 分钟仍无 `eyes` 时，`pr-submit` 重新发送一次 `@codex review`。如果 latest current-head trigger 后已经出现 current-head verdict，则视为触发成功，不因缺 `eyes` 重发。`+1` reaction 不是 current-head verdict，不能替代 Codex no-issue comment 或当前 head PR review。
 - `ready_for_review` 回归 GitHub 语义：PR Evidence sync 后即可 ready-for-review，之后再触发或监控 Codex review、等待 required checks 和执行 auto-merge。
 - required checks 按输入触发：`verify-full` 只响应 head/diff 变化、`PR Flow / evidence` 额外响应 PR body edited、`review-status` 响应 head/review/thread/workflow_dispatch。required-check workflows 使用 PR-scoped concurrency，且不新增 live PR state guard。
 - Codex review 使用 current-head verdict；旧 head 的 Codex PR review 或 latest current-head trigger 之前的 no-issue comment 不能通过当前 head。

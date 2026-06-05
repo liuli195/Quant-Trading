@@ -1993,6 +1993,7 @@ def _submit_request_codex_review(
             if remaining_seconds > 0 and _wait_for_codex_trigger_ack(
                 pr_url=pr_url,
                 trigger=trigger,
+                head_sha=head_sha,
                 root=root,
                 runner=runner,
                 timeout_seconds=remaining_seconds,
@@ -4716,6 +4717,14 @@ def _wait_for_current_head_codex_trigger_ack(
             runner=runner,
         ):
             return True
+        if trigger is not None and _current_head_codex_output_exists(
+            pr_url=pr_url,
+            head_sha=head_sha,
+            trigger=trigger,
+            root=root,
+            runner=runner,
+        ):
+            return True
         if time.monotonic() >= deadline:
             return False
         time.sleep(min(max(poll_seconds, 0), max(deadline - time.monotonic(), 0)))
@@ -4725,6 +4734,7 @@ def _wait_for_codex_trigger_ack(
     *,
     pr_url: str,
     trigger: dict[str, Any],
+    head_sha: str,
     root: Path,
     runner: Runner,
     timeout_seconds: float,
@@ -4734,6 +4744,14 @@ def _wait_for_codex_trigger_ack(
     while True:
         if _codex_trigger_is_acknowledged(
             pr_url=pr_url,
+            trigger=trigger,
+            root=root,
+            runner=runner,
+        ):
+            return True
+        if _current_head_codex_output_exists(
+            pr_url=pr_url,
+            head_sha=head_sha,
             trigger=trigger,
             root=root,
             runner=runner,

@@ -3682,7 +3682,7 @@ def test_codex_review_monitor_blocks_unresolved_blocking_threads() -> None:
     assert report.blocking_findings == 1
 
 
-def test_codex_review_monitor_passes_on_codex_completion_reaction() -> None:
+def test_codex_review_monitor_waits_on_codex_completion_reaction() -> None:
     head_sha = "0" * 40
     report = build_monitor_report(
         repo="liuli195/Quant-Trading",
@@ -3693,11 +3693,8 @@ def test_codex_review_monitor_passes_on_codex_completion_reaction() -> None:
         reviews=[],
         review_comments=[],
     )
-    assert report.status == "passed"
-    assert (
-        report.latest_review_url
-        == "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484023766"
-    )
+    assert report.status == "waiting_for_codex"
+    assert report.latest_review_url is None
 
 
 def test_codex_review_monitor_passes_on_codex_no_major_issues_comment() -> None:
@@ -4013,7 +4010,7 @@ def test_codex_review_monitor_completion_supersedes_context_invalid_review() -> 
     )
 
 
-def test_codex_review_monitor_completion_reaction_supersedes_context_invalid_review() -> (
+def test_codex_review_monitor_completion_reaction_does_not_supersede_context_invalid_review() -> (
     None
 ):
     head_sha = "0" * 40
@@ -4038,12 +4035,8 @@ def test_codex_review_monitor_completion_reaction_supersedes_context_invalid_rev
         review_comments=[],
     )
 
-    assert report.status == "passed"
-    assert report.context_invalid_reviews == 0
-    assert (
-        report.latest_review_url
-        == "https://github.com/liuli195/Quant-Trading/pull/5#issuecomment-4484023766"
-    )
+    assert report.status == "context_invalid"
+    assert report.context_invalid_reviews == 1
 
 
 def test_codex_review_monitor_ignores_later_hostile_trigger_after_valid_review() -> (
@@ -4171,7 +4164,7 @@ def test_codex_review_priority_patterns_match_plain_text_titles() -> None:
     assert report.advisory_findings == 1
 
 
-def test_codex_review_monitor_blocks_on_any_current_head_codex_review() -> None:
+def test_codex_review_monitor_uses_latest_current_head_codex_review() -> None:
     head_sha = "0" * 40
     report = build_monitor_report(
         repo="liuli195/Quant-Trading",
@@ -4196,8 +4189,8 @@ def test_codex_review_monitor_blocks_on_any_current_head_codex_review() -> None:
         ],
         review_comments=[],
     )
-    assert report.status == "blocked"
-    assert report.blocking_findings == 1
+    assert report.status == "passed"
+    assert report.blocking_findings == 0
     assert (
         report.latest_review_url
         == "https://github.com/liuli195/Quant-Trading/pull/5#pullrequestreview-4314779360"

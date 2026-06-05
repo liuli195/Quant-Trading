@@ -31,7 +31,6 @@ from scripts.research.governance.pr_review_evidence import (
     _issue_label_names,
     codex_context_invalid_review_count,
     codex_completion_effective_time,
-    has_codex_completion_reaction,
     head_updated_at_from_monitor_state,
     is_codex_completion_comment,
     is_effective_codex_review,
@@ -152,8 +151,9 @@ def build_monitor_report(
         head_created_at=head_created_at,
         before_or_at=reviewed_until,
     )
-    blocking_findings = _count_reviews_findings(
-        current_head_reviews,
+    latest_review_for_findings = None if completion_is_latest else latest_review
+    blocking_findings = _count_review_findings(
+        latest_review_for_findings,
         review_comments=review_comments,
         pattern=BLOCKING_CODEX_FINDING_PATTERN,
     )
@@ -168,8 +168,8 @@ def build_monitor_report(
         expected_head_sha=head_sha,
         submitted_after=context_invalid_cutoff,
     )
-    advisory_findings = _count_reviews_findings(
-        current_head_reviews,
+    advisory_findings = _count_review_findings(
+        latest_review_for_findings,
         review_comments=review_comments,
         pattern=P2_FINDING_PATTERN,
     )
@@ -564,13 +564,6 @@ def _latest_codex_completion_comment(
             continue
         if trigger_time and comment_time and comment_time < trigger_time:
             continue
-        if _is_required_trigger_comment(
-            comment,
-            expected_pr_url=expected_pr_url,
-            expected_head_sha=expected_head_sha,
-        ) and has_codex_completion_reaction(comment):
-            matched.append(comment)
-            continue
         if is_codex_completion_comment(comment):
             matched.append(comment)
     if not matched:
@@ -673,18 +666,6 @@ def _count_review_findings(
     ):
         return 0
     return sum(1 for text in texts if pattern.search(text))
-
-
-def _count_reviews_findings(
-    reviews: Sequence[Mapping[str, object]],
-    *,
-    review_comments: Sequence[Mapping[str, object]],
-    pattern: re.Pattern[str],
-) -> int:
-    return sum(
-        _count_review_findings(review, review_comments=review_comments, pattern=pattern)
-        for review in reviews
-    )
 
 
 def _find_monitor_comment_id(comments: Sequence[object]) -> int | None:

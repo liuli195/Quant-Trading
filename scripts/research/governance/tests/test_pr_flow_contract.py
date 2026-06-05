@@ -882,7 +882,7 @@ class SubmitCurrentHeadCodexOutputRunner(SubmitCreatePrRunner):
                             {
                                 "id": 4314779358,
                                 "commit_id": "1" * 40,
-                                "submitted_at": "2026-06-01T10:02:00Z",
+                                "submitted_at": "2026-06-01T10:06:00Z",
                                 "body": "### Codex Review\n\nNo blocking findings.",
                                 "user": {
                                     "login": "chatgpt-codex-connector[bot]",
@@ -2128,6 +2128,35 @@ def test_submit_reuses_current_head_codex_output_without_eyes_ack(
 
     assert code == pr_flow.SUCCESS_EXIT_CODE
     assert runner.comments == []
+
+
+def test_submit_accepts_new_current_head_codex_output_without_eyes_ack(
+    tmp_path: Path,
+) -> None:
+    diff_text = (
+        "diff --git a/scripts/research/governance/pr_flow.py "
+        "b/scripts/research/governance/pr_flow.py\n+hello\n"
+    )
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCurrentHeadCodexOutputRunner(
+        diff_text=diff_text,
+        changed_files_output="scripts/research/governance/pr_flow.py\n",
+        ack_generated_comments=False,
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(
+        repo_root=tmp_path,
+        title="PR automation",
+        runner=runner,
+        codex_review_ack_timeout_seconds=0,
+    )
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert len(runner.comments) == 1
 
 
 def test_submit_skips_official_codex_request_for_low_risk_fragments(
@@ -3545,9 +3574,7 @@ def test_codex_review_monitor_waits_for_trigger_with_contract_v1_evidence() -> N
     assert report.status == "waiting_for_trigger"
 
 
-def test_codex_review_monitor_skips_low_risk_contract_v1_without_official_review() -> (
-    None
-):
+def test_codex_review_monitor_skips_low_risk_contract_v1_with_risk_label() -> None:
     payload = _contract_evidence_payload()
     payload["official_review"] = {"decision": "skip_risk_low"}
     report = codex_review_monitor.build_monitor_report(
@@ -3558,7 +3585,7 @@ def test_codex_review_monitor_skips_low_risk_contract_v1_without_official_review
         reviews=[],
         review_comments=[],
         changed_files=("docs/guides/example.md",),
-        labels=(),
+        labels=("ai-risk-review",),
     )
 
     assert report.status == "skipped"

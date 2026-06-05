@@ -254,6 +254,7 @@ def _contract_v1_official_review_risk_errors(
     changed_files: Sequence[str] | None,
     labels: Sequence[str] | None,
 ) -> list[str]:
+    _ = labels
     if not isinstance(official_review, Mapping):
         return []
     if _single_line_text(official_review.get("decision")) != "skip_risk_low":
@@ -262,10 +263,6 @@ def _contract_v1_official_review_risk_errors(
     if _high_risk_changed_files(changed_files):
         errors.append(
             "PR Evidence official_review.skip_risk_low is invalid for high-risk changed files"
-        )
-    if _has_ai_risk_review_label(labels):
-        errors.append(
-            "PR Evidence official_review.skip_risk_low is invalid with ai-risk-review label"
         )
     return errors
 
@@ -388,12 +385,6 @@ def _is_high_risk_path(path: str) -> bool:
 def _is_generated_strategy_artifact(path: str) -> bool:
     parts = path.split("/")
     return len(parts) >= 3 and parts[0] == "strategies" and parts[2] == "backtest_runs"
-
-
-def _has_ai_risk_review_label(labels: Sequence[str] | None) -> bool:
-    if labels is None:
-        return False
-    return any(str(label).casefold() == "ai-risk-review" for label in labels)
 
 
 def _normalize_value(value: str) -> str:

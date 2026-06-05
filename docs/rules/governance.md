@@ -16,6 +16,7 @@
 - `PR Flow / evidence` 只校验 PR body 托管区中的 PR Evidence JSON v2；CI 不读取本地 `.local` 产物。
 - `PR Flow / evidence` 保留 PR body `edited` 触发，并只监听 `opened`、`synchronize`、`reopened`、`edited`。
 - `PR Flow / review-status` 监听当前 head 的官方 Codex review、PR Evidence `official_review.decision` 和 unresolved threads。`official_review.decision=required` 且官方 Codex review 未返回时保持 pending；官方 P0/P1、无 severity thread 和 unresolved human thread 阻断；官方 P2/P3 由 `pr_flow` 接受、resolve、重新读取确认 resolved，并写入 PR Evidence `retained`。`skip_risk_low` 或 `skip_user_authorized` 时，该 check 可写 skipped success；用户授权只记录 `authorized_by + evidence`。
+- `ai-risk-review` label 不参与 `skip_risk_low` 校验、required-check 触发或 current-head verdict，只作为人工可见风险标记。
 - `PR Flow / review-status` 保留 review/thread/workflow_dispatch 触发；PR branch worker 的 `pull_request` 触发只覆盖 `opened`、`synchronize`、`reopened`。
 - required-check workflows 使用 PR-scoped concurrency，同一 workflow、同一 PR/head 只保留最新 run，不跨 workflow 互相取消。
 - 不新增 live PR state guard；如果 closed/merged 后仍污染 required check，优先继续收敛事件触发面。
