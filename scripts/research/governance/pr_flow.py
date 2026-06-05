@@ -38,7 +38,6 @@ CODEX_NO_MAJOR_ISSUES_PATTERN = re.compile(
 BLOCKING_CODEX_FINDING_PATTERN = re.compile(r"\bP[01]\b|P[01]\s*Badge")
 CODEX_THREAD_SEVERITY_PATTERN = re.compile(r"\bP(?P<level>[0-3])\b")
 ACTIONS_CHECK_URL_PATTERN = re.compile(r"/actions/runs/(?P<run_id>\d+)/job/(?P<job_id>\d+)")
-CHECKS_JSON_FIELDS = "name,state,bucket,link,workflow,startedAt,completedAt"
 STATUS_CHECK_ROLLUP_JSON_FIELDS = "url,baseRefName,isDraft,headRefOid,statusCheckRollup"
 REQUIRED_STATUS_CHECK_NAMES = {
     "PR Flow / review-status",
@@ -998,6 +997,7 @@ def submit(
                 root,
                 contract,
                 head_sha=head_sha,
+                snapshot_context=snapshot_context,
                 failure=pr_flow_contract.SubmitFailure(
                     check="official-codex-review-thread",
                     source=pr_url,
@@ -2220,35 +2220,12 @@ def _submit_required_check_failures(
         latest = rollup_latest
         diagnostics = rollup_diagnostics
     else:
-        result = runner.run(
-            [
-                "gh",
-                "pr",
-                "checks",
-                pr_number,
-                "--required",
-                "--json",
-                CHECKS_JSON_FIELDS,
-            ],
-            cwd=root,
+        failure = pr_flow_contract.SubmitFailure(
+            check="required-checks",
+            source="",
+            detail="current-head required checks unavailable",
         )
-        fallback_latest, diagnostics = _latest_required_check_results_with_diagnostics(
-            result.stdout,
-            contract=contract,
-        )
-        if (
-            result.returncode != 0
-            and fallback_latest is None
-            and "no required checks reported"
-            not in f"{result.stdout}\n{result.stderr}".casefold()
-        ):
-            failure = pr_flow_contract.SubmitFailure(
-                check="required-checks",
-                source="",
-                detail="required checks unavailable",
-            )
-            return RequiredCheckRollup(failures=(failure,))
-        latest = fallback_latest or []
+        return RequiredCheckRollup(failures=(failure,))
     by_name = {_json_check_display_name(check): check for check in latest}
     failures: list[pr_flow_contract.SubmitFailure] = []
     pending: list[pr_flow_contract.SubmitFailure] = []

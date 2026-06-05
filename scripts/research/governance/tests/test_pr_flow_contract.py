@@ -226,6 +226,77 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
         self.lifecycle_calls: list[list[str]] = []
         self.cwd_calls: list[tuple[list[str], Path | None]] = []
 
+    def _status_rollup_command(self) -> list[str]:
+        return [
+            "gh",
+            "pr",
+            "view",
+            "88",
+            "--json",
+            pr_flow.STATUS_CHECK_ROLLUP_JSON_FIELDS,
+        ]
+
+    def _status_rollup_result(
+        self,
+        items: list[dict[str, object]],
+    ) -> pr_flow.CommandResult:
+        return pr_flow.CommandResult(
+            0,
+            json.dumps(
+                {
+                    "url": "https://github.com/liuli195/Quant-Trading/pull/88",
+                    "baseRefName": "main",
+                    "isDraft": False,
+                    "headRefOid": "1" * 40,
+                    "statusCheckRollup": items,
+                }
+            ),
+            "",
+        )
+
+    def _status_rollup_item(
+        self,
+        *,
+        name: str,
+        workflow: str = "",
+        state: str = "SUCCESS",
+        link: str = "",
+        head_sha: str = "1" * 40,
+    ) -> dict[str, object]:
+        return {
+            "name": name,
+            "workflowName": workflow,
+            "state": state,
+            "detailsUrl": link,
+            "startedAt": "2026-06-01T00:02:00Z",
+            "completedAt": "2026-06-01T00:03:00Z" if state == "SUCCESS" else "",
+            "headSha": head_sha,
+        }
+
+    def _default_status_rollup_items(self) -> list[dict[str, object]]:
+        review_state = {
+            "pass": "SUCCESS",
+            "pending": "PENDING",
+            "fail": "FAILURE",
+        }.get(self.checks_bucket, self.checks_bucket.upper())
+        return [
+            self._status_rollup_item(
+                name="review-status",
+                workflow="PR Flow",
+                state=review_state,
+            ),
+            self._status_rollup_item(
+                name="verify-full",
+                workflow="Research Governance",
+                link="https://github.com/runs/1",
+            ),
+            self._status_rollup_item(
+                name="evidence",
+                workflow="PR Flow",
+                link="https://github.com/runs/2",
+            ),
+        ]
+
     def run(
         self,
         command: list[str],
@@ -305,7 +376,7 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             "--json",
             pr_flow.STATUS_CHECK_ROLLUP_JSON_FIELDS,
         ]:
-            return pr_flow.CommandResult(1, "", "status rollup unavailable")
+            return self._status_rollup_result(self._default_status_rollup_items())
         if command[:4] == ["gh", "pr", "edit", "88"]:
             body_file = Path(command[command.index("--body-file") + 1])
             self.body_file_names.append(body_file.name)
@@ -366,46 +437,6 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             "repos/liuli195/Quant-Trading/issues/88/comments?per_page=100",
         ]:
             return pr_flow.CommandResult(0, json.dumps([self.preexisting_comments]), "")
-        if command == [
-            "gh",
-            "pr",
-            "checks",
-            "88",
-            "--required",
-            "--json",
-            pr_flow.CHECKS_JSON_FIELDS,
-        ]:
-            return pr_flow.CommandResult(
-                self.checks_returncode,
-                json.dumps(
-                    [
-                        {
-                            "name": "PR Flow / review-status",
-                            "workflow": "",
-                            "state": "PENDING"
-                            if self.checks_bucket == "pending"
-                            else "SUCCESS",
-                            "bucket": self.checks_bucket,
-                            "link": "",
-                        },
-                        {
-                            "name": "verify-full",
-                            "workflow": "Research Governance",
-                            "state": "SUCCESS",
-                            "bucket": "pass",
-                            "link": "https://github.com/runs/1",
-                        },
-                        {
-                            "name": "evidence",
-                            "workflow": "PR Flow",
-                            "state": "SUCCESS",
-                            "bucket": "pass",
-                            "link": "https://github.com/runs/2",
-                        },
-                    ]
-                ),
-                "",
-            )
         if command == ["gh", "pr", "ready", "88"]:
             self.lifecycle_calls.append(command)
             return pr_flow.CommandResult(0, "", "")
@@ -671,43 +702,28 @@ class SubmitFailingChecksRunner(SubmitCreatePrRunner):
         cwd: Path | None = None,
         input_text: str | None = None,
     ) -> pr_flow.CommandResult:
-        if command == [
-            "gh",
-            "pr",
-            "checks",
-            "88",
-            "--required",
-            "--json",
-            pr_flow.CHECKS_JSON_FIELDS,
-        ]:
-            return pr_flow.CommandResult(
-                0,
-                json.dumps(
-                    [
-                        {
-                            "name": "evidence",
-                            "workflow": "PR Flow",
-                            "state": "FAILURE",
-                            "bucket": "fail",
-                            "link": "https://github.com/runs/evidence",
-                        },
-                        {
-                            "name": "verify-full",
-                            "workflow": "Research Governance",
-                            "state": "FAILURE",
-                            "bucket": "fail",
-                            "link": "https://github.com/runs/verify",
-                        },
-                        {
-                            "name": "PR Flow / review-status",
-                            "workflow": "",
-                            "state": "FAILURE",
-                            "bucket": "fail",
-                            "link": "https://github.com/runs/review",
-                        },
-                    ]
-                ),
-                "",
+        if command == self._status_rollup_command():
+            return self._status_rollup_result(
+                [
+                    self._status_rollup_item(
+                        name="evidence",
+                        workflow="PR Flow",
+                        state="FAILURE",
+                        link="https://github.com/runs/evidence",
+                    ),
+                    self._status_rollup_item(
+                        name="verify-full",
+                        workflow="Research Governance",
+                        state="FAILURE",
+                        link="https://github.com/runs/verify",
+                    ),
+                    self._status_rollup_item(
+                        name="review-status",
+                        workflow="PR Flow",
+                        state="FAILURE",
+                        link="https://github.com/runs/review",
+                    ),
+                ]
             )
         if command[:3] == ["gh", "api", "graphql"] and any(
             "reviewThreads" in part for part in command
@@ -744,16 +760,21 @@ class SubmitEmptyRequiredChecksWindowRunner(SubmitCreatePrRunner):
         cwd: Path | None = None,
         input_text: str | None = None,
     ) -> pr_flow.CommandResult:
-        if command == [
-            "gh",
-            "pr",
-            "checks",
-            "88",
-            "--required",
-            "--json",
-            pr_flow.CHECKS_JSON_FIELDS,
-        ]:
-            return pr_flow.CommandResult(8, "[]", "no required checks reported")
+        if command == self._status_rollup_command():
+            return self._status_rollup_result([])
+        return super().run(command, cwd=cwd, input_text=input_text)
+
+
+class SubmitUnavailableStatusRollupRunner(SubmitCreatePrRunner):
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        if command == self._status_rollup_command():
+            return pr_flow.CommandResult(1, "", "status rollup unavailable")
         return super().run(command, cwd=cwd, input_text=input_text)
 
 
@@ -781,43 +802,27 @@ class SubmitMixedFailingPendingChecksRunner(SubmitCreatePrRunner):
         cwd: Path | None = None,
         input_text: str | None = None,
     ) -> pr_flow.CommandResult:
-        if command == [
-            "gh",
-            "pr",
-            "checks",
-            "88",
-            "--required",
-            "--json",
-            pr_flow.CHECKS_JSON_FIELDS,
-        ]:
-            return pr_flow.CommandResult(
-                8,
-                json.dumps(
-                    [
-                        {
-                            "name": "PR Flow / review-status",
-                            "workflow": "",
-                            "state": "SUCCESS",
-                            "bucket": "pass",
-                            "link": "https://github.com/runs/review",
-                        },
-                        {
-                            "name": "verify-full",
-                            "workflow": "Research Governance",
-                            "state": "FAILURE",
-                            "bucket": "fail",
-                            "link": "https://github.com/runs/verify",
-                        },
-                        {
-                            "name": "evidence",
-                            "workflow": "PR Flow",
-                            "state": "PENDING",
-                            "bucket": "pending",
-                            "link": "https://github.com/runs/evidence",
-                        },
-                    ]
-                ),
-                "",
+        if command == self._status_rollup_command():
+            return self._status_rollup_result(
+                [
+                    self._status_rollup_item(
+                        name="review-status",
+                        workflow="PR Flow",
+                        link="https://github.com/runs/review",
+                    ),
+                    self._status_rollup_item(
+                        name="verify-full",
+                        workflow="Research Governance",
+                        state="FAILURE",
+                        link="https://github.com/runs/verify",
+                    ),
+                    self._status_rollup_item(
+                        name="evidence",
+                        workflow="PR Flow",
+                        state="PENDING",
+                        link="https://github.com/runs/evidence",
+                    ),
+                ]
             )
         return super().run(command, cwd=cwd, input_text=input_text)
 
@@ -930,44 +935,33 @@ class SubmitOfficialCodexRetainedRunner(SubmitCreatePrRunner):
         input_text: str | None = None,
     ) -> pr_flow.CommandResult:
         joined = "\n".join(command)
-        if (
-            command[:6]
-            == ["gh", "pr", "checks", "88", "--required", "--json"]
-        ):
+        if command == self._status_rollup_command():
             self.checks_calls += 1
             # If thread was already resolved by pre-CI auto-processing,
             # return success on the first call. Otherwise fail and retry.
             already_resolved = bool(self.resolved_threads)
-            review_bucket = "fail" if (self.checks_calls == 1 and not already_resolved) else "pass"
-            review_state = "FAILURE" if (self.checks_calls == 1 and not already_resolved) else "SUCCESS"
-            return pr_flow.CommandResult(
-                0,
-                json.dumps(
-                    [
-                        {
-                            "name": "PR Flow / review-status",
-                            "workflow": "",
-                            "state": review_state,
-                            "bucket": review_bucket,
-                            "link": "https://github.com/checks/review",
-                        },
-                        {
-                            "name": "verify-full",
-                            "workflow": "Research Governance",
-                            "state": "SUCCESS",
-                            "bucket": "pass",
-                            "link": "https://github.com/runs/1",
-                        },
-                        {
-                            "name": "evidence",
-                            "workflow": "PR Flow",
-                            "state": "SUCCESS",
-                            "bucket": "pass",
-                            "link": "https://github.com/runs/2",
-                        },
-                    ]
-                ),
-                "",
+            review_state = (
+                "FAILURE" if (self.checks_calls == 1 and not already_resolved) else "SUCCESS"
+            )
+            return self._status_rollup_result(
+                [
+                    self._status_rollup_item(
+                        name="review-status",
+                        workflow="PR Flow",
+                        state=review_state,
+                        link="https://github.com/checks/review",
+                    ),
+                    self._status_rollup_item(
+                        name="verify-full",
+                        workflow="Research Governance",
+                        link="https://github.com/runs/1",
+                    ),
+                    self._status_rollup_item(
+                        name="evidence",
+                        workflow="PR Flow",
+                        link="https://github.com/runs/2",
+                    ),
+                ]
             )
         if "addPullRequestReviewThreadReply" in joined:
             body = next(
@@ -1420,6 +1414,12 @@ def test_submit_writes_submit_status_when_retained_thread_retry_fails(
             "detail": "official Codex retained thread auto-processing failed",
         }
     ]
+    assert status["snapshot_subject"] == {
+        "repository": "liuli195/Quant-Trading",
+        "pr_number": "88",
+        "head_sha": "1" * 40,
+        "head_branch": "feature/contract",
+    }
 
 
 def test_submit_writes_submit_status_when_retained_thread_read_fails(
@@ -2060,43 +2060,31 @@ class SubmitAutoCloseOutdatedThreadRunner(SubmitCreatePrRunner):
         input_text: str | None = None,
     ) -> pr_flow.CommandResult:
         joined = "\n".join(command)
-        if (
-            command[:6]
-            == ["gh", "pr", "checks", "88", "--required", "--json"]
-        ):
+        if command == self._status_rollup_command():
             self.checks_calls += 1
             self._call_sequence.append("checks")
             # CI only returns success AFTER thread is resolved
             state = "SUCCESS" if self._thread_resolved else "FAILURE"
-            bucket = "pass" if self._thread_resolved else "fail"
-            return pr_flow.CommandResult(
-                0,
-                json.dumps(
-                    [
-                        {
-                            "name": "PR Flow / review-status",
-                            "workflow": "",
-                            "state": state,
-                            "bucket": bucket,
-                            "link": "https://github.com/checks/review",
-                        },
-                        {
-                            "name": "verify-full",
-                            "workflow": "Research Governance",
-                            "state": "SUCCESS",
-                            "bucket": "pass",
-                            "link": "https://github.com/runs/1",
-                        },
-                        {
-                            "name": "evidence",
-                            "workflow": "PR Flow",
-                            "state": state,
-                            "bucket": bucket,
-                            "link": "https://github.com/runs/2",
-                        },
-                    ]
-                ),
-                "",
+            return self._status_rollup_result(
+                [
+                    self._status_rollup_item(
+                        name="review-status",
+                        workflow="PR Flow",
+                        state=state,
+                        link="https://github.com/checks/review",
+                    ),
+                    self._status_rollup_item(
+                        name="verify-full",
+                        workflow="Research Governance",
+                        link="https://github.com/runs/1",
+                    ),
+                    self._status_rollup_item(
+                        name="evidence",
+                        workflow="PR Flow",
+                        state=state,
+                        link="https://github.com/runs/2",
+                    ),
+                ]
             )
         if "addPullRequestReviewThreadReply" in joined:
             body = next(
@@ -2668,6 +2656,36 @@ def test_submit_treats_empty_required_checks_window_as_pending(
             "source": "",
             "detail": "required check timed out while pending",
         },
+    ]
+
+
+def test_submit_fails_closed_when_current_head_required_checks_unavailable(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitUnavailableStatusRollupRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(
+        repo_root=tmp_path,
+        title="PR automation",
+        runner=runner,
+        watch_timeout_seconds=0,
+        watch_poll_seconds=0,
+    )
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    status = _submit_status(tmp_path)
+    assert _blocking_as_legacy_failures(status) == [
+        {
+            "check": "required-checks",
+            "source": "",
+            "detail": "current-head required checks unavailable",
+        }
     ]
 
 
