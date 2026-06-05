@@ -1629,10 +1629,9 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     (root / ".github/workflows/research-governance.yml").write_text(
-        "on:\n  schedule:\n    - cron: '0 2 * * 1'\n"
-        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
-        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
-        "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
+        "on:\n  push:\n    branches: [main]\n"
+        "  schedule:\n    - cron: '0 2 * * 1'\n"
+        "  pull_request:\n    types: [opened, synchronize, reopened]\n"
         "steps:\n"
         "  - run: git config core.symlinks true\n"
         "  - run: python -m scripts.research.governance verify full\n",
@@ -1641,9 +1640,7 @@ def _write_minimal_repo(root: Path) -> None:
     (root / ".github/workflows/pr-flow.yml").write_text(
         "name: PR Flow\n"
         "on:\n"
-        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
-        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
-        "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
+        "  pull_request:\n    types: [opened, synchronize, reopened, edited]\n"
         "jobs:\n"
         "  evidence:\n"
         "    steps:\n"
@@ -1656,7 +1653,7 @@ def _write_minimal_repo(root: Path) -> None:
         encoding="utf-8",
     )
     (root / ".github/workflows/codex-review-monitor.yml").write_text(
-        "on:\n  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
+        "on:\n  pull_request:\n    types: [opened, synchronize, reopened]\n"
         "  pull_request_review:\n"
         "    types: [submitted, edited, dismissed]\n"
         "  pull_request_review_comment:\n"
@@ -2269,64 +2266,14 @@ def test_governance_audit_flags_workflow_without_review_evidence_gate(tmp_path) 
     )
 
 
-def test_governance_audit_flags_review_evidence_without_inline_comment_deleted_event(
+def test_governance_audit_flags_review_evidence_with_review_thread_events(
     tmp_path,
 ) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / ".github/workflows/pr-flow.yml").write_text(
         "name: PR Flow\n"
         "on:\n"
-        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
-        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
-        "  pull_request_review_comment:\n    types: [created, edited]\n"
-        "jobs:\n"
-        "  evidence:\n"
-        "    steps:\n"
-        "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
-        encoding="utf-8",
-    )
-    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
-    assert not report.ok
-    assert any(
-        finding.rule_id == "governance_gate"
-        and "deleted inline review comments" in finding.message
-        for finding in report.findings
-    )
-
-
-def test_governance_audit_flags_review_evidence_without_review_dismissed_event(
-    tmp_path,
-) -> None:
-    _write_minimal_repo(tmp_path)
-    (tmp_path / ".github/workflows/pr-flow.yml").write_text(
-        "name: PR Flow\n"
-        "on:\n"
-        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
-        "  pull_request_review:\n    types: [submitted, edited]\n"
-        "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
-        "jobs:\n"
-        "  evidence:\n"
-        "    steps:\n"
-        "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
-        encoding="utf-8",
-    )
-    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
-    assert not report.ok
-    assert any(
-        finding.rule_id == "governance_gate" and "dismissed events" in finding.message
-        for finding in report.findings
-    )
-
-
-def test_governance_audit_flags_review_evidence_without_label_events(
-    tmp_path,
-) -> None:
-    _write_minimal_repo(tmp_path)
-    (tmp_path / ".github/workflows/pr-flow.yml").write_text(
-        "name: PR Flow\n"
-        "on:\n"
-        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review]\n"
-        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
+        "  pull_request:\n    types: [opened, synchronize, reopened, edited]\n"
         "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
         "jobs:\n"
         "  evidence:\n"
@@ -2338,7 +2285,55 @@ def test_governance_audit_flags_review_evidence_without_label_events(
     assert not report.ok
     assert any(
         finding.rule_id == "governance_gate"
-        and "labeled and unlabeled events" in finding.message
+        and "must not listen to review or thread events" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_review_evidence_with_review_events(
+    tmp_path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".github/workflows/pr-flow.yml").write_text(
+        "name: PR Flow\n"
+        "on:\n"
+        "  pull_request:\n    types: [opened, synchronize, reopened, edited]\n"
+        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
+        "jobs:\n"
+        "  evidence:\n"
+        "    steps:\n"
+        "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "must not listen to review or thread events" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_review_evidence_with_ready_or_label_events(
+    tmp_path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".github/workflows/pr-flow.yml").write_text(
+        "name: PR Flow\n"
+        "on:\n"
+        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled]\n"
+        "jobs:\n"
+        "  evidence:\n"
+        "    steps:\n"
+        "      - run: python -m scripts.research.governance.pr_review_evidence --body-env PR_BODY\n",
+        encoding="utf-8",
+    )
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "pull_request events must be opened, synchronize, reopened, edited only"
+        in finding.message
         for finding in report.findings
     )
 
@@ -2386,9 +2381,8 @@ def test_governance_workflow_uses_single_verify_full_entrypoint(tmp_path: Path) 
     workflow.write_text(
         "name: Research Governance\n"
         "on:\n"
-        "  pull_request:\n    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]\n"
-        "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
-        "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
+        "  push:\n    branches: [main]\n"
+        "  pull_request:\n    types: [opened, synchronize, reopened]\n"
         "  schedule:\n    - cron: '0 2 * * 1'\n"
         "jobs:\n"
         "  verify-full:\n"
@@ -2641,11 +2635,12 @@ def test_governance_audit_flags_monitor_without_review_dismissed_event(
     )
 
 
-def test_governance_audit_flags_monitor_without_label_events(tmp_path) -> None:
+def test_governance_audit_flags_monitor_with_non_head_pull_request_events(
+    tmp_path,
+) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / ".github/workflows/codex-review-monitor.yml").write_text(
         "on:\n  pull_request:\n    types: [opened, synchronize, reopened, edited]\n"
-        "  issue_comment:\n    types: [created, edited, deleted]\n"
         "  pull_request_review:\n    types: [submitted, edited, dismissed]\n"
         "  pull_request_review_comment:\n    types: [created, edited, deleted]\n"
         "permissions:\n  statuses: write\nsteps:\n"
@@ -2656,7 +2651,7 @@ def test_governance_audit_flags_monitor_without_label_events(tmp_path) -> None:
     assert not report.ok
     assert any(
         finding.rule_id == "codex_review_monitor"
-        and "pull_request labeled and unlabeled events" in finding.message
+        and "pull_request events must be head-only" in finding.message
         for finding in report.findings
     )
 

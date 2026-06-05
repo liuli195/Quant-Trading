@@ -212,6 +212,7 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
         merge_stderr: str = "",
         changed_files_output: str = "docs/guides/example.md\n",
         main_worktree_path: str | None = None,
+        cleanup_status_output: str = "# branch.oid 1111111111111111111111111111111111111111\n# branch.head main\n",
         comment_reactions_by_id: dict[str, list[dict[str, object]]] | None = None,
         ack_generated_comments: bool = True,
     ) -> None:
@@ -228,6 +229,7 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
         self.merge_stderr = merge_stderr
         self.changed_files_output = changed_files_output
         self.main_worktree_path = main_worktree_path
+        self.cleanup_status_output = cleanup_status_output
         self.comment_reactions_by_id = comment_reactions_by_id or {}
         self.ack_generated_comments = ack_generated_comments
         self.auto_merge_requested = existing_state.upper() == "MERGED"
@@ -237,6 +239,7 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
         self.comments: list[str] = []
         self.lifecycle_calls: list[list[str]] = []
         self.cwd_calls: list[tuple[list[str], Path | None]] = []
+        self.ordered_calls: list[list[str]] = []
 
     def _status_rollup_command(self) -> list[str]:
         return [
@@ -316,6 +319,7 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
         cwd: Path | None = None,
         input_text: str | None = None,
     ) -> pr_flow.CommandResult:
+        self.ordered_calls.append(command)
         if command == [
             "git",
             "-c",
@@ -469,6 +473,14 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             "repos/liuli195/Quant-Trading/issues/88/comments?per_page=100",
         ]:
             return pr_flow.CommandResult(0, json.dumps([self.preexisting_comments]), "")
+        if command == [
+            "gh",
+            "api",
+            "--paginate",
+            "--slurp",
+            "repos/liuli195/Quant-Trading/pulls/88/reviews?per_page=100",
+        ]:
+            return pr_flow.CommandResult(0, json.dumps([[]]), "")
         if (
             command[:4] == ["gh", "api", "--paginate", "--slurp"]
             and command[4].startswith(
@@ -536,6 +548,7 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             ["git", "merge", "--ff-only", "origin/main"],
             ["git", "branch", "-d", "feature/contract"],
             ["git", "rev-list", "--left-right", "--count", "main...origin/main"],
+            ["git", "status", "--porcelain=v2", "--branch"],
         ):
             if command == ["git", "worktree", "list", "--porcelain"]:
                 if self.main_worktree_path is not None:
@@ -549,9 +562,13 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
                     )
                 return pr_flow.CommandResult(
                     0,
-                    "worktree /repo\nbranch refs/heads/feature/contract\n",
-                    "",
-                )
+                        "worktree /repo\nbranch refs/heads/feature/contract\n",
+                        "",
+                    )
+            if command == ["git", "status", "--porcelain=v2", "--branch"]:
+                self.lifecycle_calls.append(command)
+                self.cwd_calls.append((command, cwd))
+                return pr_flow.CommandResult(0, self.cleanup_status_output, "")
             self.lifecycle_calls.append(command)
             self.cwd_calls.append((command, cwd))
             if command == [
@@ -839,6 +856,43 @@ class SubmitUnavailableStatusRollupRunner(SubmitCreatePrRunner):
     ) -> pr_flow.CommandResult:
         if command == self._status_rollup_command():
             return pr_flow.CommandResult(1, "", "status rollup unavailable")
+        return super().run(command, cwd=cwd, input_text=input_text)
+
+
+class SubmitCurrentHeadCodexOutputRunner(SubmitCreatePrRunner):
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        if command == [
+            "gh",
+            "api",
+            "--paginate",
+            "--slurp",
+            "repos/liuli195/Quant-Trading/pulls/88/reviews?per_page=100",
+        ]:
+            return pr_flow.CommandResult(
+                0,
+                json.dumps(
+                    [
+                        [
+                            {
+                                "id": 4314779358,
+                                "commit_id": "1" * 40,
+                                "submitted_at": "2026-06-01T10:02:00Z",
+                                "body": "### Codex Review\n\nNo blocking findings.",
+                                "user": {
+                                    "login": "chatgpt-codex-connector[bot]",
+                                },
+                            }
+                        ]
+                    ]
+                ),
+                "",
+            )
         return super().run(command, cwd=cwd, input_text=input_text)
 
 
@@ -2040,6 +2094,37 @@ def test_submit_reuses_current_head_codex_request_with_eyes_ack(
     _write_branch_intent(tmp_path)
 
     code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert runner.comments == []
+
+
+def test_submit_reuses_current_head_codex_output_without_eyes_ack(
+    tmp_path: Path,
+) -> None:
+    diff_text = (
+        "diff --git a/scripts/research/governance/pr_flow.py "
+        "b/scripts/research/governance/pr_flow.py\n+hello\n"
+    )
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCurrentHeadCodexOutputRunner(
+        diff_text=diff_text,
+        existing_pr=True,
+        changed_files_output="scripts/research/governance/pr_flow.py\n",
+        preexisting_comments=[_current_head_trigger_comment()],
+        comment_reactions_by_id={"1": []},
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(
+        repo_root=tmp_path,
+        title="PR automation",
+        runner=runner,
+        codex_review_ack_timeout_seconds=0,
+    )
 
     assert code == pr_flow.SUCCESS_EXIT_CODE
     assert runner.comments == []
@@ -3304,6 +3389,79 @@ def test_submit_cleanup_syncs_main_in_existing_main_worktree(
     ) in runner.cwd_calls
 
 
+def test_submit_cleanup_stops_when_worktree_is_dirty_after_cleanup(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    raw_status = (
+        "# branch.oid 1111111111111111111111111111111111111111\n"
+        "# branch.head main\n"
+        "1 .D N... 100644 100644 000000 "
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa docs/rules/old.md\n"
+        "1 .M N... 100644 100644 100644 "
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb "
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb scripts/research/governance/pr_flow.py\n"
+        "? .local/tmp.txt\n"
+    )
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        existing_pr=True,
+        existing_state="MERGED",
+        cleanup_status_output=raw_status,
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR 自动化", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    status = _submit_status(tmp_path)
+    assert status["pr_submit_stop"] == {
+        "state": "EXCEPTION_REQUIRED",
+        "reason_code": "WORKTREE_DIRTY_AFTER_CLEANUP",
+        "phase": "cleanup_worktree_health",
+        "is_retryable": True,
+        "summary": (
+            "cleanup_worktree_health: dirty worktree after cleanup: "
+            "dirty_count=3 tracked_deleted_count=1 modified_count=1 "
+            "untracked_count=1 sample_paths=docs/rules/old.md, "
+            "scripts/research/governance/pr_flow.py"
+        ),
+    }
+    signals = _blocking_signals(status)
+    assert signals == [
+        {
+            "signal_type": "pr_submit_blocked",
+            "summary": (
+                "dirty worktree after cleanup: dirty_count=3 "
+                "tracked_deleted_count=1 modified_count=1 untracked_count=1 "
+                "sample_paths=docs/rules/old.md, "
+                "scripts/research/governance/pr_flow.py"
+            ),
+            "source_context": "cleanup_worktree_health",
+            "evidence_location": ".local/pr-flow/worktree-status-after-cleanup.txt",
+            "currentness": "current",
+            "is_retryable": True,
+        }
+    ]
+    artifacts = _evidence_artifacts(status)
+    assert artifacts == [
+        {
+            "artifact_type": "worktree_status_after_cleanup",
+            "artifact_path": ".local/pr-flow/worktree-status-after-cleanup.txt",
+            "artifact_summary": "raw git status --porcelain=v2 --branch after cleanup",
+        }
+    ]
+    artifact_path = tmp_path / artifacts[0]["artifact_path"]
+    assert artifact_path.read_text(encoding="utf-8") == raw_status
+    assert not any(call[:2] == ["git", "restore"] for call in runner.calls)
+    assert not any(call[:3] == ["git", "checkout", "--"] for call in runner.calls)
+
+
 def test_submit_completes_head_locked_auto_merge_and_local_cleanup(
     tmp_path: Path,
 ) -> None:
@@ -3332,6 +3490,25 @@ def test_submit_completes_head_locked_auto_merge_and_local_cleanup(
     assert ["git", "merge", "--ff-only", "origin/main"] in runner.lifecycle_calls
     assert ["git", "branch", "-d", "feature/contract"] in runner.lifecycle_calls
     assert not any(call[:3] == ["git", "push", "origin"] for call in runner.lifecycle_calls)
+
+
+def test_submit_marks_pr_ready_before_waiting_required_checks(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR 自动化", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    ready_index = runner.ordered_calls.index(["gh", "pr", "ready", "88"])
+    checks_index = runner.ordered_calls.index(runner._status_rollup_command())
+    assert ready_index < checks_index
 
 
 def test_contract_v1_rejects_legacy_ac_checked_field() -> None:
@@ -3667,6 +3844,107 @@ def test_workflow_files_publish_pending_before_validation() -> None:
             )
 
 
+def test_required_check_workflow_events_follow_issue_113_contract() -> None:
+    """Required checks should only run from events that can change their inputs."""
+    import yaml
+
+    workflow_dir = Path(".github") / "workflows"
+
+    def workflow_on(filename: str) -> dict[object, object]:
+        doc = yaml.safe_load((workflow_dir / filename).read_text(encoding="utf-8"))
+        assert isinstance(doc, dict)
+        events = doc.get("on", doc.get(True))
+        assert isinstance(events, dict)
+        return events
+
+    def event_types(events: dict[object, object], name: str) -> list[str]:
+        event = events.get(name)
+        if event is None:
+            return []
+        if event is None or event == "":
+            return []
+        if isinstance(event, dict):
+            types = event.get("types")
+            if isinstance(types, list):
+                return [str(item) for item in types]
+        return []
+
+    verify_events = workflow_on("research-governance.yml")
+    assert set(verify_events) == {
+        "push",
+        "pull_request",
+        "schedule",
+        "workflow_dispatch",
+    }
+    assert verify_events["push"] == {"branches": ["main"]}
+    assert event_types(verify_events, "pull_request") == [
+        "opened",
+        "synchronize",
+        "reopened",
+    ]
+
+    evidence_events = workflow_on("pr-flow.yml")
+    assert set(evidence_events) == {"pull_request"}
+    assert event_types(evidence_events, "pull_request") == [
+        "opened",
+        "synchronize",
+        "reopened",
+        "edited",
+    ]
+
+    monitor_events = workflow_on("codex-review-monitor.yml")
+    assert set(monitor_events) == {
+        "pull_request",
+        "pull_request_review",
+        "pull_request_review_comment",
+        "workflow_dispatch",
+    }
+    assert event_types(monitor_events, "pull_request") == [
+        "opened",
+        "synchronize",
+        "reopened",
+    ]
+    assert event_types(monitor_events, "pull_request_review") == [
+        "submitted",
+        "edited",
+        "dismissed",
+    ]
+    assert event_types(monitor_events, "pull_request_review_comment") == [
+        "created",
+        "edited",
+        "deleted",
+    ]
+
+    router_events = workflow_on("codex-review-router.yml")
+    assert set(router_events) == {"issue_comment"}
+    assert event_types(router_events, "issue_comment") == [
+        "created",
+        "edited",
+        "deleted",
+    ]
+
+
+def test_pr_scoped_required_check_workflows_have_head_concurrency() -> None:
+    """Repeated runs for the same workflow and PR head should cancel old runs."""
+    import yaml
+
+    workflow_dir = Path(".github") / "workflows"
+    for filename in (
+        "research-governance.yml",
+        "pr-flow.yml",
+        "codex-review-monitor.yml",
+    ):
+        doc = yaml.safe_load((workflow_dir / filename).read_text(encoding="utf-8"))
+        assert isinstance(doc, dict)
+        concurrency = doc.get("concurrency")
+        assert isinstance(concurrency, dict), f"{filename} missing concurrency"
+        group = str(concurrency.get("group", ""))
+        assert "github.workflow" in group, filename
+        assert "github.event.pull_request.number" in group or "github.ref" in group
+        assert "github.event.pull_request.head.sha" in group or "github.sha" in group
+        assert concurrency.get("cancel-in-progress") is True
+
+
 def test_codex_review_monitor_has_failure_finalizer_for_pending_status() -> None:
     """The monitor must not leave review-status pending after infrastructure failure."""
     import yaml
@@ -3886,6 +4164,46 @@ def test_codex_review_router_worker_model_is_documented() -> None:
             "router dispatch 成功不写 success",
             "不维护 PR Flow changed-files 白名单",
             "接手快照 v3",
+        ],
+    }
+
+    for path, tokens in required_docs.items():
+        text = path.read_text(encoding="utf-8")
+        for token in tokens:
+            assert token in text, f"{path} missing {token}"
+
+
+def test_issue_103_113_pr_flow_rules_are_documented() -> None:
+    required_docs = {
+        Path("docs/rules/pr-workflow.md"): [
+            "刷新 PR Evidence JSON、ready-for-review、按风险/授权判断是否触发官方 Codex review、等待 required checks",
+            "WORKTREE_DIRTY_AFTER_CLEANUP",
+            "cleanup_worktree_health",
+            "不自动恢复、不自动删除、不自动修复",
+        ],
+        Path("docs/rules/governance.md"): [
+            "`verify-full` 是 head/diff 级别检查",
+            "`PR Flow / evidence` 保留 PR body `edited` 触发",
+            "`PR Flow / review-status` 保留 review/thread/workflow_dispatch 触发",
+            "不新增 live PR state guard",
+            "PR-scoped concurrency",
+        ],
+        Path("docs/rules/review-guidelines.md"): [
+            "current-head verdict",
+            "P2/P3 only + all threads resolved",
+            "latest current-head trigger",
+        ],
+        Path("docs/adr/0007-pr-flow-closed-loop-review-evidence.md"): [
+            "https://github.com/liuli195/Quant-Trading/issues/103",
+            "https://github.com/liuli195/Quant-Trading/issues/113",
+            "WORKTREE_DIRTY_AFTER_CLEANUP",
+            "`ready_for_review` 回归 GitHub 语义",
+            "current-head verdict",
+        ],
+        Path("scripts/research/governance/README.md"): [
+            "sync PR Evidence",
+            "ready-for-review",
+            "WORKTREE_DIRTY_AFTER_CLEANUP",
         ],
     }
 

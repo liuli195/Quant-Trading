@@ -28,11 +28,11 @@ make pr-submit TITLE="<PR标题>"
 .\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow submit --title "<PR标题>"
 ```
 
-`pr-submit` 读取 [pr-flow-interface-contract.yaml](../../../docs/rules/pr-flow-interface-contract.yaml) <!-- pathref: docs/rules/pr-flow-interface-contract.yaml -->，检查 GitHub repo settings 和 required checks，校验 `.local/ai-review/fragments/*.json`，创建或更新 draft PR，写 PR Evidence JSON，触发 `@codex review`，等待 required checks，执行 head-locked auto-merge，并在 merged 后只做本地 fast-forward 与本地分支删除。远端分支删除交给 GitHub。
+`pr-submit` 读取 [pr-flow-interface-contract.yaml](../../../docs/rules/pr-flow-interface-contract.yaml) <!-- pathref: docs/rules/pr-flow-interface-contract.yaml -->，检查 GitHub repo settings 和 required checks，校验 `.local/ai-review/fragments/*.json`，创建或更新 draft PR，sync PR Evidence，ready-for-review，触发或复用当前 head 的 `@codex review`，等待 required checks，执行 head-locked auto-merge，并在 merged 后只做本地 fast-forward 与本地分支删除。远端分支删除交给 GitHub。
 
 同一 head/diff 的 fragments 可复用；PR body 或 status 更新不会单独要求重新 review。GitHub update-branch 生成的同步主干 merge commit 会自动按 commit 级 `no_issue: true` 进入 PR Evidence，PR 级 closes/reference 不受影响。`main` 在其他 worktree 时，本地收尾会在该 worktree 同步 `main`。
 
-接手入口是 `.local/pr-flow/status.json`。运行时只写接手快照 v3，不保留旧 `schema/head/failures` 字段；它不是成功证明。pending 不是失败；官方 Codex review 未返回或 required checks 未完成时继续等待，只有真实阻断、配置缺失或超时才写 `blocking_signals`、`diagnostic_signals`、`suggested_next_actions` 和必要的 `evidence_artifacts`。
+接手入口是 `.local/pr-flow/status.json`。运行时只写接手快照 v3，不保留旧 `schema/head/failures` 字段；它不是成功证明。pending 不是失败；官方 Codex review 未返回或 required checks 未完成时继续等待，只有真实阻断、配置缺失或超时才写 `blocking_signals`、`diagnostic_signals`、`suggested_next_actions` 和必要的 `evidence_artifacts`。cleanup 后 dirty worktree 停 `EXCEPTION_REQUIRED` / `WORKTREE_DIRTY_AFTER_CLEANUP`，raw status 落盘，cleanup 不自动修复。
 
 失败接手入口先读 `.local/pr-flow/status.json`；`diagnose` 只保留为 `pr-submit` 内部归因和开发测试面，不作为用户命令入口。unresolved review thread 明细写入 `.local/pr-flow/resolve-threads-plan.json`，显式处理 review thread 时使用：
 
