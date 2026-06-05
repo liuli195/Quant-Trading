@@ -5,7 +5,7 @@ Review 细则见 [review-guidelines.md](review-guidelines.md) <!-- pathref: docs
 ## 默认入口
 
 - 高频 PR 流程只使用 `make pr-submit TITLE="<PR标题>"`，等价于 `.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow submit --title "<PR标题>"`。
-- `pr-submit` 是前台有界自动流程：读取 `PR Flow Interface Contract`、检查 GitHub auto-merge / merge 后删远端分支 / required checks 配置、校验本地 review fragments、创建或更新 draft PR、刷新 PR Evidence JSON、按风险/授权判断是否触发官方 Codex review、ready-for-review、等待 required checks、head-locked auto-merge、等待 merged，并做本地收尾。
+- `pr-submit` 是前台有界自动流程：读取 `PR Flow Interface Contract`、检查 GitHub auto-merge / merge 后删远端分支 / required checks 配置、校验本地 review fragments、创建或更新 draft PR、刷新 PR Evidence JSON、按风险/授权判断是否触发官方 Codex review、等待 required checks、ready-for-review、head-locked auto-merge、等待 merged，并做本地收尾。
 - 官方 Codex completion comment 触发的 `PR Flow / review-status` 由默认分支 router 自动 dispatch 到 PR head branch worker；`pr-submit` 不维护 PR Flow changed-files 白名单、不直接触发 `workflow_dispatch`、不新增公开 `diagnose`、`handoff` 或 `refresh` 入口。
 - pending 是等待状态，不是失败状态。需要官方 Codex review 但未返回、或 required checks 未完成时，`pr-submit` 继续等待；只有 P0/P1、unresolved thread、CI failure、配置缺失、官方 Codex 不可用或 10 分钟超时才写接手快照 v3 并退出。
 - `.local/pr-flow/status.json` 是接手入口，不是成功证明。运行时只写接手快照 v3：`schema_version`、`snapshot_subject`、`pr_submit_stop`、`checkpoint_statuses`、`blocking_signals`、`diagnostic_signals`、`suggested_next_actions` 和 `evidence_artifacts`；合并权威仍是 GitHub required checks、conversation resolution、ruleset 和 merged state。

@@ -2698,30 +2698,6 @@ def test_submit_does_not_treat_draft_pr_as_required_check_pending(
     assert not _submit_status_path(tmp_path).exists()
 
 
-def test_submit_marks_draft_pr_ready_before_waiting_for_required_checks(
-    tmp_path: Path,
-) -> None:
-    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
-    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
-    runner = SubmitDraftStatusRollupRunner(diff_text=diff_text, checks_bucket="pending")
-    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
-    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
-    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
-    _write_branch_intent(tmp_path)
-
-    code = pr_flow.submit(
-        repo_root=tmp_path,
-        title="PR automation",
-        runner=runner,
-        watch_timeout_seconds=0,
-        watch_poll_seconds=0,
-    )
-
-    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
-    ready = ["gh", "pr", "ready", "88"]
-    assert ready in runner.lifecycle_calls
-
-
 def test_submit_fails_closed_when_current_head_required_checks_unavailable(
     tmp_path: Path,
 ) -> None:

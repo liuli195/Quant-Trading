@@ -954,16 +954,6 @@ def submit(
             retryable=True,
             failures=failures,
         )
-    ready_code = _submit_ready_for_review(
-        root=root,
-        runner=runner,
-        contract=contract,
-        pr_number=pr or pr_number,
-        head_sha=head_sha,
-        snapshot_context=snapshot_context,
-    )
-    if ready_code != SUCCESS_EXIT_CODE:
-        return ready_code
     watch_result = _submit_wait_required_checks(
         root=root,
         runner=runner,
@@ -2367,16 +2357,17 @@ def _submit_complete_lifecycle(
     timeout_seconds: float,
     poll_seconds: float,
 ) -> int:
-    ready_code = _submit_ready_for_review(
-        root=root,
-        runner=runner,
-        contract=contract,
-        pr_number=pr_number,
-        head_sha=head_sha,
-        snapshot_context=snapshot_context,
-    )
-    if ready_code != SUCCESS_EXIT_CODE:
-        return ready_code
+    ready = runner.run(["gh", "pr", "ready", pr_number], cwd=root)
+    if ready.returncode != 0 and not _pr_ready_already_ready(ready):
+        return _submit_lifecycle_command_failure(
+            root=root,
+            contract=contract,
+            head_sha=head_sha,
+            snapshot_context=snapshot_context,
+            command_label="gh pr ready",
+            phase="submit_ready",
+            result=ready,
+        )
     merge = runner.run(
         [
             "gh",
@@ -2434,29 +2425,6 @@ def _submit_complete_lifecycle(
         snapshot_context=snapshot_context,
         metadata=metadata,
     )
-
-
-def _submit_ready_for_review(
-    *,
-    root: Path,
-    runner: Runner,
-    contract: pr_flow_contract.PRFlowContract,
-    pr_number: str,
-    head_sha: str,
-    snapshot_context: SubmitSnapshotContext,
-) -> int:
-    ready = runner.run(["gh", "pr", "ready", pr_number], cwd=root)
-    if ready.returncode != 0 and not _pr_ready_already_ready(ready):
-        return _submit_lifecycle_command_failure(
-            root=root,
-            contract=contract,
-            head_sha=head_sha,
-            snapshot_context=snapshot_context,
-            command_label="gh pr ready",
-            phase="submit_ready",
-            result=ready,
-        )
-    return SUCCESS_EXIT_CODE
 
 
 def _submit_lifecycle_command_failure(
