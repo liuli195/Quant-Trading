@@ -26,6 +26,10 @@ FIXED_CHECKPOINT_NAMES = {
 }
 
 
+def test_submit_default_wait_timeout_is_ten_minutes() -> None:
+    assert pr_flow.CODEX_REVIEW_WAIT_TIMEOUT_SECONDS == 10 * 60
+
+
 def _submit_status(root: Path) -> dict[str, Any]:
     status = json.loads(
         (root / ".local/pr-flow/status.json").read_text(encoding="utf-8")
