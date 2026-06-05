@@ -45,6 +45,11 @@ REQUIRED_STATUS_CHECK_NAMES = {
     "Research Governance / verify-full",
     "PR Flow / evidence",
 }
+REQUIRED_STATUS_CHECK_ALIASES = {
+    "review-status": "PR Flow / review-status",
+    "verify-full": "Research Governance / verify-full",
+    "evidence": "PR Flow / evidence",
+}
 CODEX_REVIEW_WAIT_TIMEOUT_SECONDS = 600.0
 CODEX_REVIEW_WAIT_INTERVAL_SECONDS = 30.0
 CODEX_REVIEW_ACK_TIMEOUT_SECONDS = 3 * 60.0
@@ -4876,6 +4881,10 @@ def _check_from_status_rollup_item(item: dict[str, Any]) -> dict[str, Any] | Non
         if isinstance(workflow, dict)
         else _single_line_text(item.get("workflowName"))
     )
+    name, workflow_name = _normalized_required_status_rollup_name(
+        name=name,
+        workflow=workflow_name,
+    )
     state = _single_line_text(
         item.get("state") or item.get("conclusion") or item.get("status")
     ).upper()
@@ -4901,6 +4910,20 @@ def _check_from_status_rollup_item(item: dict[str, Any]) -> dict[str, Any] | Non
         "completedAt": _single_line_text(item.get("completedAt")),
         "headSha": _status_check_item_head_sha(item),
     }
+
+
+def _normalized_required_status_rollup_name(
+    *,
+    name: str,
+    workflow: str,
+) -> tuple[str, str]:
+    if workflow:
+        return name, workflow
+    context = REQUIRED_STATUS_CHECK_ALIASES.get(name)
+    if not context or " / " not in context:
+        return name, workflow
+    normalized_workflow, normalized_name = context.split(" / ", 1)
+    return normalized_name, normalized_workflow
 
 
 def _status_check_item_head_sha(item: dict[str, Any]) -> str:

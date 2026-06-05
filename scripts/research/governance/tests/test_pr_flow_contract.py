@@ -810,6 +810,25 @@ class SubmitEmptyRequiredChecksWindowRunner(SubmitCreatePrRunner):
         return super().run(command, cwd=cwd, input_text=input_text)
 
 
+class SubmitRawStatusRollupRequiredNamesRunner(SubmitCreatePrRunner):
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        if command == self._status_rollup_command():
+            return self._status_rollup_result(
+                [
+                    self._status_rollup_item(name="review-status"),
+                    self._status_rollup_item(name="verify-full"),
+                    self._status_rollup_item(name="evidence"),
+                ]
+            )
+        return super().run(command, cwd=cwd, input_text=input_text)
+
+
 class SubmitUnavailableStatusRollupRunner(SubmitCreatePrRunner):
     def run(
         self,
@@ -2779,6 +2798,28 @@ def test_submit_waits_on_pending_required_checks_until_timeout(tmp_path: Path) -
     assert checkpoints["official_codex_review"]["summary"] == (
         "official Codex review has not returned"
     )
+
+
+def test_submit_matches_raw_status_rollup_required_check_names(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/docs/guides/example.md b/docs/guides/example.md\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitRawStatusRollupRequiredNamesRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(
+        repo_root=tmp_path,
+        title="PR automation",
+        runner=runner,
+        watch_timeout_seconds=0,
+    )
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert runner.auto_merge_requested
 
 
 def test_submit_records_stale_required_check_failure_as_diagnostic_when_current_pending(
