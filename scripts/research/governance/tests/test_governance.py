@@ -4185,6 +4185,92 @@ def test_codex_review_monitor_reports_blocked_on_p1_inline_comment() -> None:
     assert report.blocking_findings == 1
 
 
+def test_codex_review_monitor_ignores_resolved_p1_inline_thread() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        issue_comments=[{"body": _codex_review_request_body()}],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T00:00:00Z",
+                "body": "### Codex Review",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[
+            {
+                "node_id": "PRRC_resolved",
+                "pull_request_review_id": 4314779358,
+                "body": "**![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat) false positive**",
+            }
+        ],
+        review_threads=[
+            {
+                "isResolved": True,
+                "comments": {
+                    "nodes": [
+                        {
+                            "id": "PRRC_resolved",
+                            "body": "**![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat) false positive**",
+                            "author": {"login": "chatgpt-codex-connector[bot]"},
+                        }
+                    ]
+                },
+            }
+        ],
+    )
+
+    assert report.status == "passed"
+    assert report.blocking_findings == 0
+
+
+def test_codex_review_monitor_counts_unresolved_p1_inline_thread_once() -> None:
+    head_sha = "0" * 40
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        issue_comments=[{"body": _codex_review_request_body()}],
+        reviews=[
+            {
+                "id": 4314779358,
+                "commit_id": head_sha,
+                "submitted_at": "2026-05-19T00:00:00Z",
+                "body": "### Codex Review",
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+            }
+        ],
+        review_comments=[
+            {
+                "node_id": "PRRC_unresolved",
+                "pull_request_review_id": 4314779358,
+                "body": "**![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat) blocker**",
+            }
+        ],
+        review_threads=[
+            {
+                "isResolved": False,
+                "comments": {
+                    "nodes": [
+                        {
+                            "id": "PRRC_unresolved",
+                            "body": "**![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat) blocker**",
+                            "author": {"login": "chatgpt-codex-connector[bot]"},
+                        }
+                    ]
+                },
+            }
+        ],
+    )
+
+    assert report.status == "blocked"
+    assert report.blocking_findings == 1
+
+
 def test_codex_review_priority_patterns_match_plain_text_titles() -> None:
     assert BLOCKING_CODEX_FINDING_PATTERN.search("[P1] blocking finding")
     assert BLOCKING_CODEX_FINDING_PATTERN.search("**[P0] blocking finding**")

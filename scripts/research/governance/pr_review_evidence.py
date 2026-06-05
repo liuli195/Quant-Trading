@@ -1072,10 +1072,12 @@ def _fetch_pr_review_threads(
         pullRequest(number: $number) {
           reviewThreads(first: 100, after: $cursor) {
             nodes {
+              id
               isResolved
               isOutdated
               comments(first: 50) {
                 nodes {
+                  id
                   body
                   author {
                     login

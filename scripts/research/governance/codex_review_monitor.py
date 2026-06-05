@@ -156,6 +156,7 @@ def build_monitor_report(
         latest_review_for_findings,
         review_comments=review_comments,
         pattern=BLOCKING_CODEX_FINDING_PATTERN,
+        review_threads=review_threads,
     )
     blocking_findings += (
         unresolved_blocking_codex_thread_count(review_threads)
@@ -703,19 +704,73 @@ def _count_review_findings(
     *,
     review_comments: Sequence[Mapping[str, object]],
     pattern: re.Pattern[str],
+    review_threads: Sequence[Mapping[str, object]] | None = None,
 ) -> int:
     if review is None:
         return 0
     review_id = str(review.get("id", ""))
     texts = [str(review.get("body", ""))]
+    threaded_comment_keys = (
+        _threaded_comment_keys(review_threads)
+        if pattern is BLOCKING_CODEX_FINDING_PATTERN
+        else set()
+    )
     for comment in review_comments:
         if str(comment.get("pull_request_review_id", "")) == review_id:
+            if threaded_comment_keys and _comment_keys(comment) & threaded_comment_keys:
+                continue
             texts.append(str(comment.get("body", "")))
     if pattern is BLOCKING_CODEX_FINDING_PATTERN and any(
         CODEX_CONTEXT_INVALID_PATTERN.search(text) for text in texts
     ):
         return 0
     return sum(1 for text in texts if pattern.search(text))
+
+
+def _threaded_comment_keys(
+    review_threads: Sequence[Mapping[str, object]] | None,
+) -> set[tuple[str, str]]:
+    if review_threads is None:
+        return set()
+    keys: set[tuple[str, str]] = set()
+    for thread in review_threads:
+        for comment in _thread_comments(thread):
+            keys.update(_comment_keys(comment))
+    return keys
+
+
+def _thread_comments(thread: Mapping[str, object]) -> tuple[Mapping[str, object], ...]:
+    comments = thread.get("comments")
+    if isinstance(comments, list):
+        return tuple(item for item in comments if isinstance(item, Mapping))
+    if isinstance(comments, Mapping):
+        nodes = comments.get("nodes")
+        if isinstance(nodes, list):
+            return tuple(item for item in nodes if isinstance(item, Mapping))
+    return ()
+
+
+def _comment_keys(comment: Mapping[str, object]) -> set[tuple[str, str]]:
+    keys: set[tuple[str, str]] = set()
+    node_id = str(comment.get("node_id", "") or "").strip()
+    if node_id:
+        keys.add(("node", node_id))
+    comment_id = str(comment.get("id", "") or "").strip()
+    if comment_id:
+        if comment_id.startswith("PRRC_") or comment_id.startswith("PRRC_".lower()):
+            keys.add(("node", comment_id))
+        else:
+            keys.add(("database", comment_id))
+    database_id = str(
+        comment.get("databaseId", "") or comment.get("database_id", "") or ""
+    ).strip()
+    if database_id:
+        keys.add(("database", database_id))
+    for field in ("url", "html_url"):
+        value = str(comment.get(field, "") or "").strip()
+        if value:
+            keys.add(("url", value))
+    return keys
 
 
 def _find_monitor_comment_id(comments: Sequence[object]) -> int | None:
