@@ -1895,7 +1895,12 @@ def test_submit_reissues_current_head_codex_request_without_eyes_ack(
     _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
     _write_branch_intent(tmp_path)
 
-    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+    code = pr_flow.submit(
+        repo_root=tmp_path,
+        title="PR automation",
+        runner=runner,
+        codex_review_ack_timeout_seconds=0,
+    )
 
     assert code == pr_flow.SUCCESS_EXIT_CODE
     assert len(runner.comments) == 1
@@ -1928,9 +1933,69 @@ def test_submit_reissues_new_codex_request_when_eyes_ack_times_out(
         codex_review_ack_timeout_seconds=0,
     )
 
-    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
     assert len(runner.comments) == 2
     assert all("@codex review" in comment for comment in runner.comments)
+
+
+def test_submit_blocks_when_reissued_codex_request_lacks_eyes_ack(
+    tmp_path: Path,
+) -> None:
+    diff_text = (
+        "diff --git a/scripts/research/governance/pr_flow.py "
+        "b/scripts/research/governance/pr_flow.py\n+hello\n"
+    )
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        existing_pr=True,
+        changed_files_output="scripts/research/governance/pr_flow.py\n",
+        preexisting_comments=[_current_head_trigger_comment()],
+        comment_reactions_by_id={"1": []},
+        ack_generated_comments=False,
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(
+        repo_root=tmp_path,
+        title="PR automation",
+        runner=runner,
+        codex_review_ack_timeout_seconds=0,
+    )
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert len(runner.comments) == 1
+
+
+def test_submit_reissues_when_eyes_ack_is_after_three_minute_window(
+    tmp_path: Path,
+) -> None:
+    diff_text = (
+        "diff --git a/scripts/research/governance/pr_flow.py "
+        "b/scripts/research/governance/pr_flow.py\n+hello\n"
+    )
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        existing_pr=True,
+        changed_files_output="scripts/research/governance/pr_flow.py\n",
+        preexisting_comments=[_current_head_trigger_comment()],
+        comment_reactions_by_id={
+            "1": [_codex_eyes_reaction(created_at="2026-06-01T10:04:01Z")]
+        },
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert len(runner.comments) == 1
 
 
 def test_submit_reuses_current_head_codex_request_with_eyes_ack(
@@ -2449,7 +2514,7 @@ def test_submit_auto_resolves_codex_p1_thread_with_current_fixed_evidence(
             "source": "official_codex_review_thread",
             "thread_id": "PRRT_outdated_p1",
             "severity": "P1",
-            "status": "fixed",
+            "disposition": "fixed",
             "evidence": "fixed by current change",
             "head_sha": "1" * 40,
             "diff_files_hash": diff_hash,
@@ -2462,7 +2527,7 @@ def test_submit_auto_resolves_codex_p1_thread_with_current_fixed_evidence(
 
     assert code == pr_flow.SUCCESS_EXIT_CODE
     assert runner.replies
-    assert "status: `fixed`" in runner.replies[-1]
+    assert "disposition: `fixed`" in runner.replies[-1]
     assert runner.resolved_threads == ["PRRT_outdated_p1"]
     assert not (tmp_path / ".local/pr-flow/resolve-threads-plan.json").exists()
 
@@ -2483,7 +2548,7 @@ def test_submit_auto_resolves_codex_p1_thread_with_current_false_positive_eviden
             "source": "official_codex_review_thread",
             "thread_id": "PRRT_outdated_p1",
             "severity": "P1",
-            "status": "false_positive",
+            "disposition": "false_positive",
             "evidence": "current evidence link",
             "head_sha": "1" * 40,
             "diff_files_hash": diff_hash,
@@ -2495,9 +2560,45 @@ def test_submit_auto_resolves_codex_p1_thread_with_current_false_positive_eviden
 
     assert code == pr_flow.SUCCESS_EXIT_CODE
     assert runner.replies
-    assert "status: `false_positive`" in runner.replies[-1]
+    assert "disposition: `false_positive`" in runner.replies[-1]
     assert "finding references code removed from this diff" in runner.replies[-1]
     assert runner.resolved_threads == ["PRRT_outdated_p1"]
+
+
+def test_submit_rejects_codex_p1_thread_closure_evidence_without_disposition(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitAutoCloseOutdatedThreadRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+    _write_thread_closure_evidence(
+        tmp_path,
+        {
+            "source": "official_codex_review_thread",
+            "thread_id": "PRRT_outdated_p1",
+            "severity": "P1",
+            "status": "fixed",
+            "evidence": "fixed by current change",
+            "head_sha": "1" * 40,
+            "diff_files_hash": diff_hash,
+            "fix_commit": "1" * 40,
+            "verification_command": ".\\.venv\\Scripts\\python.exe -m pytest scripts/research/governance/tests/test_pr_flow_contract.py",
+        },
+    )
+
+    code = pr_flow.submit(
+        repo_root=tmp_path,
+        title="PR automation",
+        runner=runner,
+        watch_timeout_seconds=0,
+    )
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert runner.resolved_threads == []
 
 
 def test_submit_fails_closed_when_pre_ci_review_threads_are_unreadable(
@@ -2673,6 +2774,11 @@ def test_submit_waits_on_pending_required_checks_until_timeout(tmp_path: Path) -
             "detail": "required check timed out while pending",
         }
     ]
+    checkpoints = _checkpoint_statuses(status)
+    assert checkpoints["official_codex_review"]["status"] == "pending"
+    assert checkpoints["official_codex_review"]["summary"] == (
+        "official Codex review has not returned"
+    )
 
 
 def test_submit_records_stale_required_check_failure_as_diagnostic_when_current_pending(
@@ -2721,6 +2827,11 @@ def test_submit_records_stale_required_check_failure_as_diagnostic_when_current_
             "is_retryable": True,
         }
     ]
+    checkpoints = _checkpoint_statuses(status)
+    assert checkpoints["official_codex_review"]["status"] == "pending"
+    assert checkpoints["official_codex_review"]["evidence_location"] == (
+        "https://github.com/runs/review-current"
+    )
 
 
 def test_submit_records_stale_required_check_failure_as_diagnostic_when_current_passed(

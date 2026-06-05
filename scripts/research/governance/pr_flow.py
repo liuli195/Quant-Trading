@@ -50,7 +50,7 @@ CODEX_REVIEW_WAIT_INTERVAL_SECONDS = 30.0
 CODEX_REVIEW_ACK_TIMEOUT_SECONDS = 3 * 60.0
 CODEX_REVIEW_ACK_POLL_SECONDS = 15.0
 AUTO_ACCEPTED_REVIEW_THREAD_SEVERITIES = {"P2", "P3"}
-CLOSED_REVIEW_THREAD_STATUSES = {"fixed", "false_positive"}
+CLOSED_REVIEW_THREAD_DISPOSITIONS = {"fixed", "false_positive"}
 GITHUB_READ_MAX_ATTEMPTS = 3
 GITHUB_READ_RETRY_BACKOFF_SECONDS = 0.1
 VALID_INTENT_ROLES = {"reference", "closes"}
@@ -1979,37 +1979,57 @@ def _submit_request_codex_review(
     except GitHubDataUnavailable as exc:
         _print_github_data_unavailable(exc)
         return EXCEPTION_REQUIRED_EXIT_CODE
-    post_code = _post_codex_review_request(
+    return _post_codex_review_request_until_ack(
         root=root,
         runner=runner,
         pr_number=pr_number,
         pr_url=pr_url,
         head_sha=head_sha,
+        ack_timeout_seconds=ack_timeout_seconds,
+        ack_poll_seconds=ack_poll_seconds,
+        attempts=1 if trigger is not None else 2,
     )
-    if post_code != SUCCESS_EXIT_CODE:
-        return post_code
-    if trigger is not None:
-        return SUCCESS_EXIT_CODE
-    try:
-        if _wait_for_current_head_codex_trigger_ack(
-            pr_url=pr_url,
-            head_sha=head_sha,
+
+
+def _post_codex_review_request_until_ack(
+    *,
+    root: Path,
+    runner: Runner,
+    pr_number: str,
+    pr_url: str,
+    head_sha: str,
+    ack_timeout_seconds: float,
+    ack_poll_seconds: float,
+    attempts: int,
+) -> int:
+    for _attempt in range(max(attempts, 0)):
+        post_code = _post_codex_review_request(
             root=root,
             runner=runner,
-            timeout_seconds=ack_timeout_seconds,
-            poll_seconds=ack_poll_seconds,
-        ):
-            return SUCCESS_EXIT_CODE
-    except GitHubDataUnavailable as exc:
-        _print_github_data_unavailable(exc)
-        return EXCEPTION_REQUIRED_EXIT_CODE
-    return _post_codex_review_request(
-        root=root,
-        runner=runner,
-        pr_number=pr_number,
-        pr_url=pr_url,
-        head_sha=head_sha,
+            pr_number=pr_number,
+            pr_url=pr_url,
+            head_sha=head_sha,
+        )
+        if post_code != SUCCESS_EXIT_CODE:
+            return post_code
+        try:
+            if _wait_for_current_head_codex_trigger_ack(
+                pr_url=pr_url,
+                head_sha=head_sha,
+                root=root,
+                runner=runner,
+                timeout_seconds=ack_timeout_seconds,
+                poll_seconds=ack_poll_seconds,
+            ):
+                return SUCCESS_EXIT_CODE
+        except GitHubDataUnavailable as exc:
+            _print_github_data_unavailable(exc)
+            return EXCEPTION_REQUIRED_EXIT_CODE
+    print(
+        "error: official-codex-review: Codex review trigger was not acknowledged by Codex bot",
+        file=sys.stderr,
     )
+    return EXCEPTION_REQUIRED_EXIT_CODE
 
 
 def _post_codex_review_request(
@@ -2347,7 +2367,7 @@ def _required_check_checkpoint_statuses(
 ) -> tuple[dict[str, str], ...]:
     _ = contract
     if failures:
-        return (
+        checkpoints = [
             {
                 "checkpoint_name": "required_checks",
                 "status": "failed",
@@ -2357,9 +2377,14 @@ def _required_check_checkpoint_statuses(
                     "",
                 ),
             },
-        )
+        ]
+        if review_pending := _review_status_pending_failure(failures):
+            checkpoints.append(
+                _official_codex_review_pending_checkpoint(review_pending)
+            )
+        return tuple(checkpoints)
     if pending:
-        return (
+        checkpoints = [
             {
                 "checkpoint_name": "required_checks",
                 "status": "pending",
@@ -2369,7 +2394,12 @@ def _required_check_checkpoint_statuses(
                     "",
                 ),
             },
-        )
+        ]
+        if review_pending := _review_status_pending_failure(pending):
+            checkpoints.append(
+                _official_codex_review_pending_checkpoint(review_pending)
+            )
+        return tuple(checkpoints)
     return (
         {
             "checkpoint_name": "required_checks",
@@ -2378,6 +2408,29 @@ def _required_check_checkpoint_statuses(
             "evidence_location": "",
         },
     )
+
+
+def _review_status_pending_failure(
+    failures: Sequence[pr_flow_contract.SubmitFailure],
+) -> pr_flow_contract.SubmitFailure | None:
+    for failure in failures:
+        if (
+            failure.check == "PR Flow / review-status"
+            and "pending" in failure.detail.casefold()
+        ):
+            return failure
+    return None
+
+
+def _official_codex_review_pending_checkpoint(
+    failure: pr_flow_contract.SubmitFailure,
+) -> dict[str, str]:
+    return {
+        "checkpoint_name": "official_codex_review",
+        "status": "pending",
+        "summary": "official Codex review has not returned",
+        "evidence_location": failure.source,
+    }
 
 
 def _submit_pr_head_failures(
@@ -3755,7 +3808,8 @@ def _closed_external_finding_for_thread(
             continue
         if _single_line_text(item.get("severity")) not in {"P0", "P1"}:
             continue
-        if _single_line_text(item.get("status")) not in CLOSED_REVIEW_THREAD_STATUSES:
+        disposition = _single_line_text(item.get("disposition"))
+        if disposition not in CLOSED_REVIEW_THREAD_DISPOSITIONS:
             continue
         if not _single_line_text(item.get("evidence")):
             continue
@@ -3765,15 +3819,14 @@ def _closed_external_finding_for_thread(
         finding_diff = _single_line_text(item.get("diff_files_hash"))
         if not finding_diff or finding_diff != expected_diff:
             continue
-        status = _single_line_text(item.get("status"))
-        if status == "fixed":
+        if disposition == "fixed":
             if not _single_line_text(item.get("fix_commit") or item.get("commit_sha")):
                 continue
             if not _single_line_text(
                 item.get("verification_command") or item.get("verification")
             ):
                 continue
-        elif status == "false_positive" and not _false_positive_rationale(item):
+        elif disposition == "false_positive" and not _false_positive_rationale(item):
             continue
         closed = dict(item)
         closed.setdefault(
@@ -3805,13 +3858,13 @@ def _accepted_review_thread_reply(finding: dict[str, Any]) -> str:
 
 
 def _closed_review_thread_reply(finding: dict[str, Any]) -> str:
-    if _single_line_text(finding.get("status")) == "false_positive":
+    if _single_line_text(finding.get("disposition")) == "false_positive":
         return (
             "已按 PR review 规则关闭官方 Codex false positive 阻断项。\n\n"
             f"- finding: `{_single_line_text(finding.get('id'))}`\n"
             f"- thread_id: `{_single_line_text(finding.get('thread_id'))}`\n"
             f"- severity: `{_single_line_text(finding.get('severity'))}`\n"
-            "- status: `false_positive`\n"
+            "- disposition: `false_positive`\n"
             f"- current_head: `{_single_line_text(finding.get('head_sha'))}`\n"
             f"- rationale: {_false_positive_rationale(finding)}\n"
             f"- evidence: {_single_line_text(finding.get('evidence'))}\n"
@@ -3826,7 +3879,7 @@ def _closed_review_thread_reply(finding: dict[str, Any]) -> str:
         f"- finding: `{_single_line_text(finding.get('id'))}`\n"
         f"- thread_id: `{_single_line_text(finding.get('thread_id'))}`\n"
         f"- severity: `{_single_line_text(finding.get('severity'))}`\n"
-        f"- status: `{_single_line_text(finding.get('status'))}`\n"
+        f"- disposition: `{_single_line_text(finding.get('disposition'))}`\n"
         f"- fix_commit: `{fix_commit}`\n"
         f"- current_head: `{_single_line_text(finding.get('head_sha'))}`\n"
         f"- verification: `{verification}`\n"
@@ -4471,11 +4524,26 @@ def _codex_trigger_has_ack_reaction(
         if (
             str(reaction.get("content", "")) == "eyes"
             and login in CODEX_REVIEW_AUTHORS
-            and reaction_time
-            and (not comment_time or reaction_time >= comment_time)
+            and _codex_ack_reaction_is_in_window(
+                reaction_time=reaction_time,
+                comment_time=comment_time,
+            )
         ):
             return True
     return False
+
+
+def _codex_ack_reaction_is_in_window(
+    *,
+    reaction_time: str,
+    comment_time: str,
+) -> bool:
+    reaction_at = _parse_github_timestamp(reaction_time)
+    comment_at = _parse_github_timestamp(comment_time)
+    if reaction_at is None or comment_at is None:
+        return False
+    elapsed_seconds = (reaction_at - comment_at).total_seconds()
+    return 0 <= elapsed_seconds <= CODEX_REVIEW_ACK_TIMEOUT_SECONDS
 
 
 def _codex_trigger_ack_remaining_seconds(

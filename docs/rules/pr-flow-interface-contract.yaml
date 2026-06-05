@@ -157,7 +157,7 @@ submit_status:
       - thread_id
       - head_sha
       - diff_files_hash
-      - status
+      - disposition
       - evidence
     dispositions:
       fixed:
