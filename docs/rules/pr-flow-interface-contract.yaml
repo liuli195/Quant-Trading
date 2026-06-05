@@ -154,7 +154,9 @@ submit_status:
   closure_evidence:
     path: ".local/pr-flow/thread-closure-evidence.json"
     required_fields:
+      - source
       - thread_id
+      - severity
       - head_sha
       - diff_files_hash
       - disposition

@@ -3590,6 +3590,28 @@ def test_contract_defines_codex_thread_automation_rules() -> None:
     assert contract.codex_thread_p2_p3_auto_accept is True
 
 
+def test_contract_closure_evidence_documents_required_fields() -> None:
+    """Closure evidence docs must include every field PR Flow validates."""
+    import yaml
+
+    payload = yaml.safe_load(
+        Path("docs/rules/pr-flow-interface-contract.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    required_fields = payload["submit_status"]["closure_evidence"]["required_fields"]
+
+    assert set(required_fields) >= {
+        "source",
+        "thread_id",
+        "severity",
+        "head_sha",
+        "diff_files_hash",
+        "disposition",
+        "evidence",
+    }
+
+
 def test_contract_defines_workflow_pending_rule() -> None:
     """Workflow must publish pending status before execution."""
     contract = pr_flow_contract.load_contract(Path("."))
