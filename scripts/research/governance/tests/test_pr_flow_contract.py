@@ -37,6 +37,10 @@ def _submit_status(root: Path) -> dict[str, Any]:
     return status
 
 
+def _submit_status_path(root: Path) -> Path:
+    return root / ".local/pr-flow/status.json"
+
+
 def _blocking_signals(status: dict[str, Any]) -> list[dict[str, Any]]:
     signals = status.get("blocking_signals")
     assert isinstance(signals, list)
@@ -293,6 +297,15 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             ["gh", "pr", "view", "88", "--json", "headRefOid"],
         ):
             return pr_flow.CommandResult(0, json.dumps({"headRefOid": "1" * 40}), "")
+        if command == [
+            "gh",
+            "pr",
+            "view",
+            "88",
+            "--json",
+            pr_flow.STATUS_CHECK_ROLLUP_JSON_FIELDS,
+        ]:
+            return pr_flow.CommandResult(1, "", "status rollup unavailable")
         if command[:4] == ["gh", "pr", "edit", "88"]:
             body_file = Path(command[command.index("--body-file") + 1])
             self.body_file_names.append(body_file.name)
@@ -835,55 +848,58 @@ class SubmitStaleRequiredCheckRunner(SubmitCreatePrRunner):
         if command == [
             "gh",
             "pr",
-            "checks",
+            "view",
             "88",
-            "--required",
             "--json",
-            pr_flow.CHECKS_JSON_FIELDS,
+            pr_flow.STATUS_CHECK_ROLLUP_JSON_FIELDS,
         ]:
             return pr_flow.CommandResult(
-                8 if self.current_review_bucket == "pending" else 0,
+                0,
                 json.dumps(
-                    [
-                        {
-                            "name": "PR Flow / review-status",
-                            "workflow": "",
-                            "state": "FAILURE",
-                            "bucket": "fail",
-                            "link": "https://github.com/runs/review-old",
-                            "startedAt": "2026-06-01T00:00:00Z",
-                            "completedAt": "2026-06-01T00:01:00Z",
-                        },
-                        {
-                            "name": "PR Flow / review-status",
-                            "workflow": "",
-                            "state": self.current_review_state,
-                            "bucket": self.current_review_bucket,
-                            "link": "https://github.com/runs/review-current",
-                            "startedAt": "2026-06-01T00:02:00Z",
-                            "completedAt": "2026-06-01T00:03:00Z"
-                            if self.current_review_bucket == "pass"
-                            else "",
-                        },
-                        {
-                            "name": "verify-full",
-                            "workflow": "Research Governance",
-                            "state": self.verify_state,
-                            "bucket": self.verify_bucket,
-                            "link": "https://github.com/runs/verify",
-                            "startedAt": "2026-06-01T00:02:00Z",
-                            "completedAt": "2026-06-01T00:03:00Z",
-                        },
-                        {
-                            "name": "evidence",
-                            "workflow": "PR Flow",
-                            "state": "SUCCESS",
-                            "bucket": "pass",
-                            "link": "https://github.com/runs/evidence",
-                            "startedAt": "2026-06-01T00:02:00Z",
-                            "completedAt": "2026-06-01T00:03:00Z",
-                        },
-                    ]
+                    {
+                        "url": "https://github.com/liuli195/Quant-Trading/pull/88",
+                        "baseRefName": "main",
+                        "isDraft": False,
+                        "headRefOid": "1" * 40,
+                        "statusCheckRollup": [
+                            {
+                                "name": "PR Flow / review-status",
+                                "state": "FAILURE",
+                                "detailsUrl": "https://github.com/runs/review-old",
+                                "startedAt": "2026-06-01T00:00:00Z",
+                                "completedAt": "2026-06-01T00:01:00Z",
+                                "headSha": "0" * 40,
+                            },
+                            {
+                                "name": "PR Flow / review-status",
+                                "state": self.current_review_state,
+                                "detailsUrl": "https://github.com/runs/review-current",
+                                "startedAt": "2026-06-01T00:02:00Z",
+                                "completedAt": "2026-06-01T00:03:00Z"
+                                if self.current_review_bucket == "pass"
+                                else "",
+                                "headSha": "1" * 40,
+                            },
+                            {
+                                "name": "verify-full",
+                                "workflowName": "Research Governance",
+                                "state": self.verify_state,
+                                "detailsUrl": "https://github.com/runs/verify",
+                                "startedAt": "2026-06-01T00:02:00Z",
+                                "completedAt": "2026-06-01T00:03:00Z",
+                                "headSha": "1" * 40,
+                            },
+                            {
+                                "name": "evidence",
+                                "workflowName": "PR Flow",
+                                "state": "SUCCESS",
+                                "detailsUrl": "https://github.com/runs/evidence",
+                                "startedAt": "2026-06-01T00:02:00Z",
+                                "completedAt": "2026-06-01T00:03:00Z",
+                                "headSha": "1" * 40,
+                            },
+                        ],
+                    }
                 ),
                 "",
             )
@@ -2700,6 +2716,12 @@ def test_submit_writes_required_check_failures_in_contract_order(
 
     assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
     status = _submit_status(tmp_path)
+    assert status["snapshot_subject"] == {
+        "repository": "liuli195/Quant-Trading",
+        "pr_number": "88",
+        "head_sha": "1" * 40,
+        "head_branch": "feature/contract",
+    }
     failures = _blocking_as_legacy_failures(status)
     assert [failure["check"] for failure in failures] == [
         "PR Flow / review-status",
@@ -2811,8 +2833,7 @@ def test_submit_reuses_current_diff_fragments_after_pr_body_update(
     payload = _payload_from_managed_body(runner.edited_bodies[-1])
     assert payload["head"] == "1" * 40
     assert payload["diff"] == diff_hash
-    status = _submit_status(tmp_path)
-    assert _blocking_signals(status) == []
+    assert not _submit_status_path(tmp_path).exists()
 
 
 def test_submit_refreshes_same_diff_review_fragment_heads(tmp_path: Path) -> None:

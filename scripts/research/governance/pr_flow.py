@@ -39,7 +39,7 @@ BLOCKING_CODEX_FINDING_PATTERN = re.compile(r"\bP[01]\b|P[01]\s*Badge")
 CODEX_THREAD_SEVERITY_PATTERN = re.compile(r"\bP(?P<level>[0-3])\b")
 ACTIONS_CHECK_URL_PATTERN = re.compile(r"/actions/runs/(?P<run_id>\d+)/job/(?P<job_id>\d+)")
 CHECKS_JSON_FIELDS = "name,state,bucket,link,workflow,startedAt,completedAt"
-STATUS_CHECK_ROLLUP_JSON_FIELDS = "url,baseRefName,isDraft,statusCheckRollup"
+STATUS_CHECK_ROLLUP_JSON_FIELDS = "url,baseRefName,isDraft,headRefOid,statusCheckRollup"
 REQUIRED_STATUS_CHECK_NAMES = {
     "PR Flow / review-status",
     "Research Governance / verify-full",
@@ -123,6 +123,13 @@ class SubmitSyncResult:
     phase: str = "submit_sync_pr"
     retryable: bool = True
     failures: tuple[pr_flow_contract.SubmitFailure, ...] = ()
+
+
+@dataclass(frozen=True)
+class SubmitSnapshotContext:
+    repository: str = ""
+    pr_number: str = ""
+    head_branch: str = ""
 
 
 @dataclass(frozen=True)
@@ -522,22 +529,18 @@ def submit(
     runner = runner or CommandRunner()
     contract = pr_flow_contract.load_contract(root)
     head_sha = _command_stdout(runner.run(["git", "rev-parse", "HEAD"], cwd=root))
-    pr_flow_contract.write_submit_status(root, contract, head=head_sha, failures=[])
+    snapshot_context = _submit_snapshot_context(root, runner, target_pr=pr)
+    _clear_submit_status(root, contract)
     auth_failure = _official_review_skip_authorization_failure(
         authorized_by=official_review_skip_authorized_by,
         evidence=official_review_skip_evidence,
     )
     if auth_failure is not None:
-        pr_flow_contract.write_submit_status(
-            root,
-            contract,
-            head=head_sha,
-            failures=[auth_failure],
-        )
         print(f"error: {auth_failure.check}: {auth_failure.detail}", file=sys.stderr)
         return _fail_submit(
             root, contract, EXCEPTION_REQUIRED_EXIT_CODE,
             head_sha=head_sha,
+            snapshot_context=snapshot_context,
             reason_code="OFFICIAL_REVIEW_SKIP_AUTH_INCOMPLETE",
             phase="submit_preflight",
             retryable=False,
@@ -558,17 +561,12 @@ def submit(
             )
         ]
     if failures:
-        pr_flow_contract.write_submit_status(
-            root,
-            contract,
-            head=head_sha,
-            failures=failures,
-        )
         for failure in failures:
             print(f"error: {failure.check}: {failure.detail}", file=sys.stderr)
         return _fail_submit(
             root, contract, EXCEPTION_REQUIRED_EXIT_CODE,
             head_sha=head_sha,
+            snapshot_context=snapshot_context,
             reason_code="PREFLIGHT_CHECK_FAILED",
             phase="submit_preflight",
             retryable=False,
@@ -576,17 +574,12 @@ def submit(
         )
     failures = _submit_branch_intent_failures(root=root, runner=runner)
     if failures:
-        pr_flow_contract.write_submit_status(
-            root,
-            contract,
-            head=head_sha,
-            failures=failures,
-        )
         for failure in failures:
             print(f"error: {failure.check}: {failure.detail}", file=sys.stderr)
         return _fail_submit(
             root, contract, DISPATCH_REQUIRED_EXIT_CODE,
             head_sha=head_sha,
+            snapshot_context=snapshot_context,
             reason_code="BRANCH_INTENT_COVERAGE_INCOMPLETE",
             phase="submit_branch_intent",
             retryable=True,
@@ -602,12 +595,10 @@ def submit(
                 detail=str(exc),
             )
         ]
-        pr_flow_contract.write_submit_status(
-            root, contract, head=head_sha, failures=diff_failures,
-        )
         return _fail_submit(
             root, contract, EXCEPTION_REQUIRED_EXIT_CODE,
             head_sha=head_sha,
+            snapshot_context=snapshot_context,
             reason_code="DIFF_HASH_UNAVAILABLE",
             phase="submit_diff",
             retryable=True,
@@ -620,18 +611,13 @@ def submit(
         diff_hash=diff_hash,
     )
     if failures:
-        pr_flow_contract.write_submit_status(
-            root,
-            contract,
-            head=head_sha,
-            failures=failures,
-        )
         for failure in failures:
             print(f"error: {failure.check}: {failure.detail}", file=sys.stderr)
         return _fail_submit(
             root, contract,
             REPLY_OR_FIX_REQUIRED_EXIT_CODE if has_blocking else DISPATCH_REQUIRED_EXIT_CODE,
             head_sha=head_sha,
+            snapshot_context=snapshot_context,
             reason_code="FRAGMENT_BLOCKING" if has_blocking else "FRAGMENT_MISSING",
             phase="submit_fragments",
             retryable=not has_blocking,
@@ -644,18 +630,13 @@ def submit(
         diff_hash=diff_hash,
     )
     if failures:
-        pr_flow_contract.write_submit_status(
-            root,
-            contract,
-            head=head_sha,
-            failures=failures,
-        )
         for failure in failures:
             print(f"error: {failure.check}: {failure.detail}", file=sys.stderr)
         return _fail_submit(
             root, contract,
             REPLY_OR_FIX_REQUIRED_EXIT_CODE if has_blocking else DISPATCH_REQUIRED_EXIT_CODE,
             head_sha=head_sha,
+            snapshot_context=snapshot_context,
             reason_code="SECURITY_BLOCKING" if has_blocking else "SECURITY_FRAGMENT_MISSING",
             phase="submit_security",
             retryable=not has_blocking,
@@ -672,15 +653,10 @@ def submit(
             official_review_skip_evidence=official_review_skip_evidence,
         )
         if failures:
-            pr_flow_contract.write_submit_status(
-                root,
-                contract,
-                head=head_sha,
-                failures=failures,
-            )
             return _fail_submit(
                 root, contract, DISPATCH_REQUIRED_EXIT_CODE,
                 head_sha=head_sha,
+                snapshot_context=snapshot_context,
                 reason_code="REVIEW_STATE_INCOMPLETE",
                 phase="submit_review_state",
                 retryable=True,
@@ -710,9 +686,6 @@ def submit(
                 detail=_commit_intent_failure_detail(exc),
             )
         ]
-        pr_flow_contract.write_submit_status(
-            root, contract, head=head_sha, failures=intent_failures,
-        )
         print(
             f"error: issue-intent: {_commit_intent_failure_detail(exc)}",
             file=sys.stderr,
@@ -720,6 +693,7 @@ def submit(
         return _fail_submit(
             root, contract, DISPATCH_REQUIRED_EXIT_CODE,
             head_sha=head_sha,
+            snapshot_context=snapshot_context,
             reason_code="COMMIT_INTENT_INVALID",
             phase="submit_evidence",
             retryable=True,
@@ -733,12 +707,10 @@ def submit(
                 detail=str(exc),
             )
         ]
-        pr_flow_contract.write_submit_status(
-            root, contract, head=head_sha, failures=github_failures,
-        )
         return _fail_submit(
             root, contract, EXCEPTION_REQUIRED_EXIT_CODE,
             head_sha=head_sha,
+            snapshot_context=snapshot_context,
             reason_code="GITHUB_DATA_UNAVAILABLE",
             phase="submit_sync",
             retryable=exc.retryable,
@@ -750,6 +722,7 @@ def submit(
             contract,
             sync_result.exit_code,
             head_sha=head_sha,
+            snapshot_context=snapshot_context,
             reason_code=sync_result.reason_code,
             phase=sync_result.phase,
             retryable=sync_result.retryable,
@@ -757,6 +730,11 @@ def submit(
         )
     pr_number = sync_result.pr_number
     pr_url = sync_result.pr_url
+    snapshot_context = SubmitSnapshotContext(
+        repository=snapshot_context.repository,
+        pr_number=pr or pr_number or snapshot_context.pr_number,
+        head_branch=snapshot_context.head_branch,
+    )
     try:
         head_failures = _submit_pr_head_failures(
             root=root,
@@ -773,15 +751,10 @@ def submit(
             )
         ]
     if head_failures:
-        pr_flow_contract.write_submit_status(
-            root,
-            contract,
-            head=head_sha,
-            failures=head_failures,
-        )
         return _fail_submit(
             root, contract, EXCEPTION_REQUIRED_EXIT_CODE,
             head_sha=head_sha,
+            snapshot_context=snapshot_context,
             reason_code="PR_HEAD_MISMATCH",
             phase="submit_verify",
             retryable=True,
@@ -798,6 +771,7 @@ def submit(
             runner=runner,
             contract=contract,
             head_sha=head_sha,
+            snapshot_context=snapshot_context,
             metadata=merged_metadata,
         )
         if cleanup_code != SUCCESS_EXIT_CODE:
@@ -805,6 +779,7 @@ def submit(
                 root,
                 contract,
                 head_sha=head_sha,
+                snapshot_context=snapshot_context,
                 failure=pr_flow_contract.SubmitFailure(
                     check="pr-lifecycle",
                     source=f"PR #{pr or pr_number}",
@@ -825,6 +800,7 @@ def submit(
                 root,
                 contract,
                 head_sha=head_sha,
+                snapshot_context=snapshot_context,
                 failure=pr_flow_contract.SubmitFailure(
                     check="official-codex-review",
                     source=pr_url,
@@ -864,6 +840,7 @@ def submit(
                     contract,
                     EXCEPTION_REQUIRED_EXIT_CODE,
                     head_sha=head_sha,
+                    snapshot_context=snapshot_context,
                     reason_code="CODEX_THREAD_READ_UNAVAILABLE",
                     phase="submit_review_threads",
                     retryable=exc.retryable,
@@ -896,6 +873,7 @@ def submit(
                         contract,
                         EXCEPTION_REQUIRED_EXIT_CODE,
                         head_sha=head_sha,
+                        snapshot_context=snapshot_context,
                         reason_code="CODEX_THREAD_AUTO_PROCESS_FAILED",
                         phase="submit_review_threads",
                         retryable=True,
@@ -934,6 +912,7 @@ def submit(
                             contract,
                             sync_result.exit_code,
                             head_sha=head_sha,
+                            snapshot_context=snapshot_context,
                             reason_code=sync_result.reason_code,
                             phase=sync_result.phase,
                             retryable=sync_result.retryable,
@@ -970,6 +949,7 @@ def submit(
             contract,
             EXCEPTION_REQUIRED_EXIT_CODE,
             head_sha=head_sha,
+            snapshot_context=snapshot_context,
             reason_code="CODEX_THREAD_INSPECTION_FAILED",
             phase="submit_review_threads",
             retryable=True,
@@ -1007,6 +987,7 @@ def submit(
                 contract,
                 EXCEPTION_REQUIRED_EXIT_CODE,
                 head_sha=head_sha,
+                snapshot_context=snapshot_context,
                 reason_code="CODEX_THREAD_RETRY_UNAVAILABLE",
                 phase="submit_review_threads",
                 retryable=exc.retryable,
@@ -1035,18 +1016,10 @@ def submit(
             )
     if watch_result.failures or review_thread_failures:
         final_failures = (*review_thread_failures, *watch_result.failures)
-        pr_flow_contract.write_submit_status(
-            root,
-            contract,
-            head=head_sha,
-            failures=final_failures,
-            diagnostics=watch_result.diagnostics,
-            checkpoint_statuses=watch_result.checkpoint_statuses,
-            evidence_artifacts=review_thread_artifacts,
-        )
         return _fail_submit(
             root, contract, EXCEPTION_REQUIRED_EXIT_CODE,
             head_sha=head_sha,
+            snapshot_context=snapshot_context,
             reason_code="REQUIRED_CHECKS_FAILED",
             phase="submit_wait_checks",
             retryable=True,
@@ -1061,6 +1034,7 @@ def submit(
         contract=contract,
         pr_number=pr or pr_number,
         head_sha=head_sha,
+        snapshot_context=snapshot_context,
         timeout_seconds=watch_timeout_seconds,
         poll_seconds=watch_poll_seconds,
     )
@@ -1069,6 +1043,7 @@ def submit(
             root,
             contract,
             head_sha=head_sha,
+            snapshot_context=snapshot_context,
             failure=pr_flow_contract.SubmitFailure(
                 check="pr-lifecycle",
                 source=f"PR #{pr or pr_number}",
@@ -1076,8 +1051,7 @@ def submit(
             ),
         )
         return lifecycle_code  # _submit_complete_lifecycle emits its own stop status
-    # Clear submit status on success
-    pr_flow_contract.write_submit_status(root, contract, head=head_sha, failures=[])
+    _clear_submit_status(root, contract)
     return SUCCESS_EXIT_CODE
 
 
@@ -1169,6 +1143,35 @@ def _current_github_repo(root: Path, runner: Runner) -> str:
             details=("nameWithOwner",),
         )
     return repo
+
+
+def _submit_snapshot_context(
+    root: Path,
+    runner: Runner,
+    *,
+    target_pr: str | None = None,
+) -> SubmitSnapshotContext:
+    repository = ""
+    pr_number = _single_line_text(target_pr)
+    head_branch = ""
+    try:
+        repository = _current_github_repo(root, runner)
+    except GitHubDataUnavailable:
+        repository = ""
+    try:
+        head_branch = _current_branch(root, runner)
+    except CommitIntentError:
+        head_branch = ""
+    if not pr_number:
+        try:
+            pr_number = _current_pr_number(root, runner)
+        except GitHubDataUnavailable:
+            pr_number = ""
+    return SubmitSnapshotContext(
+        repository=repository,
+        pr_number=pr_number,
+        head_branch=head_branch,
+    )
 
 
 def _submit_first_stage_fragment_failures(
@@ -2207,35 +2210,45 @@ def _submit_required_check_failures(
     contract: pr_flow_contract.PRFlowContract,
     pr_number: str,
 ) -> RequiredCheckRollup:
-    result = runner.run(
-        [
-            "gh",
-            "pr",
-            "checks",
-            pr_number,
-            "--required",
-            "--json",
-            CHECKS_JSON_FIELDS,
-        ],
-        cwd=root,
-    )
-    latest, diagnostics = _latest_required_check_results_with_diagnostics(
-        result.stdout,
+    rollup_latest, rollup_diagnostics = _current_head_required_check_results(
+        root=root,
+        runner=runner,
         contract=contract,
+        pr_number=pr_number,
     )
-    if (
-        result.returncode != 0
-        and latest is None
-        and "no required checks reported"
-        not in f"{result.stdout}\n{result.stderr}".casefold()
-    ):
-        failure = pr_flow_contract.SubmitFailure(
-            check="required-checks",
-            source="",
-            detail="required checks unavailable",
+    if rollup_latest is not None:
+        latest = rollup_latest
+        diagnostics = rollup_diagnostics
+    else:
+        result = runner.run(
+            [
+                "gh",
+                "pr",
+                "checks",
+                pr_number,
+                "--required",
+                "--json",
+                CHECKS_JSON_FIELDS,
+            ],
+            cwd=root,
         )
-        return RequiredCheckRollup(failures=(failure,))
-    latest = latest or []
+        fallback_latest, diagnostics = _latest_required_check_results_with_diagnostics(
+            result.stdout,
+            contract=contract,
+        )
+        if (
+            result.returncode != 0
+            and fallback_latest is None
+            and "no required checks reported"
+            not in f"{result.stdout}\n{result.stderr}".casefold()
+        ):
+            failure = pr_flow_contract.SubmitFailure(
+                check="required-checks",
+                source="",
+                detail="required checks unavailable",
+            )
+            return RequiredCheckRollup(failures=(failure,))
+        latest = fallback_latest or []
     by_name = {_json_check_display_name(check): check for check in latest}
     failures: list[pr_flow_contract.SubmitFailure] = []
     pending: list[pr_flow_contract.SubmitFailure] = []
@@ -2363,6 +2376,7 @@ def _submit_complete_lifecycle(
     contract: pr_flow_contract.PRFlowContract,
     pr_number: str,
     head_sha: str,
+    snapshot_context: SubmitSnapshotContext,
     timeout_seconds: float,
     poll_seconds: float,
 ) -> int:
@@ -2372,6 +2386,7 @@ def _submit_complete_lifecycle(
             root=root,
             contract=contract,
             head_sha=head_sha,
+            snapshot_context=snapshot_context,
             command_label="gh pr ready",
             phase="submit_ready",
             result=ready,
@@ -2394,6 +2409,7 @@ def _submit_complete_lifecycle(
             root=root,
             contract=contract,
             head_sha=head_sha,
+            snapshot_context=snapshot_context,
             command_label="gh pr merge --auto",
             phase="submit_merge",
             result=merge,
@@ -2418,6 +2434,7 @@ def _submit_complete_lifecycle(
             contract,
             EXCEPTION_REQUIRED_EXIT_CODE,
             head_sha=head_sha,
+            snapshot_context=snapshot_context,
             reason_code="PR_MERGE_TIMEOUT",
             phase="submit_merge",
             retryable=True,
@@ -2428,6 +2445,7 @@ def _submit_complete_lifecycle(
         runner=runner,
         contract=contract,
         head_sha=head_sha,
+        snapshot_context=snapshot_context,
         metadata=metadata,
     )
 
@@ -2437,6 +2455,7 @@ def _submit_lifecycle_command_failure(
     root: Path,
     contract: pr_flow_contract.PRFlowContract,
     head_sha: str,
+    snapshot_context: SubmitSnapshotContext,
     command_label: str,
     phase: str,
     result: CommandResult,
@@ -2447,6 +2466,7 @@ def _submit_lifecycle_command_failure(
         contract,
         EXCEPTION_REQUIRED_EXIT_CODE,
         head_sha=head_sha,
+        snapshot_context=snapshot_context,
         reason_code="PR_LIFECYCLE_COMMAND_FAILED",
         phase=phase,
         retryable=True,
@@ -2535,6 +2555,7 @@ def _submit_cleanup_merged_pr(
     runner: Runner,
     contract: pr_flow_contract.PRFlowContract | None = None,
     head_sha: str = "",
+    snapshot_context: SubmitSnapshotContext | None = None,
     metadata: dict[str, Any],
 ) -> int:
     pr_ref = _single_line_text(metadata.get("number")) or "unknown"
@@ -2553,6 +2574,7 @@ def _submit_cleanup_merged_pr(
             root,
             contract,
             head_sha=head_sha,
+            snapshot_context=snapshot_context,
             failure=pr_flow_contract.SubmitFailure(
                 check="pr-lifecycle",
                 source=f"PR #{pr_ref}",
@@ -4385,6 +4407,39 @@ def _latest_required_check_results_with_diagnostics(
     return [latest[key][1] for key in order], tuple(diagnostics)
 
 
+def _current_head_required_check_results(
+    *,
+    root: Path,
+    runner: Runner,
+    contract: pr_flow_contract.PRFlowContract,
+    pr_number: str,
+) -> tuple[list[dict[str, Any]] | None, tuple[pr_flow_contract.SubmitFailure, ...]]:
+    result = _run_github_read_command(
+        root,
+        runner,
+        [
+            "gh",
+            "pr",
+            "view",
+            pr_number,
+            "--json",
+            STATUS_CHECK_ROLLUP_JSON_FIELDS,
+        ],
+    )
+    if result.returncode != 0:
+        return None, ()
+    payload = _json_from_result(result)
+    if not payload:
+        return None, ()
+    latest, diagnostics = _status_check_rollup_required_check_results(
+        root=root,
+        runner=runner,
+        contract=contract,
+        payload=payload,
+    )
+    return latest, diagnostics
+
+
 def _fallback_required_check_results(
     root: Path,
     runner: Runner,
@@ -4461,6 +4516,89 @@ def _fallback_required_check_results(
     return [*matched, *missing_checks]
 
 
+def _status_check_rollup_required_check_results(
+    *,
+    root: Path,
+    runner: Runner,
+    contract: pr_flow_contract.PRFlowContract,
+    payload: dict[str, Any],
+) -> tuple[list[dict[str, Any]] | None, tuple[pr_flow_contract.SubmitFailure, ...]]:
+    if bool(payload.get("isDraft")):
+        return [
+            {
+                "name": "PR is draft",
+                "workflow": "Pull Request",
+                "state": "PENDING",
+                "bucket": "pending",
+            }
+        ], ()
+    expected_head = _single_line_text(payload.get("headRefOid"))
+    required_names: set[str] = set(contract.required_checks)
+    pr_info = _github_pr_info_from_url(_single_line_text(payload.get("url")))
+    if pr_info is not None:
+        repo, _ = pr_info
+        required_names.update(
+            _required_status_check_names(
+                root=root,
+                runner=runner,
+                repo=repo,
+                branch=_single_line_text(payload.get("baseRefName")),
+            )
+        )
+    checks: list[dict[str, Any]] = []
+    diagnostics: list[pr_flow_contract.SubmitFailure] = []
+    for item in _status_check_rollup_items(payload.get("statusCheckRollup")):
+        check = _check_from_status_rollup_item(item)
+        if check is None:
+            continue
+        display_name = _json_check_display_name(check)
+        raw_name = _single_line_text(check.get("name"))
+        if display_name not in required_names and raw_name not in required_names:
+            continue
+        check_head = _check_head_sha(check)
+        if expected_head and check_head and check_head != expected_head:
+            if _json_check_failed(check):
+                diagnostics.append(
+                    pr_flow_contract.SubmitFailure(
+                        check=display_name,
+                        source=_single_line_text(check.get("link")),
+                        detail=(
+                            "stale required check ignored: "
+                            f"{_json_check_failure_detail(check)}"
+                        ),
+                    )
+                )
+            continue
+        checks.append(check)
+    latest, stale_diagnostics = _latest_required_check_results_with_diagnostics(
+        json.dumps(checks),
+        contract=contract,
+    )
+    diagnostics.extend(stale_diagnostics)
+    if latest is None:
+        return None, tuple(diagnostics)
+    matched_names = {
+        name
+        for check in latest
+        for name in (
+            _json_check_display_name(check),
+            _single_line_text(check.get("name")),
+        )
+        if name
+    }
+    missing = sorted(name for name in contract.required_checks if name not in matched_names)
+    missing_checks = [
+        {
+            "name": name,
+            "state": "PENDING",
+            "bucket": "pending",
+            "workflow": "",
+        }
+        for name in missing
+    ]
+    return [*latest, *missing_checks], tuple(diagnostics)
+
+
 def _status_check_rollup_items(value: Any) -> list[dict[str, Any]]:
     if isinstance(value, list):
         return [item for item in value if isinstance(item, dict)]
@@ -4504,7 +4642,36 @@ def _check_from_status_rollup_item(item: dict[str, Any]) -> dict[str, Any] | Non
         "link": _single_line_text(item.get("detailsUrl") or item.get("targetUrl")),
         "startedAt": _single_line_text(item.get("startedAt")),
         "completedAt": _single_line_text(item.get("completedAt")),
+        "headSha": _status_check_item_head_sha(item),
     }
+
+
+def _status_check_item_head_sha(item: dict[str, Any]) -> str:
+    direct = _single_line_text(
+        item.get("headSha")
+        or item.get("head_sha")
+        or item.get("commitOid")
+        or item.get("commit_id")
+    )
+    if direct:
+        return direct
+    commit = item.get("commit")
+    if isinstance(commit, dict):
+        value = _single_line_text(commit.get("oid") or commit.get("sha"))
+        if value:
+            return value
+    suite = item.get("checkSuite")
+    if isinstance(suite, dict):
+        value = _single_line_text(
+            suite.get("headSha") or suite.get("head_sha") or suite.get("commitOid")
+        )
+        if value:
+            return value
+    return ""
+
+
+def _check_head_sha(check: dict[str, Any]) -> str:
+    return _single_line_text(check.get("headSha") or check.get("head_sha"))
 
 
 def _required_status_check_names(
@@ -4736,6 +4903,7 @@ def _fail_submit(
     exit_code: int,
     *,
     head_sha: str,
+    snapshot_context: SubmitSnapshotContext | None = None,
     reason_code: str,
     phase: str,
     retryable: bool = False,
@@ -4745,11 +4913,15 @@ def _fail_submit(
     evidence_artifacts: Sequence[dict[str, str]] = (),
 ) -> int:
     """Write submit status and emit structured stop status, then return exit code."""
+    context = snapshot_context or SubmitSnapshotContext()
     if failures:
         pr_flow_contract.write_submit_status(
             root,
             contract,
             head=head_sha,
+            repository=context.repository,
+            pr_number=context.pr_number,
+            head_branch=context.head_branch,
             failures=failures,
             stop_state=_submit_state_for_exit_code(exit_code),
             reason_code=reason_code,
@@ -4774,6 +4946,7 @@ def _ensure_submit_status_failure(
     contract: pr_flow_contract.PRFlowContract,
     *,
     head_sha: str,
+    snapshot_context: SubmitSnapshotContext | None = None,
     failure: pr_flow_contract.SubmitFailure,
 ) -> None:
     status = _read_json_object(Path(root).resolve() / contract.submit_status_path) or {}
@@ -4783,16 +4956,31 @@ def _ensure_submit_status_failure(
         return
     if isinstance(blocking_signals, list) and blocking_signals:
         return
+    context = snapshot_context or SubmitSnapshotContext()
     pr_flow_contract.write_submit_status(
         root,
         contract,
         head=head_sha,
+        repository=context.repository,
+        pr_number=context.pr_number,
+        head_branch=context.head_branch,
         failures=[failure],
         stop_state="EXCEPTION_REQUIRED",
         reason_code="SUBMIT_STATUS_FAILURE",
         phase="submit_status",
         retryable=True,
     )
+
+
+def _clear_submit_status(
+    root: str | Path,
+    contract: pr_flow_contract.PRFlowContract,
+) -> None:
+    path = Path(root).resolve() / contract.submit_status_path
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
 
 
 def _submit_state_for_exit_code(exit_code: int) -> str:
