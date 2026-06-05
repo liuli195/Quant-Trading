@@ -18,6 +18,7 @@
 - 官方 Codex Code Review 是否等待只看 PR Evidence `official_review.decision`：`required` 等待官方 review，`skip_risk_low` 跳过低风险官方 review，`skip_user_authorized` 表示用户显式授权跳过官方 review。
 - `skip_user_authorized` 只记录 `authorized_by + evidence`，不记录 `reason`；该授权不能绕过 unresolved thread、P0/P1 或 GitHub required checks 的其它阻断。
 - 官方 Codex Review 触发评论必须包含 `@codex review`、当前 PR、当前 head SHA、Review Scope（可为空）和审查重点；禁止模板外文案，禁止写“不要执行命令”“只做静态 diff review”等切断仓库、diff 或命令上下文的指令。
+- 触发评论必须在 3 分钟内出现 Codex bot 的 `eyes` reaction 才算远端已接收；超过 3 分钟无 `eyes` 时，`pr-submit` 必须重新触发一次 `@codex review`。Codex bot 的 `+1` reaction 只用于完成确认，不能替代 `eyes` 接收确认。
 - 需要官方 Codex Review 时，Review Scope 聚焦 P0/P1 合并阻断风险；无法生成明确 scope 的大型 PR 应拆分，否则按全量高风险 PR 处理。
 - 官方 Codex P2/P3 是非阻断 retained finding；`pr_flow` 只能写入 PR Evidence `retained`，不得扩展 PR body 机器字段。
 - 自动写入不等于跳过 review；需要官方 Codex Review 时，证据必须来自当前 PR、当前 head、当前 trigger 之后的 Codex 结果。

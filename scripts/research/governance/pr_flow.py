@@ -13,6 +13,7 @@ import sys
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -46,6 +47,8 @@ REQUIRED_STATUS_CHECK_NAMES = {
 }
 CODEX_REVIEW_WAIT_TIMEOUT_SECONDS = 600.0
 CODEX_REVIEW_WAIT_INTERVAL_SECONDS = 30.0
+CODEX_REVIEW_ACK_TIMEOUT_SECONDS = 3 * 60.0
+CODEX_REVIEW_ACK_POLL_SECONDS = 15.0
 AUTO_ACCEPTED_REVIEW_THREAD_SEVERITIES = {"P2", "P3"}
 CLOSED_REVIEW_THREAD_STATUSES = {"fixed", "false_positive"}
 GITHUB_READ_MAX_ATTEMPTS = 3
@@ -521,6 +524,8 @@ def submit(
     runner: Runner | None = None,
     watch_timeout_seconds: float = CODEX_REVIEW_WAIT_TIMEOUT_SECONDS,
     watch_poll_seconds: float = CODEX_REVIEW_WAIT_INTERVAL_SECONDS,
+    codex_review_ack_timeout_seconds: float = CODEX_REVIEW_ACK_TIMEOUT_SECONDS,
+    codex_review_ack_poll_seconds: float = CODEX_REVIEW_ACK_POLL_SECONDS,
     official_review_skip_authorized_by: str | None = None,
     official_review_skip_evidence: str | None = None,
 ) -> int:
@@ -793,6 +798,8 @@ def submit(
             pr_number=pr or pr_number,
             pr_url=pr_url,
             head_sha=head_sha,
+            ack_timeout_seconds=codex_review_ack_timeout_seconds,
+            ack_poll_seconds=codex_review_ack_poll_seconds,
         )
         if request_code != SUCCESS_EXIT_CODE:
             _ensure_submit_status_failure(
@@ -1938,18 +1945,81 @@ def _submit_request_codex_review(
     pr_number: str,
     pr_url: str,
     head_sha: str,
+    ack_timeout_seconds: float = CODEX_REVIEW_ACK_TIMEOUT_SECONDS,
+    ack_poll_seconds: float = CODEX_REVIEW_ACK_POLL_SECONDS,
 ) -> int:
     try:
-        if _current_head_codex_trigger_exists(
+        trigger = _current_head_codex_trigger_comment(
             pr_url=pr_url,
             head_sha=head_sha,
             root=root,
             runner=runner,
+        )
+        if trigger is not None and _codex_trigger_is_acknowledged(
+            pr_url=pr_url,
+            trigger=trigger,
+            root=root,
+            runner=runner,
+        ):
+            return SUCCESS_EXIT_CODE
+        if trigger is not None:
+            remaining_seconds = _codex_trigger_ack_remaining_seconds(
+                trigger,
+                timeout_seconds=ack_timeout_seconds,
+            )
+            if remaining_seconds > 0 and _wait_for_codex_trigger_ack(
+                pr_url=pr_url,
+                trigger=trigger,
+                root=root,
+                runner=runner,
+                timeout_seconds=remaining_seconds,
+                poll_seconds=ack_poll_seconds,
+            ):
+                return SUCCESS_EXIT_CODE
+    except GitHubDataUnavailable as exc:
+        _print_github_data_unavailable(exc)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    post_code = _post_codex_review_request(
+        root=root,
+        runner=runner,
+        pr_number=pr_number,
+        pr_url=pr_url,
+        head_sha=head_sha,
+    )
+    if post_code != SUCCESS_EXIT_CODE:
+        return post_code
+    if trigger is not None:
+        return SUCCESS_EXIT_CODE
+    try:
+        if _wait_for_current_head_codex_trigger_ack(
+            pr_url=pr_url,
+            head_sha=head_sha,
+            root=root,
+            runner=runner,
+            timeout_seconds=ack_timeout_seconds,
+            poll_seconds=ack_poll_seconds,
         ):
             return SUCCESS_EXIT_CODE
     except GitHubDataUnavailable as exc:
         _print_github_data_unavailable(exc)
         return EXCEPTION_REQUIRED_EXIT_CODE
+    return _post_codex_review_request(
+        root=root,
+        runner=runner,
+        pr_number=pr_number,
+        pr_url=pr_url,
+        head_sha=head_sha,
+    )
+
+
+def _post_codex_review_request(
+    *,
+    root: Path,
+    runner: Runner,
+    pr_number: str,
+    pr_url: str,
+    head_sha: str,
+) -> int:
     local = root / ".local" / "pr-flow"
     local.mkdir(parents=True, exist_ok=True)
     body = render_codex_review_request(
@@ -3321,21 +3391,37 @@ def _current_head_codex_trigger_exists(
     root: Path,
     runner: Runner,
 ) -> bool:
+    return (
+        _current_head_codex_trigger_comment(
+            pr_url=pr_url,
+            head_sha=head_sha,
+            root=root,
+            runner=runner,
+        )
+        is not None
+    )
+
+
+def _current_head_codex_trigger_comment(
+    *,
+    pr_url: str,
+    head_sha: str,
+    root: Path,
+    runner: Runner,
+) -> dict[str, Any] | None:
     pr_info = _github_pr_info_from_url(pr_url)
     if pr_info is None:
-        return False
+        return None
     repo, pr_number = pr_info
     issue_comments = _gh_api_list(
         root,
         runner,
         f"repos/{repo}/issues/{pr_number}/comments?per_page=100",
     )
-    return bool(
-        _latest_codex_trigger_time(
-            issue_comments,
-            pr_url=pr_url,
-            head_sha=head_sha,
-        )
+    return _latest_codex_trigger_comment(
+        issue_comments,
+        pr_url=pr_url,
+        head_sha=head_sha,
     )
 
 
@@ -4215,6 +4301,22 @@ def _latest_codex_trigger_time(
     return max(times) if times else ""
 
 
+def _latest_codex_trigger_comment(
+    comments: Sequence[dict[str, Any]],
+    *,
+    pr_url: str,
+    head_sha: str,
+) -> dict[str, Any] | None:
+    triggers = [
+        comment
+        for comment in comments
+        if _is_codex_trigger_comment(comment, pr_url=pr_url, head_sha=head_sha)
+    ]
+    if not triggers:
+        return None
+    return max(triggers, key=_comment_time)
+
+
 def _latest_codex_completion_comment_time(
     comments: Sequence[dict[str, Any]],
     *,
@@ -4276,6 +4378,134 @@ def _codex_trigger_has_completion_reaction(
         ):
             return True
     return False
+
+
+def _codex_trigger_is_acknowledged(
+    *,
+    pr_url: str,
+    trigger: dict[str, Any],
+    root: Path,
+    runner: Runner,
+) -> bool:
+    pr_info = _github_pr_info_from_url(pr_url)
+    if pr_info is None:
+        return False
+    repo, _pr_number = pr_info
+    comment_id = _single_line_text(trigger.get("id"))
+    if not comment_id:
+        return False
+    return _codex_trigger_has_ack_reaction(
+        repo=repo,
+        comment_id=comment_id,
+        comment_time=_comment_time(trigger),
+        root=root,
+        runner=runner,
+    )
+
+
+def _wait_for_current_head_codex_trigger_ack(
+    *,
+    pr_url: str,
+    head_sha: str,
+    root: Path,
+    runner: Runner,
+    timeout_seconds: float,
+    poll_seconds: float,
+) -> bool:
+    deadline = time.monotonic() + max(timeout_seconds, 0)
+    while True:
+        trigger = _current_head_codex_trigger_comment(
+            pr_url=pr_url,
+            head_sha=head_sha,
+            root=root,
+            runner=runner,
+        )
+        if trigger is not None and _codex_trigger_is_acknowledged(
+            pr_url=pr_url,
+            trigger=trigger,
+            root=root,
+            runner=runner,
+        ):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(min(max(poll_seconds, 0), max(deadline - time.monotonic(), 0)))
+
+
+def _wait_for_codex_trigger_ack(
+    *,
+    pr_url: str,
+    trigger: dict[str, Any],
+    root: Path,
+    runner: Runner,
+    timeout_seconds: float,
+    poll_seconds: float,
+) -> bool:
+    deadline = time.monotonic() + max(timeout_seconds, 0)
+    while True:
+        if _codex_trigger_is_acknowledged(
+            pr_url=pr_url,
+            trigger=trigger,
+            root=root,
+            runner=runner,
+        ):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(min(max(poll_seconds, 0), max(deadline - time.monotonic(), 0)))
+
+
+def _codex_trigger_has_ack_reaction(
+    *,
+    repo: str,
+    comment_id: str,
+    comment_time: str,
+    root: Path,
+    runner: Runner,
+) -> bool:
+    reactions = _gh_api_list(root, runner, f"repos/{repo}/issues/comments/{comment_id}/reactions?per_page=100")
+    for reaction in reactions:
+        user = reaction.get("user")
+        login = str(user.get("login", "")) if isinstance(user, dict) else ""
+        reaction_time = _single_line_text(reaction.get("created_at"))
+        if (
+            str(reaction.get("content", "")) == "eyes"
+            and login in CODEX_REVIEW_AUTHORS
+            and reaction_time
+            and (not comment_time or reaction_time >= comment_time)
+        ):
+            return True
+    return False
+
+
+def _codex_trigger_ack_remaining_seconds(
+    trigger: dict[str, Any],
+    *,
+    timeout_seconds: float,
+) -> float:
+    timeout = max(timeout_seconds, 0)
+    if timeout <= 0:
+        return 0.0
+    comment_time = _parse_github_timestamp(_comment_time(trigger))
+    if comment_time is None:
+        return timeout
+    elapsed_seconds = max(time.time() - comment_time.timestamp(), 0)
+    return max(timeout - elapsed_seconds, 0.0)
+
+
+def _parse_github_timestamp(value: str) -> datetime | None:
+    text = _single_line_text(value)
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _comment_time(comment: dict[str, Any]) -> str:

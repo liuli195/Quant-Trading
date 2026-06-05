@@ -30,6 +30,10 @@ def test_submit_default_wait_timeout_is_ten_minutes() -> None:
     assert pr_flow.CODEX_REVIEW_WAIT_TIMEOUT_SECONDS == 10 * 60
 
 
+def test_submit_default_codex_review_ack_timeout_is_three_minutes() -> None:
+    assert pr_flow.CODEX_REVIEW_ACK_TIMEOUT_SECONDS == 3 * 60
+
+
 def _submit_status(root: Path) -> dict[str, Any]:
     status = json.loads(
         (root / ".local/pr-flow/status.json").read_text(encoding="utf-8")
@@ -208,6 +212,8 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
         merge_stderr: str = "",
         changed_files_output: str = "docs/guides/example.md\n",
         main_worktree_path: str | None = None,
+        comment_reactions_by_id: dict[str, list[dict[str, object]]] | None = None,
+        ack_generated_comments: bool = True,
     ) -> None:
         super().__init__(valid_contract=True)
         self.diff_text = diff_text
@@ -222,6 +228,8 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
         self.merge_stderr = merge_stderr
         self.changed_files_output = changed_files_output
         self.main_worktree_path = main_worktree_path
+        self.comment_reactions_by_id = comment_reactions_by_id or {}
+        self.ack_generated_comments = ack_generated_comments
         self.auto_merge_requested = existing_state.upper() == "MERGED"
         self.created_bodies: list[str] = []
         self.edited_bodies: list[str] = []
@@ -409,7 +417,27 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             )
         if command[:3] == ["gh", "pr", "comment"]:
             body_file = Path(command[command.index("--body-file") + 1])
-            self.comments.append(body_file.read_text(encoding="utf-8"))
+            body = body_file.read_text(encoding="utf-8")
+            self.comments.append(body)
+            comment_id = str(1000 + len(self.comments))
+            self.preexisting_comments.append(
+                {
+                    "id": int(comment_id),
+                    "body": body,
+                    "created_at": "2026-06-01T10:05:00Z",
+                    "updated_at": "2026-06-01T10:05:00Z",
+                    "user": {"login": "liuli195"},
+                }
+            )
+            if self.ack_generated_comments:
+                self.comment_reactions_by_id.setdefault(
+                    comment_id,
+                    [
+                        _codex_eyes_reaction(
+                            created_at="2026-06-01T10:05:01Z",
+                        )
+                    ],
+                )
             return pr_flow.CommandResult(0, "", "")
         if command[:3] == ["gh", "api", "graphql"]:
             return pr_flow.CommandResult(
@@ -441,6 +469,19 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             "repos/liuli195/Quant-Trading/issues/88/comments?per_page=100",
         ]:
             return pr_flow.CommandResult(0, json.dumps([self.preexisting_comments]), "")
+        if (
+            command[:4] == ["gh", "api", "--paginate", "--slurp"]
+            and command[4].startswith(
+                "repos/liuli195/Quant-Trading/issues/comments/"
+            )
+            and command[4].endswith("/reactions?per_page=100")
+        ):
+            comment_id = command[4].split("/issues/comments/", 1)[1].split("/", 1)[0]
+            return pr_flow.CommandResult(
+                0,
+                json.dumps([self.comment_reactions_by_id.get(comment_id, [])]),
+                "",
+            )
         if command == ["gh", "pr", "ready", "88"]:
             self.lifecycle_calls.append(command)
             return pr_flow.CommandResult(0, "", "")
@@ -1832,6 +1873,92 @@ def test_submit_creates_draft_pr_with_contract_evidence_json(tmp_path: Path) -> 
     assert "@codex review" in runner.comments[-1]
     assert "https://github.com/liuli195/Quant-Trading/pull/88" in runner.comments[-1]
     assert "1" * 40 in runner.comments[-1]
+
+
+def test_submit_reissues_current_head_codex_request_without_eyes_ack(
+    tmp_path: Path,
+) -> None:
+    diff_text = (
+        "diff --git a/scripts/research/governance/pr_flow.py "
+        "b/scripts/research/governance/pr_flow.py\n+hello\n"
+    )
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        existing_pr=True,
+        changed_files_output="scripts/research/governance/pr_flow.py\n",
+        preexisting_comments=[_current_head_trigger_comment()],
+        comment_reactions_by_id={"1": []},
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert len(runner.comments) == 1
+    assert "@codex review" in runner.comments[-1]
+    assert "1" * 40 in runner.comments[-1]
+
+
+def test_submit_reissues_new_codex_request_when_eyes_ack_times_out(
+    tmp_path: Path,
+) -> None:
+    diff_text = (
+        "diff --git a/scripts/research/governance/pr_flow.py "
+        "b/scripts/research/governance/pr_flow.py\n+hello\n"
+    )
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        changed_files_output="scripts/research/governance/pr_flow.py\n",
+        ack_generated_comments=False,
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(
+        repo_root=tmp_path,
+        title="PR automation",
+        runner=runner,
+        codex_review_ack_timeout_seconds=0,
+    )
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert len(runner.comments) == 2
+    assert all("@codex review" in comment for comment in runner.comments)
+
+
+def test_submit_reuses_current_head_codex_request_with_eyes_ack(
+    tmp_path: Path,
+) -> None:
+    diff_text = (
+        "diff --git a/scripts/research/governance/pr_flow.py "
+        "b/scripts/research/governance/pr_flow.py\n+hello\n"
+    )
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        existing_pr=True,
+        changed_files_output="scripts/research/governance/pr_flow.py\n",
+        preexisting_comments=[_current_head_trigger_comment()],
+        comment_reactions_by_id={
+            "1": [_codex_eyes_reaction(created_at="2026-06-01T10:01:00Z")]
+        },
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert runner.comments == []
 
 
 def test_submit_skips_official_codex_request_for_low_risk_fragments(
@@ -3678,6 +3805,14 @@ def _current_head_trigger_comment() -> dict[str, object]:
         "created_at": "2026-06-01T10:00:00Z",
         "updated_at": "2026-06-01T10:00:00Z",
         "user": {"login": "liuli195"},
+    }
+
+
+def _codex_eyes_reaction(*, created_at: str) -> dict[str, object]:
+    return {
+        "content": "eyes",
+        "created_at": created_at,
+        "user": {"login": "chatgpt-codex-connector[bot]"},
     }
 
 

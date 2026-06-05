@@ -34,6 +34,7 @@ PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pa
 - P2/P3 accepted findings 不影响 `risk_level`，也不阻断合并；所有来源的 P2/P3 统一写入 PR Evidence `retained`。
 - 官方 Codex P2/P3 review thread 在 severity 可靠识别时，由 `pr_flow` 用固定模板自动接受、resolve、重新读取确认 resolved，并写入 PR Evidence `retained`。官方 Codex P0/P1 在缺少结构化 `fixed` / `false_positive` evidence 时阻断；有绑定当前 head/diff/thread ID 的证据时可由 `pr_flow` 自动回复、resolve 并重新读取确认 resolved。无 severity thread 和人工 reviewer thread 不自动 resolve。
 - 官方 Codex Review 状态由 `PR Flow / review-status` 复核；官方 Codex 未返回时 pending，不写失败。
+- 官方 Codex trigger comment 必须用 Codex bot 的 `eyes` reaction 作为远端接收确认；当前 head trigger 超过 3 分钟仍无 `eyes` 时，`pr-submit` 重新发送一次 `@codex review`。`+1` reaction 仍只表示 completion，不表示接收。
 - GitHub `issue_comment` 事件由默认分支 `codex-review-router.yml` 处理。router 只识别 review 相关 PR 评论、写 pending、按 PR head branch dispatch `codex-review-monitor.yml` worker；router dispatch 成功不写 success。最终 `PR Flow / review-status` verdict 由 PR branch worker 使用当前 PR 分支 workflow 和治理代码计算。
 - worker 的 `workflow_dispatch` 是正式入口，必须接收 `pr_number`、`expected_head_sha`、`trigger_event`、`trigger_run_id`，并覆盖 pending 和 failure finalizer。`expected_head_sha` 不匹配时写 `PR head changed before monitor completed` error 并停止，避免旧 run 覆盖新 head。
 - `pr-submit` 不负责 workflow 自举补救，不维护 PR Flow changed-files 白名单，不直接覆盖 GitHub status，不新增公开 `diagnose`、`handoff` 或 `refresh` 入口。
