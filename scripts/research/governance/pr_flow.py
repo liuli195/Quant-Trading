@@ -2695,12 +2695,16 @@ def _submit_cleanup_merged_pr(
     metadata: dict[str, Any],
 ) -> int:
     pr_ref = _single_line_text(metadata.get("number")) or "unknown"
-    code = _cleanup_merged_pr_metadata(
+    cleanup_result = _cleanup_merged_pr_metadata(
         root=root,
         runner=runner,
         metadata=metadata,
         pr_ref=pr_ref,
     )
+    if isinstance(cleanup_result, tuple):
+        code, health_root = cleanup_result
+    else:
+        code, health_root = cleanup_result, root
     if (
         code != SUCCESS_EXIT_CODE
         and contract is not None
@@ -2721,6 +2725,7 @@ def _submit_cleanup_merged_pr(
         return code
     return _submit_cleanup_worktree_health(
         root=root,
+        health_root=health_root,
         runner=runner,
         contract=contract,
         head_sha=head_sha,
@@ -2734,7 +2739,7 @@ def _cleanup_merged_pr_metadata(
     runner: Runner,
     metadata: dict[str, Any],
     pr_ref: str,
-) -> int:
+) -> int | tuple[int, Path]:
     state = _single_line_text(metadata.get("state")).upper()
     merged_at = _single_line_text(metadata.get("mergedAt"))
     head_branch = _single_line_text(metadata.get("headRefName"))
@@ -2818,18 +2823,22 @@ def _cleanup_merged_pr_metadata(
         f"cleanup: final base sync verified: "
         f"{base_branch}...origin/{base_branch} = 0 0"
     )
-    return SUCCESS_EXIT_CODE
+    return SUCCESS_EXIT_CODE, sync_root
 
 
 def _submit_cleanup_worktree_health(
     *,
     root: Path,
+    health_root: Path,
     runner: Runner,
     contract: pr_flow_contract.PRFlowContract | None,
     head_sha: str,
     snapshot_context: SubmitSnapshotContext | None,
 ) -> int:
-    status = runner.run(["git", "status", "--porcelain=v2", "--branch"], cwd=root)
+    status = runner.run(
+        ["git", "status", "--porcelain=v2", "--branch"],
+        cwd=health_root,
+    )
     if status.returncode != 0:
         _print_command_failure("git status --porcelain=v2 --branch", status)
         if contract is None or not _single_line_text(head_sha):

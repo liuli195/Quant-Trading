@@ -3416,6 +3416,14 @@ def test_submit_cleanup_syncs_main_in_existing_main_worktree(
         ["git", "rev-list", "--left-right", "--count", "main...origin/main"],
         main_worktree,
     ) in runner.cwd_calls
+    assert (
+        ["git", "status", "--porcelain=v2", "--branch"],
+        main_worktree,
+    ) in runner.cwd_calls
+    assert (
+        ["git", "status", "--porcelain=v2", "--branch"],
+        tmp_path,
+    ) not in runner.cwd_calls
 
 
 def test_submit_cleanup_stops_when_worktree_is_dirty_after_cleanup(
