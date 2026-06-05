@@ -3721,6 +3721,37 @@ def test_codex_review_monitor_passes_on_codex_no_major_issues_comment() -> None:
     )
 
 
+def test_codex_review_monitor_blocks_context_invalid_no_major_issues_comment() -> (
+    None
+):
+    head_sha = "0" * 40
+    codex_comment = _codex_no_major_issues_comment()
+    codex_comment["body"] = (
+        "Codex Review: Didn't find any major issues.\n\n"
+        "I could not access the PR diff."
+    )
+
+    report = build_monitor_report(
+        repo="liuli195/Quant-Trading",
+        pr_number="5",
+        pr={"head": {"sha": head_sha}},
+        head_created_at="2026-05-19T00:59:00Z",
+        issue_comments=[
+            {
+                "body": _codex_review_request_body(),
+                "created_at": "2026-05-19T01:00:00Z",
+                "user": {"login": "liuli195"},
+            },
+            codex_comment,
+        ],
+        reviews=[],
+        review_comments=[],
+    )
+
+    assert report.status == "context_invalid"
+    assert report.context_invalid_reviews == 1
+
+
 def test_codex_review_monitor_ignores_codex_help_text_when_matching_trigger() -> None:
     head_sha = "0" * 40
     codex_comment = _codex_no_major_issues_comment()

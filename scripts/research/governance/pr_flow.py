@@ -4647,29 +4647,6 @@ def _is_codex_completion_comment(comment: dict[str, Any]) -> bool:
     )
 
 
-def _codex_trigger_has_completion_reaction(
-    *,
-    repo: str,
-    comment_id: str,
-    comment_time: str,
-    root: Path,
-    runner: Runner,
-) -> bool:
-    reactions = _gh_api_list(root, runner, f"repos/{repo}/issues/comments/{comment_id}/reactions?per_page=100")
-    for reaction in reactions:
-        user = reaction.get("user")
-        login = str(user.get("login", "")) if isinstance(user, dict) else ""
-        reaction_time = _single_line_text(reaction.get("created_at"))
-        if (
-            str(reaction.get("content", "")) == "+1"
-            and login in CODEX_REVIEW_AUTHORS
-            and reaction_time
-            and (not comment_time or reaction_time >= comment_time)
-        ):
-            return True
-    return False
-
-
 def _codex_trigger_is_acknowledged(
     *,
     pr_url: str,

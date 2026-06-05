@@ -162,7 +162,27 @@ def build_monitor_report(
         if review_threads is not None
         else 0
     )
-    context_invalid_reviews = codex_context_invalid_review_count(
+    context_invalid_comment = _latest_codex_context_invalid_comment(
+        issue_comments,
+        head_created_at=head_created_at,
+        trigger_time=trigger_time,
+    )
+    context_invalid_comment_time = (
+        _comment_effective_time(context_invalid_comment)
+        if context_invalid_comment is not None
+        else ""
+    )
+    context_invalid_comment_is_latest = context_invalid_comment is not None and (
+        (completion_comment is None or completion_time <= context_invalid_comment_time)
+        and (
+            latest_review is None
+            or not latest_review_time
+            or latest_review_time <= context_invalid_comment_time
+        )
+    )
+    context_invalid_reviews = int(
+        context_invalid_comment_is_latest
+    ) + codex_context_invalid_review_count(
         current_head_reviews,
         review_comments=review_comments,
         expected_head_sha=head_sha,
@@ -576,6 +596,32 @@ def _latest_codex_completion_comment(
             expected_head_sha=expected_head_sha,
         ),
     )[-1]
+
+
+def _latest_codex_context_invalid_comment(
+    issue_comments: Sequence[Mapping[str, object]],
+    *,
+    head_created_at: str | None = None,
+    trigger_time: str | None = None,
+) -> Mapping[str, object] | None:
+    matched: list[Mapping[str, object]] = []
+    for comment in issue_comments:
+        comment_time = _comment_effective_time(comment)
+        if head_created_at and comment_time and comment_time < head_created_at:
+            continue
+        if trigger_time and comment_time and comment_time < trigger_time:
+            continue
+        user = comment.get("user")
+        login = user.get("login") if isinstance(user, Mapping) else ""
+        body = str(comment.get("body", ""))
+        if (
+            str(login) in CODEX_REVIEW_AUTHORS
+            and CODEX_CONTEXT_INVALID_PATTERN.search(body)
+        ):
+            matched.append(comment)
+    if not matched:
+        return None
+    return sorted(matched, key=_comment_effective_time)[-1]
 
 
 def _comment_effective_time(comment: Mapping[str, object]) -> str:

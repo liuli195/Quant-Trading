@@ -741,44 +741,14 @@ def _find_comment_by_id(
     return None
 
 
-def has_codex_completion_reaction(comment: Mapping[str, object]) -> bool:
-    return _codex_completion_reaction_time(comment) is not None
-
-
 def codex_completion_effective_time(
     comment: Mapping[str, object],
     *,
     expected_pr_url: str | None = None,
     expected_head_sha: str | None = None,
 ) -> str:
-    if _is_required_trigger_comment(
-        comment,
-        expected_pr_url=expected_pr_url,
-        expected_head_sha=expected_head_sha,
-    ):
-        reaction_time = _codex_completion_reaction_time(comment)
-        if reaction_time:
-            return reaction_time
+    _ = expected_pr_url, expected_head_sha
     return _comment_effective_time(comment)
-
-
-def _codex_completion_reaction_time(comment: Mapping[str, object]) -> str | None:
-    comment_time = _comment_effective_time(comment)
-    matched_times: list[str] = []
-    for reaction in _comment_reaction_items(comment):
-        if str(reaction.get("content", "")) != "+1":
-            continue
-        user = reaction.get("user")
-        login = user.get("login") if isinstance(user, Mapping) else ""
-        if str(login) not in CODEX_REVIEW_AUTHORS:
-            continue
-        reaction_time = _first_value(reaction, "created_at")
-        if reaction_time and comment_time and reaction_time < comment_time:
-            continue
-        matched_times.append(reaction_time or comment_time)
-    if not matched_times:
-        return None
-    return max(matched_times)
 
 
 def is_codex_completion_comment(comment: Mapping[str, object]) -> bool:
@@ -789,17 +759,9 @@ def is_codex_completion_comment(comment: Mapping[str, object]) -> bool:
     body = str(comment.get("body", ""))
     if not CODEX_NO_MAJOR_ISSUES_PATTERN.search(body):
         return False
+    if CODEX_CONTEXT_INVALID_PATTERN.search(body):
+        return False
     return not BLOCKING_CODEX_FINDING_PATTERN.search(body)
-
-
-def _comment_reaction_items(
-    comment: Mapping[str, object],
-) -> tuple[Mapping[str, object], ...]:
-    for key in ("reactions_detail", "reaction_items"):
-        value = comment.get(key)
-        if isinstance(value, list):
-            return tuple(item for item in value if isinstance(item, Mapping))
-    return ()
 
 
 def render_monitor_head_state(*, head_sha: str, head_updated_at: str | None) -> str:

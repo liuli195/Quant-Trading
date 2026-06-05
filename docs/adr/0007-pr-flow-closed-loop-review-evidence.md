@@ -22,7 +22,7 @@ PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pa
 
 ## 决策
 
-- 高频入口收敛为 `pr-submit`；它负责创建/更新 PR、刷新 PR Evidence JSON、等待 required checks、ready-for-review、head-locked auto-merge 和本地收尾。
+- 高频入口收敛为 `pr-submit`；它负责创建/更新 PR、刷新 PR Evidence JSON、ready-for-review、等待 required checks、head-locked auto-merge 和本地收尾。
 - `.local/pr-flow/status.json` 是 `pr-submit` 到 AI 的本地接手入口。运行时只写接手快照 v3，不保留旧 `schema/head/failures` 字段；它不是成功证明，权威证据只来自当前 Git 状态、GitHub 状态和校验过的 PR Evidence JSON。
 - review coverage 必须绑定当前 diff fingerprint。`base_sha`、`head_sha`、`diff_hash` 或文件集变化后，旧 evidence 失效；允许 delta review，但最终 evidence 必须证明覆盖当前完整 diff。
 - `pr-submit is not a sub-agent dispatcher`: `pr-submit` 只校验 fragments 并在缺失时输出 `DISPATCH_REQUIRED`；主 agent 使用 `repo-pr-governance wrapper for $review` 调用 `$review` 默认审查，并把文本结论映射为 Standards / Spec fragments。Security review 仍单独必需，不能被 `$review` 替代。
