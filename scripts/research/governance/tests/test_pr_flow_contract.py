@@ -778,6 +778,17 @@ class SubmitUnavailableStatusRollupRunner(SubmitCreatePrRunner):
         return super().run(command, cwd=cwd, input_text=input_text)
 
 
+class SubmitDraftStatusRollupRunner(SubmitCreatePrRunner):
+    def _status_rollup_result(
+        self,
+        items: list[dict[str, object]],
+    ) -> pr_flow.CommandResult:
+        result = super()._status_rollup_result(items)
+        payload = json.loads(result.stdout)
+        payload["isDraft"] = True
+        return pr_flow.CommandResult(0, json.dumps(payload), "")
+
+
 class SubmitMismatchedHeadRunner(SubmitEmptyRequiredChecksWindowRunner):
     def run(
         self,
@@ -2657,6 +2668,30 @@ def test_submit_treats_empty_required_checks_window_as_pending(
             "detail": "required check timed out while pending",
         },
     ]
+
+
+def test_submit_does_not_treat_draft_pr_as_required_check_pending(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitDraftStatusRollupRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(
+        repo_root=tmp_path,
+        title="PR automation",
+        runner=runner,
+        watch_timeout_seconds=0,
+        watch_poll_seconds=0,
+    )
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert ["gh", "pr", "ready", "88"] in runner.lifecycle_calls
+    assert not _submit_status_path(tmp_path).exists()
 
 
 def test_submit_fails_closed_when_current_head_required_checks_unavailable(

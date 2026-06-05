@@ -4437,15 +4437,6 @@ def _fallback_required_check_results(
     if result.returncode != 0:
         return None
     payload = _json_from_result(result)
-    if bool(payload.get("isDraft")):
-        return [
-            {
-                "name": "PR is draft",
-                "workflow": "Pull Request",
-                "state": "PENDING",
-                "bucket": "pending",
-            }
-        ]
     rollup_checks = [
         check
         for item in _status_check_rollup_items(payload.get("statusCheckRollup"))
@@ -4500,15 +4491,6 @@ def _status_check_rollup_required_check_results(
     contract: pr_flow_contract.PRFlowContract,
     payload: dict[str, Any],
 ) -> tuple[list[dict[str, Any]] | None, tuple[pr_flow_contract.SubmitFailure, ...]]:
-    if bool(payload.get("isDraft")):
-        return [
-            {
-                "name": "PR is draft",
-                "workflow": "Pull Request",
-                "state": "PENDING",
-                "bucket": "pending",
-            }
-        ], ()
     expected_head = _single_line_text(payload.get("headRefOid"))
     required_names: set[str] = set(contract.required_checks)
     pr_info = _github_pr_info_from_url(_single_line_text(payload.get("url")))
