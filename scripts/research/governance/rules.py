@@ -15,6 +15,7 @@ import yaml
 
 from scripts.research.registry import default_tool_registry
 from scripts.research.governance.skill_ownership import validate_ownerships
+from scripts.research.governance import pr_flow_contract
 from scripts.research.governance.schemas import AuditFinding, AuditReport
 from scripts.research.platform.datasets import DatasetRegistry
 from scripts.research.platform.docs_index import DocsIndexer, render_adr_index
@@ -192,6 +193,7 @@ def run_audit(
     findings.extend(_audit_local_review_entrypoints(root))
     findings.extend(_audit_legacy_fast_gate_references(root))
     findings.extend(_audit_rule_sources(root))
+    findings.extend(_audit_pr_flow_contract(root))
     findings.extend(_audit_codeowners(root))
     findings.extend(_audit_pr_template(root))
     findings.extend(_audit_waivers(root))
@@ -240,6 +242,14 @@ def _audit_layer_docs(root: Path) -> list[AuditFinding]:
                 )
             )
     return findings
+
+
+def _audit_pr_flow_contract(root: Path) -> list[AuditFinding]:
+    try:
+        pr_flow_contract.load_contract(root)
+    except ValueError as exc:
+        return [AuditFinding("pr_flow_contract", "error", str(exc))]
+    return []
 
 
 def _audit_claude_and_skills(root: Path) -> list[AuditFinding]:

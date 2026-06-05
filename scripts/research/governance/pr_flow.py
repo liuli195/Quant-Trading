@@ -125,6 +125,21 @@ class SubmitSyncResult:
     failures: tuple[pr_flow_contract.SubmitFailure, ...] = ()
 
 
+@dataclass(frozen=True)
+class RequiredCheckWaitResult:
+    failures: tuple[pr_flow_contract.SubmitFailure, ...] = ()
+    diagnostics: tuple[pr_flow_contract.SubmitFailure, ...] = ()
+    checkpoint_statuses: tuple[dict[str, str], ...] = ()
+
+
+@dataclass(frozen=True)
+class RequiredCheckRollup:
+    failures: tuple[pr_flow_contract.SubmitFailure, ...] = ()
+    pending: tuple[pr_flow_contract.SubmitFailure, ...] = ()
+    diagnostics: tuple[pr_flow_contract.SubmitFailure, ...] = ()
+    checkpoint_statuses: tuple[dict[str, str], ...] = ()
+
+
 class GitHubDataUnavailable(RuntimeError):
     def __init__(
         self,
@@ -818,6 +833,9 @@ def submit(
             )
             return request_code
     current_fingerprint = _submit_current_diff_fingerprint(root, runner)
+    current_diff_hash = _fingerprint_diff_files_hash(current_fingerprint)
+    review_thread_failures: tuple[pr_flow_contract.SubmitFailure, ...] = ()
+    review_thread_artifacts: tuple[dict[str, str], ...] = ()
     # Auto-process official Codex P2/P3 retained threads before waiting for CI.
     # P0/P1 closure evidence is not part of the #65 submit chain; unresolved
     # blocking threads must remain visible to PR Flow / review-status.
@@ -852,7 +870,7 @@ def submit(
                     failures=failures,
                 )
             if threads:
-                auto_payload = _submit_thread_processing_payload(current_fingerprint)
+                auto_payload = _submit_thread_processing_payload(root, current_fingerprint)
                 auto_code, _auto_payload, auto_changed = (
                     _auto_process_official_codex_review_threads(
                         root=root,
@@ -862,9 +880,7 @@ def submit(
                         threads=threads,
                         payload=auto_payload,
                         current_head_sha=head_sha,
-                        current_diff_hash=_fingerprint_diff_files_hash(
-                            current_fingerprint
-                        ),
+                        current_diff_hash=current_diff_hash,
                     )
                 )
                 if auto_code != SUCCESS_EXIT_CODE:
@@ -923,6 +939,24 @@ def submit(
                             retryable=sync_result.retryable,
                             failures=sync_result.failures,
                         )
+                unresolved_threads = [
+                    thread for thread in threads if not _thread_is_resolved(thread)
+                ]
+                if unresolved_threads:
+                    artifact = _write_resolve_threads_plan(
+                        root=root,
+                        contract=contract,
+                        repo=repo,
+                        pr_number=resolved_pr_number,
+                        head_sha=head_sha,
+                        diff_hash=current_diff_hash,
+                        threads=unresolved_threads,
+                    )
+                    review_thread_artifacts = (artifact,)
+                    review_thread_failures = _review_thread_blocking_failures(
+                        unresolved_threads,
+                        artifact_path=artifact["artifact_path"],
+                    )
     except Exception as exc:
         failures = [
             pr_flow_contract.SubmitFailure(
@@ -941,7 +975,7 @@ def submit(
             retryable=True,
             failures=failures,
         )
-    watch_failures = _submit_wait_required_checks(
+    watch_result = _submit_wait_required_checks(
         root=root,
         runner=runner,
         contract=contract,
@@ -949,7 +983,7 @@ def submit(
         timeout_seconds=watch_timeout_seconds,
         poll_seconds=watch_poll_seconds,
     )
-    if watch_failures:
+    if watch_result.failures:
         try:
             retry_code, retry_checks = _submit_accept_official_codex_retained_threads(
                 root=root,
@@ -957,7 +991,7 @@ def submit(
                 contract=contract,
                 pr_number=pr or pr_number,
                 pr_url=pr_url,
-                failures=watch_failures,
+                failures=watch_result.failures,
             )
         except GitHubDataUnavailable as exc:
             _print_github_data_unavailable(exc)
@@ -991,7 +1025,7 @@ def submit(
             )
             return retry_code
         if retry_checks:
-            watch_failures = _submit_wait_required_checks(
+            watch_result = _submit_wait_required_checks(
                 root=root,
                 runner=runner,
                 contract=contract,
@@ -999,12 +1033,16 @@ def submit(
                 timeout_seconds=watch_timeout_seconds,
                 poll_seconds=watch_poll_seconds,
             )
-    if watch_failures:
+    if watch_result.failures or review_thread_failures:
+        final_failures = (*review_thread_failures, *watch_result.failures)
         pr_flow_contract.write_submit_status(
             root,
             contract,
             head=head_sha,
-            failures=watch_failures,
+            failures=final_failures,
+            diagnostics=watch_result.diagnostics,
+            checkpoint_statuses=watch_result.checkpoint_statuses,
+            evidence_artifacts=review_thread_artifacts,
         )
         return _fail_submit(
             root, contract, EXCEPTION_REQUIRED_EXIT_CODE,
@@ -1012,7 +1050,10 @@ def submit(
             reason_code="REQUIRED_CHECKS_FAILED",
             phase="submit_wait_checks",
             retryable=True,
-            failures=watch_failures,
+            failures=final_failures,
+            diagnostics=watch_result.diagnostics,
+            checkpoint_statuses=watch_result.checkpoint_statuses,
+            evidence_artifacts=review_thread_artifacts,
         )
     lifecycle_code = _submit_complete_lifecycle(
         root=root,
@@ -1531,15 +1572,28 @@ def _submit_pr_evidence(
 
 
 def _submit_thread_processing_payload(
+    root: Path,
     current_fingerprint: dict[str, Any] | None,
 ) -> dict[str, Any]:
     fingerprint = current_fingerprint if isinstance(current_fingerprint, dict) else {}
+    closure_evidence = _read_thread_closure_evidence(root)
     return {
         "schema_version": THREAD_PROCESSING_SCHEMA_VERSION,
         "changed_files": _string_list(fingerprint.get("changed_files")),
         "diff_fingerprint": fingerprint,
-        "external_findings": [],
+        "external_findings": closure_evidence,
     }
+
+
+def _read_thread_closure_evidence(root: Path) -> list[dict[str, Any]]:
+    path = root / ".local" / "pr-flow" / "thread-closure-evidence.json"
+    payload = _read_json_object(path)
+    if not payload:
+        return []
+    findings = payload.get("external_findings")
+    if not isinstance(findings, list):
+        return []
+    return [item for item in findings if isinstance(item, dict)]
 
 
 def _fingerprint_diff_files_hash(fingerprint: dict[str, Any] | None) -> str:
@@ -2100,21 +2154,24 @@ def _submit_wait_required_checks(
     pr_number: str,
     timeout_seconds: float,
     poll_seconds: float,
-) -> list[pr_flow_contract.SubmitFailure]:
+) -> RequiredCheckWaitResult:
     deadline = time.monotonic() + max(timeout_seconds, 0)
-    pending: list[pr_flow_contract.SubmitFailure] = []
     while True:
-        failures, pending = _submit_required_check_failures(
+        rollup = _submit_required_check_failures(
             root=root,
             runner=runner,
             contract=contract,
             pr_number=pr_number,
         )
-        if not pending:
-            return failures
+        if not rollup.pending:
+            return RequiredCheckWaitResult(
+                failures=rollup.failures,
+                diagnostics=rollup.diagnostics,
+                checkpoint_statuses=rollup.checkpoint_statuses,
+            )
         if time.monotonic() >= deadline:
-            failure_by_check = {failure.check: failure for failure in failures}
-            pending_by_check = {failure.check: failure for failure in pending}
+            failure_by_check = {failure.check: failure for failure in rollup.failures}
+            pending_by_check = {failure.check: failure for failure in rollup.pending}
             timed_out: list[pr_flow_contract.SubmitFailure] = []
             for name in contract.required_checks:
                 failure = failure_by_check.get(name)
@@ -2130,7 +2187,16 @@ def _submit_wait_required_checks(
                             detail="required check timed out while pending",
                         )
                     )
-            return timed_out
+            checkpoints = _required_check_checkpoint_statuses(
+                contract=contract,
+                failures=timed_out,
+                pending=(),
+            )
+            return RequiredCheckWaitResult(
+                failures=tuple(timed_out),
+                diagnostics=rollup.diagnostics,
+                checkpoint_statuses=checkpoints,
+            )
         time.sleep(max(poll_seconds, 0))
 
 
@@ -2140,7 +2206,7 @@ def _submit_required_check_failures(
     runner: Runner,
     contract: pr_flow_contract.PRFlowContract,
     pr_number: str,
-) -> tuple[list[pr_flow_contract.SubmitFailure], list[pr_flow_contract.SubmitFailure]]:
+) -> RequiredCheckRollup:
     result = runner.run(
         [
             "gh",
@@ -2153,20 +2219,22 @@ def _submit_required_check_failures(
         ],
         cwd=root,
     )
-    latest = _latest_required_check_results(result.stdout)
+    latest, diagnostics = _latest_required_check_results_with_diagnostics(
+        result.stdout,
+        contract=contract,
+    )
     if (
         result.returncode != 0
         and latest is None
         and "no required checks reported"
         not in f"{result.stdout}\n{result.stderr}".casefold()
     ):
-        return [
-            pr_flow_contract.SubmitFailure(
-                check="required-checks",
-                source="",
-                detail="required checks unavailable",
-            )
-        ], []
+        failure = pr_flow_contract.SubmitFailure(
+            check="required-checks",
+            source="",
+            detail="required checks unavailable",
+        )
+        return RequiredCheckRollup(failures=(failure,))
     latest = latest or []
     by_name = {_json_check_display_name(check): check for check in latest}
     failures: list[pr_flow_contract.SubmitFailure] = []
@@ -2199,7 +2267,57 @@ def _submit_required_check_failures(
                     detail="required check is pending",
                 )
             )
-    return failures, pending
+    return RequiredCheckRollup(
+        failures=tuple(failures),
+        pending=tuple(pending),
+        diagnostics=tuple(diagnostics),
+        checkpoint_statuses=_required_check_checkpoint_statuses(
+            contract=contract,
+            failures=failures,
+            pending=pending,
+        ),
+    )
+
+
+def _required_check_checkpoint_statuses(
+    *,
+    contract: pr_flow_contract.PRFlowContract,
+    failures: Sequence[pr_flow_contract.SubmitFailure],
+    pending: Sequence[pr_flow_contract.SubmitFailure],
+) -> tuple[dict[str, str], ...]:
+    _ = contract
+    if failures:
+        return (
+            {
+                "checkpoint_name": "required_checks",
+                "status": "failed",
+                "summary": "; ".join(f"{failure.check}: {failure.detail}" for failure in failures),
+                "evidence_location": next(
+                    (failure.source for failure in failures if failure.source),
+                    "",
+                ),
+            },
+        )
+    if pending:
+        return (
+            {
+                "checkpoint_name": "required_checks",
+                "status": "pending",
+                "summary": "; ".join(f"{failure.check}: {failure.detail}" for failure in pending),
+                "evidence_location": next(
+                    (failure.source for failure in pending if failure.source),
+                    "",
+                ),
+            },
+        )
+    return (
+        {
+            "checkpoint_name": "required_checks",
+            "status": "passed",
+            "summary": "all required checks passed",
+            "evidence_location": "",
+        },
+    )
 
 
 def _submit_pr_head_failures(
@@ -3298,6 +3416,99 @@ def _auto_process_official_codex_review_threads(
     return SUCCESS_EXIT_CODE, updated, changed
 
 
+def _write_resolve_threads_plan(
+    *,
+    root: Path,
+    contract: pr_flow_contract.PRFlowContract,
+    repo: str,
+    pr_number: str,
+    head_sha: str,
+    diff_hash: str,
+    threads: Sequence[dict[str, Any]],
+) -> dict[str, str]:
+    rel_path = Path(".local") / "pr-flow" / "resolve-threads-plan.json"
+    path = root / rel_path
+    unresolved = [thread for thread in threads if not _thread_is_resolved(thread)]
+    payload = {
+        "schema_version": 1,
+        "repository": repo,
+        "pr_number": pr_number,
+        "head_sha": head_sha,
+        "diff_hash": diff_hash,
+        "threads": [
+            _resolve_thread_plan_entry(contract=contract, thread=thread)
+            for thread in unresolved
+        ],
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    count = len(unresolved)
+    noun = "thread" if count == 1 else "threads"
+    return {
+        "artifact_type": "resolve_threads_plan",
+        "artifact_path": rel_path.as_posix(),
+        "artifact_summary": f"{count} unresolved review {noun} requires explicit action",
+    }
+
+
+def _resolve_thread_plan_entry(
+    *,
+    contract: pr_flow_contract.PRFlowContract,
+    thread: dict[str, Any],
+) -> dict[str, Any]:
+    root_comment = _thread_root_comment(thread) or {}
+    body = _single_line_text(root_comment.get("body") or _codex_thread_body(thread))
+    severity = _codex_thread_severity(thread)
+    return {
+        "thread_id": _thread_id(thread),
+        "root_author": _comment_author_login(root_comment),
+        "comment_url": _single_line_text(root_comment.get("url")),
+        "path": _single_line_text(thread.get("path")),
+        "line": _optional_int(thread.get("line") or thread.get("originalLine")),
+        "is_outdated": _thread_is_outdated(thread),
+        "severity": severity,
+        "summary": pr_flow_contract.normalize_detail(
+            body or "unresolved review thread",
+            max_chars=contract.detail_max_chars,
+        ),
+        "closure_evidence_state": _thread_closure_evidence_state(thread),
+        "suggested_action": _thread_suggested_action(thread),
+    }
+
+
+def _thread_closure_evidence_state(thread: dict[str, Any]) -> str:
+    if _thread_is_official_codex(thread) and _codex_thread_severity(thread) in {"P0", "P1"}:
+        return "missing"
+    return "manual"
+
+
+def _thread_suggested_action(thread: dict[str, Any]) -> str:
+    if _thread_is_official_codex(thread) and _codex_thread_severity(thread) in {"P0", "P1"}:
+        return "provide current-head fixed or false_positive evidence before resolving"
+    return "inspect thread and resolve explicit ID only after review intent is satisfied"
+
+
+def _review_thread_blocking_failures(
+    threads: Sequence[dict[str, Any]],
+    *,
+    artifact_path: str,
+) -> tuple[pr_flow_contract.SubmitFailure, ...]:
+    failures: list[pr_flow_contract.SubmitFailure] = []
+    for thread in threads:
+        thread_id = _thread_id(thread) or "unknown"
+        failures.append(
+            pr_flow_contract.SubmitFailure(
+                check="official-codex-review-thread",
+                source=artifact_path,
+                detail=f"unresolved review thread {thread_id} requires closure evidence",
+            )
+        )
+    return tuple(failures)
+
+
 def _auto_review_thread_action(
     thread: dict[str, Any],
     payload: dict[str, Any],
@@ -3619,9 +3830,12 @@ def _current_pr_review_threads(
               id
               isResolved
               isOutdated
+              path
+              line
               comments(first: 50) {
                 nodes {
                   body
+                  url
                   author {
                     login
                   }
@@ -4094,6 +4308,13 @@ def _single_line_text(value: Any) -> str:
     return " ".join(str(value or "").split())
 
 
+def _optional_int(value: Any) -> int | None:
+    try:
+        return int(_single_line_text(value))
+    except ValueError:
+        return None
+
+
 def _failing_check_names(output: str) -> list[str]:
     failing: list[str] = []
     for line in output.splitlines():
@@ -4105,15 +4326,27 @@ def _failing_check_names(output: str) -> list[str]:
 
 
 def _latest_required_check_results(output: str) -> list[dict[str, Any]] | None:
+    latest, _diagnostics = _latest_required_check_results_with_diagnostics(
+        output,
+        contract=None,
+    )
+    return latest
+
+
+def _latest_required_check_results_with_diagnostics(
+    output: str,
+    *,
+    contract: pr_flow_contract.PRFlowContract | None,
+) -> tuple[list[dict[str, Any]] | None, tuple[pr_flow_contract.SubmitFailure, ...]]:
     try:
         payload = json.loads(output)
     except json.JSONDecodeError:
-        return None
+        return None, ()
     if not isinstance(payload, list):
-        return None
+        return None, ()
     latest: dict[
         tuple[str, str],
-        tuple[tuple[int, str, int, int, int], dict[str, Any]],
+        tuple[tuple[int, str, int, int, int], dict[str, Any], int],
     ] = {}
     order: list[tuple[str, str]] = []
     for index, check in enumerate(payload):
@@ -4128,10 +4361,28 @@ def _latest_required_check_results(output: str) -> list[dict[str, Any]] | None:
         current = latest.get(key)
         if current is None:
             order.append(key)
-            latest[key] = (rank, check)
+            latest[key] = (rank, check, index)
         elif rank > current[0]:
-            latest[key] = (rank, check)
-    return [latest[key][1] for key in order]
+            latest[key] = (rank, check, index)
+    selected_indexes = {item[2] for item in latest.values()}
+    required_checks = set(contract.required_checks) if contract is not None else set()
+    diagnostics: list[pr_flow_contract.SubmitFailure] = []
+    for index, check in enumerate(payload):
+        if index in selected_indexes or not isinstance(check, dict):
+            continue
+        display_name = _json_check_display_name(check)
+        if required_checks and display_name not in required_checks:
+            continue
+        if not _json_check_failed(check):
+            continue
+        diagnostics.append(
+            pr_flow_contract.SubmitFailure(
+                check=display_name,
+                source=_single_line_text(check.get("link")),
+                detail=f"stale required check ignored: {_json_check_failure_detail(check)}",
+            )
+        )
+    return [latest[key][1] for key in order], tuple(diagnostics)
 
 
 def _fallback_required_check_results(
@@ -4489,11 +4740,24 @@ def _fail_submit(
     phase: str,
     retryable: bool = False,
     failures: Sequence[pr_flow_contract.SubmitFailure] = (),
+    diagnostics: Sequence[pr_flow_contract.SubmitFailure] = (),
+    checkpoint_statuses: Sequence[dict[str, str]] = (),
+    evidence_artifacts: Sequence[dict[str, str]] = (),
 ) -> int:
     """Write submit status and emit structured stop status, then return exit code."""
     if failures:
         pr_flow_contract.write_submit_status(
-            root, contract, head=head_sha, failures=failures
+            root,
+            contract,
+            head=head_sha,
+            failures=failures,
+            stop_state=_submit_state_for_exit_code(exit_code),
+            reason_code=reason_code,
+            phase=phase,
+            retryable=retryable,
+            diagnostics=diagnostics,
+            checkpoint_statuses=checkpoint_statuses,
+            evidence_artifacts=evidence_artifacts,
         )
     return _stop_submit(
         root,
@@ -4514,9 +4778,29 @@ def _ensure_submit_status_failure(
 ) -> None:
     status = _read_json_object(Path(root).resolve() / contract.submit_status_path) or {}
     failures = status.get("failures")
+    blocking_signals = status.get("blocking_signals")
     if isinstance(failures, list) and failures:
         return
-    pr_flow_contract.write_submit_status(root, contract, head=head_sha, failures=[failure])
+    if isinstance(blocking_signals, list) and blocking_signals:
+        return
+    pr_flow_contract.write_submit_status(
+        root,
+        contract,
+        head=head_sha,
+        failures=[failure],
+        stop_state="EXCEPTION_REQUIRED",
+        reason_code="SUBMIT_STATUS_FAILURE",
+        phase="submit_status",
+        retryable=True,
+    )
+
+
+def _submit_state_for_exit_code(exit_code: int) -> str:
+    return {
+        DISPATCH_REQUIRED_EXIT_CODE: "DISPATCH_REQUIRED",
+        REPLY_OR_FIX_REQUIRED_EXIT_CODE: "REPLY_OR_FIX_REQUIRED",
+        EXCEPTION_REQUIRED_EXIT_CODE: "EXCEPTION_REQUIRED",
+    }.get(exit_code, "EXCEPTION_REQUIRED")
 
 
 def _stop_submit(
@@ -4541,11 +4825,7 @@ def _stop_submit(
     message = reason_code.replace("_", " ").title()
     if failures:
         message = "; ".join(blocking_items) if blocking_items else message
-    state = {
-        DISPATCH_REQUIRED_EXIT_CODE: "DISPATCH_REQUIRED",
-        REPLY_OR_FIX_REQUIRED_EXIT_CODE: "REPLY_OR_FIX_REQUIRED",
-        EXCEPTION_REQUIRED_EXIT_CODE: "EXCEPTION_REQUIRED",
-    }.get(exit_code, "EXCEPTION_REQUIRED")
+    state = _submit_state_for_exit_code(exit_code)
 
     _print_state(
         state,

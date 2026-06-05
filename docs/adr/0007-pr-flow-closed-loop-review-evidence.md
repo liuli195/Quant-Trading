@@ -18,12 +18,12 @@ PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pa
 - GitHub API / GraphQL 瞬时错误会中断无问题路径。
 - 多入口 PR 流程、远端 merge policy 和 cleanup 收尾仍有人工切换成本。
 
-本 ADR 对应 PRD Issue：<https://github.com/liuli195/Quant-Trading/issues/27>；Commit Intent 门禁来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/54>；PR 自动化简化来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/65>；PR Flow 闭环与官方 Codex thread 自动处理扩展见 Issue：<https://github.com/liuli195/Quant-Trading/issues/90>；`issue_comment` 默认分支自举问题和 router/worker 拆分来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/94>。
+本 ADR 对应 PRD Issue：<https://github.com/liuli195/Quant-Trading/issues/27>；Commit Intent 门禁来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/54>；PR 自动化简化来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/65>；PR Flow 闭环与官方 Codex thread 自动处理扩展见 Issue：<https://github.com/liuli195/Quant-Trading/issues/90>；`issue_comment` 默认分支自举问题和 router/worker 拆分来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/94>；接手快照 v3、required-check 当前归因和 review thread plan 来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/104>、<https://github.com/liuli195/Quant-Trading/issues/95>、<https://github.com/liuli195/Quant-Trading/issues/96>。
 
 ## 决策
 
 - 高频入口收敛为 `pr-submit`；它负责创建/更新 PR、刷新 PR Evidence JSON、等待 required checks、ready-for-review、head-locked auto-merge 和本地收尾。
-- `.local/pr-flow/status.json` 是 `pr-submit` 到 AI 的本地接手入口。`pr-submit` 每次开始写当前 head 的空 `failures`，失败时覆盖为 failures，成功时可留下 `failures: []`；它不是成功证明，权威证据只来自当前 Git 状态、GitHub 状态和校验过的 PR Evidence JSON。
+- `.local/pr-flow/status.json` 是 `pr-submit` 到 AI 的本地接手入口。运行时只写接手快照 v3，不保留旧 `schema/head/failures` 字段；它不是成功证明，权威证据只来自当前 Git 状态、GitHub 状态和校验过的 PR Evidence JSON。
 - review coverage 必须绑定当前 diff fingerprint。`base_sha`、`head_sha`、`diff_hash` 或文件集变化后，旧 evidence 失效；允许 delta review，但最终 evidence 必须证明覆盖当前完整 diff。
 - `pr-submit is not a sub-agent dispatcher`: `pr-submit` 只校验 fragments 并在缺失时输出 `DISPATCH_REQUIRED`；主 agent 使用 `repo-pr-governance wrapper for $review` 调用 `$review` 默认审查，并把文本结论映射为 Standards / Spec fragments。Security review 仍单独必需，不能被 `$review` 替代。
 - evidence builder 只读取结构化 fragments、security fragment、external findings、authorizations 和 diff facts；不得从聊天总结或自然语言结论中推断 review 通过。
@@ -36,10 +36,10 @@ PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pa
 - 官方 Codex Review 状态由 `PR Flow / review-status` 复核；官方 Codex 未返回时 pending，不写失败。
 - GitHub `issue_comment` 事件由默认分支 `codex-review-router.yml` 处理。router 只识别 review 相关 PR 评论、写 pending、按 PR head branch dispatch `codex-review-monitor.yml` worker；router dispatch 成功不写 success。最终 `PR Flow / review-status` verdict 由 PR branch worker 使用当前 PR 分支 workflow 和治理代码计算。
 - worker 的 `workflow_dispatch` 是正式入口，必须接收 `pr_number`、`expected_head_sha`、`trigger_event`、`trigger_run_id`，并覆盖 pending 和 failure finalizer。`expected_head_sha` 不匹配时写 `PR head changed before monitor completed` error 并停止，避免旧 run 覆盖新 head。
-- `pr-submit` 不负责 workflow 自举补救，不维护 PR Flow changed-files 白名单，不直接覆盖 GitHub status，不扩展 `.local/pr-flow/status.json`。
+- `pr-submit` 不负责 workflow 自举补救，不维护 PR Flow changed-files 白名单，不直接覆盖 GitHub status，不新增公开 `diagnose`、`handoff` 或 `refresh` 入口。
 - PR body 继续作为 CI 可见 evidence surface；CI 不读取 `.local`。CI 通过 PR body 和 GitHub API 校验 current head、PR Evidence JSON、thread 状态和 required checks。
 - `pr_flow` 顶层停止状态保持三类：`DISPATCH_REQUIRED`、`REPLY_OR_FIX_REQUIRED`、`EXCEPTION_REQUIRED`。所有非 0 退出必须输出 `reason_code`、phase、retryable、dispatch target、blocking items、evidence refs 和 next actions。
-- `diagnose` 只保留为 `pr-submit` 内部归因和开发测试面；用户接手失败统一读取 `.local/pr-flow/status.json`。
+- `diagnose` 只保留为 `pr-submit` 内部归因和开发测试面；用户接手失败统一读取 `.local/pr-flow/status.json`。旧 required-check failure 只进入 `diagnostic_signals`，当前 failure 和 unresolved thread 才进入 `blocking_signals`；thread 级明细放在 `.local/pr-flow/resolve-threads-plan.json`。
 - cleanup 必须在确认 PR merged、本地 base 分支受控 fast-forward 后，才删除本地已合并 head branch；远端分支删除交给 GitHub。
 
 ## 后果

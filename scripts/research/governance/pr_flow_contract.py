@@ -12,6 +12,25 @@ import yaml
 
 
 CONTRACT_PATH = Path("docs") / "rules" / "pr-flow-interface-contract.yaml"
+SUBMIT_STATUS_SCHEMA_VERSION = 3
+SUBMIT_STATUS_CHECKPOINT_NAMES = (
+    "official_codex_review",
+    "required_checks",
+    "pr_evidence",
+    "review_threads",
+    "local_review_fragments",
+)
+SUBMIT_STATUS_FIELDS = (
+    "schema_version",
+    "snapshot_subject",
+    "pr_submit_stop",
+    "checkpoint_statuses",
+    "blocking_signals",
+    "diagnostic_signals",
+    "suggested_next_actions",
+    "evidence_artifacts",
+)
+LEGACY_SUBMIT_STATUS_FIELDS = {"schema", "head", "failures"}
 
 
 @dataclass(frozen=True)
@@ -79,6 +98,8 @@ def load_contract(repo_root: str | Path = ".") -> PRFlowContract:
     detail = _mapping(payload.get("detail"), "detail")
     github = _mapping(payload.get("github"), "github")
     official = _mapping(payload.get("official_codex_request"), "official_codex_request")
+    submit_status_fields = _string_tuple(status.get("fields"))
+    _validate_submit_status_fields(submit_status_fields)
 
     fragment_freshness = _mapping(rules.get("fragment_freshness"), "rules.fragment_freshness")
     closing_links = _mapping(
@@ -119,7 +140,7 @@ def load_contract(repo_root: str | Path = ".") -> PRFlowContract:
         pr_evidence_fields=_string_tuple(pr_evidence.get("fields")),
         fragment_fields=_string_tuple(fragment.get("fields")),
         fragment_finding_fields=_string_tuple(fragment.get("finding_fields")),
-        submit_status_fields=_string_tuple(status.get("fields")),
+        submit_status_fields=submit_status_fields,
         submit_failure_fields=_string_tuple(status.get("failure_fields")),
         blocking_severities=_string_tuple(_mapping(severity, "severity").get("blocking")),
         retained_severities=_string_tuple(_mapping(severity, "severity").get("retained")),
@@ -159,23 +180,74 @@ def write_submit_status(
     *,
     head: str,
     failures: Sequence[SubmitFailure | Mapping[str, object]],
+    repository: str = "",
+    pr_number: str = "",
+    head_branch: str = "",
+    stop_state: str = "",
+    reason_code: str = "",
+    phase: str = "",
+    retryable: bool = False,
+    diagnostics: Sequence[SubmitFailure | Mapping[str, object]] = (),
+    checkpoint_statuses: Sequence[Mapping[str, object]] = (),
+    suggested_next_actions: Sequence[Mapping[str, object]] = (),
+    evidence_artifacts: Sequence[Mapping[str, object]] = (),
 ) -> Path:
     root = Path(repo_root).resolve()
     path = root / contract.submit_status_path
-    payload = {
-        "schema": contract.version,
-        "head": _single_line(head),
-        "failures": [
-            {
-                "check": _failure_value(failure, "check"),
-                "source": _failure_value(failure, "source"),
-                "detail": normalize_detail(
-                    _failure_value(failure, "detail"),
-                    max_chars=contract.detail_max_chars,
-                ),
-            }
+    blocking_signals = [
+        _signal_from_failure(
+            failure,
+            contract=contract,
+            currentness="current",
+            retryable=retryable,
+        )
+        for failure in failures
+    ]
+    diagnostic_signals = [
+        _signal_from_failure(
+            failure,
+            contract=contract,
+            currentness="stale",
+            retryable=_failure_retryable(failure),
+        )
+        for failure in diagnostics
+    ]
+    summary = _single_line(
+        "; ".join(
+            f"{_failure_value(failure, 'check')}: "
+            f"{normalize_detail(_failure_value(failure, 'detail'), max_chars=contract.detail_max_chars)}"
             for failure in failures
-        ],
+        )
+    )
+    payload = {
+        "schema_version": SUBMIT_STATUS_SCHEMA_VERSION,
+        "snapshot_subject": {
+            "repository": _single_line(repository),
+            "pr_number": _single_line(pr_number),
+            "head_sha": _single_line(head),
+            "head_branch": _single_line(head_branch),
+        },
+        "pr_submit_stop": {
+            "state": _single_line(stop_state),
+            "reason_code": _single_line(reason_code),
+            "phase": _single_line(phase),
+            "is_retryable": bool(retryable),
+            "summary": normalize_detail(summary, max_chars=contract.detail_max_chars),
+        },
+        "checkpoint_statuses": _merged_checkpoint_statuses(
+            checkpoint_statuses,
+            failures=failures,
+            diagnostics=diagnostics,
+            contract=contract,
+        ),
+        "blocking_signals": blocking_signals,
+        "diagnostic_signals": diagnostic_signals,
+        "suggested_next_actions": _suggested_next_actions(
+            suggested_next_actions,
+            blocking_signals=blocking_signals,
+            diagnostic_signals=diagnostic_signals,
+        ),
+        "evidence_artifacts": _existing_evidence_artifacts(root, evidence_artifacts),
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -188,6 +260,216 @@ def write_submit_status(
         encoding="utf-8",
     )
     return path
+
+
+def _signal_from_failure(
+    failure: SubmitFailure | Mapping[str, object],
+    *,
+    contract: PRFlowContract,
+    currentness: str,
+    retryable: bool,
+) -> dict[str, object]:
+    check = _failure_value(failure, "check")
+    detail = normalize_detail(
+        _failure_value(failure, "detail"),
+        max_chars=contract.detail_max_chars,
+    )
+    return {
+        "signal_type": _signal_type_for_failure(check, detail, contract=contract),
+        "summary": detail,
+        "source_context": check,
+        "evidence_location": _failure_value(failure, "source"),
+        "currentness": currentness,
+        "is_retryable": bool(retryable or _failure_retryable(failure)),
+    }
+
+
+def _signal_type_for_failure(
+    check: str,
+    detail: str,
+    *,
+    contract: PRFlowContract,
+) -> str:
+    normalized = f"{check} {detail}".casefold()
+    if "stale required check ignored" in normalized:
+        return "stale_required_check_ignored"
+    if check in contract.required_checks or "required check" in normalized:
+        if "pending" in normalized or "timed out" in normalized:
+            return "required_check_pending"
+        return "required_check_failed"
+    if "thread" in normalized:
+        return "review_thread_unresolved"
+    if "fragment" in normalized or check in {"standards", "spec", "security"}:
+        return "local_review_fragment_invalid"
+    if "github" in normalized:
+        return "github_unavailable"
+    return "pr_submit_blocked"
+
+
+def _failure_retryable(failure: SubmitFailure | Mapping[str, object]) -> bool:
+    detail = _failure_value(failure, "detail").casefold()
+    check = _failure_value(failure, "check").casefold()
+    return (
+        "pending" in detail
+        or "timed out" in detail
+        or "stale" in detail
+        or "github" in check
+    )
+
+
+def _merged_checkpoint_statuses(
+    checkpoint_statuses: Sequence[Mapping[str, object]],
+    *,
+    failures: Sequence[SubmitFailure | Mapping[str, object]],
+    diagnostics: Sequence[SubmitFailure | Mapping[str, object]],
+    contract: PRFlowContract,
+) -> list[dict[str, str]]:
+    by_name = {
+        name: {
+            "checkpoint_name": name,
+            "status": "unknown",
+            "summary": "",
+            "evidence_location": "",
+        }
+        for name in SUBMIT_STATUS_CHECKPOINT_NAMES
+    }
+    for checkpoint in checkpoint_statuses:
+        name = _single_line(checkpoint.get("checkpoint_name"))
+        if name not in by_name:
+            continue
+        by_name[name] = {
+            "checkpoint_name": name,
+            "status": _single_line(checkpoint.get("status")) or "unknown",
+            "summary": normalize_detail(
+                _single_line(checkpoint.get("summary")),
+                max_chars=contract.detail_max_chars,
+            ),
+            "evidence_location": _single_line(checkpoint.get("evidence_location")),
+        }
+    for failure in failures:
+        _apply_failure_to_checkpoints(by_name, failure, contract=contract, status="failed")
+    for diagnostic in diagnostics:
+        _apply_failure_to_checkpoints(by_name, diagnostic, contract=contract, status="stale")
+    return [by_name[name] for name in SUBMIT_STATUS_CHECKPOINT_NAMES]
+
+
+def _apply_failure_to_checkpoints(
+    by_name: dict[str, dict[str, str]],
+    failure: SubmitFailure | Mapping[str, object],
+    *,
+    contract: PRFlowContract,
+    status: str,
+) -> None:
+    check = _failure_value(failure, "check")
+    detail = normalize_detail(
+        _failure_value(failure, "detail"),
+        max_chars=contract.detail_max_chars,
+    )
+    source = _failure_value(failure, "source")
+    normalized = f"{check} {detail}".casefold()
+    names: list[str] = []
+    if check in contract.required_checks or "required check" in normalized:
+        names.append("required_checks")
+    if check == "PR Flow / evidence" or "pr evidence" in normalized:
+        names.append("pr_evidence")
+    if "thread" in normalized:
+        names.append("review_threads")
+    if "official-codex-review" in normalized or "official codex" in normalized:
+        names.append("official_codex_review")
+    if "fragment" in normalized or check in {"standards", "spec", "security"}:
+        names.append("local_review_fragments")
+    for name in names:
+        checkpoint = by_name[name]
+        if checkpoint["status"] == "failed" and status != "failed":
+            continue
+        checkpoint["status"] = status
+        checkpoint["summary"] = detail
+        checkpoint["evidence_location"] = source
+
+
+def _suggested_next_actions(
+    actions: Sequence[Mapping[str, object]],
+    *,
+    blocking_signals: Sequence[Mapping[str, object]],
+    diagnostic_signals: Sequence[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    normalized_actions: list[dict[str, object]] = []
+    for action in actions:
+        signal_types = action.get("applies_to_signal_types")
+        normalized_actions.append(
+            {
+                "action_summary": _single_line(action.get("action_summary")),
+                "recommended_command": _single_line(action.get("recommended_command")),
+                "applies_to_signal_types": _string_tuple(signal_types),
+            }
+        )
+    if normalized_actions:
+        return normalized_actions
+    signal_types = [
+        _single_line(signal.get("signal_type"))
+        for signal in [*blocking_signals, *diagnostic_signals]
+    ]
+    unique_signal_types = tuple(dict.fromkeys(signal_type for signal_type in signal_types if signal_type))
+    if "review_thread_unresolved" in unique_signal_types:
+        return [
+            {
+                "action_summary": "inspect unresolved review threads and resolve explicit IDs after evidence is ready",
+                "recommended_command": ".\\.venv\\Scripts\\python.exe -m scripts.research.governance.pr_flow resolve-threads <THREAD_ID>",
+                "applies_to_signal_types": ("review_thread_unresolved",),
+            }
+        ]
+    if any(signal_type.startswith("required_check") for signal_type in unique_signal_types):
+        return [
+            {
+                "action_summary": "rerun pr-submit after the current required-check state changes",
+                "recommended_command": ".\\.venv\\Scripts\\python.exe -m scripts.research.governance.pr_flow submit --title \"<PR标题>\"",
+                "applies_to_signal_types": unique_signal_types,
+            }
+        ]
+    if unique_signal_types:
+        return [
+            {
+                "action_summary": "inspect status snapshot and rerun pr-submit after fixing the blocker",
+                "recommended_command": ".\\.venv\\Scripts\\python.exe -m scripts.research.governance.pr_flow submit --title \"<PR标题>\"",
+                "applies_to_signal_types": unique_signal_types,
+            }
+        ]
+    return []
+
+
+def _existing_evidence_artifacts(
+    root: Path,
+    evidence_artifacts: Sequence[Mapping[str, object]],
+) -> list[dict[str, str]]:
+    artifacts: list[dict[str, str]] = []
+    for artifact in evidence_artifacts:
+        artifact_path = _single_line(artifact.get("artifact_path"))
+        if not artifact_path:
+            continue
+        path = Path(artifact_path)
+        if path.is_absolute() or not (root / path).is_file():
+            continue
+        artifacts.append(
+            {
+                "artifact_type": _single_line(artifact.get("artifact_type")),
+                "artifact_path": artifact_path.replace("\\", "/"),
+                "artifact_summary": _single_line(artifact.get("artifact_summary")),
+            }
+        )
+    return artifacts
+
+
+def _validate_submit_status_fields(fields: tuple[str, ...]) -> None:
+    legacy = sorted(LEGACY_SUBMIT_STATUS_FIELDS.intersection(fields))
+    if legacy:
+        raise ValueError(
+            "legacy submit_status fields are not allowed: " + ", ".join(legacy)
+        )
+    missing = [field for field in SUBMIT_STATUS_FIELDS if field not in fields]
+    if missing:
+        raise ValueError(
+            "submit_status v3 missing required fields: " + ", ".join(missing)
+        )
 
 
 def normalize_detail(value: object, *, max_chars: int) -> str:

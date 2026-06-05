@@ -32,9 +32,9 @@ make pr-submit TITLE="<PR标题>"
 
 同一 head/diff 的 fragments 可复用；PR body 或 status 更新不会单独要求重新 review。GitHub update-branch 生成的同步主干 merge commit 会自动按 commit 级 `no_issue: true` 进入 PR Evidence，PR 级 closes/reference 不受影响。`main` 在其他 worktree 时，本地收尾会在该 worktree 同步 `main`。
 
-接手入口是 `.local/pr-flow/status.json`。`pr-submit` 每次开始写当前 head 的空 `failures`，失败时覆盖为 failures，成功时可留下 `failures: []`；它不是成功证明。pending 不是失败；官方 Codex review 未返回或 required checks 未完成时继续等待，只有真实阻断、配置缺失或超时才写 failures。
+接手入口是 `.local/pr-flow/status.json`。运行时只写接手快照 v3，不保留旧 `schema/head/failures` 字段；它不是成功证明。pending 不是失败；官方 Codex review 未返回或 required checks 未完成时继续等待，只有真实阻断、配置缺失或超时才写 `blocking_signals`、`diagnostic_signals`、`suggested_next_actions` 和必要的 `evidence_artifacts`。
 
-失败接手入口先读 `.local/pr-flow/status.json`；`diagnose` 只保留为 `pr-submit` 内部归因和开发测试面，不作为用户命令入口。显式处理 review thread 时使用：
+失败接手入口先读 `.local/pr-flow/status.json`；`diagnose` 只保留为 `pr-submit` 内部归因和开发测试面，不作为用户命令入口。unresolved review thread 明细写入 `.local/pr-flow/resolve-threads-plan.json`，显式处理 review thread 时使用：
 
 ```powershell
 make pr-resolve-threads THREADS="<thread-id> [<thread-id>...]"

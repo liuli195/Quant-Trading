@@ -119,6 +119,10 @@ def test_official_review_pr_flow_contract_is_documented() -> None:
             "skip_user_authorized",
             "authorized_by",
             "evidence",
+            "schema_version",
+            "blocking_signals",
+            "diagnostic_signals",
+            "resolve_threads_plan",
         ],
         Path("docs/rules/governance.md"): [
             "official_review.decision",
@@ -1174,6 +1178,41 @@ def test_governance_audit_flags_missing_owner_skill(tmp_path: Path) -> None:
     )
 
 
+def test_governance_audit_rejects_legacy_pr_flow_status_contract(
+    tmp_path: Path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    contract_path = tmp_path / "docs/rules/pr-flow-interface-contract.yaml"
+    text = Path("docs/rules/pr-flow-interface-contract.yaml").read_text(
+        encoding="utf-8"
+    )
+    legacy = text.replace(
+        "  fields:\n"
+        "    - schema_version\n"
+        "    - snapshot_subject\n"
+        "    - pr_submit_stop\n"
+        "    - checkpoint_statuses\n"
+        "    - blocking_signals\n"
+        "    - diagnostic_signals\n"
+        "    - suggested_next_actions\n"
+        "    - evidence_artifacts\n",
+        "  fields:\n"
+        "    - schema\n"
+        "    - head\n"
+        "    - failures\n",
+    )
+    contract_path.write_text(legacy, encoding="utf-8")
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "pr_flow_contract"
+        and "legacy submit_status fields" in finding.message
+        for finding in report.findings
+    )
+
+
 def _codex_review_request_body(
     *,
     pr_url: str = "https://github.com/liuli195/Quant-Trading/pull/5",
@@ -1402,6 +1441,11 @@ def _write_minimal_repo(root: Path) -> None:
         target = root / path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text("placeholder\n", encoding="utf-8")
+
+    (root / "docs/rules/pr-flow-interface-contract.yaml").write_text(
+        Path("docs/rules/pr-flow-interface-contract.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
 
     write_adr_index(root)
 

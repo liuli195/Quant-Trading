@@ -80,13 +80,93 @@ fragment:
 
 submit_status:
   fields:
-    - schema
-    - head
-    - failures
-  failure_fields:
-    - check
-    - source
-    - detail
+    - schema_version
+    - snapshot_subject
+    - pr_submit_stop
+    - checkpoint_statuses
+    - blocking_signals
+    - diagnostic_signals
+    - suggested_next_actions
+    - evidence_artifacts
+  schema_version: 3
+  description: "PR Flow 接手快照 v3；只服务当前 head 的失败接手，不作为成功证明。"
+  snapshot_subject:
+    fields:
+      - repository
+      - pr_number
+      - head_sha
+      - head_branch
+    description: "快照描述的仓库、PR、head commit 和 head branch。head_sha 不匹配当前 PR head 时必须刷新。"
+  pr_submit_stop:
+    fields:
+      - state
+      - reason_code
+      - phase
+      - is_retryable
+      - summary
+    states:
+      - DISPATCH_REQUIRED
+      - REPLY_OR_FIX_REQUIRED
+      - EXCEPTION_REQUIRED
+    description: "pr-submit 停止状态；只解释停止位置，不判断根因或修复方案。"
+  checkpoint_statuses:
+    required_names:
+      - official_codex_review
+      - required_checks
+      - pr_evidence
+      - review_threads
+      - local_review_fragments
+    statuses:
+      - unknown
+      - pending
+      - returned
+      - passed
+      - failed
+      - stale
+      - skipped
+    fields:
+      - checkpoint_name
+      - status
+      - summary
+      - evidence_location
+    description: "固定返回节点状态，所有 required_names 必须出现。"
+  signal_fields:
+    - signal_type
+    - summary
+    - source_context
+    - evidence_location
+    - currentness
+    - is_retryable
+  signal_currentness:
+    - current
+    - stale
+    - unknown
+  suggested_next_action_fields:
+    - action_summary
+    - recommended_command
+    - applies_to_signal_types
+  evidence_artifact_fields:
+    - artifact_type
+    - artifact_path
+    - artifact_summary
+  evidence_artifacts:
+    resolve_threads_plan: ".local/pr-flow/resolve-threads-plan.json"
+  closure_evidence:
+    path: ".local/pr-flow/thread-closure-evidence.json"
+    required_fields:
+      - thread_id
+      - head_sha
+      - diff_files_hash
+      - status
+      - evidence
+    dispositions:
+      fixed:
+        required_fields:
+          - fix_commit
+          - verification_command
+      false_positive:
+        required_fields:
+          - reason
 
 severity:
   blocking:
