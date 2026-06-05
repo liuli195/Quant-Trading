@@ -162,10 +162,14 @@ def build_monitor_report(
         if review_threads is not None
         else 0
     )
-    context_invalid_comment = _latest_codex_context_invalid_comment(
-        issue_comments,
-        head_created_at=head_created_at,
-        trigger_time=trigger_time,
+    context_invalid_comment = (
+        _latest_codex_context_invalid_comment(
+            issue_comments,
+            head_created_at=head_created_at,
+            trigger_time=trigger_time,
+        )
+        if trigger_time is not None
+        else None
     )
     context_invalid_comment_time = (
         _comment_effective_time(context_invalid_comment)
