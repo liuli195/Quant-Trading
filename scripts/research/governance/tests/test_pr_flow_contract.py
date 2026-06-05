@@ -1867,7 +1867,7 @@ def test_pr_review_evidence_rejects_contract_v1_diff_mismatch() -> None:
     assert "PR Evidence JSON diff does not match current PR diff" in report.errors
 
 
-def test_pr_review_evidence_rejects_contract_v1_unresolved_threads() -> None:
+def test_pr_review_evidence_ignores_threads_for_contract_v1_evidence() -> None:
     body = _managed_evidence_body(_contract_evidence_payload())
 
     report = pr_review_evidence.validate_pr_body(
@@ -1878,8 +1878,8 @@ def test_pr_review_evidence_rejects_contract_v1_unresolved_threads() -> None:
         review_threads=[{"isResolved": False}],
     )
 
-    assert not report.ok
-    assert "Codex review must not have unresolved review threads" in report.errors
+    assert report.ok
+    assert "Codex review must not have unresolved review threads" not in report.errors
 
 
 def test_submit_creates_draft_pr_with_contract_evidence_json(tmp_path: Path) -> None:

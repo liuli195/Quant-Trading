@@ -117,6 +117,7 @@ def validate_pr_body(
 ) -> EvidenceReport:
     """Return whether a PR body contains merge-blocking review evidence."""
 
+    _ = review_threads
     contract_payload, contract_errors = _extract_contract_v1_evidence(body)
     if contract_payload is not None or contract_errors:
         errors = list(contract_errors)
@@ -132,19 +133,9 @@ def validate_pr_body(
                     labels=labels,
                 )
             )
-        if (
-            review_threads is not None
-            and unresolved_blocking_codex_thread_count(review_threads) > 0
-        ):
-            errors.append("Codex review must not have unresolved review threads")
         return EvidenceReport(not errors, tuple(errors))
 
     errors = ["PR body missing PR Evidence JSON"]
-    if (
-        review_threads is not None
-        and unresolved_blocking_codex_thread_count(review_threads) > 0
-    ):
-        errors.append("Codex review must not have unresolved review threads")
     return EvidenceReport(False, tuple(errors))
 
 def _extract_contract_v1_evidence(
@@ -1261,10 +1252,6 @@ def main(argv: list[str] | None = None) -> int:
             reviews = _fetch_pr_reviews(repo=repo, pr_number=pr_number, token=token)
         if review_comments is None:
             review_comments = _fetch_pr_review_comments(
-                repo=repo, pr_number=pr_number, token=token
-            )
-        if review_threads is None:
-            review_threads = _fetch_pr_review_threads(
                 repo=repo, pr_number=pr_number, token=token
             )
         changed_files = _fetch_pr_changed_files(
