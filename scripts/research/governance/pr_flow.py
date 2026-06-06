@@ -1256,7 +1256,13 @@ def _submit_fragment_failures_for_role(
             )
         ], False
     failures: list[pr_flow_contract.SubmitFailure] = []
-    if tuple(payload) != contract.fragment_fields:
+    required_fragment_fields = set(contract.fragment_fields)
+    extra_fragment_fields = set(payload) - required_fragment_fields
+    allowed_extra_fragment_fields = {"security_review"} if role == "security" else set()
+    if (
+        required_fragment_fields - set(payload)
+        or extra_fragment_fields - allowed_extra_fragment_fields
+    ):
         failures.append(
             pr_flow_contract.SubmitFailure(
                 check="local-review",
@@ -1270,6 +1276,13 @@ def _submit_fragment_failures_for_role(
                 check="local-review",
                 source=source,
                 detail=f"{role} fragment schema must be {contract.version}",
+            )
+        )
+    if role == "security":
+        failures.extend(
+            _submit_security_review_metadata_failures(
+                payload=payload,
+                source=source,
             )
         )
     if (
@@ -1332,6 +1345,8 @@ def _submit_fragment_failures_for_role(
         return failures, False
     has_blocking = False
     allowed = set(contract.blocking_severities) | set(contract.retained_severities)
+    allowed_fields = set(contract.fragment_finding_fields)
+    allowed_statuses = {"open", "fixed", "false_positive"}
     for index, finding in enumerate(findings):
         if not isinstance(finding, dict):
             failures.append(
@@ -1342,12 +1357,12 @@ def _submit_fragment_failures_for_role(
                 )
             )
             continue
-        if tuple(finding) != contract.fragment_finding_fields:
+        if set(finding) - allowed_fields:
             failures.append(
                 pr_flow_contract.SubmitFailure(
                     check="local-review",
                     source=source,
-                    detail=f"{role} finding {index} fields must be severity/detail",
+                    detail=f"{role} finding {index} has unknown fields",
                 )
             )
             continue
@@ -1375,16 +1390,98 @@ def _submit_fragment_failures_for_role(
             )
             continue
         if severity in contract.blocking_severities:
-            if not freshness_failed:
-                has_blocking = True
-            failures.append(
-                pr_flow_contract.SubmitFailure(
-                    check="local-review",
-                    source=source,
-                    detail=f"{role} {severity}: {detail}",
+            status = _single_line_text(finding.get("status"))
+            if not status:
+                failures.append(
+                    pr_flow_contract.SubmitFailure(
+                        check="local-review",
+                        source=source,
+                        detail=f"{role} finding {index} status is required for P0/P1",
+                    )
                 )
-            )
+                continue
+            if status not in allowed_statuses:
+                failures.append(
+                    pr_flow_contract.SubmitFailure(
+                        check="local-review",
+                        source=source,
+                        detail=f"{role} finding {index} status is invalid",
+                    )
+                )
+                continue
+            if status == "fixed" and not _single_line_text(finding.get("evidence")):
+                failures.append(
+                    pr_flow_contract.SubmitFailure(
+                        check="local-review",
+                        source=source,
+                        detail=f"{role} finding {index} fixed evidence is required",
+                    )
+                )
+                continue
+            if (
+                status == "false_positive"
+                and not _single_line_text(finding.get("rationale"))
+            ):
+                failures.append(
+                    pr_flow_contract.SubmitFailure(
+                        check="local-review",
+                        source=source,
+                        detail=(
+                            f"{role} finding {index} false_positive rationale "
+                            "is required"
+                        ),
+                    )
+                )
+                continue
+            if status == "open" and not freshness_failed:
+                has_blocking = True
+            if status == "open":
+                failures.append(
+                    pr_flow_contract.SubmitFailure(
+                        check="local-review",
+                        source=source,
+                        detail=f"{role} {severity}: {detail}",
+                    )
+                )
     return failures, has_blocking
+
+
+def _submit_security_review_metadata_failures(
+    *,
+    payload: Mapping[str, object],
+    source: str,
+) -> list[pr_flow_contract.SubmitFailure]:
+    security_review = payload.get("security_review")
+    if not isinstance(security_review, Mapping):
+        return [
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail="security fragment security_review is required",
+            )
+        ]
+    tool = _single_line_text(security_review.get("tool"))
+    fallback_reason = _single_line_text(security_review.get("fallback_reason"))
+    if not tool:
+        return [
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail="security fragment security_review.tool is required",
+            )
+        ]
+    if tool != "codex-security" and not fallback_reason:
+        return [
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail=(
+                    "security fragment fallback_reason is required when tool is "
+                    "not codex-security"
+                ),
+            )
+        ]
+    return []
 
 
 def _submit_security_fragment_failures(
@@ -1401,6 +1498,66 @@ def _submit_security_fragment_failures(
         expected_head_sha=head_sha,
         expected_diff_hash=diff_hash,
     )
+
+
+def warn_review_fragment_freshness(
+    *,
+    repo_root: str | Path = ".",
+    runner: Runner | None = None,
+) -> int:
+    root = Path(repo_root).resolve()
+    runner = runner or CommandRunner()
+    contract = pr_flow_contract.load_contract(root)
+    head = runner.run(["git", "rev-parse", "HEAD"], cwd=root)
+    if head.returncode != 0:
+        return SUCCESS_EXIT_CODE
+    head_sha = _command_stdout(head)
+    try:
+        diff_hash = _submit_current_diff_hash(root, runner)
+    except GitHubDataUnavailable:
+        return SUCCESS_EXIT_CODE
+
+    affected: list[tuple[str, str]] = []
+    existing_fragments = 0
+    for role, relative in contract.reviewer_fragments.items():
+        path = root / relative
+        if not path.is_file():
+            continue
+        existing_fragments += 1
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError):
+            affected.append((role, "schema invalid"))
+            continue
+        if not isinstance(payload, Mapping):
+            affected.append((role, "schema invalid"))
+            continue
+        fragment_diff = _single_line_text(payload.get("diff"))
+        fragment_head = _single_line_text(payload.get("head"))
+        if fragment_diff != diff_hash:
+            affected.append((role, "stale diff"))
+        elif fragment_head != head_sha:
+            affected.append((role, "head refreshable"))
+
+    if not existing_fragments or not affected:
+        return SUCCESS_EXIT_CODE
+
+    print("local review fragments freshness warning", file=sys.stderr)
+    print(f"current head: {head_sha}", file=sys.stderr)
+    print(f"current diff: {diff_hash}", file=sys.stderr)
+    for role, status in affected:
+        print(f"- {role}: {status}", file=sys.stderr)
+    if any(status != "head refreshable" for _role, status in affected):
+        print(
+            "next action: rerun local review and remap fragments before pr-submit",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            "next action: pr-submit can refresh same-diff fragment heads",
+            file=sys.stderr,
+        )
+    return SUCCESS_EXIT_CODE
 
 
 def _submit_current_diff_hash(root: Path, runner: Runner) -> str:
@@ -5707,6 +5864,10 @@ def build_parser() -> argparse.ArgumentParser:
     submit_parser.add_argument("--pr")
     submit_parser.add_argument("--official-review-skip-authorized-by")
     submit_parser.add_argument("--official-review-skip-evidence")
+    subparsers.add_parser(
+        "pre-push-review-fragments",
+        help=argparse.SUPPRESS,
+    )
     resolve_threads_parser = subparsers.add_parser("resolve-threads")
     resolve_threads_parser.add_argument("thread_ids", nargs="*")
     resolve_threads_parser.add_argument("--thread", action="append", default=[])
@@ -5740,6 +5901,8 @@ def main(argv: list[str] | None = None) -> int:
             ),
             official_review_skip_evidence=args.official_review_skip_evidence,
         )
+    if args.command == "pre-push-review-fragments":
+        return warn_review_fragment_freshness(repo_root=args.repo_root)
     if args.command == "resolve-threads":
         return resolve_review_threads(
             repo_root=args.repo_root,

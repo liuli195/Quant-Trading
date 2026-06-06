@@ -620,22 +620,24 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "pre-push hook missing branch protection gate",
                 )
             )
-        if "scripts.research.governance verify full" not in text:
+        if "scripts.research.governance.pr_flow pre-push-review-fragments" not in text:
             findings.append(
                 AuditFinding(
                     "governance_gate",
                     "error",
-                    "pre-push hook missing full governance verification",
+                    "pre-push hook missing local review fragments freshness reminder",
                 )
             )
-        if "scripts.research.governance gate" in text or (
-            "scripts.research.governance verify fast" in text
+        if (
+            "scripts.research.governance gate" in text
+            or "scripts.research.governance verify fast" in text
+            or "scripts.research.governance verify full" in text
         ):
             findings.append(
                 AuditFinding(
                     "governance_gate",
                     "error",
-                    "pre-push hook must use verify full",
+                    "pre-push hook must not run local governance verification",
                 )
             )
         if "git lfs pre-push" not in text:

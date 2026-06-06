@@ -1605,7 +1605,7 @@ def _write_minimal_repo(root: Path) -> None:
         "\n".join(
             [
                 "sh .githooks/run-python.sh -m scripts.research.governance.branch_protection pre-push",
-                "sh .githooks/run-python.sh -m scripts.research.governance verify full",
+                "sh .githooks/run-python.sh -m scripts.research.governance.pr_flow pre-push-review-fragments",
                 "git lfs pre-push",
             ]
         ),
@@ -1971,7 +1971,33 @@ def test_governance_audit_flags_pre_push_with_fast_gate(
     assert not report.ok
     assert any(
         finding.rule_id == "governance_gate"
-        and "pre-push hook must use verify full" in finding.message
+        and "pre-push hook must not run local governance verification" in finding.message
+        for finding in report.findings
+    )
+
+
+def test_governance_audit_flags_pre_push_with_local_verify_full(
+    tmp_path: Path,
+) -> None:
+    _write_minimal_repo(tmp_path)
+    (tmp_path / ".githooks/pre-push").write_text(
+        "\n".join(
+            [
+                "sh .githooks/run-python.sh -m scripts.research.governance.branch_protection pre-push",
+                "sh .githooks/run-python.sh -m scripts.research.governance.pr_flow pre-push-review-fragments",
+                "sh .githooks/run-python.sh -m scripts.research.governance verify full",
+                "git lfs pre-push",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)
+
+    assert not report.ok
+    assert any(
+        finding.rule_id == "governance_gate"
+        and "pre-push hook must not run local governance verification" in finding.message
         for finding in report.findings
     )
 
@@ -3029,7 +3055,8 @@ def test_governance_audit_flags_pre_push_without_gate(tmp_path) -> None:
     assert not report.ok
     assert any(
         finding.rule_id == "governance_gate"
-        and "pre-push hook missing full governance verification" in finding.message
+        and "pre-push hook missing local review fragments freshness reminder"
+        in finding.message
         for finding in report.findings
     )
 
@@ -3038,7 +3065,7 @@ def test_governance_audit_flags_pre_push_without_lfs_handoff(tmp_path) -> None:
     _write_minimal_repo(tmp_path)
     (tmp_path / ".githooks/pre-push").write_text(
         "python -m scripts.research.governance.branch_protection pre-push\n"
-        "python -m scripts.research.governance gate\n",
+        "python -m scripts.research.governance.pr_flow pre-push-review-fragments\n",
         encoding="utf-8",
     )
     report = run_audit(tmp_path, check_cli_help=False, check_pathrefs=False)

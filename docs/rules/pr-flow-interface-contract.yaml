@@ -76,7 +76,15 @@ fragment:
     - findings
   finding_fields:
     - severity
+    - status
     - detail
+    - evidence
+    - rationale
+    - reviewer
+  finding_statuses:
+    - open
+    - fixed
+    - false_positive
 
 submit_status:
   fields:

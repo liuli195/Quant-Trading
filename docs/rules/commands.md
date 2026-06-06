@@ -47,7 +47,7 @@ gh pr checks <PR号或URL> --required --watch --interval 10
 gh pr checks <PR号或URL> --required
 ```
 
-`verify explain` 只说明会命中哪些检查，不执行命令。`verify fast` 是日常小改入口，只表示当前改动可继续开发；PR 提交走 `pr-submit`，不把本地 `verify full` 作为前置证据；push 前、CI 和最终交付以 `verify full` / `Research Governance / verify-full` 为准。
+`verify explain` 只说明会命中哪些检查，不执行命令。`verify fast` 是日常小改入口，只表示当前改动可继续开发；PR 提交走 `pr-submit`，不把本地 `verify full` 作为前置证据；pre-push 只做主干保护和 local review fragments freshness 提醒，最终合并证据以 GitHub `Research Governance / verify-full` 为准。
 
 可用 CLI：
 

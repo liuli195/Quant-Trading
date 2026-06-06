@@ -10,10 +10,11 @@
 - 所有 PR 必须完成本地 AI review、问题评级和风险分级。
 - 本地 AI review 必须记录至少两个独立 reviewer；有子 agent 能力时必须完成子 agent 交叉评审。无能力时记录原因和替代证据。
 - 交叉评审必须记录 `superpowers:subagent-driven-development/spec-reviewer-prompt.md`、`superpowers:subagent-driven-development/code-quality-reviewer-prompt.md` 和 `reviewers: A, B`。
-- Codex 本地安全 review 使用 `codex-security`；Claude 使用 `security-guidance`；结构化 fragment 记录安全结论，PR body 只保留 PR Evidence JSON。
+- Codex 本地安全 review 默认使用 `codex-security`；工具不可用时允许替代 security review，但 security fragment 必须记录 `security_review.tool` 和非 `codex-security` 时的 `security_review.fallback_reason`。Claude 使用 `security-guidance`；结构化 fragment 记录安全结论，PR body 只保留 PR Evidence JSON。
 - 本地 AI review 默认 `review_mode=complete`；`complete_review.iterations` 必须证明每个 reviewer 最后一轮 `no_new_findings=true` 且 `new_findings=[]`。
 - `review_mode=partial` 只在用户显式授权时可用，并记录 `authorized_by`、`reason`、`evidence`。
 - P0/P1 未以 `fixed` 或 `false_positive` 关闭前，不得进入下一阶段。
+- 本地 review fragment 的 P0/P1 finding 必须记录 `status=open|fixed|false_positive`；`fixed` 必须记录 current head/diff 下的 `evidence`，`false_positive` 必须记录 `rationale`。该语义与官方 Codex thread closure evidence 一致，但存储表面不同。
 - `target spec wins`: 当目标 Issue/PRD/spec 与旧规则或 ADR 冲突时，review finding 应归类为 `rule/ADR drift`；规则或 ADR 修改仍必须先获得用户显式授权。
 - 官方 Codex Code Review 是否等待只看 PR Evidence `official_review.decision`：`required` 等待官方 review，`skip_risk_low` 跳过低风险官方 review，`skip_user_authorized` 表示用户显式授权跳过官方 review。
 - `skip_user_authorized` 只记录 `authorized_by + evidence`，不记录 `reason`；该授权不能绕过 unresolved thread、P0/P1 或 GitHub required checks 的其它阻断。
@@ -83,6 +84,7 @@ Review Scope：
 
 - `repo-pr-governance wrapper for $review`: 主 agent 用本技能作为轻量包装器，不修改 `$review` 技能，不复制完整提示词，不让 `pr-submit` 派发子 agent。
 - `pr-submit` 只校验结构化 fragments；缺失时输出 `DISPATCH_REQUIRED`。主 agent 派发 `$review`，并把 `$review` 文本结论映射为 standards/spec fragments；Security review 独立生成 security fragment。
+- 主 agent 映射 `$review` / Security review 结果时，不能用空 findings 吞掉 P0/P1；必须保留 `open`、`fixed` 或 `false_positive` 的处置解释。
 - 有 Issue refs 时，只在 `$review` 默认逻辑基础上补充 spec hint：`closes` 是主规格，`reference` 是背景。无 Issue refs 或 no-Issue 时，完全走 `$review` 默认逻辑。
 
 ## Issue Intent Review
