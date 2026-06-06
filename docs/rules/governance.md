@@ -15,6 +15,7 @@
 - `verify-full` 是 head/diff 级别检查，只由 `main` push、PR head 变化、schedule 和 manual dispatch 触发；不监听 review、thread、label 或 `ready_for_review` 事件。
 - `PR Flow / evidence` 只校验 PR body 托管区中的 PR Evidence JSON v2；CI 不读取本地 `.local` 产物。
 - `PR Flow / evidence` 保留 PR body `edited` 触发，并只监听 `opened`、`synchronize`、`reopened`、`edited`。
+- 需要官方 Codex review 时，`pr-submit` 必须先通过 local stable gate；该 gate 只等待 current head 的 `Research Governance / verify-full` 和 `PR Flow / evidence`，明确排除 `PR Flow / review-status`。pending 超时使用 `WAITING_LOCAL_STABILIZATION` reason_code 和 `submit_local_stabilization` phase，不新增顶层 stop state，并在 `.local/pr-flow/local-stabilization.json` 留下 current head、last triggered head、superseded 和 next trigger condition。
 - `PR Flow / review-status` 监听当前 head 的官方 Codex review、PR Evidence `official_review.decision` 和 unresolved threads。`official_review.decision=required` 且官方 Codex review 未返回时保持 pending；官方 P0/P1、无 severity thread 和 unresolved human thread 阻断；官方 P2/P3 由 `pr_flow` 接受、resolve、重新读取确认 resolved，并写入 PR Evidence `retained`。`skip_risk_low` 或 `skip_user_authorized` 时，该 check 可写 skipped success；用户授权只记录 `authorized_by + evidence`。
 - `ai-risk-review` label 不参与 `skip_risk_low` 校验、required-check 触发或 current-head verdict，只作为人工可见风险标记。
 - `PR Flow / review-status` 保留 review/thread/workflow_dispatch 触发；PR branch worker 的 `pull_request` 触发只覆盖 `opened`、`synchronize`、`reopened`。
@@ -26,6 +27,7 @@
 - `expected_head_sha` 与 PR 当前 head 不一致时，worker 必须写 `error`，description 为 `PR head changed before monitor completed`，并停止 checkout、install 和 monitor，不得让旧 run 覆盖新 head verdict。
 - 只要 GitHub conversation resolution ruleset 要求 resolved conversation，未 resolved 的 review thread 必须阻断；风险/授权跳过只影响是否等待官方 Codex review，不绕过其它 required checks。
 - 修复后的 review thread 只能由 `pr_flow resolve-threads` 或内部恢复命令显式 resolve，且必须显式传入 thread ID；不得猜测或批量 resolve 全部未处理 thread。官方 P2/P3 例外路径只能由 `pr_flow` 写入固定接受模板和 PR Evidence retained 后 resolve 并重新读取确认；官方 P0/P1 只有结构化 `fixed` / `false_positive` 证据且绑定当前 head/diff/thread ID 时才可自动关闭，reply/resolve 后也必须重新读取确认 resolved。
+- 本地 review fragments 和 official Codex P0/P1 closure evidence 的 agent-only builder 都只接受结构化 JSON payload；失败不得写半成品 evidence。pre-push freshness 仍只提醒，不写 handoff、不生成、不刷新、不修改 fragments。
 - 本地仓库必须设置 `git config core.hooksPath .githooks`，普通 worktree 和 linked worktree 都必须检查。
 - `.githooks/pre-commit`、`.githooks/pre-push`、`.githooks/reference-transaction` 必须通过 `.githooks/run-python.sh` 选择项目虚拟环境，不硬编码单一平台解释器。
 - `.githooks/pre-push` 必须调用 `scripts.research.governance.branch_protection pre-push` 和 `scripts.research.governance.pr_flow pre-push-review-fragments`，并保留 Git LFS pre-push 转交；该 freshness 提醒不生成、不刷新、不修改 review fragments，也不阻断 push。

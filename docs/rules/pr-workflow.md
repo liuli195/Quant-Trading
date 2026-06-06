@@ -5,7 +5,7 @@ Review 细则见 [review-guidelines.md](review-guidelines.md) <!-- pathref: docs
 ## 默认入口
 
 - 高频 PR 流程只使用 `make pr-submit TITLE="<PR标题>"`，等价于 `.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow submit --title "<PR标题>"`。
-- `pr-submit` 是前台有界自动流程：读取 `PR Flow Interface Contract`、检查 GitHub auto-merge / merge 后删远端分支 / required checks 配置、校验本地 review fragments、创建或更新 draft PR、刷新 PR Evidence JSON、ready-for-review、按风险/授权判断是否触发官方 Codex review、等待 required checks、head-locked auto-merge、等待 merged，并做本地收尾。
+- `pr-submit` 是前台有界自动流程：读取 `PR Flow Interface Contract`、检查 GitHub auto-merge / merge 后删远端分支 / required checks 配置、校验本地 review fragments、创建或更新 draft PR、刷新 PR Evidence JSON、ready-for-review、通过 local stable gate 后按风险/授权触发官方 Codex review、等待 required checks、head-locked auto-merge、等待 merged，并做本地收尾。
 - 官方 Codex completion comment 触发的 `PR Flow / review-status` 由默认分支 router 自动 dispatch 到 PR head branch worker；`pr-submit` 不维护 PR Flow changed-files 白名单、不直接触发 `workflow_dispatch`、不新增公开 `diagnose`、`handoff` 或 `refresh` 入口。
 - `pr-submit` 触发 `@codex review` 后，必须用 Codex bot 对该 trigger comment 的 `eyes` reaction 确认远端已接收；当前 head trigger 后若已出现 current-head Codex 输出，也视为触发成功。当前 head trigger 超过 3 分钟仍无 `eyes` 或 current-head 输出时，必须重新发送一次 `@codex review`。`eyes` 只代表接收确认，不代表 review 完成；`+1` reaction 不是 current-head verdict。
 - pending 是等待状态，不是失败状态。需要官方 Codex review 但未返回、或 required checks 未完成时，`pr-submit` 继续等待；只有 P0/P1、unresolved thread、CI failure、配置缺失、官方 Codex 不可用或 10 分钟超时才写接手快照 v3 并退出。
@@ -27,6 +27,7 @@ Review 细则见 [review-guidelines.md](review-guidelines.md) <!-- pathref: docs
 
 - 本地 review fragment 是 `pr-submit` 的输入，路径和字段以 [pr-flow-interface-contract.yaml](pr-flow-interface-contract.yaml) <!-- pathref: docs/rules/pr-flow-interface-contract.yaml --> 为准。
 - review fragment 只绑定当前 `head` 和 `diff`；PR body、required status 或 update-branch 状态变化不会单独让 fragment 失效。只有 fragment 缺失、`head` 不匹配或 `diff` 不匹配时才要求重新 review。
+- `pr-submit` 遇到 missing / stale local review fragments 时写 `.local/pr-flow/review-fragments-handoff.json`，列出 current head、diff、role、目标 fragment 路径和 agent-only builder 输入模板。标准动作是重新 review，然后用结构化 verdict payload 通过隐藏 builder 落 current fragment；不得从聊天总结推断 pass。
 - push 时 `.githooks/pre-push` 会非阻断提醒 existing local review fragments 是否 stale；看到 stale diff 提醒后，主 agent 必须先重新 review / 重新映射 fragments，再运行 `pr-submit`。same diff 仅 head stale 时，`pr-submit` 可按现有规则刷新 fragment head。
 - P0/P1 finding 必须在 fragment 中记录 `status=open|fixed|false_positive`；只有 `open` 阻断，`fixed` 必须带 current head/diff 下的 `evidence`，`false_positive` 必须带 `rationale`。stale fragment 中的 closed P0/P1 不能作为当前关闭证据。
 - security fragment 顶层必须记录 `security_review.tool`；未使用 `codex-security` 时必须记录 `security_review.fallback_reason`。
@@ -35,6 +36,8 @@ Review 细则见 [review-guidelines.md](review-guidelines.md) <!-- pathref: docs
 - Issue intent 并入 PR Evidence JSON 的 `issues`，不再单独维护 Issue intent machine block。每个 PR commit 要么有关联 Issue，要么明确 `no_issue: true`。
 - GitHub update-branch 生成的同步主干 merge commit 由 `pr-submit` 自动按 commit 级 `no_issue: true` 覆盖；PR 级 `issues.refs` 仍只表达 closes/reference，不受该 synthetic merge commit 影响。
 - 手工排障先读 `.local/pr-flow/status.json`；旧 required-check failure 只能进入 `diagnostic_signals`，当前阻断只进入 `blocking_signals`；GitHub 当前状态归因由 `pr-submit` 内部处理，`diagnose` 不作为用户流程入口。
+- official Codex P0/P1 thread 接手只读 `.local/pr-flow/resolve-threads-plan.json`，提供结构化 closure verdict payload，并用隐藏 builder upsert `.local/pr-flow/thread-closure-evidence.json`。builder 只处理 current head / current diff / plan 中的 unresolved official Codex P0/P1 thread，不自动 reply、不自动 resolve；推进仍由 `pr-submit` 完成。
+- local stable gate 位于 PR Evidence sync / ready-for-review 之后、官方 Codex review trigger 之前，只等待 current head 的 `PR Flow / evidence` 和 `Research Governance / verify-full`。`PR Flow / review-status` 不参与 local stable gate，避免 official review 与 review-status 循环等待；pending 超时写 `reason_code=WAITING_LOCAL_STABILIZATION`、`phase=submit_local_stabilization`，不新增顶层 stop state，并落 `.local/pr-flow/local-stabilization.json` 记录 current head、last triggered head、superseded 和 next trigger condition。
 
 ## Commit Intent
 

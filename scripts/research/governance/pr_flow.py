@@ -10,6 +10,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -18,7 +19,12 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from . import pr_flow_contract, pr_review_evidence
-from .codex_review_contract import is_codex_review_request, render_codex_review_request
+from .codex_review_contract import (
+    CodexReviewRequest,
+    is_codex_review_request,
+    parse_codex_review_request,
+    render_codex_review_request,
+)
 
 
 MANAGED_BLOCK_START = "<!-- pr-flow:start -->"
@@ -622,6 +628,13 @@ def submit(
     if failures:
         for failure in failures:
             print(f"error: {failure.check}: {failure.detail}", file=sys.stderr)
+        handoff_artifact = _write_review_fragments_handoff(
+            root=root,
+            contract=contract,
+            head_sha=head_sha,
+            diff_hash=diff_hash,
+            failures=failures,
+        )
         return _fail_submit(
             root, contract,
             REPLY_OR_FIX_REQUIRED_EXIT_CODE if has_blocking else DISPATCH_REQUIRED_EXIT_CODE,
@@ -631,6 +644,7 @@ def submit(
             phase="submit_fragments",
             retryable=not has_blocking,
             failures=failures,
+            evidence_artifacts=(handoff_artifact,) if handoff_artifact else (),
         )
     failures, has_blocking = _submit_security_fragment_failures(
         root=root,
@@ -641,6 +655,13 @@ def submit(
     if failures:
         for failure in failures:
             print(f"error: {failure.check}: {failure.detail}", file=sys.stderr)
+        handoff_artifact = _write_review_fragments_handoff(
+            root=root,
+            contract=contract,
+            head_sha=head_sha,
+            diff_hash=diff_hash,
+            failures=failures,
+        )
         return _fail_submit(
             root, contract,
             REPLY_OR_FIX_REQUIRED_EXIT_CODE if has_blocking else DISPATCH_REQUIRED_EXIT_CODE,
@@ -650,6 +671,7 @@ def submit(
             phase="submit_security",
             retryable=not has_blocking,
             failures=failures,
+            evidence_artifacts=(handoff_artifact,) if handoff_artifact else (),
         )
     try:
         review_state, failures = _submit_review_state(
@@ -807,6 +829,49 @@ def submit(
     if ready_code != SUCCESS_EXIT_CODE:
         return ready_code
     if review_state.requires_official_codex_review:
+        local_stable = _submit_wait_local_stable_checks(
+            root=root,
+            runner=runner,
+            contract=contract,
+            pr_number=pr or pr_number,
+            timeout_seconds=watch_timeout_seconds,
+            poll_seconds=watch_poll_seconds,
+        )
+        if local_stable.failures:
+            local_stable_artifact = _write_local_stabilization_artifact(
+                root=root,
+                contract=contract,
+                runner=runner,
+                pr_url=pr_url,
+                head_sha=head_sha,
+                failures=local_stable.failures,
+            )
+            reason_code = (
+                contract.local_stable_pending_reason_code
+                or "WAITING_LOCAL_STABILIZATION"
+                if _local_stable_has_only_pending_timeouts(local_stable.failures)
+                else "REQUIRED_CHECKS_FAILED"
+            )
+            return _fail_submit(
+                root,
+                contract,
+                EXCEPTION_REQUIRED_EXIT_CODE,
+                head_sha=head_sha,
+                snapshot_context=snapshot_context,
+                reason_code=reason_code,
+                phase=contract.local_stable_pending_phase
+                or "submit_local_stabilization",
+                retryable=True,
+                failures=local_stable.failures,
+                diagnostics=local_stable.diagnostics,
+                checkpoint_statuses=(
+                    *local_stable.checkpoint_statuses,
+                    _local_stable_official_review_checkpoint(),
+                ),
+                evidence_artifacts=(
+                    (local_stable_artifact,) if local_stable_artifact else ()
+                ),
+            )
         request_code = _submit_request_codex_review(
             root=root,
             runner=runner,
@@ -1515,6 +1580,265 @@ def _submit_security_fragment_failures(
     )
 
 
+def _write_review_fragments_handoff(
+    *,
+    root: Path,
+    contract: pr_flow_contract.PRFlowContract,
+    head_sha: str,
+    diff_hash: str,
+    failures: Sequence[pr_flow_contract.SubmitFailure],
+) -> dict[str, str] | None:
+    rel_path = contract.review_fragments_handoff_path
+    fragments: list[dict[str, object]] = []
+    role_by_source = {
+        relative.as_posix(): role
+        for role, relative in contract.reviewer_fragments.items()
+    }
+    seen: set[str] = set()
+    for failure in failures:
+        if failure.check != "local-review":
+            continue
+        role = role_by_source.get(failure.source)
+        if role is None or role in seen:
+            continue
+        state = _review_fragment_handoff_state(role, failure.detail)
+        if not state:
+            continue
+        seen.add(role)
+        fragments.append(
+            {
+                "role": role,
+                "state": state,
+                "detail": failure.detail,
+                "target_fragment_path": failure.source,
+                "builder_input_template": _review_fragment_builder_input_template(
+                    role=role,
+                    contract=contract,
+                    head_sha=head_sha,
+                    diff_hash=diff_hash,
+                ),
+            }
+        )
+    if not fragments:
+        return None
+    payload = {
+        "schema_version": 1,
+        "head_sha": head_sha,
+        "diff_hash": diff_hash,
+        "fragments": fragments,
+    }
+    path = root / rel_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=contract.json_indent) + "\n",
+        encoding="utf-8",
+    )
+    count = len(fragments)
+    noun = "fragment" if count == 1 else "fragments"
+    return {
+        "artifact_type": "review_fragments_handoff",
+        "artifact_path": rel_path.as_posix(),
+        "artifact_summary": f"{count} local review {noun} require agent mapping",
+    }
+
+
+def _review_fragment_builder_input_template(
+    *,
+    role: str,
+    contract: pr_flow_contract.PRFlowContract,
+    head_sha: str,
+    diff_hash: str,
+) -> dict[str, object]:
+    template: dict[str, object] = {
+        "source": role,
+        "verdict": "pass",
+        "reviewed_head": head_sha,
+        "reviewed_diff": diff_hash,
+        "reviewer": "",
+        "findings": [],
+    }
+    if role == "security":
+        template["security_review"] = {
+            "tool": contract.fragment_security_review_default_tool,
+        }
+    return template
+
+
+def _review_fragment_handoff_state(role: str, detail: str) -> str:
+    if detail == f"{role} fragment is missing":
+        return "missing"
+    if detail == f"{role} fragment head is stale":
+        return "head_stale"
+    if detail == f"{role} fragment diff is stale":
+        return "diff_stale"
+    if "fragment" in detail and (
+        "invalid" in detail
+        or "schema" in detail
+        or "fields" in detail
+        or "required" in detail
+        or "JSON" in detail
+        or "findings must be a list" in detail
+    ):
+        return "invalid"
+    return ""
+
+
+def build_review_fragment_from_payload(
+    *,
+    repo_root: str | Path = ".",
+    payload: Mapping[str, object],
+    runner: Runner | None = None,
+) -> int:
+    root = Path(repo_root).resolve()
+    runner = runner or CommandRunner()
+    contract = pr_flow_contract.load_contract(root)
+    role = _single_line_text(payload.get("source"))
+    verdict = _single_line_text(payload.get("verdict"))
+    reviewer = (
+        _single_line_text(payload.get("reviewer"))
+        or _single_line_text(payload.get("review_source"))
+    )
+    reviewed_head = _single_line_text(payload.get("reviewed_head"))
+    reviewed_diff = _single_line_text(payload.get("reviewed_diff"))
+    if role not in contract.reviewer_fragments:
+        print("error: local-review: verdict source is invalid", file=sys.stderr)
+        return DISPATCH_REQUIRED_EXIT_CODE
+    if verdict not in {"pass", "findings"}:
+        print("error: local-review: verdict must be pass or findings", file=sys.stderr)
+        return DISPATCH_REQUIRED_EXIT_CODE
+    if not reviewer or not reviewed_head or not reviewed_diff:
+        print(
+            "error: local-review: reviewer, reviewed_head and reviewed_diff are required",
+            file=sys.stderr,
+        )
+        return DISPATCH_REQUIRED_EXIT_CODE
+    head_sha = _command_stdout(runner.run(["git", "rev-parse", "HEAD"], cwd=root))
+    try:
+        diff_hash = _submit_current_diff_hash(root, runner)
+    except GitHubDataUnavailable as exc:
+        _print_github_data_unavailable(exc)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    if reviewed_diff != diff_hash:
+        print("error: local-review: reviewed_diff is stale", file=sys.stderr)
+        return DISPATCH_REQUIRED_EXIT_CODE
+    findings = _review_fragment_findings_from_payload(
+        payload,
+        verdict=verdict,
+        reviewer=reviewer,
+    )
+    if findings is None:
+        return DISPATCH_REQUIRED_EXIT_CODE
+    fragment: dict[str, object] = {
+        "schema": contract.version,
+        "head": head_sha,
+        "diff": diff_hash,
+        "findings": findings,
+    }
+    if role == "security":
+        security_review = payload.get("security_review")
+        if not isinstance(security_review, Mapping):
+            print(
+                "error: local-review: security_review is required for security",
+                file=sys.stderr,
+            )
+            return DISPATCH_REQUIRED_EXIT_CODE
+        fragment["security_review"] = dict(security_review)
+        failures = _submit_security_review_metadata_failures(
+            contract=contract,
+            payload=fragment,
+            source=contract.reviewer_fragments[role].as_posix(),
+        )
+        if failures:
+            for failure in failures:
+                print(f"error: {failure.check}: {failure.detail}", file=sys.stderr)
+            return DISPATCH_REQUIRED_EXIT_CODE
+    failures, has_blocking = _review_fragment_candidate_failures(
+        contract=contract,
+        role=role,
+        fragment=fragment,
+        expected_head_sha=head_sha,
+        expected_diff_hash=diff_hash,
+    )
+    structural_failures = [
+        failure
+        for failure in failures
+        if not (has_blocking and _is_open_blocking_fragment_failure(role, failure))
+    ]
+    if structural_failures:
+        for failure in structural_failures:
+            print(f"error: {failure.check}: {failure.detail}", file=sys.stderr)
+        return DISPATCH_REQUIRED_EXIT_CODE
+    path = root / contract.reviewer_fragments[role]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(fragment, ensure_ascii=False, indent=contract.json_indent) + "\n",
+        encoding="utf-8",
+    )
+    return SUCCESS_EXIT_CODE
+
+
+def _review_fragment_findings_from_payload(
+    payload: Mapping[str, object],
+    *,
+    verdict: str,
+    reviewer: str,
+) -> list[dict[str, object]] | None:
+    raw_findings = payload.get("findings")
+    if verdict == "pass":
+        if raw_findings not in (None, []):
+            print("error: local-review: pass verdict cannot include findings", file=sys.stderr)
+            return None
+        return []
+    if not isinstance(raw_findings, list) or not raw_findings:
+        print("error: local-review: findings verdict requires findings", file=sys.stderr)
+        return None
+    findings: list[dict[str, object]] = []
+    for item in raw_findings:
+        if not isinstance(item, Mapping):
+            print("error: local-review: finding must be an object", file=sys.stderr)
+            return None
+        finding = dict(item)
+        finding.setdefault("reviewer", reviewer)
+        findings.append(finding)
+    return findings
+
+
+def _review_fragment_candidate_failures(
+    *,
+    contract: pr_flow_contract.PRFlowContract,
+    role: str,
+    fragment: Mapping[str, object],
+    expected_head_sha: str,
+    expected_diff_hash: str,
+) -> tuple[list[pr_flow_contract.SubmitFailure], bool]:
+    with tempfile.TemporaryDirectory(prefix="pr-flow-fragment-") as temp_dir:
+        temp_root = Path(temp_dir)
+        path = temp_root / contract.reviewer_fragments[role]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(fragment, ensure_ascii=False, indent=contract.json_indent) + "\n",
+            encoding="utf-8",
+        )
+        return _submit_fragment_failures_for_role(
+            root=temp_root,
+            contract=contract,
+            role=role,
+            expected_head_sha=expected_head_sha,
+            expected_diff_hash=expected_diff_hash,
+        )
+
+
+def _is_open_blocking_fragment_failure(
+    role: str,
+    failure: pr_flow_contract.SubmitFailure,
+) -> bool:
+    if failure.check != "local-review":
+        return False
+    return failure.detail.startswith(f"{role} P0:") or failure.detail.startswith(
+        f"{role} P1:"
+    )
+
+
 def warn_review_fragment_freshness(
     *,
     repo_root: str | Path = ".",
@@ -1783,7 +2107,8 @@ def _submit_thread_processing_payload(
 
 
 def _read_thread_closure_evidence(root: Path) -> list[dict[str, Any]]:
-    path = root / ".local" / "pr-flow" / "thread-closure-evidence.json"
+    contract = pr_flow_contract.load_contract(root)
+    path = root / contract.thread_closure_evidence_path
     payload = _read_json_object(path)
     if not payload:
         return []
@@ -1797,6 +2122,131 @@ def _fingerprint_diff_files_hash(fingerprint: dict[str, Any] | None) -> str:
     if not isinstance(fingerprint, dict):
         return ""
     return _single_line_text(fingerprint.get("diff_files_hash"))
+
+
+def build_thread_closure_evidence_from_payload(
+    *,
+    repo_root: str | Path = ".",
+    payload: Mapping[str, object],
+    runner: Runner | None = None,
+) -> int:
+    root = Path(repo_root).resolve()
+    runner = runner or CommandRunner()
+    source = _single_line_text(payload.get("source"))
+    thread_id = _single_line_text(payload.get("thread_id"))
+    severity = _single_line_text(payload.get("severity"))
+    disposition = _single_line_text(payload.get("disposition"))
+    evidence = _single_line_text(payload.get("evidence"))
+    head_sha = _single_line_text(payload.get("head_sha"))
+    diff_hash = _single_line_text(payload.get("diff_files_hash"))
+    if source != "official_codex_review_thread":
+        print("error: official-codex-review-thread: source is invalid", file=sys.stderr)
+        return DISPATCH_REQUIRED_EXIT_CODE
+    if not thread_id or severity not in {"P0", "P1"}:
+        print(
+            "error: official-codex-review-thread: thread_id and P0/P1 severity are required",
+            file=sys.stderr,
+        )
+        return DISPATCH_REQUIRED_EXIT_CODE
+    if disposition not in CLOSED_REVIEW_THREAD_DISPOSITIONS or not evidence:
+        print(
+            "error: official-codex-review-thread: disposition and evidence are required",
+            file=sys.stderr,
+        )
+        return DISPATCH_REQUIRED_EXIT_CODE
+    if disposition == "fixed" and (
+        not _single_line_text(payload.get("fix_commit"))
+        or not _single_line_text(payload.get("verification_command"))
+    ):
+        print(
+            "error: official-codex-review-thread: fixed requires fix_commit and verification_command",
+            file=sys.stderr,
+        )
+        return DISPATCH_REQUIRED_EXIT_CODE
+    if disposition == "false_positive" and not _false_positive_rationale(dict(payload)):
+        print(
+            "error: official-codex-review-thread: false_positive requires reason",
+            file=sys.stderr,
+        )
+        return DISPATCH_REQUIRED_EXIT_CODE
+    current_head = _command_stdout(runner.run(["git", "rev-parse", "HEAD"], cwd=root))
+    try:
+        current_diff = _submit_current_diff_hash(root, runner)
+    except GitHubDataUnavailable as exc:
+        _print_github_data_unavailable(exc)
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    if head_sha != current_head or diff_hash != current_diff:
+        print(
+            "error: official-codex-review-thread: closure evidence is not current",
+            file=sys.stderr,
+        )
+        return DISPATCH_REQUIRED_EXIT_CODE
+    plan_failure = _thread_closure_plan_failure(
+        root=root,
+        thread_id=thread_id,
+        severity=severity,
+        head_sha=head_sha,
+        diff_hash=diff_hash,
+    )
+    if plan_failure:
+        print(f"error: official-codex-review-thread: {plan_failure}", file=sys.stderr)
+        return DISPATCH_REQUIRED_EXIT_CODE
+    finding = dict(payload)
+    existing = _read_thread_closure_evidence(root)
+    retained = [
+        item
+        for item in existing
+        if _single_line_text(item.get("thread_id")) != thread_id
+    ]
+    retained.append(finding)
+    output = {
+        "schema_version": THREAD_PROCESSING_SCHEMA_VERSION,
+        "external_findings": retained,
+    }
+    contract = pr_flow_contract.load_contract(root)
+    path = root / contract.thread_closure_evidence_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(output, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return SUCCESS_EXIT_CODE
+
+
+def _thread_closure_plan_failure(
+    *,
+    root: Path,
+    thread_id: str,
+    severity: str,
+    head_sha: str,
+    diff_hash: str,
+) -> str:
+    contract = pr_flow_contract.load_contract(root)
+    plan = _read_json_object(root / contract.resolve_threads_plan_path)
+    if not plan:
+        return "resolve-threads plan is missing"
+    if _single_line_text(plan.get("head_sha")) != head_sha:
+        return "resolve-threads plan head is stale"
+    if _single_line_text(plan.get("diff_hash")) != diff_hash:
+        return "resolve-threads plan diff is stale"
+    threads = plan.get("threads")
+    if not isinstance(threads, list):
+        return "resolve-threads plan threads are missing"
+    for item in threads:
+        if not isinstance(item, Mapping):
+            continue
+        if _single_line_text(item.get("thread_id")) != thread_id:
+            continue
+        if _single_line_text(item.get("severity")) != severity:
+            return "thread severity does not match plan"
+        if severity not in {"P0", "P1"}:
+            return "thread severity is not P0/P1"
+        if _single_line_text(item.get("current_head_sha")) not in {"", head_sha}:
+            return "thread plan head is stale"
+        if _single_line_text(item.get("current_diff_hash")) not in {"", diff_hash}:
+            return "thread plan diff is stale"
+        return ""
+    return "thread_id is not in current unresolved thread plan"
 
 
 def _submit_official_codex_retained_from_payload(
@@ -2453,7 +2903,10 @@ def _submit_wait_required_checks(
     pr_number: str,
     timeout_seconds: float,
     poll_seconds: float,
+    check_names: Sequence[str] | None = None,
+    pending_timeout_detail: str = "required check timed out while pending",
 ) -> RequiredCheckWaitResult:
+    required_checks = tuple(check_names or contract.required_checks)
     deadline = time.monotonic() + max(timeout_seconds, 0)
     while True:
         rollup = _submit_required_check_failures(
@@ -2461,6 +2914,7 @@ def _submit_wait_required_checks(
             runner=runner,
             contract=contract,
             pr_number=pr_number,
+            check_names=required_checks,
         )
         if not rollup.pending:
             return RequiredCheckWaitResult(
@@ -2472,7 +2926,7 @@ def _submit_wait_required_checks(
             failure_by_check = {failure.check: failure for failure in rollup.failures}
             pending_by_check = {failure.check: failure for failure in rollup.pending}
             timed_out: list[pr_flow_contract.SubmitFailure] = []
-            for name in contract.required_checks:
+            for name in required_checks:
                 failure = failure_by_check.get(name)
                 if failure is not None:
                     timed_out.append(failure)
@@ -2483,7 +2937,7 @@ def _submit_wait_required_checks(
                         pr_flow_contract.SubmitFailure(
                             check=pending_failure.check,
                             source=pending_failure.source,
-                            detail="required check timed out while pending",
+                            detail=pending_timeout_detail,
                         )
                     )
             checkpoints = _required_check_checkpoint_statuses(
@@ -2499,13 +2953,124 @@ def _submit_wait_required_checks(
         time.sleep(max(poll_seconds, 0))
 
 
+def _submit_wait_local_stable_checks(
+    *,
+    root: Path,
+    runner: Runner,
+    contract: pr_flow_contract.PRFlowContract,
+    pr_number: str,
+    timeout_seconds: float,
+    poll_seconds: float,
+) -> RequiredCheckWaitResult:
+    return _submit_wait_required_checks(
+        root=root,
+        runner=runner,
+        contract=contract,
+        pr_number=pr_number,
+        timeout_seconds=timeout_seconds,
+        poll_seconds=poll_seconds,
+        check_names=_local_stable_required_checks(contract),
+        pending_timeout_detail="local stabilization timed out while pending",
+    )
+
+
+def _local_stable_required_checks(
+    contract: pr_flow_contract.PRFlowContract,
+) -> tuple[str, ...]:
+    if contract.local_stable_required_checks:
+        return contract.local_stable_required_checks
+    excluded = set(contract.local_stable_excluded_checks)
+    return tuple(
+        name for name in contract.required_checks if name not in excluded
+    )
+
+
+def _local_stable_has_only_pending_timeouts(
+    failures: Sequence[pr_flow_contract.SubmitFailure],
+) -> bool:
+    return bool(failures) and all(
+        failure.detail == "local stabilization timed out while pending"
+        for failure in failures
+    )
+
+
+def _local_stable_official_review_checkpoint() -> dict[str, str]:
+    return {
+        "checkpoint_name": "official_codex_review",
+        "status": "pending",
+        "summary": "official Codex review not requested; waiting for local stable checks",
+        "evidence_location": "",
+    }
+
+
+def _write_local_stabilization_artifact(
+    *,
+    root: Path,
+    contract: pr_flow_contract.PRFlowContract,
+    runner: Runner,
+    pr_url: str,
+    head_sha: str,
+    failures: Sequence[pr_flow_contract.SubmitFailure],
+) -> dict[str, str] | None:
+    rel_path = contract.local_stabilization_path
+    if not rel_path:
+        return None
+    last_triggered_head = ""
+    trigger_read_error = ""
+    try:
+        last_triggered_head = _latest_codex_trigger_head(
+            pr_url=pr_url,
+            root=root,
+            runner=runner,
+        )
+    except GitHubDataUnavailable as exc:
+        trigger_read_error = str(exc)
+    payload: dict[str, object] = {
+        "schema_version": 1,
+        "current_head_sha": head_sha,
+        "last_triggered_head_sha": last_triggered_head,
+        "previous_trigger_superseded": bool(
+            last_triggered_head and last_triggered_head != head_sha
+        ),
+        "next_trigger_condition": (
+            "all local stable checks pass for current head: "
+            + ", ".join(_local_stable_required_checks(contract))
+        ),
+        "blocked_checks": [
+            {
+                "check": failure.check,
+                "source": failure.source,
+                "detail": failure.detail,
+            }
+            for failure in failures
+        ],
+    }
+    if trigger_read_error:
+        payload["last_trigger_read_error"] = trigger_read_error
+    path = root / rel_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=contract.json_indent) + "\n",
+        encoding="utf-8",
+    )
+    return {
+        "artifact_type": "local_stabilization",
+        "artifact_path": rel_path.as_posix(),
+        "artifact_summary": (
+            "official Codex review waits for current-head local stable checks"
+        ),
+    }
+
+
 def _submit_required_check_failures(
     *,
     root: Path,
     runner: Runner,
     contract: pr_flow_contract.PRFlowContract,
     pr_number: str,
+    check_names: Sequence[str] | None = None,
 ) -> RequiredCheckRollup:
+    required_checks = tuple(check_names or contract.required_checks)
     rollup_latest, rollup_diagnostics = _current_head_required_check_results(
         root=root,
         runner=runner,
@@ -2525,7 +3090,7 @@ def _submit_required_check_failures(
     by_name = {_json_check_display_name(check): check for check in latest}
     failures: list[pr_flow_contract.SubmitFailure] = []
     pending: list[pr_flow_contract.SubmitFailure] = []
-    for name in contract.required_checks:
+    for name in required_checks:
         check = by_name.get(name)
         if check is None:
             pending.append(
@@ -3903,6 +4468,25 @@ def _current_head_codex_trigger_comment(
     )
 
 
+def _latest_codex_trigger_head(
+    *,
+    pr_url: str,
+    root: Path,
+    runner: Runner,
+) -> str:
+    pr_info = _github_pr_info_from_url(pr_url)
+    if pr_info is None:
+        return ""
+    repo, pr_number = pr_info
+    issue_comments = _gh_api_list(
+        root,
+        runner,
+        f"repos/{repo}/issues/{pr_number}/comments?per_page=100",
+    )
+    request = _latest_codex_trigger_request(issue_comments, pr_url=pr_url)
+    return request.head_sha if request is not None else ""
+
+
 def _current_head_codex_output_exists(
     *,
     pr_url: str,
@@ -4028,7 +4612,7 @@ def _write_resolve_threads_plan(
     diff_hash: str,
     threads: Sequence[dict[str, Any]],
 ) -> dict[str, str]:
-    rel_path = Path(".local") / "pr-flow" / "resolve-threads-plan.json"
+    rel_path = contract.resolve_threads_plan_path
     path = root / rel_path
     unresolved = [thread for thread in threads if not _thread_is_resolved(thread)]
     payload = {
@@ -4038,7 +4622,12 @@ def _write_resolve_threads_plan(
         "head_sha": head_sha,
         "diff_hash": diff_hash,
         "threads": [
-            _resolve_thread_plan_entry(contract=contract, thread=thread)
+            _resolve_thread_plan_entry(
+                contract=contract,
+                thread=thread,
+                head_sha=head_sha,
+                diff_hash=diff_hash,
+            )
             for thread in unresolved
         ],
     }
@@ -4060,11 +4649,13 @@ def _resolve_thread_plan_entry(
     *,
     contract: pr_flow_contract.PRFlowContract,
     thread: dict[str, Any],
+    head_sha: str,
+    diff_hash: str,
 ) -> dict[str, Any]:
     root_comment = _thread_root_comment(thread) or {}
     body = _single_line_text(root_comment.get("body") or _codex_thread_body(thread))
     severity = _codex_thread_severity(thread)
-    return {
+    entry: dict[str, Any] = {
         "thread_id": _thread_id(thread),
         "root_author": _comment_author_login(root_comment),
         "comment_url": _single_line_text(root_comment.get("url")),
@@ -4078,6 +4669,47 @@ def _resolve_thread_plan_entry(
         ),
         "closure_evidence_state": _thread_closure_evidence_state(thread),
         "suggested_action": _thread_suggested_action(thread),
+    }
+    if _thread_is_official_codex(thread) and severity in {"P0", "P1"}:
+        entry.update(
+            {
+                "current_head_sha": head_sha,
+                "current_diff_hash": diff_hash,
+                "target_evidence_path": _thread_closure_evidence_path().as_posix(),
+                "required_dispositions": ["fixed", "false_positive"],
+                "builder_input_template": _thread_closure_builder_input_template(
+                    thread_id=_thread_id(thread),
+                    severity=severity,
+                    head_sha=head_sha,
+                    diff_hash=diff_hash,
+                ),
+            }
+        )
+    return entry
+
+
+def _thread_closure_evidence_path() -> Path:
+    return pr_flow_contract.load_contract(Path(".")).thread_closure_evidence_path
+
+
+def _thread_closure_builder_input_template(
+    *,
+    thread_id: str,
+    severity: str,
+    head_sha: str,
+    diff_hash: str,
+) -> dict[str, str]:
+    return {
+        "source": "official_codex_review_thread",
+        "thread_id": thread_id,
+        "severity": severity,
+        "head_sha": head_sha,
+        "diff_files_hash": diff_hash,
+        "disposition": "fixed",
+        "evidence": "",
+        "fix_commit": "",
+        "verification_command": "",
+        "reason": "",
     }
 
 
@@ -4832,6 +5464,22 @@ def _latest_codex_trigger_comment(
     if not triggers:
         return None
     return max(triggers, key=_comment_time)
+
+
+def _latest_codex_trigger_request(
+    comments: Sequence[dict[str, Any]],
+    *,
+    pr_url: str,
+) -> CodexReviewRequest | None:
+    triggers: list[tuple[str, CodexReviewRequest]] = []
+    for comment in comments:
+        request = parse_codex_review_request(str(comment.get("body", "")))
+        if request is None or request.pr_url != pr_url:
+            continue
+        triggers.append((_comment_time(comment), request))
+    if not triggers:
+        return None
+    return max(triggers, key=lambda item: item[0])[1]
 
 
 def _latest_codex_completion_comment_time(
@@ -5873,7 +6521,11 @@ def _short_sha(sha: str) -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", default=".")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(
+        dest="command",
+        required=True,
+        metavar="{submit,resolve-threads,intent}",
+    )
     submit_parser = subparsers.add_parser("submit")
     submit_parser.add_argument("--title")
     submit_parser.add_argument("--pr")
@@ -5883,6 +6535,19 @@ def build_parser() -> argparse.ArgumentParser:
         "pre-push-review-fragments",
         help=argparse.SUPPRESS,
     )
+    _hide_subparser_from_help(subparsers, "pre-push-review-fragments")
+    review_fragment_parser = subparsers.add_parser(
+        "build-review-fragment",
+        help=argparse.SUPPRESS,
+    )
+    review_fragment_parser.add_argument("--payload-file", required=True)
+    _hide_subparser_from_help(subparsers, "build-review-fragment")
+    thread_closure_parser = subparsers.add_parser(
+        "build-thread-closure-evidence",
+        help=argparse.SUPPRESS,
+    )
+    thread_closure_parser.add_argument("--payload-file", required=True)
+    _hide_subparser_from_help(subparsers, "build-thread-closure-evidence")
     resolve_threads_parser = subparsers.add_parser("resolve-threads")
     resolve_threads_parser.add_argument("thread_ids", nargs="*")
     resolve_threads_parser.add_argument("--thread", action="append", default=[])
@@ -5904,6 +6569,17 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _hide_subparser_from_help(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+    name: str,
+) -> None:
+    subparsers._choices_actions = [
+        action
+        for action in subparsers._choices_actions
+        if getattr(action, "dest", "") != name
+    ]
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "submit":
@@ -5918,6 +6594,27 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.command == "pre-push-review-fragments":
         return warn_review_fragment_freshness(repo_root=args.repo_root)
+    if args.command == "build-review-fragment":
+        payload = _read_json_object(Path(args.payload_file))
+        if payload is None:
+            print("error: local-review: payload-file must be a JSON object", file=sys.stderr)
+            return DISPATCH_REQUIRED_EXIT_CODE
+        return build_review_fragment_from_payload(
+            repo_root=args.repo_root,
+            payload=payload,
+        )
+    if args.command == "build-thread-closure-evidence":
+        payload = _read_json_object(Path(args.payload_file))
+        if payload is None:
+            print(
+                "error: official-codex-review-thread: payload-file must be a JSON object",
+                file=sys.stderr,
+            )
+            return DISPATCH_REQUIRED_EXIT_CODE
+        return build_thread_closure_evidence_from_payload(
+            repo_root=args.repo_root,
+            payload=payload,
+        )
     if args.command == "resolve-threads":
         return resolve_review_threads(
             repo_root=args.repo_root,
