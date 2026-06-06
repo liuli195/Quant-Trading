@@ -1281,6 +1281,7 @@ def _submit_fragment_failures_for_role(
     if role == "security":
         failures.extend(
             _submit_security_review_metadata_failures(
+                contract=contract,
                 payload=payload,
                 source=source,
             )
@@ -1448,6 +1449,7 @@ def _submit_fragment_failures_for_role(
 
 def _submit_security_review_metadata_failures(
     *,
+    contract: pr_flow_contract.PRFlowContract,
     payload: Mapping[str, object],
     source: str,
 ) -> list[pr_flow_contract.SubmitFailure]:
@@ -1460,6 +1462,15 @@ def _submit_security_review_metadata_failures(
                 detail="security fragment security_review is required",
             )
         ]
+    allowed_fields = set(contract.fragment_security_review_fields)
+    if set(security_review) - allowed_fields:
+        return [
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail="security fragment security_review has unknown fields",
+            )
+        ]
     tool = _single_line_text(security_review.get("tool"))
     fallback_reason = _single_line_text(security_review.get("fallback_reason"))
     if not tool:
@@ -1470,14 +1481,18 @@ def _submit_security_review_metadata_failures(
                 detail="security fragment security_review.tool is required",
             )
         ]
-    if tool != "codex-security" and not fallback_reason:
+    fallback_required_when_tool_not = (
+        contract.fragment_security_review_fallback_required_when_tool_not
+        or contract.fragment_security_review_default_tool
+    )
+    if tool != fallback_required_when_tool_not and not fallback_reason:
         return [
             pr_flow_contract.SubmitFailure(
                 check="local-review",
                 source=source,
                 detail=(
                     "security fragment fallback_reason is required when tool is "
-                    "not codex-security"
+                    f"not {fallback_required_when_tool_not}"
                 ),
             )
         ]

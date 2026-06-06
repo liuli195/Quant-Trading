@@ -85,6 +85,12 @@ fragment:
     - open
     - fixed
     - false_positive
+  security_review:
+    fields:
+      - tool
+      - fallback_reason
+    default_tool: codex-security
+    fallback_reason_required_when_tool_not: codex-security
 
 submit_status:
   fields:

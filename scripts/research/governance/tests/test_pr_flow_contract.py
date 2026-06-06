@@ -4164,6 +4164,21 @@ def test_contract_defines_fragment_freshness_rule() -> None:
     assert contract.fragment_freshness_same_diff_head_refresh is True
 
 
+def test_contract_defines_security_review_fragment_metadata() -> None:
+    """Security fragment review metadata must be machine-readable."""
+    contract = pr_flow_contract.load_contract(Path("."))
+
+    assert contract.fragment_security_review_fields == (
+        "tool",
+        "fallback_reason",
+    )
+    assert contract.fragment_security_review_default_tool == "codex-security"
+    assert (
+        contract.fragment_security_review_fallback_required_when_tool_not
+        == "codex-security"
+    )
+
+
 def test_contract_defines_github_native_closing_links_rule() -> None:
     """GitHub native closing links must come from per-commit evidence."""
     contract = pr_flow_contract.load_contract(Path("."))
