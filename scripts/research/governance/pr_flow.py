@@ -1822,12 +1822,22 @@ def _sync_submit_pr_evidence(
                 detail=_command_failure_detail("gh pr view --json body", body_view),
             )
         existing_body = str(_json_from_result(body_view).get("body") or "")
-        body_file = _write_managed_body_file(
-            local,
+        updated_body = _merge_managed_body(
             existing_body,
             managed_body,
             native_links_body,
         )
+        if updated_body == existing_body and _submit_required_check_passed(
+            root=root,
+            runner=runner,
+            contract=contract,
+            pr_number=pr_number,
+            check_name="PR Flow / evidence",
+        ):
+            return SubmitSyncResult(
+                SUCCESS_EXIT_CODE, pr_number=pr_number, pr_url=pr_url
+            )
+        body_file = _write_pr_body_file(local, updated_body)
         edit = runner.run(
             ["gh", "pr", "edit", pr_number, "--body-file", str(body_file)],
             cwd=root,
@@ -2381,6 +2391,28 @@ def _submit_required_check_failures(
             pending=pending,
         ),
     )
+
+
+def _submit_required_check_passed(
+    *,
+    root: Path,
+    runner: Runner,
+    contract: pr_flow_contract.PRFlowContract,
+    pr_number: str,
+    check_name: str,
+) -> bool:
+    latest, _diagnostics = _current_head_required_check_results(
+        root=root,
+        runner=runner,
+        contract=contract,
+        pr_number=pr_number,
+    )
+    if latest is None:
+        return False
+    for check in latest:
+        if _json_check_display_name(check) == check_name:
+            return _json_check_passed(check)
+    return False
 
 
 def _required_check_checkpoint_statuses(
@@ -3521,11 +3553,25 @@ def _write_managed_body_file(
     managed_body: str,
     native_links_body: str = "",
 ) -> Path:
-    local.mkdir(parents=True, exist_ok=True)
+    return _write_pr_body_file(
+        local,
+        _merge_managed_body(existing_body, managed_body, native_links_body),
+    )
+
+
+def _merge_managed_body(
+    existing_body: str,
+    managed_body: str,
+    native_links_body: str = "",
+) -> str:
     merged = _replace_managed_block(existing_body, managed_body)
-    merged = _replace_github_native_links_block(merged, native_links_body)
+    return _replace_github_native_links_block(merged, native_links_body)
+
+
+def _write_pr_body_file(local: Path, body: str) -> Path:
+    local.mkdir(parents=True, exist_ok=True)
     body_file = local / "pr-evidence-body.md"
-    body_file.write_text(merged, encoding="utf-8")
+    body_file.write_text(body, encoding="utf-8")
     return body_file
 
 
