@@ -1703,6 +1703,67 @@ def test_submit_rejects_stale_first_stage_fragment_before_security(
     ]
 
 
+def test_pre_push_review_fragment_freshness_warns_stale_diff_without_blocking(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+    _write_fragment(tmp_path, "standards", findings=[], diff="stale-diff")
+    original = (
+        tmp_path / ".local" / "ai-review" / "fragments" / "standards.json"
+    ).read_text(encoding="utf-8")
+
+    code = pr_flow.warn_review_fragment_freshness(
+        repo_root=tmp_path,
+        runner=runner,
+    )
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert "local review fragments freshness" in captured.err
+    assert "current head: " + "1" * 40 in captured.err
+    assert f"current diff: {DEFAULT_DIFF_HASH}" in captured.err
+    assert "standards: stale diff" in captured.err
+    assert "rerun local review and remap fragments before pr-submit" in captured.err
+    assert (
+        tmp_path / ".local" / "ai-review" / "fragments" / "standards.json"
+    ).read_text(encoding="utf-8") == original
+
+
+def test_pre_push_review_fragment_freshness_is_silent_without_fragments(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+
+    code = pr_flow.warn_review_fragment_freshness(
+        repo_root=tmp_path,
+        runner=runner,
+    )
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert captured.err == ""
+
+
+def test_pre_push_review_fragment_freshness_warns_head_refreshable(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+    _write_fragment(tmp_path, "standards", findings=[], head="0" * 40)
+
+    code = pr_flow.warn_review_fragment_freshness(
+        repo_root=tmp_path,
+        runner=runner,
+    )
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert "standards: head refreshable" in captured.err
+    assert "pr-submit can refresh same-diff fragment heads" in captured.err
+
+
 def test_submit_reports_stale_diff_old_blockers_without_reply_or_fix(
     tmp_path: Path,
 ) -> None:
@@ -1728,7 +1789,7 @@ def test_submit_reports_stale_diff_old_blockers_without_reply_or_fix(
         {
             "check": "local-review",
             "source": ".local/ai-review/fragments/standards.json",
-            "detail": "standards P1: old blocker",
+            "detail": "standards finding 0 status is required for P0/P1",
         }
     ]
 
@@ -1738,12 +1799,12 @@ def test_submit_aggregates_first_stage_blockers_before_security(tmp_path: Path) 
     _write_fragment(
         tmp_path,
         "standards",
-        findings=[{"severity": "P1", "detail": "rules drift"}],
+        findings=[{"severity": "P1", "status": "open", "detail": "rules drift"}],
     )
     _write_fragment(
         tmp_path,
         "spec",
-        findings=[{"severity": "P0", "detail": "AC not implemented"}],
+        findings=[{"severity": "P0", "status": "open", "detail": "AC not implemented"}],
     )
 
     code = pr_flow.submit(repo_root=tmp_path, title="PR 自动化", runner=runner)
@@ -1761,6 +1822,258 @@ def test_submit_aggregates_first_stage_blockers_before_security(tmp_path: Path) 
             "source": ".local/ai-review/fragments/spec.json",
             "detail": "spec P0: AC not implemented",
         },
+    ]
+
+
+def test_submit_accepts_fixed_blocking_fragment_finding_with_evidence(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/docs/guides/example.md b/docs/guides/example.md\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(diff_text=diff_text)
+    _write_fragment(
+        tmp_path,
+        "standards",
+        findings=[
+            {
+                "severity": "P1",
+                "status": "fixed",
+                "detail": "rules drift",
+                "evidence": "verify fast passed on current head",
+            }
+        ],
+        diff=diff_hash,
+    )
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    payload = _payload_from_managed_body(runner.created_bodies[-1])
+    assert payload["retained"] == []
+
+
+def test_submit_rejects_fixed_blocking_fragment_finding_without_evidence(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+    _write_fragment(
+        tmp_path,
+        "standards",
+        findings=[
+            {
+                "severity": "P1",
+                "status": "fixed",
+                "detail": "rules drift",
+            }
+        ],
+    )
+    _write_fragment(tmp_path, "spec", findings=[])
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    status = _submit_status(tmp_path)
+    assert _blocking_as_legacy_failures(status) == [
+        {
+            "check": "local-review",
+            "source": ".local/ai-review/fragments/standards.json",
+            "detail": "standards finding 0 fixed evidence is required",
+        }
+    ]
+
+
+def test_submit_accepts_false_positive_blocking_fragment_finding_with_rationale(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/docs/guides/example.md b/docs/guides/example.md\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(diff_text=diff_text)
+    _write_fragment(
+        tmp_path,
+        "standards",
+        findings=[
+            {
+                "severity": "P1",
+                "status": "false_positive",
+                "detail": "old rule conflict",
+                "rationale": "target spec wins for issue #108",
+            }
+        ],
+        diff=diff_hash,
+    )
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+
+
+def test_submit_rejects_false_positive_blocking_fragment_without_rationale(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+    _write_fragment(
+        tmp_path,
+        "standards",
+        findings=[
+            {
+                "severity": "P1",
+                "status": "false_positive",
+                "detail": "old rule conflict",
+            }
+        ],
+    )
+    _write_fragment(tmp_path, "spec", findings=[])
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    status = _submit_status(tmp_path)
+    assert _blocking_as_legacy_failures(status) == [
+        {
+            "check": "local-review",
+            "source": ".local/ai-review/fragments/standards.json",
+            "detail": "standards finding 0 false_positive rationale is required",
+        }
+    ]
+
+
+def test_submit_rejects_blocking_fragment_finding_without_status(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+    _write_fragment(
+        tmp_path,
+        "standards",
+        findings=[{"severity": "P1", "detail": "legacy blocker"}],
+    )
+    _write_fragment(tmp_path, "spec", findings=[])
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    status = _submit_status(tmp_path)
+    assert _blocking_as_legacy_failures(status) == [
+        {
+            "check": "local-review",
+            "source": ".local/ai-review/fragments/standards.json",
+            "detail": "standards finding 0 status is required for P0/P1",
+        }
+    ]
+
+
+def test_submit_rejects_security_fragment_without_security_review(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+    _write_fragment(tmp_path, "standards", findings=[])
+    _write_fragment(tmp_path, "spec", findings=[])
+    _write_fragment_without_security_review(tmp_path, findings=[])
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    status = _submit_status(tmp_path)
+    assert _blocking_as_legacy_failures(status) == [
+        {
+            "check": "local-review",
+            "source": ".local/ai-review/fragments/security.json",
+            "detail": "security fragment security_review is required",
+        }
+    ]
+
+
+def test_submit_requires_security_fallback_reason_for_non_codex_security_tool(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+    _write_fragment(tmp_path, "standards", findings=[])
+    _write_fragment(tmp_path, "spec", findings=[])
+    _write_fragment(
+        tmp_path,
+        "security",
+        findings=[],
+        security_review={"tool": "manual-security-review"},
+    )
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    status = _submit_status(tmp_path)
+    assert _blocking_as_legacy_failures(status) == [
+        {
+            "check": "local-review",
+            "source": ".local/ai-review/fragments/security.json",
+            "detail": (
+                "security fragment fallback_reason is required when tool is "
+                "not codex-security"
+            ),
+        }
+    ]
+
+
+def test_submit_accepts_security_fallback_reason_for_non_codex_security_tool(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/docs/guides/example.md b/docs/guides/example.md\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(
+        tmp_path,
+        "security",
+        findings=[],
+        diff=diff_hash,
+        security_review={
+            "tool": "manual-security-review",
+            "fallback_reason": "codex-security tool was unavailable",
+        },
+    )
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+
+
+def test_security_fallback_reason_does_not_bypass_open_blocking_finding(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+    _write_fragment(tmp_path, "standards", findings=[])
+    _write_fragment(tmp_path, "spec", findings=[])
+    _write_fragment(
+        tmp_path,
+        "security",
+        findings=[
+            {
+                "severity": "P1",
+                "status": "open",
+                "detail": "unsafe credential handling",
+            }
+        ],
+        security_review={
+            "tool": "manual-security-review",
+            "fallback_reason": "codex-security tool was unavailable",
+        },
+    )
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.REPLY_OR_FIX_REQUIRED_EXIT_CODE
+    status = _submit_status(tmp_path)
+    assert _blocking_as_legacy_failures(status) == [
+        {
+            "check": "local-review",
+            "source": ".local/ai-review/fragments/security.json",
+            "detail": "security P1: unsafe credential handling",
+        }
     ]
 
 
@@ -3381,12 +3694,15 @@ def test_submit_refreshes_same_diff_review_fragment_heads(tmp_path: Path) -> Non
                 / f"{role}.json"
             ).read_text(encoding="utf-8")
         )
-        assert fragment == {
+        expected_fragment: dict[str, object] = {
             "schema": 2,
             "head": "1" * 40,
             "diff": diff_hash,
             "findings": [],
         }
+        if role == "security":
+            expected_fragment["security_review"] = {"tool": "codex-security"}
+        assert fragment == expected_fragment
 
 
 def test_submit_reports_exception_when_remote_head_is_missing(
@@ -3846,6 +4162,21 @@ def test_contract_defines_fragment_freshness_rule() -> None:
 
     assert isinstance(contract.fragment_freshness_same_diff_head_refresh, bool)
     assert contract.fragment_freshness_same_diff_head_refresh is True
+
+
+def test_contract_defines_security_review_fragment_metadata() -> None:
+    """Security fragment review metadata must be machine-readable."""
+    contract = pr_flow_contract.load_contract(Path("."))
+
+    assert contract.fragment_security_review_fields == (
+        "tool",
+        "fallback_reason",
+    )
+    assert contract.fragment_security_review_default_tool == "codex-security"
+    assert (
+        contract.fragment_security_review_fallback_required_when_tool_not
+        == "codex-security"
+    )
 
 
 def test_contract_defines_github_native_closing_links_rule() -> None:
@@ -4323,8 +4654,32 @@ def _write_fragment(
     findings: list[dict[str, str]],
     head: str = "1" * 40,
     diff: str = DEFAULT_DIFF_HASH,
+    security_review: dict[str, str] | None = None,
 ) -> None:
     path = root / ".local" / "ai-review" / "fragments" / f"{role}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload: dict[str, object] = {
+        "schema": 2,
+        "head": head,
+        "diff": diff,
+        "findings": findings,
+    }
+    if role == "security":
+        payload["security_review"] = security_review or {"tool": "codex-security"}
+    path.write_text(
+        json.dumps(payload),
+        encoding="utf-8",
+    )
+
+
+def _write_fragment_without_security_review(
+    root: Path,
+    *,
+    findings: list[dict[str, str]],
+    head: str = "1" * 40,
+    diff: str = DEFAULT_DIFF_HASH,
+) -> None:
+    path = root / ".local" / "ai-review" / "fragments" / "security.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(

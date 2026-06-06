@@ -12,7 +12,7 @@
 .\.venv\Scripts\python.exe -m scripts.research.governance verify full
 ```
 
-`verify fast` 是日常开发入口；本地 PR 提交不重复运行完整验证；`verify full` 是 push、CI 和最终交付证据。`gate` 是低层完整门禁，由 `verify full` 调用。
+`verify fast` 是日常开发入口；本地 PR 提交和 pre-push 不重复运行完整验证；`verify full` 是 CI 和最终合并证据。`gate` 是低层完整门禁，由 `verify full` 调用。
 
 ## PR Flow
 
@@ -63,7 +63,9 @@ git config core.hooksPath .githooks
 git config --get core.hooksPath
 ```
 
-`.githooks/pre-commit` 运行 `verify fast --staged` 和 commit intent gate；`.githooks/pre-push` 运行主干保护门禁和 `verify full`；`.githooks/reference-transaction` 阻断本地 `main` / `master` 被 merge、reset、delete 或 force rewrite。
+`.githooks/pre-commit` 运行 `verify fast --staged` 和 commit intent gate；`.githooks/pre-push` 运行主干保护门禁、local review fragments freshness 非阻断提醒和 Git LFS 转交，不运行本地 `verify full`；`.githooks/reference-transaction` 阻断本地 `main` / `master` 被 merge、reset、delete 或 force rewrite。
+
+pre-push freshness 提醒只读取现有 `.local/ai-review/fragments/*.json`，不生成、不刷新、不修改 fragments。看到 stale diff 提醒后，先重新 review / 重新映射 fragments，再运行 `pr-submit`；same diff 仅 head stale 时，`pr-submit` 可刷新 fragment head。
 
 PR 在 GitHub 云端合并后的本地收尾只允许 fast-forward：
 

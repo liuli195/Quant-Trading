@@ -48,6 +48,9 @@ class PRFlowContract:
     pr_evidence_fields: tuple[str, ...]
     fragment_fields: tuple[str, ...]
     fragment_finding_fields: tuple[str, ...]
+    fragment_security_review_fields: tuple[str, ...]
+    fragment_security_review_default_tool: str
+    fragment_security_review_fallback_required_when_tool_not: str
     submit_status_fields: tuple[str, ...]
     submit_failure_fields: tuple[str, ...]
     blocking_severities: tuple[str, ...]
@@ -92,6 +95,10 @@ def load_contract(repo_root: str | Path = ".") -> PRFlowContract:
     rules = _mapping(payload.get("rules"), "rules")
     pr_evidence = _mapping(payload.get("pr_evidence"), "pr_evidence")
     fragment = _mapping(payload.get("fragment"), "fragment")
+    fragment_security_review = _mapping(
+        fragment.get("security_review"),
+        "fragment.security_review",
+    )
     status = _mapping(payload.get("submit_status"), "submit_status")
     severity = _mapping(payload.get("severity"), "severity")
     sources = _mapping(payload.get("sources"), "sources")
@@ -140,6 +147,15 @@ def load_contract(repo_root: str | Path = ".") -> PRFlowContract:
         pr_evidence_fields=_string_tuple(pr_evidence.get("fields")),
         fragment_fields=_string_tuple(fragment.get("fields")),
         fragment_finding_fields=_string_tuple(fragment.get("finding_fields")),
+        fragment_security_review_fields=_string_tuple(
+            fragment_security_review.get("fields")
+        ),
+        fragment_security_review_default_tool=_single_line(
+            fragment_security_review.get("default_tool")
+        ),
+        fragment_security_review_fallback_required_when_tool_not=_single_line(
+            fragment_security_review.get("fallback_reason_required_when_tool_not")
+        ),
         submit_status_fields=submit_status_fields,
         submit_failure_fields=_string_tuple(status.get("failure_fields")),
         blocking_severities=_string_tuple(_mapping(severity, "severity").get("blocking")),

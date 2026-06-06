@@ -40,7 +40,7 @@
 ### Review 与验证
 
 - **review 指南**：Review 前必须先阅读并遵守 [review-guidelines.md](docs/rules/review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md -->。
-- **完成验证**：逐项复核要求，说明已验证与无法验证的部分；日常小改跑 `verify fast`；PR 提交走 `pr-submit`，不把本地 `verify full` 作为前置证据；push 前、CI 和最终交付以 `verify full` / `Research Governance / verify-full` 为准。
+- **完成验证**：逐项复核要求，说明已验证与无法验证的部分；日常小改跑 `verify fast`；PR 提交走 `pr-submit`，不把本地 `verify full` 作为前置证据；pre-push 只做主干保护和 local review fragments freshness 提醒，最终合并证据以 GitHub `Research Governance / verify-full` 为准。
 
 ### 输出与引用
 

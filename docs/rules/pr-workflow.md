@@ -27,6 +27,9 @@ Review 细则见 [review-guidelines.md](review-guidelines.md) <!-- pathref: docs
 
 - 本地 review fragment 是 `pr-submit` 的输入，路径和字段以 [pr-flow-interface-contract.yaml](pr-flow-interface-contract.yaml) <!-- pathref: docs/rules/pr-flow-interface-contract.yaml --> 为准。
 - review fragment 只绑定当前 `head` 和 `diff`；PR body、required status 或 update-branch 状态变化不会单独让 fragment 失效。只有 fragment 缺失、`head` 不匹配或 `diff` 不匹配时才要求重新 review。
+- push 时 `.githooks/pre-push` 会非阻断提醒 existing local review fragments 是否 stale；看到 stale diff 提醒后，主 agent 必须先重新 review / 重新映射 fragments，再运行 `pr-submit`。same diff 仅 head stale 时，`pr-submit` 可按现有规则刷新 fragment head。
+- P0/P1 finding 必须在 fragment 中记录 `status=open|fixed|false_positive`；只有 `open` 阻断，`fixed` 必须带 current head/diff 下的 `evidence`，`false_positive` 必须带 `rationale`。stale fragment 中的 closed P0/P1 不能作为当前关闭证据。
+- security fragment 顶层必须记录 `security_review.tool`；未使用 `codex-security` 时必须记录 `security_review.fallback_reason`。
 - Standards 和 Spec 同阶段完成后统一汇总 P0/P1；两者无 P0/P1 后才进入 Security。Security P0/P1 阻断，P2/P3 进入 retained findings。
 - PR body 的 `pr-flow` 托管区只写 fenced PR Evidence JSON。CI 的 `PR Flow / evidence` 只信任 PR body，不读取本地 `.local`。
 - Issue intent 并入 PR Evidence JSON 的 `issues`，不再单独维护 Issue intent machine block。每个 PR commit 要么有关联 Issue，要么明确 `no_issue: true`。
