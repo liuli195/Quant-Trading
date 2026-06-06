@@ -1827,7 +1827,13 @@ def _sync_submit_pr_evidence(
             managed_body,
             native_links_body,
         )
-        if updated_body == existing_body:
+        if updated_body == existing_body and _submit_required_check_passed(
+            root=root,
+            runner=runner,
+            contract=contract,
+            pr_number=pr_number,
+            check_name="PR Flow / evidence",
+        ):
             return SubmitSyncResult(
                 SUCCESS_EXIT_CODE, pr_number=pr_number, pr_url=pr_url
             )
@@ -2385,6 +2391,28 @@ def _submit_required_check_failures(
             pending=pending,
         ),
     )
+
+
+def _submit_required_check_passed(
+    *,
+    root: Path,
+    runner: Runner,
+    contract: pr_flow_contract.PRFlowContract,
+    pr_number: str,
+    check_name: str,
+) -> bool:
+    latest, _diagnostics = _current_head_required_check_results(
+        root=root,
+        runner=runner,
+        contract=contract,
+        pr_number=pr_number,
+    )
+    if latest is None:
+        return False
+    for check in latest:
+        if _json_check_display_name(check) == check_name:
+            return _json_check_passed(check)
+    return False
 
 
 def _required_check_checkpoint_statuses(
