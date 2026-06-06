@@ -1822,12 +1822,16 @@ def _sync_submit_pr_evidence(
                 detail=_command_failure_detail("gh pr view --json body", body_view),
             )
         existing_body = str(_json_from_result(body_view).get("body") or "")
-        body_file = _write_managed_body_file(
-            local,
+        updated_body = _merge_managed_body(
             existing_body,
             managed_body,
             native_links_body,
         )
+        if updated_body == existing_body:
+            return SubmitSyncResult(
+                SUCCESS_EXIT_CODE, pr_number=pr_number, pr_url=pr_url
+            )
+        body_file = _write_pr_body_file(local, updated_body)
         edit = runner.run(
             ["gh", "pr", "edit", pr_number, "--body-file", str(body_file)],
             cwd=root,
@@ -3521,11 +3525,25 @@ def _write_managed_body_file(
     managed_body: str,
     native_links_body: str = "",
 ) -> Path:
-    local.mkdir(parents=True, exist_ok=True)
+    return _write_pr_body_file(
+        local,
+        _merge_managed_body(existing_body, managed_body, native_links_body),
+    )
+
+
+def _merge_managed_body(
+    existing_body: str,
+    managed_body: str,
+    native_links_body: str = "",
+) -> str:
     merged = _replace_managed_block(existing_body, managed_body)
-    merged = _replace_github_native_links_block(merged, native_links_body)
+    return _replace_github_native_links_block(merged, native_links_body)
+
+
+def _write_pr_body_file(local: Path, body: str) -> Path:
+    local.mkdir(parents=True, exist_ok=True)
     body_file = local / "pr-evidence-body.md"
-    body_file.write_text(merged, encoding="utf-8")
+    body_file.write_text(body, encoding="utf-8")
     return body_file
 
 

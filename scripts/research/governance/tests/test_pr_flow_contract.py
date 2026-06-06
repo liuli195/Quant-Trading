@@ -3286,6 +3286,36 @@ def test_submit_reuses_current_diff_fragments_after_pr_body_update(
     assert not _submit_status_path(tmp_path).exists()
 
 
+def test_submit_skips_existing_pr_body_edit_when_evidence_is_current(
+    tmp_path: Path,
+) -> None:
+    diff_text = "diff --git a/docs/guides/example.md b/docs/guides/example.md\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    for role in ("standards", "spec", "security"):
+        _write_fragment(tmp_path, role, findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+    create_runner = SubmitCreatePrRunner(diff_text=diff_text)
+
+    create_code = pr_flow.submit(
+        repo_root=tmp_path,
+        title="PR automation",
+        runner=create_runner,
+    )
+
+    assert create_code == pr_flow.SUCCESS_EXIT_CODE
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        existing_pr=True,
+        existing_body=create_runner.created_bodies[-1],
+    )
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert runner.edited_bodies == []
+    assert not any(call[:4] == ["gh", "pr", "edit", "88"] for call in runner.calls)
+
+
 def test_submit_refreshes_same_diff_review_fragment_heads(tmp_path: Path) -> None:
     diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
     diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
