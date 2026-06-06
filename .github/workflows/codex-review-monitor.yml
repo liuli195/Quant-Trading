@@ -2,7 +2,7 @@ name: PR Flow Review Status
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]
+    types: [opened, synchronize, reopened]
   pull_request_review:
     types: [submitted, edited, dismissed]
   pull_request_review_comment:
@@ -27,6 +27,10 @@ permissions:
   issues: read
   pull-requests: read
   statuses: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.pr_number || github.event.pull_request.number || github.ref }}-${{ inputs.expected_head_sha || github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
 
 jobs:
   monitor:

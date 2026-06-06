@@ -11,7 +11,7 @@ import re
 import subprocess
 import sys
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -796,6 +796,16 @@ def submit(
                 ),
             )
         return cleanup_code
+    ready_code = _submit_mark_pr_ready(
+        root=root,
+        runner=runner,
+        contract=contract,
+        pr_number=pr or pr_number,
+        head_sha=head_sha,
+        snapshot_context=snapshot_context,
+    )
+    if ready_code != SUCCESS_EXIT_CODE:
+        return ready_code
     if review_state.requires_official_codex_review:
         request_code = _submit_request_codex_review(
             root=root,
@@ -1967,6 +1977,14 @@ def _submit_request_codex_review(
             runner=runner,
         ):
             return SUCCESS_EXIT_CODE
+        if trigger is not None and _current_head_codex_output_exists(
+            pr_url=pr_url,
+            head_sha=head_sha,
+            trigger=trigger,
+            root=root,
+            runner=runner,
+        ):
+            return SUCCESS_EXIT_CODE
         if trigger is not None:
             remaining_seconds = _codex_trigger_ack_remaining_seconds(
                 trigger,
@@ -1975,6 +1993,7 @@ def _submit_request_codex_review(
             if remaining_seconds > 0 and _wait_for_codex_trigger_ack(
                 pr_url=pr_url,
                 trigger=trigger,
+                head_sha=head_sha,
                 root=root,
                 runner=runner,
                 timeout_seconds=remaining_seconds,
@@ -2474,6 +2493,29 @@ def _submit_pr_head_failures(
     ]
 
 
+def _submit_mark_pr_ready(
+    *,
+    root: Path,
+    runner: Runner,
+    contract: pr_flow_contract.PRFlowContract,
+    pr_number: str,
+    head_sha: str,
+    snapshot_context: SubmitSnapshotContext,
+) -> int:
+    ready = runner.run(["gh", "pr", "ready", pr_number], cwd=root)
+    if ready.returncode == 0 or _pr_ready_already_ready(ready):
+        return SUCCESS_EXIT_CODE
+    return _submit_lifecycle_command_failure(
+        root=root,
+        contract=contract,
+        head_sha=head_sha,
+        snapshot_context=snapshot_context,
+        command_label="gh pr ready",
+        phase="submit_ready",
+        result=ready,
+    )
+
+
 def _submit_complete_lifecycle(
     *,
     root: Path,
@@ -2485,17 +2527,6 @@ def _submit_complete_lifecycle(
     timeout_seconds: float,
     poll_seconds: float,
 ) -> int:
-    ready = runner.run(["gh", "pr", "ready", pr_number], cwd=root)
-    if ready.returncode != 0 and not _pr_ready_already_ready(ready):
-        return _submit_lifecycle_command_failure(
-            root=root,
-            contract=contract,
-            head_sha=head_sha,
-            snapshot_context=snapshot_context,
-            command_label="gh pr ready",
-            phase="submit_ready",
-            result=ready,
-        )
     merge = runner.run(
         [
             "gh",
@@ -2664,12 +2695,16 @@ def _submit_cleanup_merged_pr(
     metadata: dict[str, Any],
 ) -> int:
     pr_ref = _single_line_text(metadata.get("number")) or "unknown"
-    code = _cleanup_merged_pr_metadata(
+    cleanup_result = _cleanup_merged_pr_metadata(
         root=root,
         runner=runner,
         metadata=metadata,
         pr_ref=pr_ref,
     )
+    if isinstance(cleanup_result, tuple):
+        code, health_root = cleanup_result
+    else:
+        code, health_root = cleanup_result, root
     if (
         code != SUCCESS_EXIT_CODE
         and contract is not None
@@ -2686,7 +2721,16 @@ def _submit_cleanup_merged_pr(
                 detail="post-merge cleanup failed",
             ),
         )
-    return code
+    if code != SUCCESS_EXIT_CODE:
+        return code
+    return _submit_cleanup_worktree_health(
+        root=root,
+        health_root=health_root,
+        runner=runner,
+        contract=contract,
+        head_sha=head_sha,
+        snapshot_context=snapshot_context,
+    )
 
 
 def _cleanup_merged_pr_metadata(
@@ -2695,7 +2739,7 @@ def _cleanup_merged_pr_metadata(
     runner: Runner,
     metadata: dict[str, Any],
     pr_ref: str,
-) -> int:
+) -> int | tuple[int, Path]:
     state = _single_line_text(metadata.get("state")).upper()
     merged_at = _single_line_text(metadata.get("mergedAt"))
     head_branch = _single_line_text(metadata.get("headRefName"))
@@ -2779,7 +2823,165 @@ def _cleanup_merged_pr_metadata(
         f"cleanup: final base sync verified: "
         f"{base_branch}...origin/{base_branch} = 0 0"
     )
-    return SUCCESS_EXIT_CODE
+    return SUCCESS_EXIT_CODE, sync_root
+
+
+def _submit_cleanup_worktree_health(
+    *,
+    root: Path,
+    health_root: Path,
+    runner: Runner,
+    contract: pr_flow_contract.PRFlowContract | None,
+    head_sha: str,
+    snapshot_context: SubmitSnapshotContext | None,
+) -> int:
+    status = runner.run(
+        ["git", "status", "--porcelain=v2", "--branch"],
+        cwd=health_root,
+    )
+    if status.returncode != 0:
+        _print_command_failure("git status --porcelain=v2 --branch", status)
+        if contract is None or not _single_line_text(head_sha):
+            return EXCEPTION_REQUIRED_EXIT_CODE
+        return _fail_submit(
+            root,
+            contract,
+            EXCEPTION_REQUIRED_EXIT_CODE,
+            head_sha=head_sha,
+            snapshot_context=snapshot_context,
+            reason_code="WORKTREE_HEALTH_UNAVAILABLE",
+            phase="cleanup_worktree_health",
+            retryable=True,
+            failures=(
+                pr_flow_contract.SubmitFailure(
+                    check="cleanup_worktree_health",
+                    source="git status --porcelain=v2 --branch",
+                    detail=_command_failure_detail(
+                        "git status --porcelain=v2 --branch",
+                        status,
+                    ),
+                ),
+            ),
+        )
+    raw_status = status.stdout
+    dirty_entries = _worktree_dirty_entries(raw_status)
+    if not dirty_entries:
+        return SUCCESS_EXIT_CODE
+    summary = _worktree_dirty_summary(dirty_entries)
+    detail = _worktree_dirty_detail(summary)
+    artifact = _write_cleanup_worktree_status_artifact(root, raw_status)
+    if contract is None or not _single_line_text(head_sha):
+        _print_state(
+            "EXCEPTION_REQUIRED",
+            detail,
+            repo_root=root,
+            reason_code="WORKTREE_DIRTY_AFTER_CLEANUP",
+            phase="cleanup_worktree_health",
+            retryable=True,
+            blocking_items=(detail,),
+            evidence_refs=(artifact["artifact_path"],),
+            next_actions=("inspect dirty worktree before continuing",),
+        )
+        return EXCEPTION_REQUIRED_EXIT_CODE
+    return _fail_submit(
+        root,
+        contract,
+        EXCEPTION_REQUIRED_EXIT_CODE,
+        head_sha=head_sha,
+        snapshot_context=snapshot_context,
+        reason_code="WORKTREE_DIRTY_AFTER_CLEANUP",
+        phase="cleanup_worktree_health",
+        retryable=True,
+        failures=(
+            pr_flow_contract.SubmitFailure(
+                check="cleanup_worktree_health",
+                source=artifact["artifact_path"],
+                detail=detail,
+            ),
+        ),
+        evidence_artifacts=(artifact,),
+    )
+
+
+def _worktree_dirty_entries(raw_status: str) -> tuple[str, ...]:
+    return tuple(
+        line
+        for line in raw_status.splitlines()
+        if line.strip() and not line.startswith("#")
+    )
+
+
+def _worktree_dirty_summary(entries: Sequence[str]) -> dict[str, object]:
+    tracked_deleted_count = 0
+    modified_count = 0
+    untracked_count = 0
+    sample_paths: list[str] = []
+    for entry in entries:
+        path = _worktree_status_path(entry)
+        if path and len(sample_paths) < 2:
+            sample_paths.append(path)
+        if entry.startswith("? "):
+            untracked_count += 1
+            continue
+        if not entry.startswith(("1 ", "2 ", "u ")):
+            continue
+        status_code = entry[2:4]
+        if "D" in status_code:
+            tracked_deleted_count += 1
+        if "M" in status_code:
+            modified_count += 1
+    return {
+        "dirty_count": len(entries),
+        "tracked_deleted_count": tracked_deleted_count,
+        "modified_count": modified_count,
+        "untracked_count": untracked_count,
+        "sample_paths": sample_paths,
+    }
+
+
+def _worktree_status_path(entry: str) -> str:
+    if entry.startswith(("? ", "! ")):
+        return entry[2:].strip()
+    if entry.startswith("1 "):
+        parts = entry.split(" ", 8)
+        return parts[8].split("\t", 1)[0].strip() if len(parts) >= 9 else ""
+    if entry.startswith("2 "):
+        parts = entry.split(" ", 9)
+        return parts[9].split("\t", 1)[0].strip() if len(parts) >= 10 else ""
+    if entry.startswith("u "):
+        parts = entry.split(" ", 10)
+        return parts[10].strip() if len(parts) >= 11 else ""
+    return entry.strip()
+
+
+def _worktree_dirty_detail(summary: Mapping[str, object]) -> str:
+    sample_paths = summary.get("sample_paths")
+    sample_text = ""
+    if isinstance(sample_paths, list) and sample_paths:
+        sample_text = " sample_paths=" + ", ".join(str(path) for path in sample_paths)
+    return (
+        "dirty worktree after cleanup: "
+        f"dirty_count={summary.get('dirty_count')} "
+        f"tracked_deleted_count={summary.get('tracked_deleted_count')} "
+        f"modified_count={summary.get('modified_count')} "
+        f"untracked_count={summary.get('untracked_count')}"
+        f"{sample_text}"
+    )
+
+
+def _write_cleanup_worktree_status_artifact(
+    root: Path,
+    raw_status: str,
+) -> dict[str, str]:
+    rel_path = Path(".local") / "pr-flow" / "worktree-status-after-cleanup.txt"
+    path = root / rel_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(raw_status, encoding="utf-8")
+    return {
+        "artifact_type": "worktree_status_after_cleanup",
+        "artifact_path": rel_path.as_posix(),
+        "artifact_summary": "raw git status --porcelain=v2 --branch after cleanup",
+    }
 
 
 def _render_submit_managed_body(
@@ -3480,6 +3682,45 @@ def _current_head_codex_trigger_comment(
         issue_comments,
         pr_url=pr_url,
         head_sha=head_sha,
+    )
+
+
+def _current_head_codex_output_exists(
+    *,
+    pr_url: str,
+    head_sha: str,
+    trigger: dict[str, Any],
+    root: Path,
+    runner: Runner,
+) -> bool:
+    pr_info = _github_pr_info_from_url(pr_url)
+    if pr_info is None:
+        return False
+    repo, pr_number = pr_info
+    trigger_time = _comment_time(trigger)
+    issue_comments = _gh_api_list(
+        root,
+        runner,
+        f"repos/{repo}/issues/{pr_number}/comments?per_page=100",
+    )
+    if _latest_codex_completion_comment_time(
+        issue_comments,
+        trigger_time=trigger_time,
+    ):
+        return True
+    reviews = _gh_api_list(
+        root,
+        runner,
+        f"repos/{repo}/pulls/{pr_number}/reviews?per_page=100",
+    )
+    return any(
+        _is_current_head_codex_item(
+            review,
+            head_sha=head_sha,
+            trigger_time=trigger_time,
+        )
+        and (not trigger_time or _codex_item_time(review) >= trigger_time)
+        for review in reviews
     )
 
 
@@ -4415,29 +4656,6 @@ def _is_codex_completion_comment(comment: dict[str, Any]) -> bool:
     )
 
 
-def _codex_trigger_has_completion_reaction(
-    *,
-    repo: str,
-    comment_id: str,
-    comment_time: str,
-    root: Path,
-    runner: Runner,
-) -> bool:
-    reactions = _gh_api_list(root, runner, f"repos/{repo}/issues/comments/{comment_id}/reactions?per_page=100")
-    for reaction in reactions:
-        user = reaction.get("user")
-        login = str(user.get("login", "")) if isinstance(user, dict) else ""
-        reaction_time = _single_line_text(reaction.get("created_at"))
-        if (
-            str(reaction.get("content", "")) == "+1"
-            and login in CODEX_REVIEW_AUTHORS
-            and reaction_time
-            and (not comment_time or reaction_time >= comment_time)
-        ):
-            return True
-    return False
-
-
 def _codex_trigger_is_acknowledged(
     *,
     pr_url: str,
@@ -4485,6 +4703,14 @@ def _wait_for_current_head_codex_trigger_ack(
             runner=runner,
         ):
             return True
+        if trigger is not None and _current_head_codex_output_exists(
+            pr_url=pr_url,
+            head_sha=head_sha,
+            trigger=trigger,
+            root=root,
+            runner=runner,
+        ):
+            return True
         if time.monotonic() >= deadline:
             return False
         time.sleep(min(max(poll_seconds, 0), max(deadline - time.monotonic(), 0)))
@@ -4494,6 +4720,7 @@ def _wait_for_codex_trigger_ack(
     *,
     pr_url: str,
     trigger: dict[str, Any],
+    head_sha: str,
     root: Path,
     runner: Runner,
     timeout_seconds: float,
@@ -4503,6 +4730,14 @@ def _wait_for_codex_trigger_ack(
     while True:
         if _codex_trigger_is_acknowledged(
             pr_url=pr_url,
+            trigger=trigger,
+            root=root,
+            runner=runner,
+        ):
+            return True
+        if _current_head_codex_output_exists(
+            pr_url=pr_url,
+            head_sha=head_sha,
             trigger=trigger,
             root=root,
             runner=runner,

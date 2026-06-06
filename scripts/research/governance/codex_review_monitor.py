@@ -31,7 +31,6 @@ from scripts.research.governance.pr_review_evidence import (
     _issue_label_names,
     codex_context_invalid_review_count,
     codex_completion_effective_time,
-    has_codex_completion_reaction,
     head_updated_at_from_monitor_state,
     is_codex_completion_comment,
     is_effective_codex_review,
@@ -152,24 +151,50 @@ def build_monitor_report(
         head_created_at=head_created_at,
         before_or_at=reviewed_until,
     )
-    blocking_findings = _count_reviews_findings(
-        current_head_reviews,
+    latest_review_for_findings = None if completion_is_latest else latest_review
+    blocking_findings = _count_review_findings(
+        latest_review_for_findings,
         review_comments=review_comments,
         pattern=BLOCKING_CODEX_FINDING_PATTERN,
+        review_threads=review_threads,
     )
     blocking_findings += (
         unresolved_blocking_codex_thread_count(review_threads)
         if review_threads is not None
         else 0
     )
-    context_invalid_reviews = codex_context_invalid_review_count(
+    context_invalid_comment = (
+        _latest_codex_context_invalid_comment(
+            issue_comments,
+            head_created_at=head_created_at,
+            trigger_time=trigger_time,
+        )
+        if trigger_time is not None
+        else None
+    )
+    context_invalid_comment_time = (
+        _comment_effective_time(context_invalid_comment)
+        if context_invalid_comment is not None
+        else ""
+    )
+    context_invalid_comment_is_latest = context_invalid_comment is not None and (
+        (completion_comment is None or completion_time <= context_invalid_comment_time)
+        and (
+            latest_review is None
+            or not latest_review_time
+            or latest_review_time <= context_invalid_comment_time
+        )
+    )
+    context_invalid_reviews = int(
+        context_invalid_comment_is_latest
+    ) + codex_context_invalid_review_count(
         current_head_reviews,
         review_comments=review_comments,
         expected_head_sha=head_sha,
         submitted_after=context_invalid_cutoff,
     )
-    advisory_findings = _count_reviews_findings(
-        current_head_reviews,
+    advisory_findings = _count_review_findings(
+        latest_review_for_findings,
         review_comments=review_comments,
         pattern=P2_FINDING_PATTERN,
     )
@@ -564,13 +589,6 @@ def _latest_codex_completion_comment(
             continue
         if trigger_time and comment_time and comment_time < trigger_time:
             continue
-        if _is_required_trigger_comment(
-            comment,
-            expected_pr_url=expected_pr_url,
-            expected_head_sha=expected_head_sha,
-        ) and has_codex_completion_reaction(comment):
-            matched.append(comment)
-            continue
         if is_codex_completion_comment(comment):
             matched.append(comment)
     if not matched:
@@ -583,6 +601,32 @@ def _latest_codex_completion_comment(
             expected_head_sha=expected_head_sha,
         ),
     )[-1]
+
+
+def _latest_codex_context_invalid_comment(
+    issue_comments: Sequence[Mapping[str, object]],
+    *,
+    head_created_at: str | None = None,
+    trigger_time: str | None = None,
+) -> Mapping[str, object] | None:
+    matched: list[Mapping[str, object]] = []
+    for comment in issue_comments:
+        comment_time = _comment_effective_time(comment)
+        if head_created_at and comment_time and comment_time < head_created_at:
+            continue
+        if trigger_time and comment_time and comment_time < trigger_time:
+            continue
+        user = comment.get("user")
+        login = user.get("login") if isinstance(user, Mapping) else ""
+        body = str(comment.get("body", ""))
+        if (
+            str(login) in CODEX_REVIEW_AUTHORS
+            and CODEX_CONTEXT_INVALID_PATTERN.search(body)
+        ):
+            matched.append(comment)
+    if not matched:
+        return None
+    return sorted(matched, key=_comment_effective_time)[-1]
 
 
 def _comment_effective_time(comment: Mapping[str, object]) -> str:
@@ -660,13 +704,21 @@ def _count_review_findings(
     *,
     review_comments: Sequence[Mapping[str, object]],
     pattern: re.Pattern[str],
+    review_threads: Sequence[Mapping[str, object]] | None = None,
 ) -> int:
     if review is None:
         return 0
     review_id = str(review.get("id", ""))
     texts = [str(review.get("body", ""))]
+    threaded_comment_keys = (
+        _threaded_comment_keys(review_threads)
+        if pattern is BLOCKING_CODEX_FINDING_PATTERN
+        else set()
+    )
     for comment in review_comments:
         if str(comment.get("pull_request_review_id", "")) == review_id:
+            if threaded_comment_keys and _comment_keys(comment) & threaded_comment_keys:
+                continue
             texts.append(str(comment.get("body", "")))
     if pattern is BLOCKING_CODEX_FINDING_PATTERN and any(
         CODEX_CONTEXT_INVALID_PATTERN.search(text) for text in texts
@@ -675,16 +727,50 @@ def _count_review_findings(
     return sum(1 for text in texts if pattern.search(text))
 
 
-def _count_reviews_findings(
-    reviews: Sequence[Mapping[str, object]],
-    *,
-    review_comments: Sequence[Mapping[str, object]],
-    pattern: re.Pattern[str],
-) -> int:
-    return sum(
-        _count_review_findings(review, review_comments=review_comments, pattern=pattern)
-        for review in reviews
-    )
+def _threaded_comment_keys(
+    review_threads: Sequence[Mapping[str, object]] | None,
+) -> set[tuple[str, str]]:
+    if review_threads is None:
+        return set()
+    keys: set[tuple[str, str]] = set()
+    for thread in review_threads:
+        for comment in _thread_comments(thread):
+            keys.update(_comment_keys(comment))
+    return keys
+
+
+def _thread_comments(thread: Mapping[str, object]) -> tuple[Mapping[str, object], ...]:
+    comments = thread.get("comments")
+    if isinstance(comments, list):
+        return tuple(item for item in comments if isinstance(item, Mapping))
+    if isinstance(comments, Mapping):
+        nodes = comments.get("nodes")
+        if isinstance(nodes, list):
+            return tuple(item for item in nodes if isinstance(item, Mapping))
+    return ()
+
+
+def _comment_keys(comment: Mapping[str, object]) -> set[tuple[str, str]]:
+    keys: set[tuple[str, str]] = set()
+    node_id = str(comment.get("node_id", "") or "").strip()
+    if node_id:
+        keys.add(("node", node_id))
+    comment_id = str(comment.get("id", "") or "").strip()
+    if comment_id:
+        if comment_id.startswith("PRRC_") or comment_id.startswith("PRRC_".lower()):
+            keys.add(("node", comment_id))
+        else:
+            keys.add(("database", comment_id))
+    database_id = str(
+        comment.get("databaseId", "") or comment.get("database_id", "") or ""
+    ).strip()
+    if database_id:
+        keys.add(("database", database_id))
+    for field in ("url", "html_url"):
+        value = str(comment.get(field, "") or "").strip()
+        if value:
+            keys.add(("url", value))
+    return keys
 
 
 def _find_monitor_comment_id(comments: Sequence[object]) -> int | None:
@@ -751,31 +837,6 @@ def _fetch_github_list(*, repo: str, path: str, token: str) -> list[object]:
             return items
         items.extend(payload)
     return items
-
-
-def _enrich_required_trigger_reactions(
-    comments: Sequence[Mapping[str, object]],
-    *,
-    repo: str,
-    token: str,
-) -> list[Mapping[str, object]]:
-    enriched: list[Mapping[str, object]] = []
-    for comment in comments:
-        if not _is_required_trigger_comment(comment):
-            enriched.append(comment)
-            continue
-        comment_id = comment.get("id")
-        if comment_id is None:
-            enriched.append(comment)
-            continue
-        item = dict(comment)
-        item["reaction_items"] = _as_mapping_list(
-            _fetch_github_list(
-                repo=repo, path=f"issues/comments/{comment_id}/reactions", token=token
-            )
-        )
-        enriched.append(item)
-    return enriched
 
 
 def _parse_next_link(header: str) -> str | None:
@@ -872,9 +933,6 @@ def main(argv: list[str] | None = None) -> int:
                     repo=repo, path=f"issues/{pr_number}/comments", token=token
                 )
             )
-        issue_comments = _enrich_required_trigger_reactions(
-            issue_comments, repo=repo, token=token
-        )
         if not reviews:
             reviews = _as_mapping_list(
                 _fetch_github_list(

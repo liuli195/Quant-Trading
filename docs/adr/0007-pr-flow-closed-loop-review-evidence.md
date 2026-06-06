@@ -18,11 +18,11 @@ PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pa
 - GitHub API / GraphQL 瞬时错误会中断无问题路径。
 - 多入口 PR 流程、远端 merge policy 和 cleanup 收尾仍有人工切换成本。
 
-本 ADR 对应 PRD Issue：<https://github.com/liuli195/Quant-Trading/issues/27>；Commit Intent 门禁来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/54>；PR 自动化简化来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/65>；PR Flow 闭环与官方 Codex thread 自动处理扩展见 Issue：<https://github.com/liuli195/Quant-Trading/issues/90>；`issue_comment` 默认分支自举问题和 router/worker 拆分来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/94>；接手快照 v3、required-check 当前归因和 review thread plan 来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/104>、<https://github.com/liuli195/Quant-Trading/issues/95>、<https://github.com/liuli195/Quant-Trading/issues/96>。
+本 ADR 对应 PRD Issue：<https://github.com/liuli195/Quant-Trading/issues/27>；Commit Intent 门禁来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/54>；PR 自动化简化来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/65>；PR Flow 闭环与官方 Codex thread 自动处理扩展见 Issue：<https://github.com/liuli195/Quant-Trading/issues/90>；`issue_comment` 默认分支自举问题和 router/worker 拆分来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/94>；接手快照 v3、required-check 当前归因和 review thread plan 来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/104>、<https://github.com/liuli195/Quant-Trading/issues/95>、<https://github.com/liuli195/Quant-Trading/issues/96>；cleanup worktree health 来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/103>；required-check 触发面和 current-head Codex verdict 来源见 Issue：<https://github.com/liuli195/Quant-Trading/issues/113>。
 
 ## 决策
 
-- 高频入口收敛为 `pr-submit`；它负责创建/更新 PR、刷新 PR Evidence JSON、等待 required checks、ready-for-review、head-locked auto-merge 和本地收尾。
+- 高频入口收敛为 `pr-submit`；它负责创建/更新 PR、刷新 PR Evidence JSON、ready-for-review、等待 required checks、head-locked auto-merge 和本地收尾。
 - `.local/pr-flow/status.json` 是 `pr-submit` 到 AI 的本地接手入口。运行时只写接手快照 v3，不保留旧 `schema/head/failures` 字段；它不是成功证明，权威证据只来自当前 Git 状态、GitHub 状态和校验过的 PR Evidence JSON。
 - review coverage 必须绑定当前 diff fingerprint。`base_sha`、`head_sha`、`diff_hash` 或文件集变化后，旧 evidence 失效；允许 delta review，但最终 evidence 必须证明覆盖当前完整 diff。
 - `pr-submit is not a sub-agent dispatcher`: `pr-submit` 只校验 fragments 并在缺失时输出 `DISPATCH_REQUIRED`；主 agent 使用 `repo-pr-governance wrapper for $review` 调用 `$review` 默认审查，并把文本结论映射为 Standards / Spec fragments。Security review 仍单独必需，不能被 `$review` 替代。
@@ -34,7 +34,10 @@ PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pa
 - P2/P3 accepted findings 不影响 `risk_level`，也不阻断合并；所有来源的 P2/P3 统一写入 PR Evidence `retained`。
 - 官方 Codex P2/P3 review thread 在 severity 可靠识别时，由 `pr_flow` 用固定模板自动接受、resolve、重新读取确认 resolved，并写入 PR Evidence `retained`。官方 Codex P0/P1 在缺少结构化 `fixed` / `false_positive` evidence 时阻断；有绑定当前 head/diff/thread ID 的证据时可由 `pr_flow` 自动回复、resolve 并重新读取确认 resolved。无 severity thread 和人工 reviewer thread 不自动 resolve。
 - 官方 Codex Review 状态由 `PR Flow / review-status` 复核；官方 Codex 未返回时 pending，不写失败。
-- 官方 Codex trigger comment 必须用 Codex bot 的 `eyes` reaction 作为远端接收确认；当前 head trigger 超过 3 分钟仍无 `eyes` 时，`pr-submit` 重新发送一次 `@codex review`。`+1` reaction 仍只表示 completion，不表示接收。
+- 官方 Codex trigger comment 必须用 Codex bot 的 `eyes` reaction 作为远端接收确认；当前 head trigger 超过 3 分钟仍无 `eyes` 时，`pr-submit` 重新发送一次 `@codex review`。如果 latest current-head trigger 后已经出现 current-head verdict，则视为触发成功，不因缺 `eyes` 重发。`+1` reaction 不是 current-head verdict，不能替代 Codex no-issue comment 或当前 head PR review。
+- `ready_for_review` 回归 GitHub 语义：PR Evidence sync 后即可 ready-for-review，之后再触发或监控 Codex review、等待 required checks 和执行 auto-merge。
+- required checks 按输入触发：`verify-full` 只响应 head/diff 变化、`PR Flow / evidence` 额外响应 PR body edited、`review-status` 响应 head/review/thread/workflow_dispatch。required-check workflows 使用 PR-scoped concurrency，且不新增 live PR state guard。
+- Codex review 使用 current-head verdict；旧 head 的 Codex PR review 或 latest current-head trigger 之前的 no-issue comment 不能通过当前 head。
 - GitHub `issue_comment` 事件由默认分支 `codex-review-router.yml` 处理。router 只识别 review 相关 PR 评论、写 pending、按 PR head branch dispatch `codex-review-monitor.yml` worker；router dispatch 成功不写 success。最终 `PR Flow / review-status` verdict 由 PR branch worker 使用当前 PR 分支 workflow 和治理代码计算。
 - worker 的 `workflow_dispatch` 是正式入口，必须接收 `pr_number`、`expected_head_sha`、`trigger_event`、`trigger_run_id`，并覆盖 pending 和 failure finalizer。`expected_head_sha` 不匹配时写 `PR head changed before monitor completed` error 并停止，避免旧 run 覆盖新 head。
 - `pr-submit` 不负责 workflow 自举补救，不维护 PR Flow changed-files 白名单，不直接覆盖 GitHub status，不新增公开 `diagnose`、`handoff` 或 `refresh` 入口。
@@ -42,6 +45,7 @@ PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pa
 - `pr_flow` 顶层停止状态保持三类：`DISPATCH_REQUIRED`、`REPLY_OR_FIX_REQUIRED`、`EXCEPTION_REQUIRED`。所有非 0 退出必须输出 `reason_code`、phase、retryable、dispatch target、blocking items、evidence refs 和 next actions。
 - `diagnose` 只保留为 `pr-submit` 内部归因和开发测试面；用户接手失败统一读取 `.local/pr-flow/status.json`。旧 required-check failure 只进入 `diagnostic_signals`，当前 failure 和 unresolved thread 才进入 `blocking_signals`；thread 级明细放在 `.local/pr-flow/resolve-threads-plan.json`。
 - cleanup 必须在确认 PR merged、本地 base 分支受控 fast-forward 后，才删除本地已合并 head branch；远端分支删除交给 GitHub。
+- cleanup 末尾必须检查 worktree health。dirty worktree 停 `EXCEPTION_REQUIRED`，`reason_code=WORKTREE_DIRTY_AFTER_CLEANUP`，`phase=cleanup_worktree_health`，保留 raw `git status --porcelain=v2 --branch` 证据；cleanup 只发现，不恢复、不删除、不修复。
 
 ## 后果
 

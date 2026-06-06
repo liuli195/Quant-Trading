@@ -171,6 +171,16 @@ def _workflow_event_types_include(
     return all(required_type in declared for required_type in required_types)
 
 
+def _workflow_event_types_exact(
+    text: str, event: str, expected_types: Sequence[str]
+) -> bool:
+    match = re.search(rf"{re.escape(event)}:\s*\n\s*types:\s*\[([^\]]*)\]", text)
+    if not match:
+        return False
+    declared = tuple(item.strip() for item in match.group(1).split(",") if item.strip())
+    return declared == tuple(expected_types)
+
+
 def run_audit(
     repo_root: str | Path = ".",
     *,
@@ -757,6 +767,32 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "CI workflow missing scheduled drift audit",
                 )
             )
+        if not re.search(r"push:\s*\n\s*branches:\s*\[\s*main\s*\]", text):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "CI workflow push trigger must be limited to main",
+                )
+            )
+        if not _workflow_event_types_exact(
+            text, "pull_request", ("opened", "synchronize", "reopened")
+        ):
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "CI workflow pull_request events must be head-only: opened, synchronize, reopened",
+                )
+            )
+        if "pull_request_review:" in text or "pull_request_review_comment:" in text:
+            findings.append(
+                AuditFinding(
+                    "governance_gate",
+                    "error",
+                    "CI workflow must not listen to review or thread events",
+                )
+            )
     pr_flow_workflow = root / ".github" / "workflows" / "pr-flow.yml"
     if not pr_flow_workflow.is_file():
         findings.append(
@@ -816,34 +852,22 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "required PR Flow evidence job must not use job-level if",
                 )
             )
-        if not re.search(
-            r"pull_request_review_comment:\s*\n\s*types:\s*\[[^\]]*deleted", text
+        if not _workflow_event_types_exact(
+            text, "pull_request", ("opened", "synchronize", "reopened", "edited")
         ):
             findings.append(
                 AuditFinding(
                     "governance_gate",
                     "error",
-                    "PR Flow evidence workflow must listen to deleted inline review comments",
+                    "PR Flow evidence workflow pull_request events must be opened, synchronize, reopened, edited only",
                 )
             )
-        if not _workflow_event_types_include(
-            text, "pull_request_review", ("submitted", "edited", "dismissed")
-        ):
+        if "pull_request_review:" in text or "pull_request_review_comment:" in text:
             findings.append(
                 AuditFinding(
                     "governance_gate",
                     "error",
-                    "PR Flow evidence workflow must listen to Codex review submitted, edited, and dismissed events",
-                )
-            )
-        if not _workflow_event_types_include(
-            text, "pull_request", ("labeled", "unlabeled")
-        ):
-            findings.append(
-                AuditFinding(
-                    "governance_gate",
-                    "error",
-                    "PR Flow evidence workflow must listen to pull_request labeled and unlabeled events",
+                    "PR Flow evidence workflow must not listen to review or thread events",
                 )
             )
 
@@ -960,6 +984,16 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "monitor workflow must include a failure status finalizer for PR Flow / review-status",
                 )
             )
+        if not _workflow_event_types_exact(
+            text, "pull_request", ("opened", "synchronize", "reopened")
+        ):
+            findings.append(
+                AuditFinding(
+                    "codex_review_monitor",
+                    "error",
+                    "monitor workflow pull_request events must be head-only: opened, synchronize, reopened",
+                )
+            )
         if not re.search(
             r"pull_request_review_comment:\s*\n\s*types:\s*\[[^\]]*deleted", text
         ):
@@ -978,16 +1012,6 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                     "codex_review_monitor",
                     "error",
                     "monitor workflow must listen to Codex review submitted, edited, and dismissed events",
-                )
-            )
-        if not _workflow_event_types_include(
-            text, "pull_request", ("labeled", "unlabeled")
-        ):
-            findings.append(
-                AuditFinding(
-                    "codex_review_monitor",
-                    "error",
-                    "monitor workflow must listen to pull_request labeled and unlabeled events",
                 )
             )
 

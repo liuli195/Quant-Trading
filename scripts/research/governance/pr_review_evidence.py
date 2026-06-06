@@ -117,6 +117,7 @@ def validate_pr_body(
 ) -> EvidenceReport:
     """Return whether a PR body contains merge-blocking review evidence."""
 
+    _ = review_threads
     contract_payload, contract_errors = _extract_contract_v1_evidence(body)
     if contract_payload is not None or contract_errors:
         errors = list(contract_errors)
@@ -132,19 +133,9 @@ def validate_pr_body(
                     labels=labels,
                 )
             )
-        if (
-            review_threads is not None
-            and unresolved_blocking_codex_thread_count(review_threads) > 0
-        ):
-            errors.append("Codex review must not have unresolved review threads")
         return EvidenceReport(not errors, tuple(errors))
 
     errors = ["PR body missing PR Evidence JSON"]
-    if (
-        review_threads is not None
-        and unresolved_blocking_codex_thread_count(review_threads) > 0
-    ):
-        errors.append("Codex review must not have unresolved review threads")
     return EvidenceReport(False, tuple(errors))
 
 def _extract_contract_v1_evidence(
@@ -254,6 +245,7 @@ def _contract_v1_official_review_risk_errors(
     changed_files: Sequence[str] | None,
     labels: Sequence[str] | None,
 ) -> list[str]:
+    _ = labels
     if not isinstance(official_review, Mapping):
         return []
     if _single_line_text(official_review.get("decision")) != "skip_risk_low":
@@ -262,10 +254,6 @@ def _contract_v1_official_review_risk_errors(
     if _high_risk_changed_files(changed_files):
         errors.append(
             "PR Evidence official_review.skip_risk_low is invalid for high-risk changed files"
-        )
-    if _has_ai_risk_review_label(labels):
-        errors.append(
-            "PR Evidence official_review.skip_risk_low is invalid with ai-risk-review label"
         )
     return errors
 
@@ -388,12 +376,6 @@ def _is_high_risk_path(path: str) -> bool:
 def _is_generated_strategy_artifact(path: str) -> bool:
     parts = path.split("/")
     return len(parts) >= 3 and parts[0] == "strategies" and parts[2] == "backtest_runs"
-
-
-def _has_ai_risk_review_label(labels: Sequence[str] | None) -> bool:
-    if labels is None:
-        return False
-    return any(str(label).casefold() == "ai-risk-review" for label in labels)
 
 
 def _normalize_value(value: str) -> str:
@@ -750,44 +732,14 @@ def _find_comment_by_id(
     return None
 
 
-def has_codex_completion_reaction(comment: Mapping[str, object]) -> bool:
-    return _codex_completion_reaction_time(comment) is not None
-
-
 def codex_completion_effective_time(
     comment: Mapping[str, object],
     *,
     expected_pr_url: str | None = None,
     expected_head_sha: str | None = None,
 ) -> str:
-    if _is_required_trigger_comment(
-        comment,
-        expected_pr_url=expected_pr_url,
-        expected_head_sha=expected_head_sha,
-    ):
-        reaction_time = _codex_completion_reaction_time(comment)
-        if reaction_time:
-            return reaction_time
+    _ = expected_pr_url, expected_head_sha
     return _comment_effective_time(comment)
-
-
-def _codex_completion_reaction_time(comment: Mapping[str, object]) -> str | None:
-    comment_time = _comment_effective_time(comment)
-    matched_times: list[str] = []
-    for reaction in _comment_reaction_items(comment):
-        if str(reaction.get("content", "")) != "+1":
-            continue
-        user = reaction.get("user")
-        login = user.get("login") if isinstance(user, Mapping) else ""
-        if str(login) not in CODEX_REVIEW_AUTHORS:
-            continue
-        reaction_time = _first_value(reaction, "created_at")
-        if reaction_time and comment_time and reaction_time < comment_time:
-            continue
-        matched_times.append(reaction_time or comment_time)
-    if not matched_times:
-        return None
-    return max(matched_times)
 
 
 def is_codex_completion_comment(comment: Mapping[str, object]) -> bool:
@@ -798,17 +750,9 @@ def is_codex_completion_comment(comment: Mapping[str, object]) -> bool:
     body = str(comment.get("body", ""))
     if not CODEX_NO_MAJOR_ISSUES_PATTERN.search(body):
         return False
+    if CODEX_CONTEXT_INVALID_PATTERN.search(body):
+        return False
     return not BLOCKING_CODEX_FINDING_PATTERN.search(body)
-
-
-def _comment_reaction_items(
-    comment: Mapping[str, object],
-) -> tuple[Mapping[str, object], ...]:
-    for key in ("reactions_detail", "reaction_items"):
-        value = comment.get(key)
-        if isinstance(value, list):
-            return tuple(item for item in value if isinstance(item, Mapping))
-    return ()
 
 
 def render_monitor_head_state(*, head_sha: str, head_updated_at: str | None) -> str:
@@ -1018,42 +962,6 @@ def _fetch_pr_comments(
     payload = _fetch_github_list(
         repo=repo, path=f"issues/{pr_number}/comments", token=token
     )
-    return _enrich_required_trigger_reactions(
-        [item for item in payload if isinstance(item, Mapping)],
-        repo=repo,
-        token=token,
-    )
-
-
-def _enrich_required_trigger_reactions(
-    comments: Sequence[Mapping[str, object]],
-    *,
-    repo: str,
-    token: str,
-) -> list[Mapping[str, object]]:
-    enriched: list[Mapping[str, object]] = []
-    for comment in comments:
-        if not _is_required_trigger_comment(comment):
-            enriched.append(comment)
-            continue
-        comment_id = comment.get("id")
-        if comment_id is None:
-            enriched.append(comment)
-            continue
-        item = dict(comment)
-        item["reaction_items"] = _fetch_issue_comment_reactions(
-            repo=repo, comment_id=str(comment_id), token=token
-        )
-        enriched.append(item)
-    return enriched
-
-
-def _fetch_issue_comment_reactions(
-    *, repo: str, comment_id: str, token: str
-) -> list[Mapping[str, object]]:
-    payload = _fetch_github_list(
-        repo=repo, path=f"issues/comments/{comment_id}/reactions", token=token
-    )
     return [item for item in payload if isinstance(item, Mapping)]
 
 
@@ -1164,10 +1072,12 @@ def _fetch_pr_review_threads(
         pullRequest(number: $number) {
           reviewThreads(first: 100, after: $cursor) {
             nodes {
+              id
               isResolved
               isOutdated
               comments(first: 50) {
                 nodes {
+                  id
                   body
                   author {
                     login
@@ -1344,10 +1254,6 @@ def main(argv: list[str] | None = None) -> int:
             reviews = _fetch_pr_reviews(repo=repo, pr_number=pr_number, token=token)
         if review_comments is None:
             review_comments = _fetch_pr_review_comments(
-                repo=repo, pr_number=pr_number, token=token
-            )
-        if review_threads is None:
-            review_threads = _fetch_pr_review_threads(
                 repo=repo, pr_number=pr_number, token=token
             )
         changed_files = _fetch_pr_changed_files(
