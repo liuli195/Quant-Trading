@@ -23,6 +23,9 @@ description: 准备进入主干的 PR、review 证据、required checks、Codex 
 - `repo-pr-governance wrapper for $review`：主 agent 使用本技能作为 `$review` 的轻量包装器；不修改 `$review` 技能，不复制完整提示词，不新增包装技能。
 - `target spec wins`：当目标 Issue/PRD/spec 与旧规则或 ADR 冲突时，review finding 归类为 rule/ADR drift；规则或 ADR 修改仍必须先获得用户显式授权。
 - 看到 pre-push 输出 local review fragments freshness 的 stale diff 提醒后，不得直接运行 `pr-submit`；必须先重新 review / 重新映射 fragments。same diff 仅 head stale 时，可让 `pr-submit` 按规则刷新 fragment head。
+- `pr-submit` 因 missing / stale local fragments 停止时，先读 `.local/pr-flow/review-fragments-handoff.json`，重新 review 后用 agent-only builder 写 current fragment；不得手写 fragment JSON 或从聊天总结推断 pass。
+- 处理 official Codex P0/P1 thread 时，先读 `.local/pr-flow/resolve-threads-plan.json`，提供结构化 `fixed` / `false_positive` closure verdict，用 agent-only builder upsert `.local/pr-flow/thread-closure-evidence.json`，再让 `pr-submit` 自动 reply / resolve。
+- official Codex review 触发前必须经过 local stable gate；只等待 `Research Governance / verify-full` 和 `PR Flow / evidence`，不等待 `PR Flow / review-status`，pending 使用 `WAITING_LOCAL_STABILIZATION` 诊断，并读 `.local/pr-flow/local-stabilization.json` 确认 current head、last triggered head、superseded 和 next trigger condition。
 
 ## 本地 Review 包装口径
 
@@ -39,4 +42,13 @@ description: 准备进入主干的 PR、review 证据、required checks、Codex 
 ```powershell
 make pr-submit TITLE="<PR标题>"
 make pr-resolve-threads THREADS="<thread-id> [<thread-id>...]"
+```
+
+## Agent-only builder
+
+这些入口不作为用户高频命令，只给主 agent 落结构化 evidence：
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow build-review-fragment --payload-file <verdict.json>
+.\.venv\Scripts\python.exe -m scripts.research.governance.pr_flow build-thread-closure-evidence --payload-file <closure.json>
 ```

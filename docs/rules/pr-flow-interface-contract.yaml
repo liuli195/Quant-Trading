@@ -20,6 +20,10 @@ artifacts:
     standards: .local/ai-review/fragments/standards.json
     spec: .local/ai-review/fragments/spec.json
     security: .local/ai-review/fragments/security.json
+  review_fragments_handoff: .local/pr-flow/review-fragments-handoff.json
+  resolve_threads_plan: .local/pr-flow/resolve-threads-plan.json
+  thread_closure_evidence: .local/pr-flow/thread-closure-evidence.json
+  local_stabilization: .local/pr-flow/local-stabilization.json
   submit_status: .local/pr-flow/status.json
 
 rules:
@@ -27,6 +31,21 @@ rules:
   fragment_freshness:
     same_diff_head_refresh: true
     description: "same-diff current-head review refresh updates fragment head without invalidating existing findings"
+  local_review_fragment_builder:
+    agent_only: true
+    structured_payload_only: true
+    public_command: false
+    description: "agent-only builder maps structured reviewer verdict payloads into current-head local review fragments"
+  local_stable_gate:
+    before_official_codex_review: true
+    required_checks:
+      - Research Governance / verify-full
+      - PR Flow / evidence
+    excluded_checks:
+      - PR Flow / review-status
+    pending_reason_code: WAITING_LOCAL_STABILIZATION
+    pending_phase: submit_local_stabilization
+    description: "official Codex review is requested only after local evidence and non-review-status required checks are stable"
   github_native_closing_links:
     from_per_commit_evidence: true
     description: "closing links must derive from validated per-commit issue evidence, not from stale aggregate issue refs"
@@ -164,9 +183,13 @@ submit_status:
     - artifact_path
     - artifact_summary
   evidence_artifacts:
+    review_fragments_handoff: ".local/pr-flow/review-fragments-handoff.json"
     resolve_threads_plan: ".local/pr-flow/resolve-threads-plan.json"
+    local_stabilization: ".local/pr-flow/local-stabilization.json"
   closure_evidence:
     path: ".local/pr-flow/thread-closure-evidence.json"
+    agent_only_builder: true
+    structured_payload_only: true
     required_fields:
       - source
       - thread_id

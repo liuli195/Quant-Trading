@@ -84,7 +84,9 @@ Review Scope：
 
 - `repo-pr-governance wrapper for $review`: 主 agent 用本技能作为轻量包装器，不修改 `$review` 技能，不复制完整提示词，不让 `pr-submit` 派发子 agent。
 - `pr-submit` 只校验结构化 fragments；缺失时输出 `DISPATCH_REQUIRED`。主 agent 派发 `$review`，并把 `$review` 文本结论映射为 standards/spec fragments；Security review 独立生成 security fragment。
+- missing / stale local review fragments 的标准动作是读取 `.local/pr-flow/review-fragments-handoff.json`，重新 review 后提交结构化 verdict payload 给 agent-only builder；builder 只接受 JSON payload，不解析自然语言，不凭空生成 pass fragment。
 - 主 agent 映射 `$review` / Security review 结果时，不能用空 findings 吞掉 P0/P1；必须保留 `open`、`fixed` 或 `false_positive` 的处置解释。
+- official Codex P0/P1 thread closure 的标准动作是读取 `.local/pr-flow/resolve-threads-plan.json`，提供结构化 `fixed` 或 `false_positive` closure verdict payload，由 agent-only builder upsert `.local/pr-flow/thread-closure-evidence.json`。该 evidence 不进入 PR Evidence JSON，不自动 same-diff head refresh。
 - 有 Issue refs 时，只在 `$review` 默认逻辑基础上补充 spec hint：`closes` 是主规格，`reference` 是背景。无 Issue refs 或 no-Issue 时，完全走 `$review` 默认逻辑。
 
 ## Issue Intent Review

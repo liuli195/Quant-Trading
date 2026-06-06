@@ -41,6 +41,10 @@ class PRFlowContract:
     required_settings: dict[str, bool]
     required_checks: tuple[str, ...]
     reviewer_fragments: dict[str, Path]
+    review_fragments_handoff_path: Path
+    resolve_threads_plan_path: Path
+    thread_closure_evidence_path: Path
+    local_stabilization_path: Path
     submit_status_path: Path
     marker_start: str
     marker_end: str
@@ -63,6 +67,10 @@ class PRFlowContract:
     target_spec_wins: bool
     fragment_freshness_same_diff_head_refresh: bool
     github_native_closing_links_from_per_commit_evidence: bool
+    local_stable_required_checks: tuple[str, ...]
+    local_stable_excluded_checks: tuple[str, ...]
+    local_stable_pending_reason_code: str
+    local_stable_pending_phase: str
     codex_thread_p0_p1_requires_closure_evidence: bool
     codex_thread_human_never_auto_resolve: bool
     codex_thread_no_severity_never_auto_resolve: bool
@@ -109,6 +117,7 @@ def load_contract(repo_root: str | Path = ".") -> PRFlowContract:
     _validate_submit_status_fields(submit_status_fields)
 
     fragment_freshness = _mapping(rules.get("fragment_freshness"), "rules.fragment_freshness")
+    local_stable_gate = _mapping(rules.get("local_stable_gate"), "rules.local_stable_gate")
     closing_links = _mapping(
         rules.get("github_native_closing_links"),
         "rules.github_native_closing_links",
@@ -140,6 +149,14 @@ def load_contract(repo_root: str | Path = ".") -> PRFlowContract:
             role: Path(_single_line(path_value))
             for role, path_value in reviewer_fragments.items()
         },
+        review_fragments_handoff_path=Path(
+            _single_line(artifacts.get("review_fragments_handoff"))
+        ),
+        resolve_threads_plan_path=Path(_single_line(artifacts.get("resolve_threads_plan"))),
+        thread_closure_evidence_path=Path(
+            _single_line(artifacts.get("thread_closure_evidence"))
+        ),
+        local_stabilization_path=Path(_single_line(artifacts.get("local_stabilization"))),
         submit_status_path=Path(submit_status),
         marker_start=_single_line(pr_evidence.get("marker_start")),
         marker_end=_single_line(pr_evidence.get("marker_end")),
@@ -172,6 +189,16 @@ def load_contract(repo_root: str | Path = ".") -> PRFlowContract:
         github_native_closing_links_from_per_commit_evidence=bool(
             closing_links.get("from_per_commit_evidence")
         ),
+        local_stable_required_checks=_string_tuple(
+            local_stable_gate.get("required_checks")
+        ),
+        local_stable_excluded_checks=_string_tuple(
+            local_stable_gate.get("excluded_checks")
+        ),
+        local_stable_pending_reason_code=_single_line(
+            local_stable_gate.get("pending_reason_code")
+        ),
+        local_stable_pending_phase=_single_line(local_stable_gate.get("pending_phase")),
         codex_thread_p0_p1_requires_closure_evidence=bool(
             codex_thread.get("p0_p1_requires_closure_evidence")
         ),

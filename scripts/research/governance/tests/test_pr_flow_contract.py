@@ -956,6 +956,38 @@ class SubmitMixedFailingPendingChecksRunner(SubmitCreatePrRunner):
         return super().run(command, cwd=cwd, input_text=input_text)
 
 
+class SubmitLocalStablePendingRunner(SubmitCreatePrRunner):
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        if command == self._status_rollup_command():
+            return self._status_rollup_result(
+                [
+                    self._status_rollup_item(
+                        name="review-status",
+                        workflow="PR Flow",
+                    ),
+                    self._status_rollup_item(
+                        name="verify-full",
+                        workflow="Research Governance",
+                        state="PENDING",
+                        link="https://github.com/runs/verify",
+                    ),
+                    self._status_rollup_item(
+                        name="evidence",
+                        workflow="PR Flow",
+                        state="PENDING",
+                        link="https://github.com/runs/evidence",
+                    ),
+                ]
+            )
+        return super().run(command, cwd=cwd, input_text=input_text)
+
+
 class SubmitStaleRequiredCheckRunner(SubmitCreatePrRunner):
     def __init__(
         self,
@@ -1665,6 +1697,143 @@ def test_submit_reports_missing_first_stage_review_fragments(tmp_path: Path) -> 
     ]
 
 
+def test_review_fragment_builder_writes_pass_verdict_current_fragment(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+
+    code = pr_flow.build_review_fragment_from_payload(
+        repo_root=tmp_path,
+        runner=runner,
+        payload={
+            "source": "standards",
+            "verdict": "pass",
+            "reviewed_head": "1" * 40,
+            "reviewed_diff": DEFAULT_DIFF_HASH,
+            "reviewer": "standards-reviewer",
+        },
+    )
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    fragment_path = tmp_path / ".local/ai-review/fragments/standards.json"
+    assert json.loads(fragment_path.read_text(encoding="utf-8")) == {
+        "schema": 2,
+        "head": "1" * 40,
+        "diff": DEFAULT_DIFF_HASH,
+        "findings": [],
+    }
+
+
+def test_submit_writes_review_fragments_handoff_for_missing_fragments(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR 自动化", runner=runner)
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    status = _submit_status(tmp_path)
+    assert _evidence_artifacts(status) == [
+        {
+            "artifact_type": "review_fragments_handoff",
+            "artifact_path": ".local/pr-flow/review-fragments-handoff.json",
+            "artifact_summary": "2 local review fragments require agent mapping",
+        }
+    ]
+    handoff = json.loads(
+        (tmp_path / ".local/pr-flow/review-fragments-handoff.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert handoff["schema_version"] == 1
+    assert handoff["head_sha"] == "1" * 40
+    assert handoff["diff_hash"] == DEFAULT_DIFF_HASH
+    assert [item["role"] for item in handoff["fragments"]] == ["standards", "spec"]
+    assert handoff["fragments"][0]["builder_input_template"] == {
+        "source": "standards",
+        "verdict": "pass",
+        "reviewed_head": "1" * 40,
+        "reviewed_diff": DEFAULT_DIFF_HASH,
+        "reviewer": "",
+        "findings": [],
+    }
+
+
+def test_review_fragment_builder_rejects_security_without_fallback_reason(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+
+    code = pr_flow.build_review_fragment_from_payload(
+        repo_root=tmp_path,
+        runner=runner,
+        payload={
+            "source": "security",
+            "verdict": "pass",
+            "reviewed_head": "1" * 40,
+            "reviewed_diff": DEFAULT_DIFF_HASH,
+            "reviewer": "security-reviewer",
+            "security_review": {"tool": "manual-security-review"},
+        },
+    )
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    assert not (tmp_path / ".local/ai-review/fragments/security.json").exists()
+
+
+def test_review_fragment_builder_preserves_fixed_blocking_finding(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+
+    code = pr_flow.build_review_fragment_from_payload(
+        repo_root=tmp_path,
+        runner=runner,
+        payload={
+            "source": "spec",
+            "verdict": "findings",
+            "reviewed_head": "1" * 40,
+            "reviewed_diff": DEFAULT_DIFF_HASH,
+            "reviewer": "spec-reviewer",
+            "findings": [
+                {
+                    "severity": "P1",
+                    "status": "fixed",
+                    "detail": "AC was incomplete",
+                    "evidence": "current test covers the AC",
+                }
+            ],
+        },
+    )
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    fragment = json.loads(
+        (tmp_path / ".local/ai-review/fragments/spec.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert fragment["findings"] == [
+        {
+            "severity": "P1",
+            "status": "fixed",
+            "detail": "AC was incomplete",
+            "evidence": "current test covers the AC",
+            "reviewer": "spec-reviewer",
+        }
+    ]
+
+
+def test_review_fragment_builder_subcommand_is_agent_only() -> None:
+    parser = pr_flow.build_parser()
+
+    args = parser.parse_args(
+        ["build-review-fragment", "--payload-file", "verdict.json"]
+    )
+
+    assert args.command == "build-review-fragment"
+    assert "build-review-fragment" not in parser.format_help()
+
+
 def test_submit_requires_security_only_after_first_stage_passes(tmp_path: Path) -> None:
     runner = SubmitPreflightRunner(valid_contract=True)
     _write_fragment(tmp_path, "standards", findings=[])
@@ -1984,6 +2153,28 @@ def test_submit_rejects_security_fragment_without_security_review(
             "check": "local-review",
             "source": ".local/ai-review/fragments/security.json",
             "detail": "security fragment security_review is required",
+        }
+    ]
+    handoff = json.loads(
+        (tmp_path / ".local/pr-flow/review-fragments-handoff.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert handoff["fragments"] == [
+        {
+            "role": "security",
+            "state": "invalid",
+            "detail": "security fragment security_review is required",
+            "target_fragment_path": ".local/ai-review/fragments/security.json",
+            "builder_input_template": {
+                "source": "security",
+                "verdict": "pass",
+                "reviewed_head": "1" * 40,
+                "reviewed_diff": DEFAULT_DIFF_HASH,
+                "reviewer": "",
+                "findings": [],
+                "security_review": {"tool": "codex-security"},
+            },
         }
     ]
 
@@ -2939,9 +3130,120 @@ def test_submit_writes_resolve_threads_plan_artifact_for_unresolved_codex_thread
             "severity": "P1",
             "summary": "![P1 Badge] outdated finding",
             "closure_evidence_state": "missing",
+            "current_head_sha": "1" * 40,
+            "current_diff_hash": diff_hash,
+            "target_evidence_path": ".local/pr-flow/thread-closure-evidence.json",
+            "required_dispositions": ["fixed", "false_positive"],
+            "builder_input_template": {
+                "source": "official_codex_review_thread",
+                "thread_id": "PRRT_outdated_p1",
+                "severity": "P1",
+                "head_sha": "1" * 40,
+                "diff_files_hash": diff_hash,
+                "disposition": "fixed",
+                "evidence": "",
+                "fix_commit": "",
+                "verification_command": "",
+                "reason": "",
+            },
             "suggested_action": "provide current-head fixed or false_positive evidence before resolving",
         }
     ]
+
+
+def test_thread_closure_builder_upserts_fixed_payload_from_plan(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+    _write_resolve_threads_plan(
+        tmp_path,
+        thread_id="PRRT_outdated_p1",
+        severity="P1",
+        head="1" * 40,
+        diff=DEFAULT_DIFF_HASH,
+    )
+    _write_thread_closure_evidence(
+        tmp_path,
+        {
+            "source": "official_codex_review_thread",
+            "thread_id": "PRRT_other",
+            "severity": "P1",
+            "disposition": "false_positive",
+            "evidence": "existing evidence",
+            "head_sha": "1" * 40,
+            "diff_files_hash": DEFAULT_DIFF_HASH,
+            "reason": "already handled",
+        },
+    )
+
+    code = pr_flow.build_thread_closure_evidence_from_payload(
+        repo_root=tmp_path,
+        runner=runner,
+        payload={
+            "source": "official_codex_review_thread",
+            "thread_id": "PRRT_outdated_p1",
+            "severity": "P1",
+            "head_sha": "1" * 40,
+            "diff_files_hash": DEFAULT_DIFF_HASH,
+            "disposition": "fixed",
+            "evidence": "fixed by current implementation",
+            "fix_commit": "1" * 40,
+            "verification_command": ".\\.venv\\Scripts\\python.exe -m pytest scripts/research/governance/tests/test_pr_flow_contract.py",
+        },
+    )
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    evidence = json.loads(
+        (tmp_path / ".local/pr-flow/thread-closure-evidence.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert [item["thread_id"] for item in evidence["external_findings"]] == [
+        "PRRT_other",
+        "PRRT_outdated_p1",
+    ]
+    assert evidence["external_findings"][-1]["disposition"] == "fixed"
+
+
+def test_thread_closure_builder_rejects_thread_not_in_plan(tmp_path: Path) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+    _write_resolve_threads_plan(
+        tmp_path,
+        thread_id="PRRT_expected",
+        severity="P1",
+        head="1" * 40,
+        diff=DEFAULT_DIFF_HASH,
+    )
+
+    code = pr_flow.build_thread_closure_evidence_from_payload(
+        repo_root=tmp_path,
+        runner=runner,
+        payload={
+            "source": "official_codex_review_thread",
+            "thread_id": "PRRT_other",
+            "severity": "P1",
+            "head_sha": "1" * 40,
+            "diff_files_hash": DEFAULT_DIFF_HASH,
+            "disposition": "fixed",
+            "evidence": "fixed by current implementation",
+            "fix_commit": "1" * 40,
+            "verification_command": ".\\.venv\\Scripts\\python.exe -m pytest scripts/research/governance/tests/test_pr_flow_contract.py",
+        },
+    )
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    assert not (tmp_path / ".local/pr-flow/thread-closure-evidence.json").exists()
+
+
+def test_thread_closure_builder_subcommand_is_agent_only() -> None:
+    parser = pr_flow.build_parser()
+
+    args = parser.parse_args(
+        ["build-thread-closure-evidence", "--payload-file", "closure.json"]
+    )
+
+    assert args.command == "build-thread-closure-evidence"
+    assert "build-thread-closure-evidence" not in parser.format_help()
 
 
 def test_submit_auto_resolves_codex_p1_thread_with_current_fixed_evidence(
@@ -3530,6 +3832,158 @@ def test_submit_writes_failed_and_timed_out_required_checks_in_contract_order(
             "source": "https://github.com/runs/evidence",
             "detail": "required check timed out while pending",
         },
+    ]
+
+
+def test_submit_waits_for_local_stable_checks_before_codex_review(
+    tmp_path: Path,
+) -> None:
+    diff_text = (
+        "diff --git a/scripts/research/governance/pr_flow.py "
+        "b/scripts/research/governance/pr_flow.py\n+hello\n"
+    )
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitLocalStablePendingRunner(
+        diff_text=diff_text,
+        changed_files_output="scripts/research/governance/pr_flow.py\n",
+        preexisting_comments=[_current_head_trigger_comment(head="0" * 40)],
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(
+        repo_root=tmp_path,
+        title="PR automation",
+        runner=runner,
+        watch_timeout_seconds=0,
+        watch_poll_seconds=0,
+    )
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert runner.comments == []
+    status = _submit_status(tmp_path)
+    assert status["pr_submit_stop"]["reason_code"] == "WAITING_LOCAL_STABILIZATION"
+    assert status["pr_submit_stop"]["phase"] == "submit_local_stabilization"
+    assert _blocking_as_legacy_failures(status) == [
+        {
+            "check": "Research Governance / verify-full",
+            "source": "https://github.com/runs/verify",
+            "detail": "local stabilization timed out while pending",
+        },
+        {
+            "check": "PR Flow / evidence",
+            "source": "https://github.com/runs/evidence",
+            "detail": "local stabilization timed out while pending",
+        },
+    ]
+    checkpoints = _checkpoint_statuses(status)
+    assert checkpoints["official_codex_review"] == {
+        "checkpoint_name": "official_codex_review",
+        "status": "pending",
+        "summary": (
+            "official Codex review not requested; waiting for local stable checks"
+        ),
+        "evidence_location": "",
+    }
+    assert _evidence_artifacts(status) == [
+        {
+            "artifact_type": "local_stabilization",
+            "artifact_path": ".local/pr-flow/local-stabilization.json",
+            "artifact_summary": (
+                "official Codex review waits for current-head local stable checks"
+            ),
+        }
+    ]
+    local_stable = json.loads(
+        (tmp_path / ".local/pr-flow/local-stabilization.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert local_stable["current_head_sha"] == "1" * 40
+    assert local_stable["last_triggered_head_sha"] == "0" * 40
+    assert local_stable["previous_trigger_superseded"] is True
+    assert local_stable["next_trigger_condition"] == (
+        "all local stable checks pass for current head: "
+        "Research Governance / verify-full, PR Flow / evidence"
+    )
+
+
+def test_submit_excludes_review_status_from_local_stable_gate(
+    tmp_path: Path,
+) -> None:
+    diff_text = (
+        "diff --git a/scripts/research/governance/pr_flow.py "
+        "b/scripts/research/governance/pr_flow.py\n+hello\n"
+    )
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitCreatePrRunner(
+        diff_text=diff_text,
+        checks_bucket="pending",
+        checks_returncode=8,
+        changed_files_output="scripts/research/governance/pr_flow.py\n",
+    )
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(
+        repo_root=tmp_path,
+        title="PR automation",
+        runner=runner,
+        watch_timeout_seconds=0,
+        watch_poll_seconds=0,
+    )
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert len(runner.comments) == 1
+    status = _submit_status(tmp_path)
+    assert status["pr_submit_stop"]["phase"] == "submit_wait_checks"
+    assert _blocking_as_legacy_failures(status) == [
+        {
+            "check": "PR Flow / review-status",
+            "source": "",
+            "detail": "required check timed out while pending",
+        }
+    ]
+
+
+def test_submit_does_not_request_codex_when_local_stable_check_failed(
+    tmp_path: Path,
+) -> None:
+    diff_text = (
+        "diff --git a/scripts/research/governance/pr_flow.py "
+        "b/scripts/research/governance/pr_flow.py\n+hello\n"
+    )
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = SubmitStaleRequiredCheckRunner(
+        diff_text=diff_text,
+        current_review_bucket="pass",
+        current_review_state="SUCCESS",
+        verify_bucket="fail",
+        verify_state="FAILURE",
+    )
+    runner.changed_files_output = "scripts/research/governance/pr_flow.py\n"
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert runner.comments == []
+    status = _submit_status(tmp_path)
+    assert status["pr_submit_stop"]["reason_code"] == "REQUIRED_CHECKS_FAILED"
+    assert status["pr_submit_stop"]["phase"] == "submit_local_stabilization"
+    assert _blocking_as_legacy_failures(status) == [
+        {
+            "check": "Research Governance / verify-full",
+            "source": "https://github.com/runs/verify",
+            "detail": "Research Governance / verify-full https://github.com/runs/verify",
+        }
     ]
 
 
@@ -4179,6 +4633,37 @@ def test_contract_defines_security_review_fragment_metadata() -> None:
     )
 
 
+def test_contract_defines_review_handoff_and_local_stable_artifacts() -> None:
+    """PR Flow handoff and local-stable paths must be machine-readable."""
+    contract = pr_flow_contract.load_contract(Path("."))
+
+    assert contract.review_fragments_handoff_path.as_posix() == (
+        ".local/pr-flow/review-fragments-handoff.json"
+    )
+    assert contract.resolve_threads_plan_path.as_posix() == (
+        ".local/pr-flow/resolve-threads-plan.json"
+    )
+    assert contract.thread_closure_evidence_path.as_posix() == (
+        ".local/pr-flow/thread-closure-evidence.json"
+    )
+    assert contract.local_stabilization_path.as_posix() == (
+        ".local/pr-flow/local-stabilization.json"
+    )
+
+
+def test_contract_defines_local_stable_gate() -> None:
+    """Local stable gate checks and stop labels must be machine-readable."""
+    contract = pr_flow_contract.load_contract(Path("."))
+
+    assert contract.local_stable_required_checks == (
+        "Research Governance / verify-full",
+        "PR Flow / evidence",
+    )
+    assert contract.local_stable_excluded_checks == ("PR Flow / review-status",)
+    assert contract.local_stable_pending_reason_code == "WAITING_LOCAL_STABILIZATION"
+    assert contract.local_stable_pending_phase == "submit_local_stabilization"
+
+
 def test_contract_defines_github_native_closing_links_rule() -> None:
     """GitHub native closing links must come from per-commit evidence."""
     contract = pr_flow_contract.load_contract(Path("."))
@@ -4610,7 +5095,7 @@ def test_codex_review_router_worker_model_is_documented() -> None:
 def test_issue_103_113_pr_flow_rules_are_documented() -> None:
     required_docs = {
         Path("docs/rules/pr-workflow.md"): [
-            "刷新 PR Evidence JSON、ready-for-review、按风险/授权判断是否触发官方 Codex review、等待 required checks",
+            "刷新 PR Evidence JSON、ready-for-review、通过 local stable gate 后按风险/授权触发官方 Codex review、等待 required checks",
             "WORKTREE_DIRTY_AFTER_CLEANUP",
             "cleanup_worktree_health",
             "不自动恢复、不自动删除、不自动修复",
@@ -4638,6 +5123,48 @@ def test_issue_103_113_pr_flow_rules_are_documented() -> None:
             "sync PR Evidence",
             "ready-for-review",
             "WORKTREE_DIRTY_AFTER_CLEANUP",
+        ],
+    }
+
+    for path, tokens in required_docs.items():
+        text = path.read_text(encoding="utf-8")
+        for token in tokens:
+            assert token in text, f"{path} missing {token}"
+
+
+def test_issue_97_114_120_pr_flow_rules_are_documented() -> None:
+    required_docs = {
+        Path("docs/rules/pr-workflow.md"): [
+            "review-fragments-handoff.json",
+            "thread-closure-evidence.json",
+            "WAITING_LOCAL_STABILIZATION",
+            "`PR Flow / review-status` 不参与 local stable gate",
+        ],
+        Path("docs/rules/review-guidelines.md"): [
+            "review-fragments-handoff.json",
+            "thread-closure-evidence.json",
+            "不解析自然语言",
+        ],
+        Path("docs/rules/governance.md"): [
+            "local stable gate",
+            "`Research Governance / verify-full` 和 `PR Flow / evidence`",
+            "pre-push freshness 仍只提醒",
+        ],
+        Path("docs/adr/0007-pr-flow-closed-loop-review-evidence.md"): [
+            "https://github.com/liuli195/Quant-Trading/issues/120",
+            "https://github.com/liuli195/Quant-Trading/issues/114",
+            "https://github.com/liuli195/Quant-Trading/issues/97",
+            "submit_local_stabilization",
+        ],
+        Path("scripts/research/governance/README.md"): [
+            "review-fragments-handoff.json",
+            "thread-closure-evidence.json",
+            "WAITING_LOCAL_STABILIZATION",
+        ],
+        Path(".agents/skills/repo-pr-governance/SKILL.md"): [
+            "build-review-fragment",
+            "build-thread-closure-evidence",
+            "WAITING_LOCAL_STABILIZATION",
         ],
     }
 
@@ -4744,12 +5271,12 @@ def _contract_evidence_payload() -> dict[str, object]:
     }
 
 
-def _current_head_trigger_comment() -> dict[str, object]:
+def _current_head_trigger_comment(*, head: str = "1" * 40) -> dict[str, object]:
     return {
         "id": 1,
         "body": pr_flow.render_codex_review_request(
             pr_url="https://github.com/liuli195/Quant-Trading/pull/88",
-            head_sha="1" * 40,
+            head_sha=head,
             review_scope=(),
         ),
         "created_at": "2026-06-01T10:00:00Z",
@@ -4809,6 +5336,43 @@ def _write_branch_intent(
                 ],
                 "issues": refs,
                 "no_issue_authorizations": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _write_resolve_threads_plan(
+    root: Path,
+    *,
+    thread_id: str,
+    severity: str,
+    head: str,
+    diff: str,
+) -> None:
+    path = root / ".local/pr-flow/resolve-threads-plan.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "repository": "liuli195/Quant-Trading",
+                "pr_number": "88",
+                "head_sha": head,
+                "diff_hash": diff,
+                "threads": [
+                    {
+                        "thread_id": thread_id,
+                        "severity": severity,
+                        "closure_evidence_state": "missing",
+                        "current_head_sha": head,
+                        "current_diff_hash": diff,
+                        "target_evidence_path": (
+                            ".local/pr-flow/thread-closure-evidence.json"
+                        ),
+                        "required_dispositions": ["fixed", "false_positive"],
+                    }
+                ],
             }
         ),
         encoding="utf-8",
