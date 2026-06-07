@@ -1653,7 +1653,7 @@ def _submit_delegation_attempt_metadata_failures(
                 detail=f"{role} fragment delegation_attempt.reason is required",
             )
         ]
-    normalized_reason = reason.lower()
+    normalized_reason = _normalize_delegation_attempt_reason(reason)
     if any(
         token in normalized_reason
         for token in contract.fragment_delegation_attempt_invalid_reason_tokens
@@ -1669,6 +1669,10 @@ def _submit_delegation_attempt_metadata_failures(
             )
         ]
     return []
+
+
+def _normalize_delegation_attempt_reason(reason: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", reason.lower()).strip("_")
 
 
 def _submit_security_fragment_failures(

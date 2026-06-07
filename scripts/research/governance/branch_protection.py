@@ -259,27 +259,34 @@ def _authorized_main_command_is_destructive(subcommand: str, args: Sequence[str]
     if subcommand in {"reset", "rebase", "update-ref"}:
         return True
     if subcommand == "push":
-        return any(
-            arg
-            in {
-                "--force",
-                "-f",
-                "--force-with-lease",
-                "--delete",
-                "-d",
-                "--mirror",
-                "--prune",
-            }
-            or arg.startswith("--force")
-            or arg.startswith(("+", ":"))
-            for arg in args
-        )
+        return any(_authorized_main_push_arg_is_destructive(arg) for arg in args)
     if subcommand == "branch":
         return any(arg in {"-d", "-D", "--delete", "-m", "-M", "--move"} for arg in args)
     if subcommand == "checkout":
         return any(arg in {"-B", "-b"} or arg.startswith("-B") for arg in args)
     if subcommand == "switch":
         return any(arg in {"-C", "-c"} or arg.startswith("-C") for arg in args)
+    return False
+
+
+def _authorized_main_push_arg_is_destructive(arg: str) -> bool:
+    if arg.startswith(("+", ":")):
+        return True
+    if arg.startswith("--"):
+        option = arg.split("=", 1)[0]
+        destructive_long_options = (
+            "--force",
+            "--force-with-lease",
+            "--delete",
+            "--mirror",
+            "--prune",
+        )
+        return option.startswith("--force") or (
+            len(option) > 2
+            and any(item.startswith(option) for item in destructive_long_options)
+        )
+    if arg.startswith("-"):
+        return any(item in arg[1:] for item in {"f", "d"})
     return False
 
 

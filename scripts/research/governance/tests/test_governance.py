@@ -3781,6 +3781,12 @@ def test_authorized_main_wrapper_rejects_force_push() -> None:
         ["git", "push", "--prune", "origin"],
         ["git", "-C", ".", "push", "--mirror", "origin"],
         ["git", "-C", ".", "push", "origin", "+HEAD:main"],
+        ["git", "push", "-uf", "origin", "main"],
+        ["git", "push", "-vf", "origin", "main"],
+        ["git", "push", "--mir", "origin"],
+        ["git", "push", "--del", "origin", "main"],
+        ["git", "push", "--pru", "origin"],
+        ["git", "push", "--for", "origin", "main"],
     ],
 )
 def test_authorized_main_wrapper_rejects_force_push_forms(

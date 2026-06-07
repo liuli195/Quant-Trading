@@ -1852,8 +1852,19 @@ def test_review_fragment_builder_rejects_standards_without_delegation_attempt(
     assert not (tmp_path / ".local/ai-review/fragments/standards.json").exists()
 
 
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "user_not_authorized",
+        "user not authorized",
+        "Permission-Not-Allowed",
+        "explicit authorization missing",
+        "policy disallowed",
+    ],
+)
 def test_review_fragment_builder_rejects_authorization_missing_delegation_reason(
     tmp_path: Path,
+    reason: str,
 ) -> None:
     runner = SubmitPreflightRunner(valid_contract=True)
 
@@ -1871,7 +1882,7 @@ def test_review_fragment_builder_rejects_authorization_missing_delegation_reason
                 "authorization_basis": "AGENTS.md + ADR 0009",
                 "tool": "spawn_agent",
                 "result": "tool_unavailable",
-                "reason": "user_not_authorized",
+                "reason": reason,
             },
         },
     )
