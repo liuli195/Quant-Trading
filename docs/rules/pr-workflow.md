@@ -18,7 +18,7 @@ Review 细则见 [review-guidelines.md](review-guidelines.md) <!-- pathref: docs
 - 所有进入主干的改动必须通过 PR，除非用户在当前对话中显式授权直写主干。
 - “合并到主干”默认指创建、更新或准备 PR，不是本地合并 `main`。
 - 禁止把功能分支本地合入 `main`；GitHub 合并后的本地同步只能走受控 fast-forward。
-- 直写主干或 GitHub 合并后的本地 `main` 同步都必须走受控 fast-forward；前者设置 `ALLOW_DIRECT_MAIN_WRITE=1` 和 `DIRECT_MAIN_WRITE_REASON=<reason>`，后者先 `git fetch origin main`，再设置 `ALLOW_MAIN_REF_UPDATE=1` 和 `MAIN_REF_UPDATE_REASON=<reason>`，并用 `git merge --ff-only origin/main` 或等价 fast-forward 同步；禁止 reset、删除或 force rewrite。
+- 直写主干或 GitHub 合并后的本地 `main` 同步都必须走单次 wrapper：`branch_protection authorize-main --action direct-write --reason <reason> -- git <main-command>` 或先 `git fetch origin main`，再运行 `branch_protection authorize-main --action ref-sync --reason <reason> -- git merge --ff-only origin/main`。wrapper 只对子 Git 进程注入 `ALLOW_DIRECT_MAIN_WRITE` / `DIRECT_MAIN_WRITE_REASON` 或 `ALLOW_MAIN_REF_UPDATE` / `MAIN_REF_UPDATE_REASON`；禁止 reset、删除或 force rewrite。
 - 本地工作分支默认只允许 fast-forward 更新。agent 不得默认使用 `commit --amend`、`rebase`、`squash` 或 `reset` 后重做提交；review finding 修复必须使用追加 commit。单次 history rewrite 例外只通过 repo-native wrapper 授权，不附带 review、intent 或 cleanup 后续恢复。
 - PR 合并后远端分支删除交给 GitHub；本地收尾只删除已合并的本地功能分支，不本地删除远端分支。
 - `main` 被其他 worktree 占用时，`pr-submit` 在 `main` 所在 worktree 执行受控 fast-forward；当前 worktree 只切到 detached `origin/main` 以便删除已合并的本地功能分支。
@@ -31,11 +31,13 @@ Review 细则见 [review-guidelines.md](review-guidelines.md) <!-- pathref: docs
 - `pr-submit` 遇到 missing / stale local review fragments 时写 `.local/pr-flow/review-fragments-handoff.json`，列出 current head、diff、role、目标 fragment 路径和 agent-only builder 输入模板。标准动作是重新 review，然后用结构化 verdict payload 通过隐藏 builder 落 current fragment；不得从聊天总结推断 pass。
 - push 时 `.githooks/pre-push` 会非阻断提醒 existing local review fragments 是否 stale；看到 stale diff 提醒后，主 agent 必须先重新 review / 重新映射 fragments，再运行 `pr-submit`。same diff 仅 head stale 时，`pr-submit` 可按现有规则刷新 fragment head。
 - P0/P1 finding 必须在 fragment 中记录 `status=open|fixed|false_positive`；只有 `open` 阻断，`fixed` 必须带 current head/diff 下的 `evidence`，`false_positive` 必须带 `rationale`。stale fragment 中的 closed P0/P1 不能作为当前关闭证据。
+- Standards / Spec fragment 必须记录 `delegation_attempt`：`required=true`、`authorization_basis="AGENTS.md + ADR 0009"`、`tool="spawn_agent"`、`result=spawned|tool_unavailable|spawn_failed`；`tool_unavailable` / `spawn_failed` 必须写具体 `reason`，且不得使用 `user_not_authorized`、`permission_not_allowed`、`explicit_authorization_missing`、`policy_disallowed` 这类授权缺失理由。
 - security fragment 顶层必须记录 `security_review.tool`；未使用 `codex-security` 时必须记录 `security_review.fallback_reason`。
 - Standards 和 Spec 同阶段完成后统一汇总 P0/P1；两者无 P0/P1 后才进入 Security。Security P0/P1 阻断，P2/P3 进入 retained findings。
 - PR body 的 `pr-flow` 托管区只写 fenced PR Evidence JSON。CI 的 `PR Flow / evidence` 只信任 PR body，不读取本地 `.local`。
 - Issue intent 并入 PR Evidence JSON 的 `issues`，不再单独维护 Issue intent machine block。每个 PR commit 要么有关联 Issue，要么明确 `no_issue: true`。
 - GitHub update-branch 生成的同步主干 merge commit 由 `pr-submit` 自动按 commit 级 `no_issue: true` 覆盖；PR 级 `issues.refs` 仍只表达 closes/reference，不受该 synthetic merge commit 影响。
+- 新功能分支首次运行 `pr-submit` 且当前非主干分支缺少远端 branch 时，`pr-submit` 可自动执行 `git push -u origin HEAD:<branch>`，并验证远端 head 等于当前 head 后继续创建或更新 PR；`main` / `master` 不自动 push。
 - 手工排障先读 `.local/pr-flow/status.json`；旧 required-check failure 只能进入 `diagnostic_signals`，当前阻断只进入 `blocking_signals`；GitHub 当前状态归因由 `pr-submit` 内部处理，`diagnose` 不作为用户流程入口。
 - official Codex P0/P1 thread 接手只读 `.local/pr-flow/resolve-threads-plan.json`，提供结构化 closure verdict payload，并用隐藏 builder upsert `.local/pr-flow/thread-closure-evidence.json`。builder 只处理 current head / current diff / plan 中的 unresolved official Codex P0/P1 thread，不自动 reply、不自动 resolve；推进仍由 `pr-submit` 完成。
 - local stable gate 位于 PR Evidence sync / ready-for-review 之后、官方 Codex review trigger 之前，只等待 current head 的 `PR Flow / evidence` 和 `Research Governance / verify-full`。`PR Flow / review-status` 不参与 local stable gate，避免 official review 与 review-status 循环等待；pending 超时写 `reason_code=WAITING_LOCAL_STABILIZATION`、`phase=submit_local_stabilization`，不新增顶层 stop state，并落 `.local/pr-flow/local-stabilization.json` 记录 current head、last triggered head、superseded 和 next trigger condition。

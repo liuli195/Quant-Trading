@@ -1323,7 +1323,13 @@ def _submit_fragment_failures_for_role(
     failures: list[pr_flow_contract.SubmitFailure] = []
     required_fragment_fields = set(contract.fragment_fields)
     extra_fragment_fields = set(payload) - required_fragment_fields
-    allowed_extra_fragment_fields = {"security_review"} if role == "security" else set()
+    allowed_extra_fragment_fields = (
+        {"security_review"}
+        if role == "security"
+        else {"delegation_attempt"}
+        if role in {"standards", "spec"}
+        else set()
+    )
     if (
         required_fragment_fields - set(payload)
         or extra_fragment_fields - allowed_extra_fragment_fields
@@ -1347,6 +1353,15 @@ def _submit_fragment_failures_for_role(
         failures.extend(
             _submit_security_review_metadata_failures(
                 contract=contract,
+                payload=payload,
+                source=source,
+            )
+        )
+    if role in {"standards", "spec"}:
+        failures.extend(
+            _submit_delegation_attempt_metadata_failures(
+                contract=contract,
+                role=role,
                 payload=payload,
                 source=source,
             )
@@ -1564,6 +1579,98 @@ def _submit_security_review_metadata_failures(
     return []
 
 
+def _submit_delegation_attempt_metadata_failures(
+    *,
+    contract: pr_flow_contract.PRFlowContract,
+    role: str,
+    payload: Mapping[str, object],
+    source: str,
+) -> list[pr_flow_contract.SubmitFailure]:
+    delegation_attempt = payload.get("delegation_attempt")
+    if not isinstance(delegation_attempt, Mapping):
+        return [
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail=f"{role} fragment delegation_attempt is required",
+            )
+        ]
+    allowed_fields = set(contract.fragment_delegation_attempt_fields)
+    if set(delegation_attempt) - allowed_fields:
+        return [
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail=f"{role} fragment delegation_attempt has unknown fields",
+            )
+        ]
+    if delegation_attempt.get("required") is not True:
+        return [
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail=f"{role} fragment delegation_attempt.required must be true",
+            )
+        ]
+    authorization_basis = _single_line_text(
+        delegation_attempt.get("authorization_basis")
+    )
+    if authorization_basis != contract.fragment_delegation_attempt_authorization_basis:
+        return [
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail=f"{role} fragment delegation_attempt authorization_basis is invalid",
+            )
+        ]
+    tool = _single_line_text(delegation_attempt.get("tool"))
+    if tool != contract.fragment_delegation_attempt_tool:
+        return [
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail=f"{role} fragment delegation_attempt.tool is invalid",
+            )
+        ]
+    result = _single_line_text(delegation_attempt.get("result"))
+    if result not in contract.fragment_delegation_attempt_results:
+        return [
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail=f"{role} fragment delegation_attempt.result is invalid",
+            )
+        ]
+    reason = _single_line_text(delegation_attempt.get("reason"))
+    if (
+        result in contract.fragment_delegation_attempt_reason_required_results
+        and not reason
+    ):
+        return [
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail=f"{role} fragment delegation_attempt.reason is required",
+            )
+        ]
+    normalized_reason = reason.lower()
+    if any(
+        token in normalized_reason
+        for token in contract.fragment_delegation_attempt_invalid_reason_tokens
+    ):
+        return [
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail=(
+                    f"{role} fragment delegation_attempt.reason cannot be "
+                    "authorization-missing"
+                ),
+            )
+        ]
+    return []
+
+
 def _submit_security_fragment_failures(
     *,
     root: Path,
@@ -1661,6 +1768,16 @@ def _review_fragment_builder_input_template(
         template["security_review"] = {
             "tool": contract.fragment_security_review_default_tool,
         }
+    if role in {"standards", "spec"}:
+        template["delegation_attempt"] = {
+            "required": True,
+            "authorization_basis": (
+                contract.fragment_delegation_attempt_authorization_basis
+            ),
+            "tool": contract.fragment_delegation_attempt_tool,
+            "result": "",
+            "reason": "",
+        }
     return template
 
 
@@ -1734,6 +1851,26 @@ def build_review_fragment_from_payload(
         "diff": diff_hash,
         "findings": findings,
     }
+    if role in {"standards", "spec"}:
+        delegation_attempt = payload.get("delegation_attempt")
+        if not isinstance(delegation_attempt, Mapping):
+            print(
+                "error: local-review: delegation_attempt is required for "
+                f"{role}",
+                file=sys.stderr,
+            )
+            return DISPATCH_REQUIRED_EXIT_CODE
+        fragment["delegation_attempt"] = dict(delegation_attempt)
+        failures = _submit_delegation_attempt_metadata_failures(
+            contract=contract,
+            role=role,
+            payload=fragment,
+            source=contract.reviewer_fragments[role].as_posix(),
+        )
+        if failures:
+            for failure in failures:
+                print(f"error: {failure.check}: {failure.detail}", file=sys.stderr)
+            return DISPATCH_REQUIRED_EXIT_CODE
     if role == "security":
         security_review = payload.get("security_review")
         if not isinstance(security_review, Mapping):
@@ -2498,6 +2635,62 @@ def _sync_submit_pr_evidence(
         )
     branch = _current_branch(root, runner)
     remote_head = runner.run(["git", "ls-remote", "--heads", "origin", branch], cwd=root)
+    if remote_head.returncode != 0:
+        return _submit_sync_failure(
+            EXCEPTION_REQUIRED_EXIT_CODE,
+            reason_code="REMOTE_BRANCH_MISSING",
+            check="git-remote",
+            source=f"origin/{branch}",
+            detail=_command_failure_detail("git ls-remote --heads origin", remote_head),
+        )
+    if not _command_stdout(remote_head):
+        local_head = _single_line_text(evidence.get("head"))
+        if branch in {"main", "master"}:
+            return _submit_sync_failure(
+                EXCEPTION_REQUIRED_EXIT_CODE,
+                reason_code="REMOTE_BRANCH_MISSING",
+                check="git-remote",
+                source=f"origin/{branch}",
+                detail=(
+                    f"remote branch missing for protected branch {branch}; "
+                    "automatic first push is only allowed for feature branches"
+                ),
+            )
+        push_command = ["git", "push", "-u", "origin", f"HEAD:{branch}"]
+        push = runner.run(push_command, cwd=root)
+        if push.returncode != 0:
+            _print_command_failure("git push -u origin HEAD:<branch>", push)
+            return _submit_sync_failure(
+                EXCEPTION_REQUIRED_EXIT_CODE,
+                reason_code="REMOTE_BRANCH_PUSH_FAILED",
+                check="git-remote",
+                source=f"origin/{branch}",
+                detail=(
+                    f"git push -u origin HEAD:{branch} failed for head {local_head}: "
+                    f"{_command_failure_detail('git push -u origin HEAD:<branch>', push)}"
+                ),
+            )
+        remote_head = runner.run(
+            ["git", "ls-remote", "--heads", "origin", branch],
+            cwd=root,
+        )
+        pushed_remote_head = _ls_remote_head_sha(remote_head)
+        if remote_head.returncode != 0 or pushed_remote_head != local_head:
+            detail = (
+                _command_failure_detail("git ls-remote --heads origin", remote_head)
+                if remote_head.returncode != 0
+                else (
+                    f"remote head {pushed_remote_head or '<missing>'} does not match "
+                    f"local head {local_head} after git push -u origin HEAD:{branch}"
+                )
+            )
+            return _submit_sync_failure(
+                EXCEPTION_REQUIRED_EXIT_CODE,
+                reason_code="REMOTE_BRANCH_HEAD_MISMATCH",
+                check="git-remote",
+                source=f"origin/{branch}",
+                detail=detail,
+            )
     if remote_head.returncode != 0 or not _command_stdout(remote_head):
         detail = (
             _command_failure_detail("git ls-remote --heads origin", remote_head)
@@ -2547,6 +2740,16 @@ def _sync_submit_pr_evidence(
         pr_number=_pr_number_from_url(pr_url),
         pr_url=pr_url,
     )
+
+
+def _ls_remote_head_sha(result: CommandResult) -> str:
+    output = _command_stdout(result)
+    if not output:
+        return ""
+    first_line = output.splitlines()[0].strip()
+    if not first_line:
+        return ""
+    return first_line.split()[0]
 
 
 def _submit_sync_failure(

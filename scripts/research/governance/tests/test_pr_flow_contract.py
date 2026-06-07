@@ -17,6 +17,12 @@ from scripts.research.governance import (
 
 DEFAULT_DIFF_TEXT = "diff --git a/a.txt b/a.txt\n+hello\n"
 DEFAULT_DIFF_HASH = hashlib.sha256(DEFAULT_DIFF_TEXT.encode("utf-8")).hexdigest()
+DEFAULT_DELEGATION_ATTEMPT = {
+    "required": True,
+    "authorization_basis": "AGENTS.md + ADR 0009",
+    "tool": "spawn_agent",
+    "result": "spawned",
+}
 FIXED_CHECKPOINT_NAMES = {
     "official_codex_review",
     "required_checks",
@@ -584,6 +590,11 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
 
 
 class MissingSubmitRemoteHeadRunner(SubmitCreatePrRunner):
+    def __init__(self, *, diff_text: str, push_returncode: int = 0) -> None:
+        super().__init__(diff_text=diff_text)
+        self.push_returncode = push_returncode
+        self.pushed_remote = False
+
     def run(
         self,
         command: list[str],
@@ -598,6 +609,58 @@ class MissingSubmitRemoteHeadRunner(SubmitCreatePrRunner):
             "origin",
             "feature/contract",
         ]:
+            if self.pushed_remote:
+                return pr_flow.CommandResult(
+                    0,
+                    "1" * 40 + "\trefs/heads/feature/contract\n",
+                    "",
+                )
+            return pr_flow.CommandResult(0, "", "")
+        if command == ["git", "push", "-u", "origin", "HEAD:feature/contract"]:
+            self.lifecycle_calls.append(command)
+            if self.push_returncode != 0:
+                return pr_flow.CommandResult(
+                    self.push_returncode,
+                    "",
+                    "remote rejected feature/contract",
+                )
+            self.pushed_remote = True
+            return pr_flow.CommandResult(0, "", "")
+        return super().run(command, cwd=cwd, input_text=input_text)
+
+
+class MismatchedAutoPushRemoteHeadRunner(MissingSubmitRemoteHeadRunner):
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        if (
+            self.pushed_remote
+            and command
+            == ["git", "ls-remote", "--heads", "origin", "feature/contract"]
+        ):
+            return pr_flow.CommandResult(
+                0,
+                "2" * 40 + "\trefs/heads/feature/contract\n",
+                "",
+            )
+        return super().run(command, cwd=cwd, input_text=input_text)
+
+
+class MainBranchMissingSubmitRemoteHeadRunner(MissingSubmitRemoteHeadRunner):
+    def run(
+        self,
+        command: list[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> pr_flow.CommandResult:
+        if command == ["git", "branch", "--show-current"]:
+            return pr_flow.CommandResult(0, "main\n", "")
+        if command == ["git", "ls-remote", "--heads", "origin", "main"]:
             return pr_flow.CommandResult(0, "", "")
         return super().run(command, cwd=cwd, input_text=input_text)
 
@@ -1711,6 +1774,7 @@ def test_review_fragment_builder_writes_pass_verdict_current_fragment(
             "reviewed_head": "1" * 40,
             "reviewed_diff": DEFAULT_DIFF_HASH,
             "reviewer": "standards-reviewer",
+            "delegation_attempt": DEFAULT_DELEGATION_ATTEMPT,
         },
     )
 
@@ -1721,6 +1785,7 @@ def test_review_fragment_builder_writes_pass_verdict_current_fragment(
         "head": "1" * 40,
         "diff": DEFAULT_DIFF_HASH,
         "findings": [],
+        "delegation_attempt": DEFAULT_DELEGATION_ATTEMPT,
     }
 
 
@@ -1756,7 +1821,88 @@ def test_submit_writes_review_fragments_handoff_for_missing_fragments(
         "reviewed_diff": DEFAULT_DIFF_HASH,
         "reviewer": "",
         "findings": [],
+        "delegation_attempt": {
+            "required": True,
+            "authorization_basis": "AGENTS.md + ADR 0009",
+            "tool": "spawn_agent",
+            "result": "",
+            "reason": "",
+        },
     }
+
+
+def test_review_fragment_builder_rejects_standards_without_delegation_attempt(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+
+    code = pr_flow.build_review_fragment_from_payload(
+        repo_root=tmp_path,
+        runner=runner,
+        payload={
+            "source": "standards",
+            "verdict": "pass",
+            "reviewed_head": "1" * 40,
+            "reviewed_diff": DEFAULT_DIFF_HASH,
+            "reviewer": "standards-reviewer",
+        },
+    )
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    assert not (tmp_path / ".local/ai-review/fragments/standards.json").exists()
+
+
+def test_review_fragment_builder_rejects_authorization_missing_delegation_reason(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+
+    code = pr_flow.build_review_fragment_from_payload(
+        repo_root=tmp_path,
+        runner=runner,
+        payload={
+            "source": "spec",
+            "verdict": "pass",
+            "reviewed_head": "1" * 40,
+            "reviewed_diff": DEFAULT_DIFF_HASH,
+            "reviewer": "spec-reviewer",
+            "delegation_attempt": {
+                "required": True,
+                "authorization_basis": "AGENTS.md + ADR 0009",
+                "tool": "spawn_agent",
+                "result": "tool_unavailable",
+                "reason": "user_not_authorized",
+            },
+        },
+    )
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    assert not (tmp_path / ".local/ai-review/fragments/spec.json").exists()
+
+
+def test_submit_rejects_standards_fragment_without_delegation_attempt(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+    _write_fragment(
+        tmp_path,
+        "standards",
+        findings=[],
+        delegation_attempt=None,
+    )
+    _write_fragment(tmp_path, "spec", findings=[])
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    status = _submit_status(tmp_path)
+    assert _blocking_as_legacy_failures(status) == [
+        {
+            "check": "local-review",
+            "source": ".local/ai-review/fragments/standards.json",
+            "detail": "standards fragment delegation_attempt is required",
+        }
+    ]
 
 
 def test_review_fragment_builder_rejects_security_without_fallback_reason(
@@ -1795,6 +1941,7 @@ def test_review_fragment_builder_preserves_fixed_blocking_finding(
             "reviewed_head": "1" * 40,
             "reviewed_diff": DEFAULT_DIFF_HASH,
             "reviewer": "spec-reviewer",
+            "delegation_attempt": DEFAULT_DELEGATION_ATTEMPT,
             "findings": [
                 {
                     "severity": "P1",
@@ -1812,6 +1959,7 @@ def test_review_fragment_builder_preserves_fixed_blocking_finding(
             encoding="utf-8"
         )
     )
+    assert fragment["delegation_attempt"] == DEFAULT_DELEGATION_ATTEMPT
     assert fragment["findings"] == [
         {
             "severity": "P1",
@@ -4154,14 +4302,15 @@ def test_submit_refreshes_same_diff_review_fragment_heads(tmp_path: Path) -> Non
             "diff": diff_hash,
             "findings": [],
         }
+        if role in {"standards", "spec"}:
+            expected_fragment["delegation_attempt"] = DEFAULT_DELEGATION_ATTEMPT
         if role == "security":
             expected_fragment["security_review"] = {"tool": "codex-security"}
         assert fragment == expected_fragment
 
 
-def test_submit_reports_exception_when_remote_head_is_missing(
+def test_submit_auto_pushes_missing_remote_head_and_creates_pr(
     tmp_path: Path,
-    capsys,
 ) -> None:
     diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
     diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
@@ -4173,11 +4322,73 @@ def test_submit_reports_exception_when_remote_head_is_missing(
 
     code = pr_flow.submit(repo_root=tmp_path, title="PR 自动化", runner=runner)
 
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    assert ["git", "push", "-u", "origin", "HEAD:feature/contract"] in runner.lifecycle_calls
+    assert runner.created_bodies
+
+
+def test_submit_reports_exception_when_auto_push_fails(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = MissingSubmitRemoteHeadRunner(diff_text=diff_text, push_returncode=1)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR 自动化", runner=runner)
+
     captured = capsys.readouterr()
     assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
     assert "EXCEPTION_REQUIRED" in captured.err
-    assert "PUSH_REQUIRED" not in captured.err
-    assert "git push -u origin feature/contract" in captured.err
+    assert "REMOTE_BRANCH_PUSH_FAILED" in captured.err
+    assert "remote rejected feature/contract" in captured.err
+    assert runner.created_bodies == []
+
+
+def test_submit_reports_exception_when_auto_push_remote_head_mismatches(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = MismatchedAutoPushRemoteHeadRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path)
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR 自动化", runner=runner)
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "EXCEPTION_REQUIRED" in captured.err
+    assert "REMOTE_BRANCH_HEAD_MISMATCH" in captured.err
+    assert runner.created_bodies == []
+
+
+def test_submit_does_not_auto_push_main_branch(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    diff_text = "diff --git a/a.txt b/a.txt\n+hello\n"
+    diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()
+    runner = MainBranchMissingSubmitRemoteHeadRunner(diff_text=diff_text)
+    _write_fragment(tmp_path, "standards", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "spec", findings=[], diff=diff_hash)
+    _write_fragment(tmp_path, "security", findings=[], diff=diff_hash)
+    _write_branch_intent(tmp_path, branch="main")
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR 自动化", runner=runner)
+
+    captured = capsys.readouterr()
+    assert code == pr_flow.EXCEPTION_REQUIRED_EXIT_CODE
+    assert "EXCEPTION_REQUIRED" in captured.err
+    assert "REMOTE_BRANCH_MISSING" in captured.err
+    assert not any(call[:3] == ["git", "push", "-u"] for call in runner.lifecycle_calls)
     assert runner.created_bodies == []
 
 
@@ -4630,6 +4841,36 @@ def test_contract_defines_security_review_fragment_metadata() -> None:
     assert (
         contract.fragment_security_review_fallback_required_when_tool_not
         == "codex-security"
+    )
+
+
+def test_contract_defines_delegation_attempt_fragment_metadata() -> None:
+    """Standards/Spec delegation evidence must be machine-readable."""
+    contract = pr_flow_contract.load_contract(Path("."))
+
+    assert contract.fragment_delegation_attempt_fields == (
+        "required",
+        "authorization_basis",
+        "tool",
+        "result",
+        "reason",
+    )
+    assert (
+        contract.fragment_delegation_attempt_authorization_basis
+        == "AGENTS.md + ADR 0009"
+    )
+    assert contract.fragment_delegation_attempt_tool == "spawn_agent"
+    assert contract.fragment_delegation_attempt_results == (
+        "spawned",
+        "tool_unavailable",
+        "spawn_failed",
+    )
+    assert contract.fragment_delegation_attempt_reason_required_results == (
+        "tool_unavailable",
+        "spawn_failed",
+    )
+    assert "user_not_authorized" in (
+        contract.fragment_delegation_attempt_invalid_reason_tokens
     )
 
 
@@ -5182,6 +5423,7 @@ def _write_fragment(
     head: str = "1" * 40,
     diff: str = DEFAULT_DIFF_HASH,
     security_review: dict[str, str] | None = None,
+    delegation_attempt: dict[str, object] | None = DEFAULT_DELEGATION_ATTEMPT,
 ) -> None:
     path = root / ".local" / "ai-review" / "fragments" / f"{role}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -5191,6 +5433,8 @@ def _write_fragment(
         "diff": diff,
         "findings": findings,
     }
+    if role in {"standards", "spec"} and delegation_attempt is not None:
+        payload["delegation_attempt"] = delegation_attempt
     if role == "security":
         payload["security_review"] = security_review or {"tool": "codex-security"}
     path.write_text(
@@ -5303,10 +5547,11 @@ def _payload_from_managed_body(body: str) -> dict[str, object]:
 def _write_branch_intent(
     root: Path,
     *,
+    branch: str = "feature/contract",
     commit_issues: list[dict[str, object]] | None = None,
     refs: list[dict[str, object]] | None = None,
 ) -> None:
-    path = root / ".local/pr-flow/intents/feature/contract.json"
+    path = root / ".local/pr-flow/intents" / f"{branch}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     commit_issues = commit_issues or [{"number": 66, "role": "closes"}]
     refs = refs or [
@@ -5317,7 +5562,7 @@ def _write_branch_intent(
         json.dumps(
             {
                 "schema_version": 1,
-                "branch": "feature/contract",
+                "branch": branch,
                 "commits": [
                     {
                         "commit_sha": "1" * 40,

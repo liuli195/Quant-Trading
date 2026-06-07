@@ -113,6 +113,7 @@ REQUIRED_COMMAND_RULE_TOKENS = (
     "PYTHONIOENCODING",
     "gh pr checks",
     "`gh` CLI 默认提权执行",
+    "authorize-main",
 )
 REQUIRED_AGENT_ENTRY_TOKENS = (
     "docs/rules/review-guidelines.md",
@@ -127,6 +128,9 @@ REQUIRED_AGENT_ENTRY_TOKENS = (
     "docs/rules/pr-workflow.md",
     "分支名使用 ASCII",
     "优先派发子 agent",
+    "sub-agents",
+    "delegation",
+    "parallel agent work",
     "主会话负责编排",
     "可点击链接",
     "pathref",
@@ -1078,11 +1082,15 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         for token in (
             "所有进入主干的改动必须通过 PR",
             "直写主干",
+            "authorize-main",
             "ALLOW_DIRECT_MAIN_WRITE",
             "DIRECT_MAIN_WRITE_REASON",
             "禁止把功能分支本地合入",
             "git fetch origin main",
             "git merge --ff-only origin/main",
+            "git push -u origin HEAD:<branch>",
+            "delegation_attempt",
+            "spawn_agent",
             "git branch -d <branch>",
             "远端分支删除交给 GitHub",
         ):
@@ -1123,6 +1131,8 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
             "MAIN_REF_UPDATE_REASON",
             "ALLOW_DIRECT_MAIN_WRITE",
             "DIRECT_MAIN_WRITE_REASON",
+            "authorize-main",
+            "git push -u origin HEAD:<branch>",
             "PR Flow / review-status",
             "Research Governance / verify-full",
             "PR Flow / evidence",
@@ -1133,6 +1143,25 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
                 findings.append(
                     AuditFinding(
                         "governance_gate", "error", f"governance.md missing {token}"
+                    )
+                )
+    for rel_path in (
+        "docs/rules/pr-workflow.md",
+        "docs/rules/governance.md",
+        "docs/rules/commands.md",
+        "scripts/research/governance/README.md",
+    ):
+        path = root / rel_path
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        for token in ("$env:ALLOW_MAIN_REF_UPDATE", "$env:ALLOW_DIRECT_MAIN_WRITE"):
+            if token in text:
+                findings.append(
+                    AuditFinding(
+                        "governance_gate",
+                        "error",
+                        f"{rel_path} must use authorize-main instead of {token}",
                     )
                 )
     if (root / ".git").exists() and not os.environ.get("GITHUB_ACTIONS"):
