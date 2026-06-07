@@ -204,16 +204,65 @@ def run_authorized_main(
         reason_env = REF_UPDATE_REASON_ENV
     else:
         raise ValueError("authorized main action must be direct-write or ref-sync")
+    _validate_authorized_main_command(normalized, action=action)
     if not normalized_reason:
         raise ValueError(f"{reason_env} is required")
     parent_env = dict(environ if environ is not None else os.environ)
     child_env = dict(parent_env)
+    for name in _MAIN_AUTH_ENV_NAMES:
+        child_env.pop(name, None)
     child_env[flag_env] = "1"
     child_env[reason_env] = normalized_reason
     if run is not None:
         return run(normalized, child_env)
     result = subprocess.run(normalized, env=child_env, check=False)
     return int(result.returncode)
+
+
+_MAIN_AUTH_ENV_NAMES = {
+    BYPASS_ENV,
+    BYPASS_REASON_ENV,
+    DIRECT_MAIN_WRITE_ENV,
+    DIRECT_MAIN_WRITE_REASON_ENV,
+    REF_UPDATE_BYPASS_ENV,
+    REF_UPDATE_REASON_ENV,
+}
+
+
+def _validate_authorized_main_command(command: Sequence[str], *, action: str) -> None:
+    lowered = [item.lower() for item in command]
+    if action == "ref-sync" and lowered != [
+        lowered[0],
+        "merge",
+        "--ff-only",
+        "origin/main",
+    ]:
+        raise ValueError("ref-sync only runs git merge --ff-only origin/main")
+    if _authorized_main_command_is_destructive(lowered):
+        raise ValueError("authorized main wrapper does not allow destructive git commands")
+
+
+def _authorized_main_command_is_destructive(lowered: Sequence[str]) -> bool:
+    if len(lowered) < 2:
+        return False
+    subcommand = lowered[1]
+    args = list(lowered[2:])
+    if subcommand in {"reset", "rebase", "update-ref"}:
+        return True
+    if subcommand == "push":
+        return any(
+            arg in {"--force", "-f", "--force-with-lease", "--delete", "-d"}
+            or arg.startswith("--force")
+            or arg.startswith(":")
+            for arg in args
+        )
+    if subcommand == "branch":
+        return any(arg in {"-d", "-D", "--delete", "-m", "-M", "--move"} for arg in args)
+    if subcommand == "checkout":
+        return any(arg in {"-B", "-b"} or arg.startswith("-B") for arg in args)
+    if subcommand == "switch":
+        return any(arg in {"-C", "-c"} or arg.startswith("-C") for arg in args)
+    return False
 
 
 def _remote_head_for_branch(branch: str, *, remote_heads: Mapping[str, str | None] | None = None) -> str | None:
@@ -311,8 +360,9 @@ def _cmd_pre_push(_args: argparse.Namespace) -> int:
         [
             "Create a feature branch and open a PR instead.",
             (
-                f"Explicit direct-main path: set {DIRECT_MAIN_WRITE_ENV}=1 and "
-                f"{DIRECT_MAIN_WRITE_REASON_ENV}=<reason> for this command."
+                "Explicit direct-main path: run "
+                "branch_protection authorize-main --action direct-write "
+                "--reason <reason> -- git <main-command>."
             ),
         ]
     )
@@ -335,13 +385,15 @@ def _cmd_reference_transaction(_args: argparse.Namespace) -> int:
         "Local branch history rewrite is blocked by default; use an additional commit instead.",
         "Do not merge feature branches into main/master locally; open a PR instead.",
         (
-            f"Explicit direct-main path: set {DIRECT_MAIN_WRITE_ENV}=1 and "
-            f"{DIRECT_MAIN_WRITE_REASON_ENV}=<reason>; only fast-forward local updates are allowed."
+            "Explicit direct-main path: run "
+            "branch_protection authorize-main --action direct-write "
+            "--reason <reason> -- git <main-command>."
         ),
         "After a remote PR merge, local main/master may only fast-forward to refs/remotes/origin/<branch>.",
         (
-            f"Audited sync bypass: set {REF_UPDATE_BYPASS_ENV}=1 and "
-            f"{REF_UPDATE_REASON_ENV}=<reason> for this command."
+            "Audited sync bypass: run "
+            "branch_protection authorize-main --action ref-sync "
+            "--reason <reason> -- git merge --ff-only origin/main."
         ),
         (
             "Single-command history rewrite exception: run "

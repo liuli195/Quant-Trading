@@ -34,7 +34,7 @@
 - `.githooks/pre-push` 必须阻断推送到 `main` / `master`；直写主干只在用户当前对话授权时允许，并通过 `branch_protection authorize-main --action direct-write --reason <reason> -- git <main-command>` 对单个 Git 子进程注入 `ALLOW_DIRECT_MAIN_WRITE=1` 和 `DIRECT_MAIN_WRITE_REASON=<reason>`。
 - `.githooks/reference-transaction` 必须阻断本地 `refs/heads/main` / `refs/heads/master` 被 merge、reset、delete 或 force rewrite；授权直写也只允许 fast-forward。
 - `.githooks/reference-transaction` 必须阻断本地 `refs/heads/*` 的 non-fast-forward 更新；新建和删除本地分支允许。agent 不得默认使用 `commit --amend`、`rebase`、`squash`、`reset` 后重做提交等 history rewrite；review finding 修复必须使用追加 commit。单次例外只能通过 repo-native wrapper 注入 `ALLOW_BRANCH_HISTORY_REWRITE=1` 和 `BRANCH_HISTORY_REWRITE_REASON=<reason>`，wrapper 不负责 review、intent 或 cleanup 后续恢复。决策见 [ADR 0010](../adr/0010-local-branch-history-rewrite-gate.md) <!-- pathref: docs/adr/0010-local-branch-history-rewrite-gate.md -->。
-- PR 云端合并后，本地同步 `main` 必须通过 `branch_protection authorize-main --action ref-sync --reason <reason> -- git merge --ff-only origin/main` 对单个 Git 子进程注入 `ALLOW_MAIN_REF_UPDATE=1` 和 `MAIN_REF_UPDATE_REASON=<reason>`，并只允许 fast-forward 到 `origin/main`。
+- PR 云端合并后，手工同步本地 `main` 必须通过 `branch_protection authorize-main --action ref-sync --reason <reason> -- git merge --ff-only origin/main` 对单个 Git 子进程注入 `ALLOW_MAIN_REF_UPDATE=1` 和 `MAIN_REF_UPDATE_REASON=<reason>`，并只允许 fast-forward 到 `origin/main`；`pr-submit` cleanup 内部可继续使用一次性临时 env，语义仍必须是受控 fast-forward。
 - PR 合并收尾必须删除已合并提交分支的本地引用；远端分支删除交给 GitHub 的 delete branch on merge。
 - `pr-submit` 必须使用当前 head SHA 的 `--match-head-commit` auto-merge 授权；merged 后先 fetch，再走受控 fast-forward，同步后只删除本地已合并分支。
 - `pr-submit` 在新功能分支首次缺少远端 branch 时，可自动执行 `git push -u origin HEAD:<branch>` 并验证远端 head；该自动 push 禁止用于 `main` / `master`。

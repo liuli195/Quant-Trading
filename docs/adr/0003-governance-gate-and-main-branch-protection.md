@@ -16,7 +16,7 @@ GitHub Free 的私有仓库中，远端 branch protection / rulesets 可能不�
 - GitHub 主干保护必须禁止直接 push 和 force push。
 - `.githooks/pre-push` 必须调用 `scripts.research.governance.branch_protection pre-push`，在本地阻断直接推送 `main` / `master`。
 - `.githooks/reference-transaction` 必须阻断本地 `main` / `master` ref 更新；PR 在 GitHub 云端合并后，本地主干只能用带审计说明的 fast-forward 同步到 `origin/main`。
-- 手工直写主干和 PR 合并后的本地 `main` 同步必须通过 `branch_protection authorize-main` 单次 wrapper 完成。wrapper 只运行 `git` 子命令，并只对子进程注入 `ALLOW_DIRECT_MAIN_WRITE` / `DIRECT_MAIN_WRITE_REASON` 或 `ALLOW_MAIN_REF_UPDATE` / `MAIN_REF_UPDATE_REASON`。
+- 手工直写主干和手工同步 PR 合并后的本地 `main` 必须通过 `branch_protection authorize-main` 单次 wrapper 完成。wrapper 只运行 `git` 子命令，并只对子进程注入 `ALLOW_DIRECT_MAIN_WRITE` / `DIRECT_MAIN_WRITE_REASON` 或 `ALLOW_MAIN_REF_UPDATE` / `MAIN_REF_UPDATE_REASON`。`pr-submit` cleanup 内部可以继续使用一次性临时 env，但只能执行受控 fast-forward。
 - PR 必须通过 required checks。
 - 关键路径必须由 CODEOWNERS 覆盖；是否要求 approval / Code Owner review 阻断合并，以远端实际 branch protection / ruleset 为准。
 - waiver 必须有 owner、批准人、过期时间和迁移计划。

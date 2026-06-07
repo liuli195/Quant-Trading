@@ -18,10 +18,11 @@ Review 细则见 [review-guidelines.md](review-guidelines.md) <!-- pathref: docs
 - 所有进入主干的改动必须通过 PR，除非用户在当前对话中显式授权直写主干。
 - “合并到主干”默认指创建、更新或准备 PR，不是本地合并 `main`。
 - 禁止把功能分支本地合入 `main`；GitHub 合并后的本地同步只能走受控 fast-forward。
-- 直写主干或 GitHub 合并后的本地 `main` 同步都必须走单次 wrapper：`branch_protection authorize-main --action direct-write --reason <reason> -- git <main-command>` 或先 `git fetch origin main`，再运行 `branch_protection authorize-main --action ref-sync --reason <reason> -- git merge --ff-only origin/main`。wrapper 只对子 Git 进程注入 `ALLOW_DIRECT_MAIN_WRITE` / `DIRECT_MAIN_WRITE_REASON` 或 `ALLOW_MAIN_REF_UPDATE` / `MAIN_REF_UPDATE_REASON`；禁止 reset、删除或 force rewrite。
+- 手工直写主干或手工同步 GitHub 合并后的本地 `main` 都必须走单次 wrapper：`branch_protection authorize-main --action direct-write --reason <reason> -- git <main-command>` 或先 `git fetch origin main`，再运行 `branch_protection authorize-main --action ref-sync --reason <reason> -- git merge --ff-only origin/main`。wrapper 只对子 Git 进程注入 `ALLOW_DIRECT_MAIN_WRITE` / `DIRECT_MAIN_WRITE_REASON` 或 `ALLOW_MAIN_REF_UPDATE` / `MAIN_REF_UPDATE_REASON`；禁止 reset、删除或 force rewrite。
 - 本地工作分支默认只允许 fast-forward 更新。agent 不得默认使用 `commit --amend`、`rebase`、`squash` 或 `reset` 后重做提交；review finding 修复必须使用追加 commit。单次 history rewrite 例外只通过 repo-native wrapper 授权，不附带 review、intent 或 cleanup 后续恢复。
 - PR 合并后远端分支删除交给 GitHub；本地收尾只删除已合并的本地功能分支，不本地删除远端分支。
 - `main` 被其他 worktree 占用时，`pr-submit` 在 `main` 所在 worktree 执行受控 fast-forward；当前 worktree 只切到 detached `origin/main` 以便删除已合并的本地功能分支。
+- `pr-submit` cleanup 内部可继续用一次性临时 env 执行受控 fast-forward，但不得要求用户设置会话级 `ALLOW_*`。
 
 - 本地删除已合并功能分支使用 `git branch -d <branch>`；远端分支删除交给 GitHub。
 ## Review 和 Evidence
