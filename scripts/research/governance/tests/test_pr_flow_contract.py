@@ -119,6 +119,7 @@ class SubmitPreflightRunner:
             "core.quotePath=false",
             "diff",
             "--binary",
+            "--full-index",
             "--no-ext-diff",
             "origin/main...HEAD",
         ]:
@@ -332,6 +333,7 @@ class SubmitCreatePrRunner(SubmitPreflightRunner):
             "core.quotePath=false",
             "diff",
             "--binary",
+            "--full-index",
             "--no-ext-diff",
             "origin/main...HEAD",
         ]:
@@ -2528,6 +2530,32 @@ def test_pr_review_evidence_rejects_contract_v1_diff_mismatch() -> None:
 
     assert not report.ok
     assert "PR Evidence JSON diff does not match current PR diff" in report.errors
+
+
+def test_pr_review_evidence_local_diff_hash_uses_full_index(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **_kwargs: object) -> pr_flow.CommandResult:
+        calls.append(command)
+        return pr_flow.CommandResult(0, DEFAULT_DIFF_TEXT, "")
+
+    monkeypatch.setattr(pr_review_evidence.subprocess, "run", fake_run)
+
+    assert pr_review_evidence._local_pr_diff_hash(Path(".")) == DEFAULT_DIFF_HASH
+    assert calls == [
+        [
+            "git",
+            "-c",
+            "core.quotePath=false",
+            "diff",
+            "--binary",
+            "--full-index",
+            "--no-ext-diff",
+            "origin/main...HEAD",
+        ]
+    ]
 
 
 def test_pr_review_evidence_ignores_threads_for_contract_v1_evidence() -> None:

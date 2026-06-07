@@ -2048,6 +2048,7 @@ def _submit_current_diff_hash(root: Path, runner: Runner) -> str:
             "core.quotePath=false",
             "diff",
             "--binary",
+            "--full-index",
             "--no-ext-diff",
             "origin/main...HEAD",
         ],

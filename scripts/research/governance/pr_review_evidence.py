@@ -1004,6 +1004,7 @@ def _local_pr_diff_hash(repo_root: Path | None = None) -> str:
             "core.quotePath=false",
             "diff",
             "--binary",
+            "--full-index",
             "--no-ext-diff",
             "origin/main...HEAD",
         ],
@@ -1017,7 +1018,7 @@ def _local_pr_diff_hash(repo_root: Path | None = None) -> str:
     if result.returncode != 0:
         detail = _single_line_text(result.stderr or result.stdout)
         raise RuntimeError(
-            "git diff --binary origin/main...HEAD failed"
+            "git diff --binary --full-index origin/main...HEAD failed"
             + (f": {detail}" if detail else "")
         )
     return hashlib.sha256(result.stdout.encode("utf-8")).hexdigest()
