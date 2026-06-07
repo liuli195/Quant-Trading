@@ -3779,6 +3779,8 @@ def test_authorized_main_wrapper_rejects_force_push() -> None:
         ["git", "push", "origin", "+HEAD:main"],
         ["git", "push", "--mirror", "origin"],
         ["git", "push", "--prune", "origin"],
+        ["git", "-C", ".", "push", "--mirror", "origin"],
+        ["git", "-C", ".", "push", "origin", "+HEAD:main"],
     ],
 )
 def test_authorized_main_wrapper_rejects_force_push_forms(
@@ -3791,7 +3793,7 @@ def test_authorized_main_wrapper_rejects_force_push_forms(
         called = True
         return 0
 
-    with pytest.raises(ValueError, match="does not allow destructive git commands"):
+    with pytest.raises(ValueError, match="does not allow"):
         run_authorized_main(
             command,
             action="direct-write",
@@ -3815,6 +3817,24 @@ def test_authorized_main_ref_sync_only_allows_fast_forward_origin_main() -> None
     ):
         run_authorized_main(
             ["git", "merge", "origin/main"],
+            action="ref-sync",
+            reason="sync main after merged PR",
+            run=fake_run,
+        )
+    assert called is False
+
+
+def test_authorized_main_ref_sync_rejects_git_global_options() -> None:
+    called = False
+
+    def fake_run(_command: Sequence[str], _env: Mapping[str, str]) -> int:
+        nonlocal called
+        called = True
+        return 0
+
+    with pytest.raises(ValueError, match="does not allow git global options"):
+        run_authorized_main(
+            ["git", "-C", ".", "merge", "--ff-only", "origin/main"],
             action="ref-sync",
             reason="sync main after merged PR",
             run=fake_run,

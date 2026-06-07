@@ -231,22 +231,31 @@ _MAIN_AUTH_ENV_NAMES = {
 
 def _validate_authorized_main_command(command: Sequence[str], *, action: str) -> None:
     lowered = [item.lower() for item in command]
-    if action == "ref-sync" and lowered != [
+    parsed = _parse_git_command(lowered)
+    if parsed is None:
+        raise ValueError("authorized main wrapper does not allow git global options")
+    subcommand, args = parsed
+    if action == "ref-sync" and [lowered[0], subcommand, *args] != [
         lowered[0],
         "merge",
         "--ff-only",
         "origin/main",
     ]:
         raise ValueError("ref-sync only runs git merge --ff-only origin/main")
-    if _authorized_main_command_is_destructive(lowered):
+    if _authorized_main_command_is_destructive(subcommand, args):
         raise ValueError("authorized main wrapper does not allow destructive git commands")
 
 
-def _authorized_main_command_is_destructive(lowered: Sequence[str]) -> bool:
+def _parse_git_command(lowered: Sequence[str]) -> tuple[str, list[str]] | None:
     if len(lowered) < 2:
-        return False
+        return None
     subcommand = lowered[1]
-    args = list(lowered[2:])
+    if subcommand.startswith("-"):
+        return None
+    return subcommand, list(lowered[2:])
+
+
+def _authorized_main_command_is_destructive(subcommand: str, args: Sequence[str]) -> bool:
     if subcommand in {"reset", "rebase", "update-ref"}:
         return True
     if subcommand == "push":
