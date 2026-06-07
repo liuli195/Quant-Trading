@@ -3773,6 +3773,34 @@ def test_authorized_main_wrapper_rejects_force_push() -> None:
     assert called is False
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["git", "push", "origin", "+HEAD:main"],
+        ["git", "push", "--mirror", "origin"],
+        ["git", "push", "--prune", "origin"],
+    ],
+)
+def test_authorized_main_wrapper_rejects_force_push_forms(
+    command: list[str],
+) -> None:
+    called = False
+
+    def fake_run(_command: Sequence[str], _env: Mapping[str, str]) -> int:
+        nonlocal called
+        called = True
+        return 0
+
+    with pytest.raises(ValueError, match="does not allow destructive git commands"):
+        run_authorized_main(
+            command,
+            action="direct-write",
+            reason="user approved direct main fix",
+            run=fake_run,
+        )
+    assert called is False
+
+
 def test_authorized_main_ref_sync_only_allows_fast_forward_origin_main() -> None:
     called = False
 

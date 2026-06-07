@@ -251,9 +251,18 @@ def _authorized_main_command_is_destructive(lowered: Sequence[str]) -> bool:
         return True
     if subcommand == "push":
         return any(
-            arg in {"--force", "-f", "--force-with-lease", "--delete", "-d"}
+            arg
+            in {
+                "--force",
+                "-f",
+                "--force-with-lease",
+                "--delete",
+                "-d",
+                "--mirror",
+                "--prune",
+            }
             or arg.startswith("--force")
-            or arg.startswith(":")
+            or arg.startswith(("+", ":"))
             for arg in args
         )
     if subcommand == "branch":
