@@ -19,6 +19,7 @@ Review 细则见 [review-guidelines.md](review-guidelines.md) <!-- pathref: docs
 - “合并到主干”默认指创建、更新或准备 PR，不是本地合并 `main`。
 - 禁止把功能分支本地合入 `main`；GitHub 合并后的本地同步只能走受控 fast-forward。
 - 直写主干或 GitHub 合并后的本地 `main` 同步都必须走受控 fast-forward；前者设置 `ALLOW_DIRECT_MAIN_WRITE=1` 和 `DIRECT_MAIN_WRITE_REASON=<reason>`，后者先 `git fetch origin main`，再设置 `ALLOW_MAIN_REF_UPDATE=1` 和 `MAIN_REF_UPDATE_REASON=<reason>`，并用 `git merge --ff-only origin/main` 或等价 fast-forward 同步；禁止 reset、删除或 force rewrite。
+- 本地工作分支默认只允许 fast-forward 更新。agent 不得默认使用 `commit --amend`、`rebase`、`squash` 或 `reset` 后重做提交；review finding 修复必须使用追加 commit。单次 history rewrite 例外只通过 repo-native wrapper 授权，不附带 review、intent 或 cleanup 后续恢复。
 - PR 合并后远端分支删除交给 GitHub；本地收尾只删除已合并的本地功能分支，不本地删除远端分支。
 - `main` 被其他 worktree 占用时，`pr-submit` 在 `main` 所在 worktree 执行受控 fast-forward；当前 worktree 只切到 detached `origin/main` 以便删除已合并的本地功能分支。
 

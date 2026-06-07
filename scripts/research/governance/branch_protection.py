@@ -6,7 +6,7 @@ import argparse
 import os
 import subprocess
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 
 
 PROTECTED_BRANCHES = {"main", "master"}
@@ -16,6 +16,8 @@ DIRECT_MAIN_WRITE_ENV = "ALLOW_DIRECT_MAIN_WRITE"
 DIRECT_MAIN_WRITE_REASON_ENV = "DIRECT_MAIN_WRITE_REASON"
 REF_UPDATE_BYPASS_ENV = "ALLOW_MAIN_REF_UPDATE"
 REF_UPDATE_REASON_ENV = "MAIN_REF_UPDATE_REASON"
+HISTORY_REWRITE_BYPASS_ENV = "ALLOW_BRANCH_HISTORY_REWRITE"
+HISTORY_REWRITE_REASON_ENV = "BRANCH_HISTORY_REWRITE_REASON"
 ZERO_SHA = "0" * 40
 
 
@@ -50,32 +52,66 @@ def check_reference_transaction_input(
     """Return protected local branch ref updates from Git reference-transaction stdin."""
 
     updates = _protected_branch_updates_from_reference_transaction(input_text)
-    if not updates:
-        return []
-
     env = environ if environ is not None else os.environ
-    branches = sorted({branch for _old_sha, _new_sha, branch in updates})
-    if _env_pair_enabled(env, DIRECT_MAIN_WRITE_ENV, DIRECT_MAIN_WRITE_REASON_ENV):
-        return sorted(
-            {
-                branch
-                for old_sha, new_sha, branch in updates
-                if not _is_fast_forward_update(old_sha, new_sha, is_ancestor=is_ancestor)
-            }
-        )
-
-    if env.get(REF_UPDATE_BYPASS_ENV) != "1" or not env.get(REF_UPDATE_REASON_ENV, "").strip():
-        return branches
-
     violations: list[str] = []
-    for old_sha, new_sha, branch in updates:
-        remote_sha = _remote_head_for_branch(branch, remote_heads=remote_heads)
-        if remote_sha != new_sha or not _is_fast_forward_update(old_sha, new_sha, is_ancestor=is_ancestor):
-            violations.append(branch)
+    if updates:
+        branches = sorted({branch for _old_sha, _new_sha, branch in updates})
+        if _env_pair_enabled(env, DIRECT_MAIN_WRITE_ENV, DIRECT_MAIN_WRITE_REASON_ENV):
+            violations.extend(
+                sorted(
+                    {
+                        branch
+                        for old_sha, new_sha, branch in updates
+                        if not _is_fast_forward_update(
+                            old_sha,
+                            new_sha,
+                            is_ancestor=is_ancestor,
+                        )
+                    }
+                )
+            )
+        elif (
+            env.get(REF_UPDATE_BYPASS_ENV) != "1"
+            or not env.get(REF_UPDATE_REASON_ENV, "").strip()
+        ):
+            violations.extend(branches)
+        else:
+            for old_sha, new_sha, branch in updates:
+                remote_sha = _remote_head_for_branch(
+                    branch,
+                    remote_heads=remote_heads,
+                )
+                if remote_sha != new_sha or not _is_fast_forward_update(
+                    old_sha,
+                    new_sha,
+                    is_ancestor=is_ancestor,
+                ):
+                    violations.append(branch)
+
+    history_rewrite_violations = _history_rewrite_branch_violations(
+        input_text,
+        environ=env,
+        is_ancestor=is_ancestor,
+    )
+    violations.extend(
+        branch
+        for branch in history_rewrite_violations
+        if branch not in PROTECTED_BRANCHES
+    )
     return sorted(set(violations))
 
 
 def _protected_branch_updates_from_reference_transaction(input_text: str) -> list[tuple[str, str, str]]:
+    return [
+        (old_sha, new_sha, branch)
+        for old_sha, new_sha, branch in _branch_updates_from_reference_transaction(
+            input_text
+        )
+        if branch in PROTECTED_BRANCHES
+    ]
+
+
+def _branch_updates_from_reference_transaction(input_text: str) -> list[tuple[str, str, str]]:
     updates: list[tuple[str, str, str]] = []
     for line in input_text.splitlines():
         parts = line.split()
@@ -83,9 +119,62 @@ def _protected_branch_updates_from_reference_transaction(input_text: str) -> lis
             continue
         old_sha, new_sha, ref = parts[:3]
         branch = _branch_from_ref(ref)
-        if branch in PROTECTED_BRANCHES:
+        if branch:
             updates.append((old_sha, new_sha, branch))
     return updates
+
+
+def _history_rewrite_branch_violations(
+    input_text: str,
+    *,
+    environ: Mapping[str, str],
+    is_ancestor: Callable[[str, str], bool] | None = None,
+) -> list[str]:
+    if _env_pair_enabled(
+        environ,
+        HISTORY_REWRITE_BYPASS_ENV,
+        HISTORY_REWRITE_REASON_ENV,
+    ):
+        return []
+    violations: list[str] = []
+    for old_sha, new_sha, branch in _branch_updates_from_reference_transaction(
+        input_text
+    ):
+        if old_sha == ZERO_SHA or new_sha == ZERO_SHA:
+            continue
+        if not _is_fast_forward_update(old_sha, new_sha, is_ancestor=is_ancestor):
+            violations.append(branch)
+    return sorted(set(violations))
+
+
+def run_authorized_history_rewrite(
+    command: Sequence[str],
+    reason: str,
+    *,
+    environ: Mapping[str, str] | None = None,
+    run: Callable[[Sequence[str], Mapping[str, str]], int] | None = None,
+) -> int:
+    """Run one Git command with history rewrite authorization scoped to the child."""
+
+    normalized = [item for item in command if item]
+    if normalized and normalized[0] == "--":
+        normalized = normalized[1:]
+    if not normalized:
+        raise ValueError("authorized history rewrite command is required")
+    executable = normalized[0].lower()
+    if executable not in {"git", "git.exe"}:
+        raise ValueError("authorized history rewrite wrapper only runs git commands")
+    normalized_reason = reason.strip()
+    if not normalized_reason:
+        raise ValueError(f"{HISTORY_REWRITE_REASON_ENV} is required")
+    parent_env = dict(environ if environ is not None else os.environ)
+    child_env = dict(parent_env)
+    child_env[HISTORY_REWRITE_BYPASS_ENV] = "1"
+    child_env[HISTORY_REWRITE_REASON_ENV] = normalized_reason
+    if run is not None:
+        return run(normalized, child_env)
+    result = subprocess.run(normalized, env=child_env, check=False)
+    return int(result.returncode)
 
 
 def _remote_head_for_branch(branch: str, *, remote_heads: Mapping[str, str | None] | None = None) -> str | None:
@@ -147,6 +236,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="validate local protected branch ref updates from stdin",
     )
     reference_transaction.set_defaults(func=_cmd_reference_transaction)
+    allow_history_rewrite = subparsers.add_parser(
+        "allow-history-rewrite",
+        help="run one Git command with local branch history rewrite authorization",
+    )
+    allow_history_rewrite.add_argument("--reason", required=True)
+    allow_history_rewrite.add_argument("git_command", nargs=argparse.REMAINDER)
+    allow_history_rewrite.set_defaults(func=_cmd_allow_history_rewrite)
     return parser
 
 
@@ -184,7 +280,8 @@ def _cmd_reference_transaction(_args: argparse.Namespace) -> int:
 
     branches = ", ".join(violations)
     message = [
-        f"error: local update to protected branch blocked: {branches}",
+        f"error: local branch ref update blocked: {branches}",
+        "Local branch history rewrite is blocked by default; use an additional commit instead.",
         "Do not merge feature branches into main/master locally; open a PR instead.",
         (
             f"Explicit direct-main path: set {DIRECT_MAIN_WRITE_ENV}=1 and "
@@ -195,13 +292,27 @@ def _cmd_reference_transaction(_args: argparse.Namespace) -> int:
             f"Audited sync bypass: set {REF_UPDATE_BYPASS_ENV}=1 and "
             f"{REF_UPDATE_REASON_ENV}=<reason> for this command."
         ),
+        (
+            "Single-command history rewrite exception: run "
+            "branch_protection allow-history-rewrite --reason <reason> -- git <command>."
+        ),
     ]
     if os.environ.get(DIRECT_MAIN_WRITE_ENV) == "1" and not os.environ.get(DIRECT_MAIN_WRITE_REASON_ENV, "").strip():
         message.insert(1, f"error: {DIRECT_MAIN_WRITE_REASON_ENV} is required when {DIRECT_MAIN_WRITE_ENV}=1")
     if os.environ.get(REF_UPDATE_BYPASS_ENV) == "1" and not os.environ.get(REF_UPDATE_REASON_ENV, "").strip():
         message.insert(1, f"error: {REF_UPDATE_REASON_ENV} is required when {REF_UPDATE_BYPASS_ENV}=1")
+    if os.environ.get(HISTORY_REWRITE_BYPASS_ENV) == "1" and not os.environ.get(HISTORY_REWRITE_REASON_ENV, "").strip():
+        message.insert(1, f"error: {HISTORY_REWRITE_REASON_ENV} is required when {HISTORY_REWRITE_BYPASS_ENV}=1")
     print("\n".join(message), file=sys.stderr)
     return 1
+
+
+def _cmd_allow_history_rewrite(args: argparse.Namespace) -> int:
+    try:
+        return run_authorized_history_rewrite(args.git_command, args.reason)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
 
 def main(argv: list[str] | None = None) -> int:

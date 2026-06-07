@@ -65,7 +65,7 @@ git config core.hooksPath .githooks
 git config --get core.hooksPath
 ```
 
-`.githooks/pre-commit` 运行 `verify fast --staged` 和 commit intent gate；`.githooks/pre-push` 运行主干保护门禁、local review fragments freshness 非阻断提醒和 Git LFS 转交，不运行本地 `verify full`；`.githooks/reference-transaction` 阻断本地 `main` / `master` 被 merge、reset、delete 或 force rewrite。
+`.githooks/pre-commit` 运行 `verify fast --staged` 和 commit intent gate；`.githooks/pre-push` 运行主干保护门禁、local review fragments freshness 非阻断提醒和 Git LFS 转交，不运行本地 `verify full`；`.githooks/reference-transaction` 阻断本地 `main` / `master` 非授权更新，并阻断所有本地分支默认 history rewrite。普通修复使用追加 commit；确需单次 rewrite 时使用 repo-native wrapper 注入 `ALLOW_BRANCH_HISTORY_REWRITE=1` 和 `BRANCH_HISTORY_REWRITE_REASON=<reason>`。
 
 pre-push freshness 提醒只读取现有 `.local/ai-review/fragments/*.json`，不生成、不刷新、不修改 fragments。看到 stale diff 提醒后，先重新 review / 重新映射 fragments，再运行 `pr-submit`；same diff 仅 head stale 时，`pr-submit` 可刷新 fragment head。
 

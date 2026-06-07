@@ -33,6 +33,7 @@
 - `.githooks/pre-push` 必须调用 `scripts.research.governance.branch_protection pre-push` 和 `scripts.research.governance.pr_flow pre-push-review-fragments`，并保留 Git LFS pre-push 转交；该 freshness 提醒不生成、不刷新、不修改 review fragments，也不阻断 push。
 - `.githooks/pre-push` 必须阻断推送到 `main` / `master`；直写主干只在用户当前对话授权时允许，并要求 `ALLOW_DIRECT_MAIN_WRITE=1` 和 `DIRECT_MAIN_WRITE_REASON=<reason>`。
 - `.githooks/reference-transaction` 必须阻断本地 `refs/heads/main` / `refs/heads/master` 被 merge、reset、delete 或 force rewrite；授权直写也只允许 fast-forward。
+- `.githooks/reference-transaction` 必须阻断本地 `refs/heads/*` 的 non-fast-forward 更新；新建和删除本地分支允许。agent 不得默认使用 `commit --amend`、`rebase`、`squash`、`reset` 后重做提交等 history rewrite；review finding 修复必须使用追加 commit。单次例外只能通过 repo-native wrapper 注入 `ALLOW_BRANCH_HISTORY_REWRITE=1` 和 `BRANCH_HISTORY_REWRITE_REASON=<reason>`，wrapper 不负责 review、intent 或 cleanup 后续恢复。决策见 [ADR 0010](../adr/0010-local-branch-history-rewrite-gate.md) <!-- pathref: docs/adr/0010-local-branch-history-rewrite-gate.md -->。
 - PR 云端合并后，本地同步 `main` 必须设置 `ALLOW_MAIN_REF_UPDATE=1` 和 `MAIN_REF_UPDATE_REASON=<reason>`，并只允许 fast-forward 到 `origin/main`。
 - PR 合并收尾必须删除已合并提交分支的本地引用；远端分支删除交给 GitHub 的 delete branch on merge。
 - `pr-submit` 必须使用当前 head SHA 的 `--match-head-commit` auto-merge 授权；merged 后先 fetch，再走受控 fast-forward，同步后只删除本地已合并分支。
@@ -72,6 +73,6 @@
 ## Commit Intent Gate
 
 - `commit intent hook`: `.githooks/pre-commit` 必须运行 `pr_flow intent pre-commit`，`.githooks/post-commit` 必须运行 `pr_flow intent post-commit`，并继续通过 `.githooks/run-python.sh` 使用项目 `.venv`。
-- PR readiness 必须检查 branch intent coverage，发现 amend、squash、rebase 或 hook bypass 导致的 missing SHA 时停止。
+- PR readiness 必须检查 branch intent coverage，发现 amend、squash、rebase、reset 或 hook bypass 导致的 missing SHA 时停止；这些状态说明 history rewrite 围墙已被绕过或出现外部状态污染，不得把 stale branch intent 自动当成正常路径兼容。
 - `PR Evidence JSON issues` 是 CI 可见审计面，必须覆盖 current head、PR commits、Issue roles 和 no-Issue minimum records；CI 不读取本地 `.local`。
 - `no-Issue PR Evidence minimum` 在 PR body 只记录 `no_issue: true`；reason、authorized_by 和 evidence 按 commit 保留在 branch intent 中，不扩展 PR Evidence 契约。

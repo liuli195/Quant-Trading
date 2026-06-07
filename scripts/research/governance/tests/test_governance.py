@@ -12,6 +12,7 @@ import yaml
 from scripts.research.governance.branch_protection import (
     check_pre_push_input,
     check_reference_transaction_input,
+    run_authorized_history_rewrite,
 )
 from scripts.research.governance.codex_review_monitor import (
     build_monitor_report,
@@ -1618,8 +1619,7 @@ def _write_minimal_repo(root: Path) -> None:
                 "INPUT=$(cat)",
                 'if [ "$STATE" = "prepared" ]; then',
                 "if [ ! -x .venv/bin/python ] && [ ! -x .venv/Scripts/python.exe ]; then",
-                "grep refs/heads/main",
-                "grep refs/heads/master",
+                "grep refs/heads/",
                 "Project virtualenv Python not found",
                 "fi",
                 "sh .githooks/run-python.sh -m scripts.research.governance.branch_protection reference-transaction",
@@ -3401,12 +3401,66 @@ def test_reference_transaction_branch_protection_blocks_main_update() -> None:
     assert violations == ["main"]
 
 
-def test_reference_transaction_branch_protection_allows_feature_update() -> None:
+def test_reference_transaction_branch_protection_allows_feature_creation() -> None:
     violations = check_reference_transaction_input(
         "0" * 40 + " " + "1" * 40 + " refs/heads/fix/topic\n",
         environ={},
     )
     assert violations == []
+
+
+def test_reference_transaction_branch_protection_allows_feature_fast_forward() -> (
+    None
+):
+    violations = check_reference_transaction_input(
+        "1" * 40 + " " + "2" * 40 + " refs/heads/fix/topic\n",
+        environ={},
+        is_ancestor=lambda _old_sha, _new_sha: True,
+    )
+    assert violations == []
+
+
+def test_reference_transaction_branch_protection_allows_feature_delete() -> None:
+    violations = check_reference_transaction_input(
+        "1" * 40 + " " + "0" * 40 + " refs/heads/fix/topic\n",
+        environ={},
+        is_ancestor=lambda _old_sha, _new_sha: False,
+    )
+    assert violations == []
+
+
+def test_reference_transaction_branch_protection_blocks_feature_rewrite() -> None:
+    violations = check_reference_transaction_input(
+        "2" * 40 + " " + "1" * 40 + " refs/heads/fix/topic\n",
+        environ={},
+        is_ancestor=lambda _old_sha, _new_sha: False,
+    )
+    assert violations == ["fix/topic"]
+
+
+def test_reference_transaction_branch_protection_allows_authorized_feature_rewrite() -> (
+    None
+):
+    violations = check_reference_transaction_input(
+        "2" * 40 + " " + "1" * 40 + " refs/heads/fix/topic\n",
+        environ={
+            "ALLOW_BRANCH_HISTORY_REWRITE": "1",
+            "BRANCH_HISTORY_REWRITE_REASON": "user approved conflict recovery",
+        },
+        is_ancestor=lambda _old_sha, _new_sha: False,
+    )
+    assert violations == []
+
+
+def test_reference_transaction_branch_protection_requires_history_rewrite_reason() -> (
+    None
+):
+    violations = check_reference_transaction_input(
+        "2" * 40 + " " + "1" * 40 + " refs/heads/fix/topic\n",
+        environ={"ALLOW_BRANCH_HISTORY_REWRITE": "1"},
+        is_ancestor=lambda _old_sha, _new_sha: False,
+    )
+    assert violations == ["fix/topic"]
 
 
 def test_reference_transaction_branch_protection_requires_bypass_reason() -> None:
@@ -3497,6 +3551,34 @@ def test_reference_transaction_branch_protection_blocks_audited_non_fast_forward
         is_ancestor=lambda _old_sha, _new_sha: False,
     )
     assert violations == ["main"]
+
+
+def test_authorized_history_rewrite_wrapper_scopes_env_to_child() -> None:
+    captured: dict[str, object] = {}
+    parent_env = {"EXISTING": "1"}
+
+    def fake_run(command: Sequence[str], env: Mapping[str, str]) -> int:
+        captured["command"] = list(command)
+        captured["env"] = dict(env)
+        return 7
+
+    code = run_authorized_history_rewrite(
+        ["git", "rebase", "origin/main"],
+        "user approved conflict recovery",
+        environ=parent_env,
+        run=fake_run,
+    )
+
+    assert code == 7
+    assert captured["command"] == ["git", "rebase", "origin/main"]
+    child_env = captured["env"]
+    assert isinstance(child_env, dict)
+    assert child_env["ALLOW_BRANCH_HISTORY_REWRITE"] == "1"
+    assert child_env["BRANCH_HISTORY_REWRITE_REASON"] == (
+        "user approved conflict recovery"
+    )
+    assert "ALLOW_BRANCH_HISTORY_REWRITE" not in parent_env
+    assert "BRANCH_HISTORY_REWRITE_REASON" not in parent_env
 
 
 def _managed_evidence_body(payload: Mapping[str, object]) -> str:
