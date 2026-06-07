@@ -692,8 +692,7 @@ def _audit_governance_gate(root: Path) -> list[AuditFinding]:
         pre_setup_tokens = (
             ".venv/bin/python",
             ".venv/Scripts/python.exe",
-            "refs/heads/main",
-            "refs/heads/master",
+            "refs/heads/",
             "Project virtualenv Python not found",
         )
         if not all(token in text for token in pre_setup_tokens):
