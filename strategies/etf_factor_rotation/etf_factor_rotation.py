@@ -56,17 +56,52 @@ FIELD_MAP = {
 
 JQ_AUTO_AUDIT_TOKEN = "manual"
 JQ_AUTO_AUDIT_DIR = "jq_auto_audit"
-EXECUTION_TIMING_MODES = (
-    "baseline",
-    "logic-2-delay-only",
-    "logic-3-live-like",
-)
-PORTFOLIO_VOL_RELIEF_MODES = (
-    "baseline",
-    "fixed_gold",
-    "dyn_marginal",
-)
-PORTFOLIO_VOL_RELIEF_DEFAULTS = {
+PARAM_DEFAULTS = {
+    "etf_pool": (
+        "159819.XSHE",
+        "513100.XSHG",
+        "518880.XSHG",
+    ),
+    "MA_long": 120,
+    "MA_long_by_etf": (20, 40, 100),
+    "MomShort": 20,
+    "MomMid": 60,
+    "MomLong": 120,
+    "w20": 0.2,
+    "w60": 0.3,
+    "w120": 0.5,
+    "TopK": 3,
+    "VolWindow": 60,
+    "annual_factor": 252,
+    "RSRS_N": 18,
+    "RSRS_M": 600,
+    "RSRS_NegativeFullCut": 1.8,
+    "RSRSMinMultiplier": 0.0,
+    "RSRSMaxMultiplier": 1.3,
+    "MomentumTiltStrength": 0.50,
+    "MomentumTiltMin": 0.70,
+    "MomentumTiltMax": 1.30,
+    "MomentumExtremeScoreStart": None,
+    "MomentumExtremeTiltCap": 1.00,
+    "RSRSTiltMin": 0.70,
+    "RSRSTiltMax": 1.30,
+    "CrowdWindow": 500,
+    "CrowdRetShort": 20,
+    "CrowdRetMid": 60,
+    "AmountMAWindow": 20,
+    "DeviationMAWindow": 20,
+    "CrowdVolWindow": 20,
+    "CrowdStart": 0.60,
+    "CrowdEnd": 0.95,
+    "MinCrowdPenalty": 0.30,
+    "CrowdStart_by_etf": (0.60, 0.60, 0.80),
+    "CrowdEnd_by_etf": None,
+    "MinCrowdPenalty_by_etf": None,
+    "CrowdRetShort_by_etf": None,
+    "CrowdRetMid_by_etf": None,
+    "PortfolioVolWindow": 40,
+    "TargetVol": 0.08,
+    "MaxPortfolioVolScale": 1.0,
     "PortfolioVolReliefMode": "dyn_marginal",
     "GoldVolReliefFraction": 0.5,
     "GoldVolReliefMaxRatio": 2.0,
@@ -74,6 +109,35 @@ PORTFOLIO_VOL_RELIEF_DEFAULTS = {
     "DynamicVolReliefMaxRatio": 1.5,
     "DynamicVolReliefMomentumWindow": 20,
     "DynamicVolReliefCovWindow": 40,
+    "MaxWeight": 0.60,
+    "MinWeight": 0.05,
+    "RebalanceThreshold": 0.03,
+    "MaxTotalWeight": 1.0,
+    "ExecutionTimingMode": "baseline",
+    "use_real_price": False,
+    "fq_mode": None,
+    "history_buffer": 100,
+    "benchmark": "000300.XSHG",
+}
+EXECUTION_TIMING_MODES = (
+    "baseline",
+    "logic-2-delay-only",
+    "logic-3-live-like",
+)
+DEFAULT_EXECUTION_TIMING_MODE = PARAM_DEFAULTS["ExecutionTimingMode"]
+PORTFOLIO_VOL_RELIEF_MODES = (
+    "baseline",
+    "fixed_gold",
+    "dyn_marginal",
+)
+PORTFOLIO_VOL_RELIEF_DEFAULTS = {
+    "PortfolioVolReliefMode": PARAM_DEFAULTS["PortfolioVolReliefMode"],
+    "GoldVolReliefFraction": PARAM_DEFAULTS["GoldVolReliefFraction"],
+    "GoldVolReliefMaxRatio": PARAM_DEFAULTS["GoldVolReliefMaxRatio"],
+    "DynamicVolReliefFraction": PARAM_DEFAULTS["DynamicVolReliefFraction"],
+    "DynamicVolReliefMaxRatio": PARAM_DEFAULTS["DynamicVolReliefMaxRatio"],
+    "DynamicVolReliefMomentumWindow": PARAM_DEFAULTS["DynamicVolReliefMomentumWindow"],
+    "DynamicVolReliefCovWindow": PARAM_DEFAULTS["DynamicVolReliefCovWindow"],
 }
 
 
@@ -191,10 +255,27 @@ def audit_event(event, context=None, **payload):
     write_file(path, json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n", append=True)
 
 
+def _copy_runtime_default(value):
+    if isinstance(value, tuple):
+        return list(value)
+    if isinstance(value, list):
+        return list(value)
+    if isinstance(value, dict):
+        return dict(value)
+    return value
+
+
 def _runtime_param(name, default):
     if not hasattr(g, name):
-        setattr(g, name, default)
+        setattr(g, name, _copy_runtime_default(default))
     return getattr(g, name)
+
+
+def _runtime_list_param(name):
+    value = _runtime_param(name, PARAM_DEFAULTS[name])
+    if value is None:
+        return None
+    return list(value)
 
 
 # ============================================================
@@ -206,52 +287,53 @@ def snapshot_params():
 
     核心计算函数通过接收 params 而非直接读 g，实现解耦。
     """
-    etf_pool = list(g.etf_pool)
-    etf_names = build_etf_display_names(etf_pool, list(g.etf_names))
+    etf_pool = _runtime_list_param("etf_pool")
+    raw_etf_names = _runtime_param("etf_names", etf_pool)
+    etf_names = build_etf_display_names(etf_pool, list(raw_etf_names))
     return {
         "etf_pool": etf_pool,
         "etf_names": etf_names,
-        "benchmark": g.benchmark,
-        "MA_long": g.MA_long,
-        "MA_long_by_etf": None if g.MA_long_by_etf is None else list(g.MA_long_by_etf),
-        "MomShort": g.MomShort,
-        "MomMid": g.MomMid,
-        "MomLong": g.MomLong,
-        "w20": g.w20,
-        "w60": g.w60,
-        "w120": g.w120,
-        "TopK": g.TopK,
-        "VolWindow": g.VolWindow,
-        "annual_factor": g.annual_factor,
-        "RSRS_N": g.RSRS_N,
-        "RSRS_M": g.RSRS_M,
-        "RSRS_NegativeFullCut": g.RSRS_NegativeFullCut,
-        "RSRSMinMultiplier": g.RSRSMinMultiplier,
-        "RSRSMaxMultiplier": g.RSRSMaxMultiplier,
-        "MomentumTiltStrength": g.MomentumTiltStrength,
-        "MomentumTiltMin": g.MomentumTiltMin,
-        "MomentumTiltMax": g.MomentumTiltMax,
-        "MomentumExtremeScoreStart": g.MomentumExtremeScoreStart,
-        "MomentumExtremeTiltCap": g.MomentumExtremeTiltCap,
-        "RSRSTiltMin": g.RSRSTiltMin,
-        "RSRSTiltMax": g.RSRSTiltMax,
-        "CrowdWindow": g.CrowdWindow,
-        "CrowdRetShort": g.CrowdRetShort,
-        "CrowdRetMid": g.CrowdRetMid,
-        "AmountMAWindow": g.AmountMAWindow,
-        "DeviationMAWindow": g.DeviationMAWindow,
-        "CrowdVolWindow": g.CrowdVolWindow,
-        "CrowdStart": g.CrowdStart,
-        "CrowdEnd": g.CrowdEnd,
-        "MinCrowdPenalty": g.MinCrowdPenalty,
-        "CrowdStart_by_etf": None if g.CrowdStart_by_etf is None else list(g.CrowdStart_by_etf),
-        "CrowdEnd_by_etf": None if g.CrowdEnd_by_etf is None else list(g.CrowdEnd_by_etf),
-        "MinCrowdPenalty_by_etf": None if g.MinCrowdPenalty_by_etf is None else list(g.MinCrowdPenalty_by_etf),
-        "CrowdRetShort_by_etf": None if g.CrowdRetShort_by_etf is None else list(g.CrowdRetShort_by_etf),
-        "CrowdRetMid_by_etf": None if g.CrowdRetMid_by_etf is None else list(g.CrowdRetMid_by_etf),
-        "PortfolioVolWindow": g.PortfolioVolWindow,
-        "TargetVol": g.TargetVol,
-        "MaxPortfolioVolScale": g.MaxPortfolioVolScale,
+        "benchmark": _runtime_param("benchmark", PARAM_DEFAULTS["benchmark"]),
+        "MA_long": _runtime_param("MA_long", PARAM_DEFAULTS["MA_long"]),
+        "MA_long_by_etf": _runtime_list_param("MA_long_by_etf"),
+        "MomShort": _runtime_param("MomShort", PARAM_DEFAULTS["MomShort"]),
+        "MomMid": _runtime_param("MomMid", PARAM_DEFAULTS["MomMid"]),
+        "MomLong": _runtime_param("MomLong", PARAM_DEFAULTS["MomLong"]),
+        "w20": _runtime_param("w20", PARAM_DEFAULTS["w20"]),
+        "w60": _runtime_param("w60", PARAM_DEFAULTS["w60"]),
+        "w120": _runtime_param("w120", PARAM_DEFAULTS["w120"]),
+        "TopK": _runtime_param("TopK", PARAM_DEFAULTS["TopK"]),
+        "VolWindow": _runtime_param("VolWindow", PARAM_DEFAULTS["VolWindow"]),
+        "annual_factor": _runtime_param("annual_factor", PARAM_DEFAULTS["annual_factor"]),
+        "RSRS_N": _runtime_param("RSRS_N", PARAM_DEFAULTS["RSRS_N"]),
+        "RSRS_M": _runtime_param("RSRS_M", PARAM_DEFAULTS["RSRS_M"]),
+        "RSRS_NegativeFullCut": _runtime_param("RSRS_NegativeFullCut", PARAM_DEFAULTS["RSRS_NegativeFullCut"]),
+        "RSRSMinMultiplier": _runtime_param("RSRSMinMultiplier", PARAM_DEFAULTS["RSRSMinMultiplier"]),
+        "RSRSMaxMultiplier": _runtime_param("RSRSMaxMultiplier", PARAM_DEFAULTS["RSRSMaxMultiplier"]),
+        "MomentumTiltStrength": _runtime_param("MomentumTiltStrength", PARAM_DEFAULTS["MomentumTiltStrength"]),
+        "MomentumTiltMin": _runtime_param("MomentumTiltMin", PARAM_DEFAULTS["MomentumTiltMin"]),
+        "MomentumTiltMax": _runtime_param("MomentumTiltMax", PARAM_DEFAULTS["MomentumTiltMax"]),
+        "MomentumExtremeScoreStart": _runtime_param("MomentumExtremeScoreStart", PARAM_DEFAULTS["MomentumExtremeScoreStart"]),
+        "MomentumExtremeTiltCap": _runtime_param("MomentumExtremeTiltCap", PARAM_DEFAULTS["MomentumExtremeTiltCap"]),
+        "RSRSTiltMin": _runtime_param("RSRSTiltMin", PARAM_DEFAULTS["RSRSTiltMin"]),
+        "RSRSTiltMax": _runtime_param("RSRSTiltMax", PARAM_DEFAULTS["RSRSTiltMax"]),
+        "CrowdWindow": _runtime_param("CrowdWindow", PARAM_DEFAULTS["CrowdWindow"]),
+        "CrowdRetShort": _runtime_param("CrowdRetShort", PARAM_DEFAULTS["CrowdRetShort"]),
+        "CrowdRetMid": _runtime_param("CrowdRetMid", PARAM_DEFAULTS["CrowdRetMid"]),
+        "AmountMAWindow": _runtime_param("AmountMAWindow", PARAM_DEFAULTS["AmountMAWindow"]),
+        "DeviationMAWindow": _runtime_param("DeviationMAWindow", PARAM_DEFAULTS["DeviationMAWindow"]),
+        "CrowdVolWindow": _runtime_param("CrowdVolWindow", PARAM_DEFAULTS["CrowdVolWindow"]),
+        "CrowdStart": _runtime_param("CrowdStart", PARAM_DEFAULTS["CrowdStart"]),
+        "CrowdEnd": _runtime_param("CrowdEnd", PARAM_DEFAULTS["CrowdEnd"]),
+        "MinCrowdPenalty": _runtime_param("MinCrowdPenalty", PARAM_DEFAULTS["MinCrowdPenalty"]),
+        "CrowdStart_by_etf": _runtime_list_param("CrowdStart_by_etf"),
+        "CrowdEnd_by_etf": _runtime_list_param("CrowdEnd_by_etf"),
+        "MinCrowdPenalty_by_etf": _runtime_list_param("MinCrowdPenalty_by_etf"),
+        "CrowdRetShort_by_etf": _runtime_list_param("CrowdRetShort_by_etf"),
+        "CrowdRetMid_by_etf": _runtime_list_param("CrowdRetMid_by_etf"),
+        "PortfolioVolWindow": _runtime_param("PortfolioVolWindow", PARAM_DEFAULTS["PortfolioVolWindow"]),
+        "TargetVol": _runtime_param("TargetVol", PARAM_DEFAULTS["TargetVol"]),
+        "MaxPortfolioVolScale": _runtime_param("MaxPortfolioVolScale", PARAM_DEFAULTS["MaxPortfolioVolScale"]),
         "PortfolioVolReliefMode": _runtime_param(
             "PortfolioVolReliefMode",
             PORTFOLIO_VOL_RELIEF_DEFAULTS["PortfolioVolReliefMode"],
@@ -280,14 +362,17 @@ def snapshot_params():
             "DynamicVolReliefCovWindow",
             PORTFOLIO_VOL_RELIEF_DEFAULTS["DynamicVolReliefCovWindow"],
         ),
-        "MaxWeight": g.MaxWeight,
-        "MinWeight": g.MinWeight,
-        "RebalanceThreshold": g.RebalanceThreshold,
-        "MaxTotalWeight": g.MaxTotalWeight,
-        "ExecutionTimingMode": g.ExecutionTimingMode,
-        "use_real_price": g.use_real_price,
-        "fq_mode": g.fq_mode,
-        "history_buffer": g.history_buffer,
+        "MaxWeight": _runtime_param("MaxWeight", PARAM_DEFAULTS["MaxWeight"]),
+        "MinWeight": _runtime_param("MinWeight", PARAM_DEFAULTS["MinWeight"]),
+        "RebalanceThreshold": _runtime_param("RebalanceThreshold", PARAM_DEFAULTS["RebalanceThreshold"]),
+        "MaxTotalWeight": _runtime_param("MaxTotalWeight", PARAM_DEFAULTS["MaxTotalWeight"]),
+        "ExecutionTimingMode": _runtime_param(
+            "ExecutionTimingMode",
+            DEFAULT_EXECUTION_TIMING_MODE,
+        ),
+        "use_real_price": _runtime_param("use_real_price", PARAM_DEFAULTS["use_real_price"]),
+        "fq_mode": _runtime_param("fq_mode", PARAM_DEFAULTS["fq_mode"]),
+        "history_buffer": _runtime_param("history_buffer", PARAM_DEFAULTS["history_buffer"]),
         "audit_token": getattr(g, "audit_token", ""),
         "audit_path": getattr(g, "audit_path", ""),
     }
@@ -512,96 +597,92 @@ def set_parameter(context):
     """
 
     # ---- 资产池 ----
-    g.etf_pool = [
-        '159819.XSHE',
-        '513100.XSHG',
-        '518880.XSHG',
-    ]
+    g.etf_pool = _copy_runtime_default(PARAM_DEFAULTS["etf_pool"])
     g.etf_names = load_etf_display_names(g.etf_pool)
 
     # ---- 趋势门槛 ----
-    g.MA_long = 120
-    g.MA_long_by_etf = [20, 40, 100]
+    g.MA_long = PARAM_DEFAULTS["MA_long"]
+    g.MA_long_by_etf = _copy_runtime_default(PARAM_DEFAULTS["MA_long_by_etf"])
 
     # ---- 动量选择 ----
-    g.MomShort = 20
-    g.MomMid = 60
-    g.MomLong = 120
-    g.w20 = 0.2
-    g.w60 = 0.3
-    g.w120 = 0.5
-    g.TopK = 3
+    g.MomShort = PARAM_DEFAULTS["MomShort"]
+    g.MomMid = PARAM_DEFAULTS["MomMid"]
+    g.MomLong = PARAM_DEFAULTS["MomLong"]
+    g.w20 = PARAM_DEFAULTS["w20"]
+    g.w60 = PARAM_DEFAULTS["w60"]
+    g.w120 = PARAM_DEFAULTS["w120"]
+    g.TopK = PARAM_DEFAULTS["TopK"]
 
     # ---- 风险平价 ----
-    g.VolWindow = 60
-    g.annual_factor = 252
+    g.VolWindow = PARAM_DEFAULTS["VolWindow"]
+    g.annual_factor = PARAM_DEFAULTS["annual_factor"]
 
     # ---- RSRS 修正 ----
-    g.RSRS_N = 18        # 回归窗口
-    g.RSRS_M = 600       # 标准化窗口
-    g.RSRS_NegativeFullCut = 1.8
-    g.RSRSMinMultiplier = 0.0
-    g.RSRSMaxMultiplier = 1.3
+    g.RSRS_N = PARAM_DEFAULTS["RSRS_N"]        # 回归窗口
+    g.RSRS_M = PARAM_DEFAULTS["RSRS_M"]        # 标准化窗口
+    g.RSRS_NegativeFullCut = PARAM_DEFAULTS["RSRS_NegativeFullCut"]
+    g.RSRSMinMultiplier = PARAM_DEFAULTS["RSRSMinMultiplier"]
+    g.RSRSMaxMultiplier = PARAM_DEFAULTS["RSRSMaxMultiplier"]
 
     # ---- 动量倾斜（资产间相对信号） ----
-    g.MomentumTiltStrength = 0.50
-    g.MomentumTiltMin = 0.70
-    g.MomentumTiltMax = 1.30
-    g.MomentumExtremeScoreStart = None
-    g.MomentumExtremeTiltCap = 1.00
+    g.MomentumTiltStrength = PARAM_DEFAULTS["MomentumTiltStrength"]
+    g.MomentumTiltMin = PARAM_DEFAULTS["MomentumTiltMin"]
+    g.MomentumTiltMax = PARAM_DEFAULTS["MomentumTiltMax"]
+    g.MomentumExtremeScoreStart = PARAM_DEFAULTS["MomentumExtremeScoreStart"]
+    g.MomentumExtremeTiltCap = PARAM_DEFAULTS["MomentumExtremeTiltCap"]
 
     # ---- RSRS 倾斜（资产间相对信号） ----
-    g.RSRSTiltMin = 0.70
-    g.RSRSTiltMax = 1.30
+    g.RSRSTiltMin = PARAM_DEFAULTS["RSRSTiltMin"]
+    g.RSRSTiltMax = PARAM_DEFAULTS["RSRSTiltMax"]
 
     # ---- 拥挤度惩罚 ----
-    g.CrowdWindow = 500
-    g.CrowdRetShort = 20
-    g.CrowdRetMid = 60
-    g.AmountMAWindow = 20
-    g.DeviationMAWindow = 20
-    g.CrowdVolWindow = 20
-    g.CrowdStart = 0.60
-    g.CrowdEnd = 0.95
-    g.MinCrowdPenalty = 0.30
-    g.CrowdStart_by_etf = [0.60, 0.60, 0.80]  # AI=0.60, 纳指=0.60, 黄金=0.80（AB 验证：2026-05-15）
-    g.CrowdEnd_by_etf = None         # 列表或 None，None 时使用全局 CrowdEnd
-    g.MinCrowdPenalty_by_etf = None  # 列表或 None，None 时使用全局 MinCrowdPenalty
-    g.CrowdRetShort_by_etf = None    # 列表或 None，None 时使用全局 CrowdRetShort
-    g.CrowdRetMid_by_etf = None      # 列表或 None，None 时使用全局 CrowdRetMid
+    g.CrowdWindow = PARAM_DEFAULTS["CrowdWindow"]
+    g.CrowdRetShort = PARAM_DEFAULTS["CrowdRetShort"]
+    g.CrowdRetMid = PARAM_DEFAULTS["CrowdRetMid"]
+    g.AmountMAWindow = PARAM_DEFAULTS["AmountMAWindow"]
+    g.DeviationMAWindow = PARAM_DEFAULTS["DeviationMAWindow"]
+    g.CrowdVolWindow = PARAM_DEFAULTS["CrowdVolWindow"]
+    g.CrowdStart = PARAM_DEFAULTS["CrowdStart"]
+    g.CrowdEnd = PARAM_DEFAULTS["CrowdEnd"]
+    g.MinCrowdPenalty = PARAM_DEFAULTS["MinCrowdPenalty"]
+    g.CrowdStart_by_etf = _copy_runtime_default(PARAM_DEFAULTS["CrowdStart_by_etf"])
+    g.CrowdEnd_by_etf = PARAM_DEFAULTS["CrowdEnd_by_etf"]
+    g.MinCrowdPenalty_by_etf = PARAM_DEFAULTS["MinCrowdPenalty_by_etf"]
+    g.CrowdRetShort_by_etf = PARAM_DEFAULTS["CrowdRetShort_by_etf"]
+    g.CrowdRetMid_by_etf = PARAM_DEFAULTS["CrowdRetMid_by_etf"]
 
     # ---- 组合波动率控制 ----
-    g.PortfolioVolWindow = 40
-    g.TargetVol = 0.08
-    g.MaxPortfolioVolScale = 1.0
-    g.PortfolioVolReliefMode = "dyn_marginal"
-    g.GoldVolReliefFraction = 0.5
-    g.GoldVolReliefMaxRatio = 2.0
-    g.DynamicVolReliefFraction = 1.0
-    g.DynamicVolReliefMaxRatio = 1.5
-    g.DynamicVolReliefMomentumWindow = 20
-    g.DynamicVolReliefCovWindow = 40
+    g.PortfolioVolWindow = PARAM_DEFAULTS["PortfolioVolWindow"]
+    g.TargetVol = PARAM_DEFAULTS["TargetVol"]
+    g.MaxPortfolioVolScale = PARAM_DEFAULTS["MaxPortfolioVolScale"]
+    g.PortfolioVolReliefMode = PARAM_DEFAULTS["PortfolioVolReliefMode"]
+    g.GoldVolReliefFraction = PARAM_DEFAULTS["GoldVolReliefFraction"]
+    g.GoldVolReliefMaxRatio = PARAM_DEFAULTS["GoldVolReliefMaxRatio"]
+    g.DynamicVolReliefFraction = PARAM_DEFAULTS["DynamicVolReliefFraction"]
+    g.DynamicVolReliefMaxRatio = PARAM_DEFAULTS["DynamicVolReliefMaxRatio"]
+    g.DynamicVolReliefMomentumWindow = PARAM_DEFAULTS["DynamicVolReliefMomentumWindow"]
+    g.DynamicVolReliefCovWindow = PARAM_DEFAULTS["DynamicVolReliefCovWindow"]
 
     # ---- 仓位与交易约束 ----
-    g.MaxWeight = 0.60
-    g.MinWeight = 0.05
-    g.RebalanceThreshold = 0.03
-    g.MaxTotalWeight = 1.0
-    g.ExecutionTimingMode = "baseline"
+    g.MaxWeight = PARAM_DEFAULTS["MaxWeight"]
+    g.MinWeight = PARAM_DEFAULTS["MinWeight"]
+    g.RebalanceThreshold = PARAM_DEFAULTS["RebalanceThreshold"]
+    g.MaxTotalWeight = PARAM_DEFAULTS["MaxTotalWeight"]
+    g.ExecutionTimingMode = DEFAULT_EXECUTION_TIMING_MODE
 
     # ---- 数据与基准 ----
     # 复权模式：fq='pre' 在 FQ A/B 对比测试中证实对场内基金会
     # 导致 get_price 返回空数据（2025-04~2026-04 区间复现）。
     # 故默认关闭复权。参考 FQ comparison: R2/backtest_runs/*/report/fq-comparison.md
-    g.use_real_price = False
-    g.fq_mode = None        # 不复权（场内基金默认）
+    g.use_real_price = PARAM_DEFAULTS["use_real_price"]
+    g.fq_mode = PARAM_DEFAULTS["fq_mode"]        # 不复权（场内基金默认）
     ma_long_max = max(g.MA_long_by_etf) if g.MA_long_by_etf else g.MA_long
     g.live_days = max(
         ma_long_max, g.MomLong, g.RSRS_M,
         g.CrowdWindow, g.PortfolioVolWindow
     ) + 50
-    g.history_buffer = 100
-    g.benchmark = '000300.XSHG'
+    g.history_buffer = PARAM_DEFAULTS["history_buffer"]
+    g.benchmark = PARAM_DEFAULTS["benchmark"]
     g.audit_token = JQ_AUTO_AUDIT_TOKEN
     g.audit_path = "%s/%s.jsonl" % (JQ_AUTO_AUDIT_DIR, g.audit_token)
     g.audit_seq = 0
