@@ -1641,6 +1641,17 @@ def _submit_delegation_attempt_metadata_failures(
                 detail=f"{role} fragment delegation_attempt.result is invalid",
             )
         ]
+    if result == "spawn_failed":
+        return [
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail=(
+                    f"{role} fragment delegation_attempt.result=spawn_failed "
+                    "cannot satisfy local review; diagnose and retry"
+                ),
+            )
+        ]
     reason = _single_line_text(delegation_attempt.get("reason"))
     if (
         result in contract.fragment_delegation_attempt_reason_required_results
@@ -1665,6 +1676,22 @@ def _submit_delegation_attempt_metadata_failures(
                 detail=(
                     f"{role} fragment delegation_attempt.reason cannot be "
                     "authorization-missing"
+                ),
+            )
+        ]
+    tool_unavailable_invalid_reason_tokens = (
+        contract.fragment_delegation_attempt_tool_unavailable_invalid_reason_tokens
+    )
+    if result == "tool_unavailable" and any(
+        token in normalized_reason for token in tool_unavailable_invalid_reason_tokens
+    ):
+        return [
+            pr_flow_contract.SubmitFailure(
+                check="local-review",
+                source=source,
+                detail=(
+                    f"{role} fragment delegation_attempt.reason cannot describe "
+                    "a spawned review failure; diagnose and retry"
                 ),
             )
         ]
@@ -1801,6 +1828,10 @@ def _review_fragment_handoff_state(role: str, detail: str) -> str:
         or "findings must be a list" in detail
     ):
         return "invalid"
+    if "spawned review failure" in detail:
+        return "invalid"
+    if "delegation_attempt.result=spawn_failed" in detail:
+        return "spawn_failed"
     return ""
 
 

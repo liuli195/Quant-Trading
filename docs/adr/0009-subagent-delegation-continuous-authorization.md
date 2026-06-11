@@ -12,7 +12,7 @@ Accepted
 
 在本仓库中，`AGENTS.md` 和协作规则中的“优先派发子 agent”同时记录用户对本仓库的持续显式授权。凡仓库规则要求或建议派发子 agent、`sub-agents`、`delegation` 或 `parallel agent work` 的场景，均视为已满足子 agent 工具的显式授权前提。
 
-PR Flow 的 Standards / Spec review fragment 必须用 `delegation_attempt` 记录派发结果。允许的非派发结果只有 `tool_unavailable` 和 `spawn_failed`；不得用 `user_not_authorized`、`permission_not_allowed`、`explicit_authorization_missing`、`policy_disallowed` 表示授权缺失，因为授权已由本 ADR 和 `AGENTS.md` 持续提供。
+PR Flow 的 Standards / Spec review fragment 必须用 `delegation_attempt` 记录派发结果。允许的非 `spawned` 结果只有 `tool_unavailable` 和 `spawn_failed`；`tool_unavailable` 表示工具未注册、不可用或不可调用，`spawn_failed` 表示已派发但没有可用 review 结论且不能满足本地 review evidence。不得用 `user_not_authorized`、`permission_not_allowed`、`explicit_authorization_missing`、`policy_disallowed` 表示授权缺失，因为授权已由本 ADR 和 `AGENTS.md` 持续提供。
 
 该授权只覆盖子 agent 派发本身，不覆盖直写主干、绕过官方 Codex required check、跳过 GitHub Issue 关联、破坏性操作、权限提升、force push、reset 或其他需要单独授权的动作。
 

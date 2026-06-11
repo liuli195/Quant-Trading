@@ -61,6 +61,9 @@ class PRFlowContract:
     fragment_delegation_attempt_results: tuple[str, ...]
     fragment_delegation_attempt_reason_required_results: tuple[str, ...]
     fragment_delegation_attempt_invalid_reason_tokens: tuple[str, ...]
+    fragment_delegation_attempt_tool_unavailable_invalid_reason_tokens: tuple[
+        str, ...
+    ]
     submit_status_fields: tuple[str, ...]
     submit_failure_fields: tuple[str, ...]
     blocking_severities: tuple[str, ...]
@@ -200,6 +203,13 @@ def load_contract(repo_root: str | Path = ".") -> PRFlowContract:
         ),
         fragment_delegation_attempt_invalid_reason_tokens=_string_tuple(
             fragment_delegation_attempt.get("invalid_reason_tokens")
+        ),
+        fragment_delegation_attempt_tool_unavailable_invalid_reason_tokens=(
+            _string_tuple(
+                fragment_delegation_attempt.get(
+                    "tool_unavailable_invalid_reason_tokens"
+                )
+            )
         ),
         submit_status_fields=submit_status_fields,
         submit_failure_fields=_string_tuple(status.get("failure_fields")),
