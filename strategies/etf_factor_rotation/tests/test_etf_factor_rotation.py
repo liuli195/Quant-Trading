@@ -8,6 +8,8 @@ ETF 多因子轮动策略 — 单元测试
   - 集成测试（weekly_check 完整流程）
 """
 
+import ast
+import inspect
 import json
 import math
 from types import SimpleNamespace
@@ -2765,6 +2767,43 @@ class TestSnapshotParams:
         assert params["DynamicVolReliefMomentumWindow"] == 20
         assert params["DynamicVolReliefCovWindow"] == 40
         assert mock_g.PortfolioVolReliefMode == "dyn_marginal"
+
+    def test_snapshot_backfills_missing_execution_timing_mode(self, strategy, mock_g):
+        """Live simulation code replacement can keep an older g without new attrs."""
+        delattr(mock_g, "ExecutionTimingMode")
+
+        params = strategy.snapshot_params()
+
+        assert params["ExecutionTimingMode"] == "baseline"
+        assert mock_g.ExecutionTimingMode == "baseline"
+
+    def test_snapshot_backfills_all_missing_runtime_params(self, strategy, mock_g):
+        """新增策略参数必须能兼容模拟盘保留的旧 g。"""
+        for name in strategy.PARAM_DEFAULTS:
+            if hasattr(mock_g, name):
+                delattr(mock_g, name)
+        delattr(mock_g, "etf_names")
+
+        params = strategy.snapshot_params()
+
+        for name, default in strategy.PARAM_DEFAULTS.items():
+            expected = list(default) if isinstance(default, tuple) else default
+            assert params[name] == expected
+            assert getattr(mock_g, name) == expected
+        assert mock_g.etf_names == params["etf_pool"]
+
+    def test_snapshot_params_does_not_read_g_attrs_directly(self, strategy):
+        """所有 g 参数读取必须经过 _runtime_param 兼容旧模拟盘。"""
+        tree = ast.parse(inspect.getsource(strategy.snapshot_params))
+        direct_reads = sorted(
+            node.attr
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "g"
+            and isinstance(node.ctx, ast.Load)
+        )
+        assert direct_reads == []
 
     def test_snapshot_list_values_are_copies(self, strategy, mock_g):
         params = strategy.snapshot_params()
