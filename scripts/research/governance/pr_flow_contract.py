@@ -55,6 +55,12 @@ class PRFlowContract:
     fragment_security_review_fields: tuple[str, ...]
     fragment_security_review_default_tool: str
     fragment_security_review_fallback_required_when_tool_not: str
+    fragment_delegation_attempt_fields: tuple[str, ...]
+    fragment_delegation_attempt_authorization_basis: str
+    fragment_delegation_attempt_tool: str
+    fragment_delegation_attempt_results: tuple[str, ...]
+    fragment_delegation_attempt_reason_required_results: tuple[str, ...]
+    fragment_delegation_attempt_invalid_reason_tokens: tuple[str, ...]
     submit_status_fields: tuple[str, ...]
     submit_failure_fields: tuple[str, ...]
     blocking_severities: tuple[str, ...]
@@ -106,6 +112,10 @@ def load_contract(repo_root: str | Path = ".") -> PRFlowContract:
     fragment_security_review = _mapping(
         fragment.get("security_review"),
         "fragment.security_review",
+    )
+    fragment_delegation_attempt = _mapping(
+        fragment.get("delegation_attempt"),
+        "fragment.delegation_attempt",
     )
     status = _mapping(payload.get("submit_status"), "submit_status")
     severity = _mapping(payload.get("severity"), "severity")
@@ -172,6 +182,24 @@ def load_contract(repo_root: str | Path = ".") -> PRFlowContract:
         ),
         fragment_security_review_fallback_required_when_tool_not=_single_line(
             fragment_security_review.get("fallback_reason_required_when_tool_not")
+        ),
+        fragment_delegation_attempt_fields=_string_tuple(
+            fragment_delegation_attempt.get("fields")
+        ),
+        fragment_delegation_attempt_authorization_basis=_single_line(
+            fragment_delegation_attempt.get("authorization_basis")
+        ),
+        fragment_delegation_attempt_tool=_single_line(
+            fragment_delegation_attempt.get("tool")
+        ),
+        fragment_delegation_attempt_results=_string_tuple(
+            fragment_delegation_attempt.get("results")
+        ),
+        fragment_delegation_attempt_reason_required_results=_string_tuple(
+            fragment_delegation_attempt.get("reason_required_results")
+        ),
+        fragment_delegation_attempt_invalid_reason_tokens=_string_tuple(
+            fragment_delegation_attempt.get("invalid_reason_tokens")
         ),
         submit_status_fields=submit_status_fields,
         submit_failure_fields=_string_tuple(status.get("failure_fields")),

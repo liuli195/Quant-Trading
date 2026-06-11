@@ -177,6 +177,119 @@ def run_authorized_history_rewrite(
     return int(result.returncode)
 
 
+def run_authorized_main(
+    command: Sequence[str],
+    *,
+    action: str,
+    reason: str,
+    environ: Mapping[str, str] | None = None,
+    run: Callable[[Sequence[str], Mapping[str, str]], int] | None = None,
+) -> int:
+    """Run one Git command with main authorization scoped to the child."""
+
+    normalized = [item for item in command if item]
+    if normalized and normalized[0] == "--":
+        normalized = normalized[1:]
+    if not normalized:
+        raise ValueError("authorized main command is required")
+    executable = normalized[0].lower()
+    if executable not in {"git", "git.exe"}:
+        raise ValueError("authorized main wrapper only runs git commands")
+    normalized_reason = reason.strip()
+    if action == "direct-write":
+        flag_env = DIRECT_MAIN_WRITE_ENV
+        reason_env = DIRECT_MAIN_WRITE_REASON_ENV
+    elif action == "ref-sync":
+        flag_env = REF_UPDATE_BYPASS_ENV
+        reason_env = REF_UPDATE_REASON_ENV
+    else:
+        raise ValueError("authorized main action must be direct-write or ref-sync")
+    _validate_authorized_main_command(normalized, action=action)
+    if not normalized_reason:
+        raise ValueError(f"{reason_env} is required")
+    parent_env = dict(environ if environ is not None else os.environ)
+    child_env = dict(parent_env)
+    for name in _MAIN_AUTH_ENV_NAMES:
+        child_env.pop(name, None)
+    child_env[flag_env] = "1"
+    child_env[reason_env] = normalized_reason
+    if run is not None:
+        return run(normalized, child_env)
+    result = subprocess.run(normalized, env=child_env, check=False)
+    return int(result.returncode)
+
+
+_MAIN_AUTH_ENV_NAMES = {
+    BYPASS_ENV,
+    BYPASS_REASON_ENV,
+    DIRECT_MAIN_WRITE_ENV,
+    DIRECT_MAIN_WRITE_REASON_ENV,
+    REF_UPDATE_BYPASS_ENV,
+    REF_UPDATE_REASON_ENV,
+}
+
+
+def _validate_authorized_main_command(command: Sequence[str], *, action: str) -> None:
+    lowered = [item.lower() for item in command]
+    parsed = _parse_git_command(lowered)
+    if parsed is None:
+        raise ValueError("authorized main wrapper does not allow git global options")
+    subcommand, args = parsed
+    if action == "ref-sync" and [lowered[0], subcommand, *args] != [
+        lowered[0],
+        "merge",
+        "--ff-only",
+        "origin/main",
+    ]:
+        raise ValueError("ref-sync only runs git merge --ff-only origin/main")
+    if _authorized_main_command_is_destructive(subcommand, args):
+        raise ValueError("authorized main wrapper does not allow destructive git commands")
+
+
+def _parse_git_command(lowered: Sequence[str]) -> tuple[str, list[str]] | None:
+    if len(lowered) < 2:
+        return None
+    subcommand = lowered[1]
+    if subcommand.startswith("-"):
+        return None
+    return subcommand, list(lowered[2:])
+
+
+def _authorized_main_command_is_destructive(subcommand: str, args: Sequence[str]) -> bool:
+    if subcommand in {"reset", "rebase", "update-ref"}:
+        return True
+    if subcommand == "push":
+        return any(_authorized_main_push_arg_is_destructive(arg) for arg in args)
+    if subcommand == "branch":
+        return any(arg in {"-d", "-D", "--delete", "-m", "-M", "--move"} for arg in args)
+    if subcommand == "checkout":
+        return any(arg in {"-B", "-b"} or arg.startswith("-B") for arg in args)
+    if subcommand == "switch":
+        return any(arg in {"-C", "-c"} or arg.startswith("-C") for arg in args)
+    return False
+
+
+def _authorized_main_push_arg_is_destructive(arg: str) -> bool:
+    if arg.startswith(("+", ":")):
+        return True
+    if arg.startswith("--"):
+        option = arg.split("=", 1)[0]
+        destructive_long_options = (
+            "--force",
+            "--force-with-lease",
+            "--delete",
+            "--mirror",
+            "--prune",
+        )
+        return option.startswith("--force") or (
+            len(option) > 2
+            and any(item.startswith(option) for item in destructive_long_options)
+        )
+    if arg.startswith("-"):
+        return any(item in arg[1:] for item in {"f", "d"})
+    return False
+
+
 def _remote_head_for_branch(branch: str, *, remote_heads: Mapping[str, str | None] | None = None) -> str | None:
     if remote_heads is not None:
         return remote_heads.get(branch)
@@ -243,6 +356,18 @@ def build_parser() -> argparse.ArgumentParser:
     allow_history_rewrite.add_argument("--reason", required=True)
     allow_history_rewrite.add_argument("git_command", nargs=argparse.REMAINDER)
     allow_history_rewrite.set_defaults(func=_cmd_allow_history_rewrite)
+    authorize_main = subparsers.add_parser(
+        "authorize-main",
+        help="run one Git command with scoped main-branch authorization",
+    )
+    authorize_main.add_argument(
+        "--action",
+        choices=("direct-write", "ref-sync"),
+        required=True,
+    )
+    authorize_main.add_argument("--reason", required=True)
+    authorize_main.add_argument("git_command", nargs=argparse.REMAINDER)
+    authorize_main.set_defaults(func=_cmd_authorize_main)
     return parser
 
 
@@ -260,8 +385,9 @@ def _cmd_pre_push(_args: argparse.Namespace) -> int:
         [
             "Create a feature branch and open a PR instead.",
             (
-                f"Explicit direct-main path: set {DIRECT_MAIN_WRITE_ENV}=1 and "
-                f"{DIRECT_MAIN_WRITE_REASON_ENV}=<reason> for this command."
+                "Explicit direct-main path: run "
+                "branch_protection authorize-main --action direct-write "
+                "--reason <reason> -- git <main-command>."
             ),
         ]
     )
@@ -284,13 +410,15 @@ def _cmd_reference_transaction(_args: argparse.Namespace) -> int:
         "Local branch history rewrite is blocked by default; use an additional commit instead.",
         "Do not merge feature branches into main/master locally; open a PR instead.",
         (
-            f"Explicit direct-main path: set {DIRECT_MAIN_WRITE_ENV}=1 and "
-            f"{DIRECT_MAIN_WRITE_REASON_ENV}=<reason>; only fast-forward local updates are allowed."
+            "Explicit direct-main path: run "
+            "branch_protection authorize-main --action direct-write "
+            "--reason <reason> -- git <main-command>."
         ),
         "After a remote PR merge, local main/master may only fast-forward to refs/remotes/origin/<branch>.",
         (
-            f"Audited sync bypass: set {REF_UPDATE_BYPASS_ENV}=1 and "
-            f"{REF_UPDATE_REASON_ENV}=<reason> for this command."
+            "Audited sync bypass: run "
+            "branch_protection authorize-main --action ref-sync "
+            "--reason <reason> -- git merge --ff-only origin/main."
         ),
         (
             "Single-command history rewrite exception: run "
@@ -310,6 +438,18 @@ def _cmd_reference_transaction(_args: argparse.Namespace) -> int:
 def _cmd_allow_history_rewrite(args: argparse.Namespace) -> int:
     try:
         return run_authorized_history_rewrite(args.git_command, args.reason)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+
+def _cmd_authorize_main(args: argparse.Namespace) -> int:
+    try:
+        return run_authorized_main(
+            args.git_command,
+            action=args.action,
+            reason=args.reason,
+        )
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+import io
 import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 
 import pytest
 import yaml
@@ -12,7 +14,9 @@ import yaml
 from scripts.research.governance.branch_protection import (
     check_pre_push_input,
     check_reference_transaction_input,
+    main as branch_protection_main,
     run_authorized_history_rewrite,
+    run_authorized_main,
 )
 from scripts.research.governance.codex_review_monitor import (
     build_monitor_report,
@@ -1471,7 +1475,7 @@ def _write_minimal_repo(root: Path) -> None:
         "进入主干须通过 PR；如用户显式授权，可以按直写主干链路直接提交和推送主干；"
         "禁止把功能分支本地合入 main，细则见 docs/rules/pr-workflow.md。"
         "分支名使用 ASCII 模板，提交说明使用简体中文。"
-        "效率：所有任务默认优先派发子 agent，主会话负责编排。"
+        "效率：所有任务默认优先派发子 agent，sub-agents delegation parallel agent work，主会话负责编排。"
         "Markdown 内部文件引用使用可点击链接和 pathref。"
         "每次任务后清理临时产物。\n\n"
         "## Review 指南\n\n"
@@ -1490,7 +1494,7 @@ def _write_minimal_repo(root: Path) -> None:
         ".githooks/setup-python.sh "
         ".\\.venv\\Scripts\\python.exe .venv/bin/python PYTHONUTF8 PYTHONIOENCODING "
         "Python 命令默认必须提权使用项目 `.venv`，不改用系统 Python "
-        "gh pr checks `gh` CLI 默认提权执行",
+        "gh pr checks `gh` CLI 默认提权执行 authorize-main",
         encoding="utf-8",
     )
     (root / "docs/rules/environments.md").write_text(
@@ -1699,14 +1703,15 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / "scripts/research/governance/README.md").write_text(
         "docs/rules/index.md docs/adr/index.md scripts.research.governance gate PR Flow / review-status "
-        "git fetch origin main git merge --ff-only origin/main "
+        "authorize-main git fetch origin main git merge --ff-only origin/main "
         "git branch -d <branch> remote branch deletion by GitHub\n",
         encoding="utf-8",
     )
     (root / "docs/rules/pr-workflow.md").write_text(
-        "所有进入主干的改动必须通过 PR\n直写主干 ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON\n"
+        "所有进入主干的改动必须通过 PR\n直写主干 authorize-main ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON\n"
         "禁止把功能分支本地合入\n"
         "git fetch origin main\ngit merge --ff-only origin/main\n"
+        "git push -u origin HEAD:<branch>\ndelegation_attempt spawn_agent\n"
         "git branch -d <branch>\n远端分支删除交给 GitHub\n",
         encoding="utf-8",
     )
@@ -1717,7 +1722,7 @@ def _write_minimal_repo(root: Path) -> None:
     )
     (root / "docs/rules/governance.md").write_text(
         ".githooks/reference-transaction ALLOW_MAIN_REF_UPDATE MAIN_REF_UPDATE_REASON "
-        "ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON PR Flow / review-status "
+        "ALLOW_DIRECT_MAIN_WRITE DIRECT_MAIN_WRITE_REASON authorize-main git push -u origin HEAD:<branch> PR Flow / review-status "
         "Research Governance / verify-full PR Flow / evidence PR Evidence JSON issues "
         "no-Issue PR Evidence minimum "
         "review_mode=complete official Codex required check "
@@ -1799,6 +1804,8 @@ def _write_minimal_repo(root: Path) -> None:
                 "reviewers:",
                 "review_mode=complete",
                 "review_mode=partial",
+                "delegation_attempt",
+                "spawn_agent",
                 "security_review",
                 "本地安全 review",
                 "codex-security",
@@ -3393,6 +3400,24 @@ def test_pre_push_branch_protection_requires_direct_main_reason() -> None:
     assert violations == ["main"]
 
 
+def test_pre_push_error_message_recommends_authorize_main(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys,
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        io.StringIO("refs/heads/main abc123 refs/heads/main def456\n"),
+    )
+
+    code = branch_protection_main(["pre-push"])
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert "authorize-main --action direct-write" in captured.err
+    assert "set ALLOW_DIRECT_MAIN_WRITE" not in captured.err
+
+
 def test_reference_transaction_branch_protection_blocks_main_update() -> None:
     violations = check_reference_transaction_input(
         "0" * 40 + " " + "1" * 40 + " refs/heads/main\n",
@@ -3553,6 +3578,25 @@ def test_reference_transaction_branch_protection_blocks_audited_non_fast_forward
     assert violations == ["main"]
 
 
+def test_reference_transaction_error_message_recommends_authorize_main(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys,
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        io.StringIO("0" * 40 + " " + "1" * 40 + " refs/heads/main\n"),
+    )
+
+    code = branch_protection_main(["reference-transaction"])
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert "authorize-main --action direct-write" in captured.err
+    assert "authorize-main --action ref-sync" in captured.err
+    assert "set ALLOW_MAIN_REF_UPDATE" not in captured.err
+
+
 def test_authorized_history_rewrite_wrapper_scopes_env_to_child() -> None:
     captured: dict[str, object] = {}
     parent_env = {"EXISTING": "1"}
@@ -3579,6 +3623,268 @@ def test_authorized_history_rewrite_wrapper_scopes_env_to_child() -> None:
     )
     assert "ALLOW_BRANCH_HISTORY_REWRITE" not in parent_env
     assert "BRANCH_HISTORY_REWRITE_REASON" not in parent_env
+
+
+def test_authorized_main_direct_write_wrapper_scopes_env_to_child() -> None:
+    captured: dict[str, object] = {}
+    parent_env = {"EXISTING": "1"}
+
+    def fake_run(command: Sequence[str], env: Mapping[str, str]) -> int:
+        captured["command"] = list(command)
+        captured["env"] = dict(env)
+        return 9
+
+    code = run_authorized_main(
+        ["git", "commit", "--allow-empty", "-m", "user approved main fix"],
+        action="direct-write",
+        reason="user approved direct main fix",
+        environ=parent_env,
+        run=fake_run,
+    )
+
+    assert code == 9
+    assert captured["command"] == [
+        "git",
+        "commit",
+        "--allow-empty",
+        "-m",
+        "user approved main fix",
+    ]
+    child_env = captured["env"]
+    assert isinstance(child_env, dict)
+    assert child_env["ALLOW_DIRECT_MAIN_WRITE"] == "1"
+    assert child_env["DIRECT_MAIN_WRITE_REASON"] == "user approved direct main fix"
+    assert "ALLOW_DIRECT_MAIN_WRITE" not in parent_env
+    assert "DIRECT_MAIN_WRITE_REASON" not in parent_env
+
+
+def test_authorized_main_ref_sync_wrapper_scopes_env_to_child() -> None:
+    captured: dict[str, object] = {}
+    parent_env = {"EXISTING": "1"}
+
+    def fake_run(command: Sequence[str], env: Mapping[str, str]) -> int:
+        captured["command"] = list(command)
+        captured["env"] = dict(env)
+        return 0
+
+    code = run_authorized_main(
+        ["--", "git", "merge", "--ff-only", "origin/main"],
+        action="ref-sync",
+        reason="sync main after merged PR",
+        environ=parent_env,
+        run=fake_run,
+    )
+
+    assert code == 0
+    assert captured["command"] == ["git", "merge", "--ff-only", "origin/main"]
+    child_env = captured["env"]
+    assert isinstance(child_env, dict)
+    assert child_env["ALLOW_MAIN_REF_UPDATE"] == "1"
+    assert child_env["MAIN_REF_UPDATE_REASON"] == "sync main after merged PR"
+    assert "ALLOW_MAIN_REF_UPDATE" not in parent_env
+    assert "MAIN_REF_UPDATE_REASON" not in parent_env
+
+
+def test_authorized_main_wrapper_removes_stale_parent_main_authorization() -> None:
+    captured: dict[str, object] = {}
+    parent_env = {
+        "ALLOW_DIRECT_MAIN_WRITE": "1",
+        "DIRECT_MAIN_WRITE_REASON": "stale parent shell authorization",
+        "ALLOW_PROTECTED_BRANCH_PUSH": "1",
+        "PROTECTED_BRANCH_PUSH_REASON": "stale legacy bypass",
+    }
+
+    def fake_run(command: Sequence[str], env: Mapping[str, str]) -> int:
+        captured["command"] = list(command)
+        captured["env"] = dict(env)
+        return 0
+
+    code = run_authorized_main(
+        ["git", "merge", "--ff-only", "origin/main"],
+        action="ref-sync",
+        reason="sync main after merged PR",
+        environ=parent_env,
+        run=fake_run,
+    )
+
+    assert code == 0
+    child_env = captured["env"]
+    assert isinstance(child_env, dict)
+    assert child_env["ALLOW_MAIN_REF_UPDATE"] == "1"
+    assert child_env["MAIN_REF_UPDATE_REASON"] == "sync main after merged PR"
+    assert "ALLOW_DIRECT_MAIN_WRITE" not in child_env
+    assert "DIRECT_MAIN_WRITE_REASON" not in child_env
+    assert "ALLOW_PROTECTED_BRANCH_PUSH" not in child_env
+    assert "PROTECTED_BRANCH_PUSH_REASON" not in child_env
+    assert parent_env["ALLOW_DIRECT_MAIN_WRITE"] == "1"
+
+
+def test_authorized_main_wrapper_rejects_missing_reason() -> None:
+    with pytest.raises(ValueError, match="DIRECT_MAIN_WRITE_REASON is required"):
+        run_authorized_main(
+            ["git", "commit", "--allow-empty", "-m", "main fix"],
+            action="direct-write",
+            reason=" ",
+        )
+
+
+def test_authorized_main_wrapper_rejects_non_git_command() -> None:
+    with pytest.raises(ValueError, match="only runs git commands"):
+        run_authorized_main(
+            ["pwsh", "-NoProfile", "-Command", "git status"],
+            action="ref-sync",
+            reason="sync main after merged PR",
+        )
+
+
+def test_authorized_main_wrapper_rejects_destructive_git_command() -> None:
+    called = False
+
+    def fake_run(_command: Sequence[str], _env: Mapping[str, str]) -> int:
+        nonlocal called
+        called = True
+        return 0
+
+    with pytest.raises(ValueError, match="does not allow destructive git commands"):
+        run_authorized_main(
+            ["git", "reset", "--hard", "origin/main"],
+            action="direct-write",
+            reason="user approved direct main fix",
+            run=fake_run,
+        )
+    assert called is False
+
+
+def test_authorized_main_wrapper_rejects_force_push() -> None:
+    called = False
+
+    def fake_run(_command: Sequence[str], _env: Mapping[str, str]) -> int:
+        nonlocal called
+        called = True
+        return 0
+
+    with pytest.raises(ValueError, match="does not allow destructive git commands"):
+        run_authorized_main(
+            ["git", "push", "--force", "origin", "main"],
+            action="direct-write",
+            reason="user approved direct main fix",
+            run=fake_run,
+        )
+    assert called is False
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["git", "push", "origin", "+HEAD:main"],
+        ["git", "push", "--mirror", "origin"],
+        ["git", "push", "--prune", "origin"],
+        ["git", "-C", ".", "push", "--mirror", "origin"],
+        ["git", "-C", ".", "push", "origin", "+HEAD:main"],
+        ["git", "push", "-uf", "origin", "main"],
+        ["git", "push", "-vf", "origin", "main"],
+        ["git", "push", "--mir", "origin"],
+        ["git", "push", "--del", "origin", "main"],
+        ["git", "push", "--pru", "origin"],
+        ["git", "push", "--for", "origin", "main"],
+    ],
+)
+def test_authorized_main_wrapper_rejects_force_push_forms(
+    command: list[str],
+) -> None:
+    called = False
+
+    def fake_run(_command: Sequence[str], _env: Mapping[str, str]) -> int:
+        nonlocal called
+        called = True
+        return 0
+
+    with pytest.raises(ValueError, match="does not allow"):
+        run_authorized_main(
+            command,
+            action="direct-write",
+            reason="user approved direct main fix",
+            run=fake_run,
+        )
+    assert called is False
+
+
+def test_authorized_main_ref_sync_only_allows_fast_forward_origin_main() -> None:
+    called = False
+
+    def fake_run(_command: Sequence[str], _env: Mapping[str, str]) -> int:
+        nonlocal called
+        called = True
+        return 0
+
+    with pytest.raises(
+        ValueError,
+        match="ref-sync only runs git merge --ff-only origin/main",
+    ):
+        run_authorized_main(
+            ["git", "merge", "origin/main"],
+            action="ref-sync",
+            reason="sync main after merged PR",
+            run=fake_run,
+        )
+    assert called is False
+
+
+def test_authorized_main_ref_sync_rejects_git_global_options() -> None:
+    called = False
+
+    def fake_run(_command: Sequence[str], _env: Mapping[str, str]) -> int:
+        nonlocal called
+        called = True
+        return 0
+
+    with pytest.raises(ValueError, match="does not allow git global options"):
+        run_authorized_main(
+            ["git", "-C", ".", "merge", "--ff-only", "origin/main"],
+            action="ref-sync",
+            reason="sync main after merged PR",
+            run=fake_run,
+        )
+    assert called is False
+
+
+def test_authorized_main_cli_exposes_single_command_wrapper(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run(command: Sequence[str], env: Mapping[str, str], check: bool) -> object:
+        captured["command"] = list(command)
+        captured["env"] = dict(env)
+        captured["check"] = check
+
+        class Result:
+            returncode = 3
+
+        return Result()
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    code = branch_protection_main(
+        [
+            "authorize-main",
+            "--action",
+            "ref-sync",
+            "--reason",
+            "sync main after merged PR",
+            "--",
+            "git",
+            "merge",
+            "--ff-only",
+            "origin/main",
+        ]
+    )
+
+    assert code == 3
+    assert captured["command"] == ["git", "merge", "--ff-only", "origin/main"]
+    child_env = captured["env"]
+    assert isinstance(child_env, dict)
+    assert child_env["ALLOW_MAIN_REF_UPDATE"] == "1"
+    assert child_env["MAIN_REF_UPDATE_REASON"] == "sync main after merged PR"
+    assert captured["check"] is False
 
 
 def _managed_evidence_body(payload: Mapping[str, object]) -> str:
