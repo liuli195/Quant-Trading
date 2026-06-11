@@ -131,6 +131,14 @@ fragment:
       - permission_not_allowed
       - explicit_authorization_missing
       - policy_disallowed
+    tool_unavailable_invalid_reason_tokens:
+      - empty_completion
+      - timeout
+      - timed_out
+      - cancelled
+      - canceled
+      - tool_error
+      - malformed_response
 
 submit_status:
   fields:

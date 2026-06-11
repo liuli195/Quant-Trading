@@ -1854,6 +1854,96 @@ def test_review_fragment_builder_rejects_standards_without_delegation_attempt(
     assert not (tmp_path / ".local/ai-review/fragments/standards.json").exists()
 
 
+def test_review_fragment_builder_rejects_spawn_failed_delegation_attempt(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+
+    code = pr_flow.build_review_fragment_from_payload(
+        repo_root=tmp_path,
+        runner=runner,
+        payload={
+            "source": "standards",
+            "verdict": "pass",
+            "reviewed_head": "1" * 40,
+            "reviewed_diff": DEFAULT_DIFF_HASH,
+            "reviewer": "standards-reviewer",
+            "delegation_attempt": {
+                "required": True,
+                "authorization_basis": "AGENTS.md + ADR 0009",
+                "tool": "spawn_agent",
+                "result": "spawn_failed",
+                "reason": "empty_completion",
+            },
+        },
+    )
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    assert not (tmp_path / ".local/ai-review/fragments/standards.json").exists()
+
+
+def test_review_fragment_builder_rejects_empty_completion_as_tool_unavailable(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+
+    code = pr_flow.build_review_fragment_from_payload(
+        repo_root=tmp_path,
+        runner=runner,
+        payload={
+            "source": "spec",
+            "verdict": "pass",
+            "reviewed_head": "1" * 40,
+            "reviewed_diff": DEFAULT_DIFF_HASH,
+            "reviewer": "spec-reviewer",
+            "delegation_attempt": {
+                "required": True,
+                "authorization_basis": "AGENTS.md + ADR 0009",
+                "tool": "spawn_agent",
+                "result": "tool_unavailable",
+                "reason": "empty_completion",
+            },
+        },
+    )
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    assert not (tmp_path / ".local/ai-review/fragments/spec.json").exists()
+
+
+def test_review_fragment_builder_accepts_tool_unavailable_delegation_attempt(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+    delegation_attempt = {
+        "required": True,
+        "authorization_basis": "AGENTS.md + ADR 0009",
+        "tool": "spawn_agent",
+        "result": "tool_unavailable",
+        "reason": "spawn_agent_tool_not_registered",
+    }
+
+    code = pr_flow.build_review_fragment_from_payload(
+        repo_root=tmp_path,
+        runner=runner,
+        payload={
+            "source": "spec",
+            "verdict": "pass",
+            "reviewed_head": "1" * 40,
+            "reviewed_diff": DEFAULT_DIFF_HASH,
+            "reviewer": "spec-reviewer",
+            "delegation_attempt": delegation_attempt,
+        },
+    )
+
+    assert code == pr_flow.SUCCESS_EXIT_CODE
+    fragment = json.loads(
+        (tmp_path / ".local/ai-review/fragments/spec.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert fragment["delegation_attempt"] == delegation_attempt
+
+
 @pytest.mark.parametrize(
     "reason",
     [
@@ -1916,6 +2006,89 @@ def test_submit_rejects_standards_fragment_without_delegation_attempt(
             "detail": "standards fragment delegation_attempt is required",
         }
     ]
+
+
+def test_submit_rejects_spawn_failed_delegation_attempt_fragment(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+    _write_fragment(
+        tmp_path,
+        "standards",
+        findings=[],
+        delegation_attempt={
+            "required": True,
+            "authorization_basis": "AGENTS.md + ADR 0009",
+            "tool": "spawn_agent",
+            "result": "spawn_failed",
+            "reason": "empty_completion",
+        },
+    )
+    _write_fragment(tmp_path, "spec", findings=[])
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    status = _submit_status(tmp_path)
+    assert _blocking_as_legacy_failures(status) == [
+        {
+            "check": "local-review",
+            "source": ".local/ai-review/fragments/standards.json",
+            "detail": (
+                "standards fragment delegation_attempt.result=spawn_failed "
+                "cannot satisfy local review; diagnose and retry"
+            ),
+        }
+    ]
+    handoff = json.loads(
+        (tmp_path / ".local/pr-flow/review-fragments-handoff.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert handoff["fragments"][0]["state"] == "spawn_failed"
+    assert handoff["fragments"][0]["builder_input_template"]["delegation_attempt"][
+        "result"
+    ] == ""
+
+
+def test_submit_rejects_empty_completion_as_tool_unavailable_fragment(
+    tmp_path: Path,
+) -> None:
+    runner = SubmitPreflightRunner(valid_contract=True)
+    _write_fragment(
+        tmp_path,
+        "standards",
+        findings=[],
+        delegation_attempt={
+            "required": True,
+            "authorization_basis": "AGENTS.md + ADR 0009",
+            "tool": "spawn_agent",
+            "result": "tool_unavailable",
+            "reason": "empty_completion",
+        },
+    )
+    _write_fragment(tmp_path, "spec", findings=[])
+
+    code = pr_flow.submit(repo_root=tmp_path, title="PR automation", runner=runner)
+
+    assert code == pr_flow.DISPATCH_REQUIRED_EXIT_CODE
+    status = _submit_status(tmp_path)
+    assert _blocking_as_legacy_failures(status) == [
+        {
+            "check": "local-review",
+            "source": ".local/ai-review/fragments/standards.json",
+            "detail": (
+                "standards fragment delegation_attempt.reason cannot describe "
+                "a spawned review failure; diagnose and retry"
+            ),
+        }
+    ]
+    handoff = json.loads(
+        (tmp_path / ".local/pr-flow/review-fragments-handoff.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert handoff["fragments"][0]["state"] == "invalid"
 
 
 def test_review_fragment_builder_rejects_security_without_fallback_reason(
@@ -4910,6 +5083,12 @@ def test_contract_defines_delegation_attempt_fragment_metadata() -> None:
     )
     assert "user_not_authorized" in (
         contract.fragment_delegation_attempt_invalid_reason_tokens
+    )
+    assert "empty_completion" in (
+        contract.fragment_delegation_attempt_tool_unavailable_invalid_reason_tokens
+    )
+    assert "malformed_response" in (
+        contract.fragment_delegation_attempt_tool_unavailable_invalid_reason_tokens
     )
 
 
