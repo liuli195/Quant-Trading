@@ -29,6 +29,90 @@ states:
             - security
       reason: Standards / Spec 通过前不得运行 security review。
       suggestion: 先完成 local review fragments，再进入 security_review_required。
+    - effect: deny
+      match:
+        parameters:
+          command:
+            contains: ";"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          command:
+            contains: "&&"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          command:
+            contains: "||"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          command:
+            contains: "|"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          command:
+            contains: "\n"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          command:
+            contains: "\r"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          cmd:
+            contains: ";"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          cmd:
+            contains: "&&"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          cmd:
+            contains: "||"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          cmd:
+            contains: "|"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          cmd:
+            contains: "\n"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          cmd:
+            contains: "\r"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
     - effect: allow
       match:
         command_prefix: rg
@@ -163,6 +247,90 @@ states:
             - code-quality-reviewer
       reason: security_review_required 不再派发 Standards / Spec reviewer。
       suggestion: 只运行 security review，或回到人工排障。
+    - effect: deny
+      match:
+        parameters:
+          command:
+            contains: ";"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          command:
+            contains: "&&"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          command:
+            contains: "||"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          command:
+            contains: "|"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          command:
+            contains: "\n"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          command:
+            contains: "\r"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          cmd:
+            contains: ";"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          cmd:
+            contains: "&&"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          cmd:
+            contains: "||"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          cmd:
+            contains: "|"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          cmd:
+            contains: "\n"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
+    - effect: deny
+      match:
+        parameters:
+          cmd:
+            contains: "\r"
+      reason: 命令包含 shell 控制符，禁止用允许前缀串接受限动作。
+      suggestion: 拆分为单一命令；review 守卫完成前不得串接命令。
     - effect: allow
       match:
         command_prefix: rg

@@ -23,6 +23,7 @@
 - 在 security_review_required 下模拟 SubagentStart Standards / Spec reviewer，应返回 deny。
 - 在 security_review_required 下模拟 SubagentStart security reviewer，应返回 allow。
 - 模拟 PreToolUse 跑 pr-submit 或 git push，两个状态都应 deny。
+- 模拟 PreToolUse 跑 `git status; git push origin HEAD`，两个状态都应 deny，避免允许前缀串接受限动作。
 - 准备当前状态轮次的 Standards / Spec fragments，提交 state_completed 后应进入 security_review_required。
 - 准备当前状态轮次的 Security fragment，提交 state_completed 后应进入 completed。
 - 确认安装计划不覆盖现有 `.githooks/pre-push`。
