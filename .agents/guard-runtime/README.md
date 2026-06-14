@@ -5,10 +5,16 @@
 稳定入口：
 
 ```powershell
-python .agents\guard-runtime\guard_runner.py activate --profile <id> --scope current_context --source agent-guard-skill --context-json '{"session_id":"..."}'
-python .agents\guard-runtime\guard_runner.py run --event <event-file>
-python .agents\guard-runtime\guard_runner.py brief --profile <id> --subject <subject-key-hash> --format json
-python .agents\guard-runtime\guard_runner.py brief --profile <id> --subject <subject-key-hash> --session <session-id> --format json
+.\.venv\Scripts\python.exe .agents\guard-runtime\guard_runner.py activate --profile <id> --scope current_context --source agent-guard-skill --context-json '{"session_id":"..."}'
+.\.venv\Scripts\python.exe .agents\guard-runtime\guard_runner.py run --event <event-file>
+.\.venv\Scripts\python.exe .agents\guard-runtime\guard_runner.py brief --profile <id> --subject <subject-key-hash> --format json
+.\.venv\Scripts\python.exe .agents\guard-runtime\guard_runner.py brief --profile <id> --subject <subject-key-hash> --session <session-id> --format json
+```
+
+`repo-pr-governance` 的显式激活必须传入和 Hook Adapter（钩子适配器）一致的 Subject Key（主体键）字段：
+
+```powershell
+.\.venv\Scripts\python.exe .agents\guard-runtime\guard_runner.py activate --profile repo-pr-governance --scope current_context --source agent-guard-skill --context-json '{"repo":"github.com/liuli195/Quant-Trading.git","worktree":"D:\\My Project\\Quant Trading","branch":"codex/repo-pr-governance-guard","session_id":"..."}'
 ```
 
 目录约定：
@@ -27,4 +33,4 @@ python .agents\guard-runtime\guard_runner.py brief --profile <id> --subject <sub
 
 `brief --session <session-id>` 会先校验 `subject-key-hash`、`state_version` 和 `expires_at`，再在 `.local/guard/injections/` 中记录已注入的 `brief_hash`。同一 session（会话）内相同 brief（简报）第二次返回 `already_injected`。
 
-初始化阶段只写 Runtime（运行时）和 Profile（画像）配置，不预建 `.local/guard/*` 运行态目录，不安装 Hook（钩子），不会修改被守卫对象。
+初始化阶段只写 Runtime（运行时）和 Profile（画像）配置，不预建 `.local/guard/*` 运行态目录，不安装 Hook（钩子），不会修改被守卫对象。当前项目随后已安装 Codex lifecycle Hook（生命周期钩子），并保留既有 Git Hook（Git 钩子）不改。

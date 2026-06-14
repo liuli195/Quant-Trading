@@ -18,8 +18,8 @@ Guard Profile（守卫画像）：repo-pr-governance
 ## Hook（钩子）
 
 - 调研已确认启用 Hook（钩子）。
-- 初始化完成并校验画像后，使用 `install_hooks.py --authorize-install` 安装 Hook（钩子）。
-- 安装 Hook（钩子）前仍必须获得用户明确授权。
+- 已安装 Codex lifecycle Hook（生命周期钩子）：`UserPromptSubmit`、`SubagentStart`、`SubagentStop`、`PreToolUse`。
+- 不安装 agent-guard Git Hook（Git 钩子），保留仓库既有 `.githooks/pre-push`。
 
 ## 配置
 
@@ -28,6 +28,8 @@ Guard Profile（守卫画像）：repo-pr-governance
 - activation.on_missing_subject：`create`。
 - subject.identity_fields：`context.repo`, `context.worktree`, `context.branch`。
 - subject.required_fields：`context.repo`, `context.worktree`, `context.branch`。
+- `context.repo` 必须使用 Hook Adapter（钩子适配器）输出的 canonical remote id（规范远端标识）：`github.com/liuli195/Quant-Trading.git`。
+- 显式 activate（激活）必须同时传入 `repo`、`worktree` 和 `branch`，避免和 Hook 事件计算出不同 Subject Key（主体键）。
 - 业务规则只放在 Guard Profile（守卫画像）配置中，Runtime（运行时）和 Hook（钩子）只做通用执行。
 
 ## 守卫点划分

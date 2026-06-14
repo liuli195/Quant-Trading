@@ -19,4 +19,4 @@ files:
   validation_plan: validation-plan.md
   implementation_plan: implementation-plan.md
 project_initialization:
-  hook_installation: not_installed
+  hook_installation: codex_lifecycle_installed

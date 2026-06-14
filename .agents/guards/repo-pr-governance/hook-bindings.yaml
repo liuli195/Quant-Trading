@@ -5,7 +5,7 @@ hook_bindings:
   event_type: codex.pre_tool_use
   target_profile: repo-pr-governance
   install:
-    status: not_installed
+    status: installed
     target: .codex/hooks.json
     rollback: remove managed repo-pr-governance PreToolUse entry
   transitions: []
@@ -18,7 +18,7 @@ hook_bindings:
   event_type: codex.subagent_start
   target_profile: repo-pr-governance
   install:
-    status: not_installed
+    status: installed
     target: .codex/hooks.json
     rollback: remove managed repo-pr-governance SubagentStart entry
   transitions: []
@@ -31,7 +31,7 @@ hook_bindings:
   event_type: codex.subagent_stop
   target_profile: repo-pr-governance
   install:
-    status: not_installed
+    status: installed
     target: .codex/hooks.json
     rollback: remove managed repo-pr-governance SubagentStop entry
   transitions: []
@@ -42,7 +42,7 @@ hook_bindings:
   event_type: codex.user_prompt_submit
   target_profile: repo-pr-governance
   install:
-    status: not_installed
+    status: installed
     target: .codex/hooks.json
     rollback: remove managed repo-pr-governance UserPromptSubmit entry
   transitions: []
