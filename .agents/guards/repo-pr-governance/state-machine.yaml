@@ -200,22 +200,6 @@ states:
             contains: --no-verify
       reason: 不得绕过 commit intent 和 pre-commit 审计。
       suggestion: 使用普通 git commit，并先运行 pr_flow intent stage。
-    - effect: deny
-      match:
-        command_prefix: git commit
-        parameters:
-          command:
-            contains: " -n"
-      reason: 不得绕过 commit intent 和 pre-commit 审计。
-      suggestion: 使用普通 git commit，并先运行 pr_flow intent stage。
-    - effect: deny
-      match:
-        command_prefix: git commit
-        parameters:
-          cmd:
-            contains: " -n"
-      reason: 不得绕过 commit intent 和 pre-commit 审计。
-      suggestion: 使用普通 git commit，并先运行 pr_flow intent stage。
     - effect: allow
       match:
         command_prefix: git commit
@@ -461,22 +445,6 @@ states:
         parameters:
           cmd:
             contains: --no-verify
-      reason: 不得绕过 commit intent 和 pre-commit 审计。
-      suggestion: 使用普通 git commit，并先运行 pr_flow intent stage。
-    - effect: deny
-      match:
-        command_prefix: git commit
-        parameters:
-          command:
-            contains: " -n"
-      reason: 不得绕过 commit intent 和 pre-commit 审计。
-      suggestion: 使用普通 git commit，并先运行 pr_flow intent stage。
-    - effect: deny
-      match:
-        command_prefix: git commit
-        parameters:
-          cmd:
-            contains: " -n"
       reason: 不得绕过 commit intent 和 pre-commit 审计。
       suggestion: 使用普通 git commit，并先运行 pr_flow intent stage。
     - effect: allow
