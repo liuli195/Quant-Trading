@@ -36,6 +36,9 @@ Guard Profile（守卫画像）：repo-pr-governance
 
 - `local_review_gate`：依赖产物=`standards_fragment`, `spec_fragment`。
 - `security_review_gate`：依赖产物=`security_fragment`。
+- 当前 Guard Point（守卫点）只校验 current-state artifact presence（当前状态产物存在性），不声明 fragment JSON 内容语义校验。
+- fragment 内容语义，包括 current head/diff、open P0/P1、`delegation_attempt`、`security_review.tool` / `fallback_reason`，由 repo-pr-governance 的 `pr_flow build-review-fragment` 和 `pr-submit` 校验。
+- Runtime（运行时）级 JSON artifact 内容校验能力缺口跟踪在 `liuli195/my-agent-skills#15`，本轮不改 agent-guard 源码。
 
 ## 单个守卫点单独实施计划
 

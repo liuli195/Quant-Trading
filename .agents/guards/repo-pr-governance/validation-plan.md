@@ -6,12 +6,13 @@
 - 已确认决策：Guard Profile ID 使用 `repo-pr-governance`。
 - 已确认决策：目标只守卫 repo-pr-governance PR 流程的 local review 和 security review 两个阶段。
 - 已确认决策：本轮不守卫 pr-submit、official Codex review、required checks、merge 或 cleanup。
-- 已确认决策：Subject Key 使用 `context.repo + context.worktree + context.branch`；本次不在 Subject Resolver（主体解析器）中声明 PR number（既不放入 identity_fields，也不放入 optional_fields），因此当前事件里即使存在 PR number 也不会进入 Subject Key；head/diff 只作 evidence freshness，不进入 Subject Key。
+- 已确认决策：Subject Key 使用 `context.repo + context.worktree + context.branch`；本次不在 Subject Resolver（主体解析器）中声明 PR number（既不放入 identity_fields，也不放入 optional_fields），因此当前事件里即使存在 PR number 也不会进入 Subject Key；若未来重新把 PR number 加入 `optional_fields`，事件里存在 PR number 时会进入 Subject Key；head/diff 只作 evidence freshness，不进入 Subject Key。
 - 已确认决策：`context.repo` 使用 Hook Adapter（钩子适配器）输出的 canonical remote id（规范远端标识）`github.com/liuli195/Quant-Trading.git`；显式 activate 必须传入同一 repo/worktree/branch。
 - 已确认决策：状态线精简为 `local_review_required -> security_review_required -> completed`。
 - 已确认决策：在 local_review_required 阶段禁止运行 security review。
 - 已确认决策：两个 review 阶段使用 `permissions.default: deny` 和窄 allowlist。
 - 已确认决策：允许问题 FIX，但 FIX 后仍必须重新 review 并生成当前状态轮次的新 fragment。
+- 已确认决策：当前 Guard Point（守卫点）只校验 current-state artifact presence（当前状态产物存在性）；fragment 内容语义由 `pr_flow build-review-fragment` 和 `pr-submit` 校验；Runtime JSON artifact 内容校验能力缺口跟踪在 `liuli195/my-agent-skills#15`。
 - 已确认决策：启用工具级 deny 权限，并已获得用户明确授权。
 - 已确认决策：已安装 Codex Hook（Codex 钩子），并增加 SubagentStart gate，防止阶段不匹配的子 agent 派发；不安装 agent-guard Git Hook，保留仓库既有 `.githooks/pre-push`。
 - 文档变更摘要：本轮不更新 CONTEXT.md 或 ADR；所有已确认事实只进入本轮 confirmed-notes 和 Guard Profile 草案。
@@ -19,6 +20,7 @@
 ## 验证项
 
 - 运行 validate_guard_profile.py，确认画像文件、状态、artifact、guard point、hook binding 引用合法。
+- 校验 Guard Point 文档明确只覆盖 current-state artifact presence；fragment 内容语义依赖 pr_flow builder / pr-submit，不由当前 Runtime Guard Point 伪装校验。
 - 使用 canonical repo/worktree/branch 显式 activate 后，Hook Adapter 的 `git status` 事件应命中同一 Guard Instance（守卫实例），不得返回 `no_guard_instance`。
 - 在 local_review_required 下模拟 SubagentStart security reviewer，应返回 deny。
 - 在 local_review_required 下模拟 SubagentStart Standards / Spec reviewer，应返回 allow。
