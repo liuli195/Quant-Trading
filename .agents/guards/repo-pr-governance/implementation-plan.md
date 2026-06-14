@@ -26,8 +26,8 @@ Guard Profile（守卫画像）：repo-pr-governance
 - activation.initial_state：`local_review_required`。
 - activation.on_existing_subject：`reuse`。
 - activation.on_missing_subject：`create`。
-- subject.identity_fields：`context.worktree`, `context.branch`。
-- subject.required_fields：`context.worktree`, `context.branch`。
+- subject.identity_fields：`context.repo`, `context.worktree`, `context.branch`。
+- subject.required_fields：`context.repo`, `context.worktree`, `context.branch`。
 - 业务规则只放在 Guard Profile（守卫画像）配置中，Runtime（运行时）和 Hook（钩子）只做通用执行。
 
 ## 守卫点划分

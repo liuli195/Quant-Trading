@@ -1,12 +1,12 @@
 subject:
   identity_fields:
+  - context.repo
   - context.worktree
   - context.branch
   required_fields:
+  - context.repo
   - context.worktree
   - context.branch
-  optional_fields:
-  - context.pr_number
   context_sources:
   - context
   - subject

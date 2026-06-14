@@ -6,7 +6,7 @@
 - 已确认决策：Guard Profile ID 使用 `repo-pr-governance`。
 - 已确认决策：目标只守卫 repo-pr-governance PR 流程的 local review 和 security review 两个阶段。
 - 已确认决策：本轮不守卫 pr-submit、official Codex review、required checks、merge 或 cleanup。
-- 已确认决策：Subject Key 使用 `context.worktree + context.branch`；PR number 只作可选元数据，head/diff 只作 evidence freshness，不进入 Subject Key。
+- 已确认决策：Subject Key 使用 `context.repo + context.worktree + context.branch`；本次不把 PR number 放入可选 KEY 配置，避免 PR 创建后实例 ID 升级导致旧实例与后续 Hook 事件断链；head/diff 只作 evidence freshness，不进入 Subject Key。
 - 已确认决策：状态线精简为 `local_review_required -> security_review_required -> completed`。
 - 已确认决策：在 local_review_required 阶段禁止运行 security review。
 - 已确认决策：两个 review 阶段使用 `permissions.default: deny` 和窄 allowlist。
