@@ -332,7 +332,34 @@
       "PowerShell(gh repo view --json nameWithOwner,defaultBranchRef,url,isPrivate,isFork,updatedAt 2>&1)",
       "Bash(ALLOW_DIRECT_MAIN_WRITE=1 DIRECT_MAIN_WRITE_REASON='合并跨AI工具技能管理文档：已完成第1-4步详细盘点产出' git merge 文档-跨工具技能管理计划)",
       "Bash(ALLOW_DIRECT_MAIN_WRITE=1 DIRECT_MAIN_WRITE_REASON=更新本地设置：记录hook自动添加的bypass权限 git commit -m '@ *)",
-      "Bash(ALLOW_DIRECT_MAIN_WRITE=1 DIRECT_MAIN_WRITE_REASON='推送跨AI工具技能管理文档更新到远端主干' git push origin main)"
+      "Bash(ALLOW_DIRECT_MAIN_WRITE=1 DIRECT_MAIN_WRITE_REASON='推送跨AI工具技能管理文档更新到远端主干' git push origin main)",
+      "Bash('d:/My Project/Quant Trading/.venv/Scripts/python.exe' -c ' *)",
+      "Bash(python -c \"import agentmemory; print\\('Global/system Python agentmemory:', agentmemory.__file__\\)\")",
+      "Bash(where agentmemory *)",
+      "Bash(where npx *)",
+      "Bash(npm list *)",
+      "Bash(Get-Content \"C:\\\\Users\\\\liuli\\\\.agentmemory\\\\logs\\\\agentmemory-service.log\" -Tail 100 -Encoding UTF8)",
+      "Bash(Get-Content \"C:\\\\Users\\\\liuli\\\\.agentmemory\\\\logs\\\\agentmemory-start.err.log\" -Tail 50 -Encoding UTF8)",
+      "Bash(Get-Content \"C:\\\\Users\\\\liuli\\\\.agentmemory\\\\logs\\\\codex-agentmemory-bg.err.log\" -Tail 50 -Encoding UTF8)",
+      "Bash(Get-Content \"C:\\\\Users\\\\liuli\\\\.agentmemory\\\\logs\\\\agentmemory-start.out.log\" -Encoding UTF8)",
+      "PowerShell(Get-Content \"C:\\\\Users\\\\liuli\\\\.agentmemory\\\\logs\\\\agentmemory-service.log\" -Encoding UTF8 | Select-String -Pattern \"error|timed out|failed|ECONNREFUSED|timeout\" -SimpleMatch | ForEach-Object { $_.Line })",
+      "PowerShell(Get-Content \"C:\\\\Users\\\\liuli\\\\.agentmemory\\\\logs\\\\agentmemory-start.err.log\" -Encoding UTF8 | Select-String -Pattern \"error|failed|timeout\" | ForEach-Object { $_.Line.Substring\\(0, [Math]::Min\\(300, $_.Line.Length\\)\\) })"
+    ],
+    "defaultMode": "auto",
+    "deny": [
+      "Bash(curl * | bash)",
+      "Bash(curl * | sh)",
+      "Bash(wget * -O - | bash)",
+      "Bash(wget * -O - | sh)",
+      "PowerShell(Invoke-Expression *)",
+      "PowerShell(iex *)"
+    ],
+    "ask": [
+      "Write(.claude/settings.json)",
+      "Write(.claude/settings.local.json)",
+      "Write(CLAUDE.md)",
+      "Write(AGENTS.md)",
+      "Write(.gitignore)"
     ],
     "additionalDirectories": [
       "d:\\My Project\\Quant Trading\\.claude\\skills\\strategy-experiment"
