@@ -1,0 +1,49 @@
+hook_bindings:
+- id: codex_pre_tool_use_permission
+  source: codex
+  trigger_event: PreToolUse
+  event_type: codex.pre_tool_use
+  target_profile: repo-pr-governance
+  install:
+    status: installed
+    target: .codex/hooks.json
+    rollback: remove managed repo-pr-governance PreToolUse entry
+  transitions: []
+  guard_points:
+  - local_review_gate
+  - security_review_gate
+- id: codex_subagent_start_gate
+  source: codex
+  trigger_event: SubagentStart
+  event_type: codex.subagent_start
+  target_profile: repo-pr-governance
+  install:
+    status: installed
+    target: .codex/hooks.json
+    rollback: remove managed repo-pr-governance SubagentStart entry
+  transitions: []
+  guard_points:
+  - local_review_gate
+  - security_review_gate
+- id: codex_subagent_stop_audit
+  source: codex
+  trigger_event: SubagentStop
+  event_type: codex.subagent_stop
+  target_profile: repo-pr-governance
+  install:
+    status: installed
+    target: .codex/hooks.json
+    rollback: remove managed repo-pr-governance SubagentStop entry
+  transitions: []
+  guard_points: []
+- id: codex_user_prompt_submit_injection
+  source: codex
+  trigger_event: UserPromptSubmit
+  event_type: codex.user_prompt_submit
+  target_profile: repo-pr-governance
+  install:
+    status: installed
+    target: .codex/hooks.json
+    rollback: remove managed repo-pr-governance UserPromptSubmit entry
+  transitions: []
+  guard_points: []
