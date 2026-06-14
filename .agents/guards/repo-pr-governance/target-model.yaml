@@ -1,0 +1,11 @@
+target:
+  id: repo-pr-governance-workflow
+  type: workflow
+  name: repo-pr-governance PR review workflow
+  source:
+  - .agents/skills/repo-pr-governance/SKILL.md
+  - docs/rules/pr-workflow.md
+  - docs/rules/review-guidelines.md
+  - docs/rules/governance.md
+  - docs/rules/pr-flow-interface-contract.yaml
+  boundary: 只旁路观察、校验、权限拒绝和记录，不修改被守卫 Skill、规则文档或 pr_flow 实现。

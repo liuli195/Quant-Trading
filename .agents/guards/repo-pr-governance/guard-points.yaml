@@ -1,0 +1,54 @@
+guard_points:
+- id: local_review_gate
+  description: 守卫 Standards / Spec review fragments。
+  trigger:
+    events:
+    - state_completed
+    states:
+    - local_review_required
+  inputs:
+    artifacts:
+    - standards_fragment
+    - spec_fragment
+  required_artifacts:
+  - standards_fragment
+  - spec_fragment
+  checks:
+  - id: standards_fragment_exists
+    type: artifact_exists
+    artifact: standards_fragment
+    failure_reason: 缺少当前状态轮次的 standards fragment。
+    fix_hint: 重新运行 Standards review，并通过 build-review-fragment 写入 current-state standards
+      fragment。
+  - id: spec_fragment_exists
+    type: artifact_exists
+    artifact: spec_fragment
+    failure_reason: 缺少当前状态轮次的 spec fragment。
+    fix_hint: 重新运行 Spec review，并通过 build-review-fragment 写入 current-state spec fragment。
+  failure_reason: local review evidence 不满足推进条件。
+  fix_hint: 补齐 Standards / Spec current-state fragments；如果有 open P0/P1，先修复并重新 review。
+  override_policy:
+    allowed: false
+- id: security_review_gate
+  description: 守卫 security review fragment。
+  trigger:
+    events:
+    - state_completed
+    states:
+    - security_review_required
+  inputs:
+    artifacts:
+    - security_fragment
+  required_artifacts:
+  - security_fragment
+  checks:
+  - id: security_fragment_exists
+    type: artifact_exists
+    artifact: security_fragment
+    failure_reason: 缺少当前状态轮次的 security fragment。
+    fix_hint: 运行 security review，并通过 build-review-fragment 写入 current-state security
+      fragment。
+  failure_reason: security review evidence 不满足推进条件。
+  fix_hint: 补齐 current-state security fragment；如果有 open P0/P1，先修复并重新 review。
+  override_policy:
+    allowed: false

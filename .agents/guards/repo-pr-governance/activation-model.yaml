@@ -1,0 +1,10 @@
+activation:
+  allowed_sources:
+  - agent-guard-skill
+  - manual
+  required_profile_ref: true
+  scopes:
+  - current_context
+  on_existing_subject: reuse
+  on_missing_subject: create
+  initial_state: local_review_required

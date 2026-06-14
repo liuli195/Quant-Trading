@@ -1,0 +1,8 @@
+concurrency:
+  lock_scope: guard-profile-and-subject
+  lock_root: .local/guard/locks
+  lock_key_fields:
+  - guard_profile_id
+  - subject_key_hash
+  timeout_seconds: 30
+  on_timeout: audit_error

@@ -1,0 +1,43 @@
+artifacts:
+- id: standards_fragment
+  description: Standards review fragment。
+  path: .local/ai-review/fragments/standards.json
+  owner: repo-pr-governance pr_flow builder
+  freshness:
+    scope: current_state_entry
+  reuse_policy: deny
+- id: spec_fragment
+  description: Spec review fragment。
+  path: .local/ai-review/fragments/spec.json
+  owner: repo-pr-governance pr_flow builder
+  freshness:
+    scope: current_state_entry
+  reuse_policy: deny
+- id: security_fragment
+  description: Security review fragment。
+  path: .local/ai-review/fragments/security.json
+  owner: repo-pr-governance pr_flow builder
+  freshness:
+    scope: current_state_entry
+  reuse_policy: deny
+- id: review_fragments_handoff
+  description: pr-submit missing/stale fragments handoff。
+  path: .local/pr-flow/review-fragments-handoff.json
+  owner: pr-submit
+  freshness:
+    scope: external_current_head
+  reuse_policy: allow
+- id: local_review_builder_payload
+  description: Standards / Spec builder payload。
+  path: .local/guard/artifacts/repo-pr-governance/local-review/{subject_key_hash}/{state_version}/verdict.json
+  owner: main-agent
+  freshness:
+    scope: current_state_entry
+  reuse_policy: deny
+- id: security_builder_payload
+  description: Security builder payload。
+  path: .local/guard/artifacts/repo-pr-governance/security-review/{subject_key_hash}/{state_version}/verdict.json
+  owner: main-agent
+  freshness:
+    scope: current_state_entry
+  reuse_policy: deny

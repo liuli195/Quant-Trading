@@ -1,0 +1,22 @@
+schema_version: guard-profile/v1
+guard_profile_id: repo-pr-governance
+name: Repo PR Governance Guard
+description: 守卫 repo-pr-governance 流程的 local review 与 security review 阶段。
+source:
+  kind: grill-with-docs-confirmed-notes
+  status: confirmed
+files:
+  target_model: target-model.yaml
+  activation_model: activation-model.yaml
+  subject_resolver: subject-resolver.yaml
+  execution_model: execution-model.yaml
+  observation_model: observation-model.yaml
+  state_machine: state-machine.yaml
+  guard_points: guard-points.yaml
+  artifacts: artifacts.yaml
+  hook_bindings: hook-bindings.yaml
+  brief_template: brief-template.md
+  validation_plan: validation-plan.md
+  implementation_plan: implementation-plan.md
+project_initialization:
+  hook_installation: not_installed

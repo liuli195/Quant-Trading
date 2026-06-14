@@ -1,0 +1,16 @@
+subject:
+  identity_fields:
+  - context.worktree
+  - context.branch
+  required_fields:
+  - context.worktree
+  - context.branch
+  optional_fields:
+  - context.pr_number
+  context_sources:
+  - context
+  - subject
+  - event
+  existing_match_policy: exact
+  create_policy: explicit_activation_only
+  ambiguous_policy: audit

@@ -1,0 +1,21 @@
+signals:
+- id: state_completed
+  description: 主 agent 主动声明当前状态完成。
+- id: local_review_fragments_ready
+  description: Standards / Spec fragments 已生成并属于当前状态轮次。
+- id: local_review_blocked
+  description: Standards / Spec review 有 open P0/P1，或 delegation_attempt 不合规。
+- id: security_fragment_ready
+  description: Security fragment 已生成并属于当前状态轮次。
+- id: security_review_blocked
+  description: Security review 有 open P0/P1，或 security_review 元数据不合规。
+- id: fix_committed
+  description: 修复已通过正常 commit intent 路径提交，但不自动推进状态。
+- id: codex.pre_tool_use
+  description: Codex PreToolUse Hook 权限检查事件。
+- id: codex.subagent_start
+  description: Codex SubagentStart Hook 权限检查事件。
+- id: codex.subagent_stop
+  description: Codex SubagentStop Hook 审计事件。
+- id: codex.user_prompt_submit
+  description: Codex UserPromptSubmit Hook 事件。
