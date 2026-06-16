@@ -20,13 +20,13 @@
 
 关键文件：
 
-- [datasets.py](../../../scripts/research/platform/datasets.py) <!-- pathref: scripts/research/platform/datasets.py -->
-- [datasets.py](../../../scripts/research/datasets.py) <!-- pathref: scripts/research/datasets.py -->
-- [metrics.py](../../../scripts/research/research_core/metrics.py) <!-- pathref: scripts/research/research_core/metrics.py -->
-- [audit.py](../../../scripts/research/research_core/audit.py) <!-- pathref: scripts/research/research_core/audit.py -->
-- [test_platform.py](../../../scripts/research/platform/tests/test_platform.py) <!-- pathref: scripts/research/platform/tests/test_platform.py -->
-- [test_core.py](../../../scripts/tools/jq_automation/tests/test_core.py) <!-- pathref: scripts/tools/jq_automation/tests/test_core.py -->
-- [.gitignore](../../../.gitignore) <!-- pathref: repo/.gitignore -->
+- [datasets.py](../../../../scripts/research/platform/datasets.py) <!-- pathref: scripts/research/platform/datasets.py -->
+- [datasets.py](../../../../scripts/research/datasets.py) <!-- pathref: scripts/research/datasets.py -->
+- [metrics.py](../../../../scripts/research/research_core/metrics.py) <!-- pathref: scripts/research/research_core/metrics.py -->
+- [audit.py](../../../../scripts/research/research_core/audit.py) <!-- pathref: scripts/research/research_core/audit.py -->
+- [test_platform.py](../../../../scripts/research/platform/tests/test_platform.py) <!-- pathref: scripts/research/platform/tests/test_platform.py -->
+- [test_core.py](../../../../scripts/tools/jq_automation/tests/test_core.py) <!-- pathref: scripts/tools/jq_automation/tests/test_core.py -->
+- [.gitignore](../../../../.gitignore) <!-- pathref: repo/.gitignore -->
 
 ## 任务
 

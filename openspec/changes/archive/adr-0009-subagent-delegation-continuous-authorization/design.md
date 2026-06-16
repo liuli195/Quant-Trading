@@ -20,5 +20,5 @@ PR Flow 的 Standards / Spec review fragment 必须用 `delegation_attempt` 记�
 
 - 主会话仍负责编排、确认、汇总和验证。
 - 无可用子 agent 能力、只读查询、强串行依赖或权限只在主会话可用时，必须记录不分发原因和替代证据。
-- PR review 仍按 [review-guidelines.md](../rules/review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md --> 记录本地 review、官方 Codex required check 和未 resolved thread 阻断。
-- 协作边界仍按 [collaboration.md](../rules/collaboration.md) <!-- pathref: docs/rules/collaboration.md --> 执行。
+- PR review 仍按 [review-guidelines.md](../../../../docs/rules/review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md --> 记录本地 review、官方 Codex required check 和未 resolved thread 阻断。
+- 协作边界仍按 [collaboration.md](../../../../docs/rules/collaboration.md) <!-- pathref: docs/rules/collaboration.md --> 执行。

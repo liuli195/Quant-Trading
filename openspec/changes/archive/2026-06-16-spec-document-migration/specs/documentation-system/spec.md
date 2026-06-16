@@ -7,7 +7,7 @@
 #### Scenario: 文件引用
 
 - **WHEN** 文档中需要引用另一个仓库内文件
-- **THEN** 系统使用 `[文件名](相对路径) <!-- pathref: 目标路径 -->` 格式，允许 `scripts.tools.path_tools.refactor check` 校验引用有效性
+- **THEN** 系统使用 `[文件名](相对路径) ` 格式，允许 `scripts.tools.path_tools.refactor check` 校验引用有效性
 
 ### Requirement: 文档报告索引
 

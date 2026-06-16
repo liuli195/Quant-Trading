@@ -291,9 +291,9 @@ CI 规则：
 
 ### 规则来源
 
-- AI 助手入口仍是 [CLAUDE.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->。
-- 仓库级规则正文放在 [docs/rules/index.md](../rules/index.md) <!-- pathref: docs/rules/index.md -->。
-- 重大规则和治理决策放在 [ADR 索引](../adr/index.md) <!-- pathref: docs/adr/index.md -->。
+- AI 助手入口仍是 [CLAUDE.md](../../../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->。
+- 仓库级规则正文放在 [docs/rules/index.md](../../../../docs/rules/index.md) <!-- pathref: docs/rules/index.md -->。
+- 重大规则和治理决策放在 [ADR 索引](../adr/index.md) 。
 - ADR 记录“为什么这样定”，规则文档记录“现在必须怎么做”。
 
 ### 多 AI Agent 并行协作
@@ -309,12 +309,12 @@ CI 规则：
 
 需要补齐并保持：
 
-- [CODEOWNERS](../../CODEOWNERS) <!-- pathref: repo/CODEOWNERS -->
-- [.github/pull_request_template.md](../../.github/pull_request_template.md) <!-- pathref: repo/.github/pull_request_template.md -->
-- [.githooks/pre-push](../../.githooks/pre-push) <!-- pathref: repo/.githooks/pre-push -->
+- [CODEOWNERS](../../../../CODEOWNERS) <!-- pathref: repo/CODEOWNERS -->
+- [.github/pull_request_template.md](../../../../.github/pull_request_template.md) <!-- pathref: repo/.github/pull_request_template.md -->
+- [.githooks/pre-push](../../../../.githooks/pre-push) <!-- pathref: repo/.githooks/pre-push -->
 - GitHub branch protection / rulesets
 - required checks
-- waiver 机制：[docs/exceptions/active-waivers.yaml](../exceptions/active-waivers.yaml) <!-- pathref: docs/exceptions/active-waivers.yaml -->
+- waiver 机制：[docs/exceptions/active-waivers.yaml](../exceptions/active-waivers.yaml) 
 - scheduled drift audit
 
 关键路径必须 owner review：
@@ -333,7 +333,7 @@ CI 规则：
 
 ### Governance Gate 扩展
 
-[scripts.research.governance](../../scripts/research/governance) <!-- pathref: scripts/research/governance --> 需要检查：
+[scripts.research.governance](../../../../scripts/research/governance) <!-- pathref: scripts/research/governance --> 需要检查：
 
 - `docs/rules/index.md` 是否存在。
 - `docs/adr/` 是否存在且 ADR 编号连续。

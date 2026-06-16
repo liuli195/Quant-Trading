@@ -5536,7 +5536,7 @@ def test_codex_review_router_worker_model_is_documented() -> None:
             "trigger_run_id",
             "router 成功调度后不写 success",
         ],
-        Path("docs/adr/0007-pr-flow-closed-loop-review-evidence.md"): [
+        Path("openspec/changes/archive/adr-0007-pr-flow-closed-loop-review-evidence/design.md"): [
             "https://github.com/liuli195/Quant-Trading/issues/94",
             "https://github.com/liuli195/Quant-Trading/issues/104",
             "router dispatch 成功不写 success",
@@ -5571,7 +5571,7 @@ def test_issue_103_113_pr_flow_rules_are_documented() -> None:
             "P2/P3 only + all threads resolved",
             "latest current-head trigger",
         ],
-        Path("docs/adr/0007-pr-flow-closed-loop-review-evidence.md"): [
+        Path("openspec/changes/archive/adr-0007-pr-flow-closed-loop-review-evidence/design.md"): [
             "https://github.com/liuli195/Quant-Trading/issues/103",
             "https://github.com/liuli195/Quant-Trading/issues/113",
             "WORKTREE_DIRTY_AFTER_CLEANUP",
@@ -5609,7 +5609,7 @@ def test_issue_97_114_120_pr_flow_rules_are_documented() -> None:
             "`Research Governance / verify-full` 和 `PR Flow / evidence`",
             "pre-push freshness 仍只提醒",
         ],
-        Path("docs/adr/0007-pr-flow-closed-loop-review-evidence.md"): [
+        Path("openspec/changes/archive/adr-0007-pr-flow-closed-loop-review-evidence/design.md"): [
             "https://github.com/liuli195/Quant-Trading/issues/120",
             "https://github.com/liuli195/Quant-Trading/issues/114",
             "https://github.com/liuli195/Quant-Trading/issues/97",

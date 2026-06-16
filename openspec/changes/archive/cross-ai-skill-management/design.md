@@ -6,11 +6,11 @@
 
 ## 已知事实
 
-- `cc-switch` 已支持跨应用管理 Skills、MCP 和 prompts，说明见 [cc-switch-cli.md](cc-switch-cli.md) <!-- pathref: docs/design/cc-switch-cli.md -->。
-- 本仓库的 AI 通用入口是 [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->；Claude Code 专属入口是 [CLAUDE.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->。
-- 入口分层已经由 [ADR 0005](../adr/0005-ai-entry-progressive-disclosure.md) <!-- pathref: docs/adr/0005-ai-entry-progressive-disclosure.md --> 确认：通用规则进 `AGENTS.md`，工具专属内容进对应工具入口，细则进 `docs/rules/*.md`。
-- 本仓库治理要求规则入口、Skill、README、workflow、registry、catalog 和 pathref 不漂移，见 [governance.md](../rules/governance.md) <!-- pathref: docs/rules/governance.md -->。
-- Markdown 内部引用必须使用可点击链接加 `pathref` 注释，见 [docs-and-pathref.md](../rules/docs-and-pathref.md) <!-- pathref: docs/rules/docs-and-pathref.md -->。
+- `cc-switch` 已支持跨应用管理 Skills、MCP 和 prompts，说明见 [cc-switch-cli.md](cc-switch-cli.md) 。
+- 本仓库的 AI 通用入口是 [AGENTS.md](../../../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->；Claude Code 专属入口是 [CLAUDE.md](../../../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->。
+- 入口分层已经由 [ADR 0005](../adr/0005-ai-entry-progressive-disclosure.md)  确认：通用规则进 `AGENTS.md`，工具专属内容进对应工具入口，细则进 `docs/rules/*.md`。
+- 本仓库治理要求规则入口、Skill、README、workflow、registry、catalog 和 pathref 不漂移，见 [governance.md](../../../../docs/rules/governance.md) <!-- pathref: docs/rules/governance.md -->。
+- Markdown 内部引用必须使用可点击链接加 `pathref` 注释，见 [docs-and-pathref.md](../../../../docs/rules/docs-and-pathref.md) <!-- pathref: docs/rules/docs-and-pathref.md -->。
 
 ## 设计边界
 
@@ -84,7 +84,7 @@ MCP 注册
 
 #### 第 1 步产出：现状盘点
 
-执行范围：只读盘点，不执行 `cc-switch skills sync`，不写入各工具用户级目录，也不修改 [.agents/skills](../../.agents/skills) <!-- pathref: repo/.agents/skills -->。
+执行范围：只读盘点，不执行 `cc-switch skills sync`，不写入各工具用户级目录，也不修改 [.agents/skills](../../../../.agents/skills) <!-- pathref: repo/.agents/skills -->。
 
 命令结果：
 
@@ -173,7 +173,7 @@ Codex 运行时 / 插件 Skill 盘点：
 
 #### 第 2 步产出：分层规则和当前归类
 
-执行范围：只定义分层和准入结论，不执行 `cc-switch skills sync`，不导入运行时或插件 Skill，不修改 [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 或 [CLAUDE.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->。
+执行范围：只定义分层和准入结论，不执行 `cc-switch skills sync`，不导入运行时或插件 Skill，不修改 [AGENTS.md](../../../../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 或 [CLAUDE.md](../../../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->。
 
 分层定义：
 
@@ -182,7 +182,7 @@ Codex 运行时 / 插件 Skill 盘点：
 | `cc-switch-global` | `cc-switch` SSOT，例如 `~/.cc-switch/skills/` | 通过 `cc-switch skills install/enable/sync` 管理 | 当前为空；只接收已经显式安装到 SSOT、带元数据、可跨至少两个工具复用的 Skill。 |
 | `claude-runtime/plugin-managed` | Claude Code 用户目录或插件目录 | 由 Claude Code 用户配置或插件安装状态管理 | 不自动导入 `cc-switch`；只作为只读盘点对象。 |
 | `codex-runtime/plugin-managed` | Codex 系统 Skill 或插件缓存 | 由 Codex 运行时或插件安装状态管理 | 不自动导入 `cc-switch`；只作为只读盘点对象。 |
-| `repo-local` | 本仓库 [.agents/skills](../../.agents/skills) <!-- pathref: repo/.agents/skills --> | 通过 Git、PR、CODEOWNERS 和治理门禁管理 | 当前仓库 Skill 全部保持在此层，不允许被用户级 `cc-switch skills sync` 自动覆盖。 |
+| `repo-local` | 本仓库 [.agents/skills](../../../../.agents/skills) <!-- pathref: repo/.agents/skills --> | 通过 Git、PR、CODEOWNERS 和治理门禁管理 | 当前仓库 Skill 全部保持在此层，不允许被用户级 `cc-switch skills sync` 自动覆盖。 |
 
 `cc-switch-global` 准入规则：
 
@@ -197,7 +197,7 @@ Codex 运行时 / 插件 Skill 盘点：
 - 依赖本仓库路径、脚本、策略代码、报告模板、研究平台、JoinQuant 云端额度或治理审计的 Skill 必须留在 `repo-local`。
 - `repo-local` 的权威文件是 `.agents/skills/**/SKILL.md` 和同目录 `references/ownership.yaml`；`.claude/skills/<同名>/SKILL.md` 只作为 Symlink 输出，变更必须先改 `.agents/skills` 并走仓库 Git diff 和 PR 流程。
 - `repo-local` 未来若要跨工具复用，只能先做只读导入或显式导出副本；不得从用户级目录写回仓库。
-- 入口文件继续按 ADR 0005 分层：[AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 只保留通用入口，[CLAUDE.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 只保留 Claude Code 专属指针。
+- 入口文件继续按 ADR 0005 分层：[AGENTS.md](../../../../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 只保留通用入口，[CLAUDE.md](../../../../AGENTS.md) <!-- pathref: repo/AGENTS.md --> 只保留 Claude Code 专属指针。
 
 旧仓库 Skill 迁移归类：
 

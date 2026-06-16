@@ -8,12 +8,12 @@
 
 当前仓库已经有本地优先研究平台雏形：
 
-- 研究流程 CLI：[cli.py](../../scripts/research/cli.py) <!-- pathref: scripts/research/cli.py -->
-- 数据集 CLI：[datasets.py](../../scripts/research/datasets.py) <!-- pathref: scripts/research/datasets.py -->
-- 平台核心：[platform](../../scripts/research/platform) <!-- pathref: scripts/research/platform -->
-- 研究流程说明：[research-workflow.md](../guides/research-workflow.md) <!-- pathref: docs/guides/research-workflow.md -->
-- 旧项目迁移说明：[research-workflow-migration.md](../guides/research-workflow-migration.md) <!-- pathref: docs/guides/research-workflow-migration.md -->
-- 仓库总规则：[CLAUDE.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->
+- 研究流程 CLI：[cli.py](../../../../scripts/research/cli.py) <!-- pathref: scripts/research/cli.py -->
+- 数据集 CLI：[datasets.py](../../../../scripts/research/datasets.py) <!-- pathref: scripts/research/datasets.py -->
+- 平台核心：[platform](../../../../scripts/research/platform) <!-- pathref: scripts/research/platform -->
+- 研究流程说明：[research-workflow.md](../../../../docs/guides/research-workflow.md) <!-- pathref: docs/guides/research-workflow.md -->
+- 旧项目迁移说明：[research-workflow-migration.md](../../../../docs/guides/research-workflow-migration.md) <!-- pathref: docs/guides/research-workflow-migration.md -->
+- 仓库总规则：[CLAUDE.md](../../../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->
 
 本次重构目标不是推翻现有平台，而是把零散研究脚本、回测数据、A/B 实验、策略变体、报告文档和 Skill 工作流统一到一套长期可维护的架构中。
 

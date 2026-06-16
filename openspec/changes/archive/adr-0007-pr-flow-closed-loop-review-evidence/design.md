@@ -6,7 +6,7 @@ Accepted
 
 ## 背景
 
-PR 风险分级评审流程见 [ADR 0006](0006-risk-tiered-pr-review.md) <!-- pathref: docs/adr/0006-risk-tiered-pr-review.md -->。实践中，PR #21/#22 和 PR #25/#26 复盘暴露出同一类问题：`pr_flow` 已能辅助准备、等待、合并和清理，但证据、review、required checks、GitHub review threads、merge policy 和 cleanup 仍经常退回人工判断。
+PR 风险分级评审流程见 [ADR 0006](../adr-0006-risk-tiered-pr-review/proposal.md) <!-- pathref: openspec/changes/archive/adr-0006-risk-tiered-pr-review/proposal.md -->。实践中，PR #21/#22 和 PR #25/#26 复盘暴露出同一类问题：`pr_flow` 已能辅助准备、等待、合并和清理，但证据、review、required checks、GitHub review threads、merge policy 和 cleanup 仍经常退回人工判断。
 
 典型问题包括：
 

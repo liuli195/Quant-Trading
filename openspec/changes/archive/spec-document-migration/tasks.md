@@ -14,7 +14,7 @@ base-ref: 7ef3f2c78fc184c226191abf7b3e9c85846d6717
 
 **Tech Stack:** Git、Bash/PowerShell 文件操作、`openspec` CLI、`scripts.tools.path_tools.refactor`、`scripts.research.docs index`、`scripts.research.governance verify`
 
-**设计文档:** [2026-06-17-spec-document-migration-design.md](../specs/2026-06-17-spec-document-migration-design.md) <!-- pathref: docs/superpowers/specs/2026-06-17-spec-document-migration-design.md -->
+**设计文档:** [2026-06-17-spec-document-migration-design.md](../specs/2026-06-17-spec-document-migration-design.md) 
 
 ---
 
@@ -788,19 +788,19 @@ git commit --allow-empty -m "迁移 Phase 5: 治理扫描完成 — 记录所有
 该文件引用 `docs/adr/index.md`。将：
 
 ```markdown
-规则来源见 [ADR 索引](../adr/index.md) <!-- pathref: docs/adr/index.md -->
+规则来源见 [ADR 索引](../adr/index.md) 
 ```
 
 改为：
 
 ```markdown
-规则来源见 [ADR 索引](../../openspec/changes/archive/) <!-- pathref: openspec/changes/archive -->
+规则来源见 [ADR 索引(..) <!-- pathref: openspec/changes/archive -->
 ```
 
 将底部变更段落的：
 
 ```markdown
-同步 [ADR 索引](../adr/index.md) <!-- pathref: docs/adr/index.md -->
+同步 [ADR 索引](../adr/index.md) 
 ```
 
 改为删除该 pathref（ADR 索引已不存在，决策记录分散在各 archive 目录中）：
@@ -814,18 +814,18 @@ git commit --allow-empty -m "迁移 Phase 5: 治理扫描完成 — 记录所有
 当前目录分层表包含 adr、architecture、design、joinquant-data 四行需要更新：
 
 ```markdown
-| [adr/index.md](adr/index.md) <!-- pathref: docs/adr/index.md --> | 重大治理和架构决策记录 | [0001-rule-source-and-governance-model.md](adr/0001-rule-source-and-governance-model.md) <!-- pathref: docs/adr/0001-rule-source-and-governance-model.md --> |
-| [architecture](architecture) <!-- pathref: docs/architecture --> | 平台结构和长期架构说明 | [research-platform-architecture.md](architecture/research-platform-architecture.md) <!-- pathref: docs/architecture/research-platform-architecture.md --> |
-| [design](design) <!-- pathref: docs/design --> | 实施方案、重构方案、治理方案草案 | [本地研究平台重构技术实施方案.md](design/本地研究平台重构技术实施方案.md) <!-- pathref: docs/design/本地研究平台重构技术实施方案.md --> |
-| [joinquant-data](joinquant-data) <!-- pathref: docs/joinquant-data --> | 聚宽数据专题资料 | [JQ_场内基金数据.md](joinquant-data/JQ_场内基金数据.md) <!-- pathref: docs/joinquant-data/JQ_场内基金数据.md --> |
+| [adr/index.md](adr/index.md)  | 重大治理和架构决策记录 | [0001-rule-source-and-governance-model.md](adr/0001-rule-source-and-governance-model.md)  |
+| [architecture](architecture)  | 平台结构和长期架构说明 | [research-platform-architecture.md](architecture/research-platform-architecture.md)  |
+| [design](design)  | 实施方案、重构方案、治理方案草案 | [本地研究平台重构技术实施方案.md](design/本地研究平台重构技术实施方案.md)  |
+| [joinquant-data](joinquant-data)  | 聚宽数据专题资料 | [JQ_场内基金数据.md](joinquant-data/JQ_场内基金数据.md)  |
 ```
 
 改为删除 adr/architecture/design 三行（已归档），更新 joinquant-data 行为 joinquant-api：
 
 ```markdown
-| [joinquant-api](joinquant-api) <!-- pathref: docs/joinquant-api --> | 聚宽数据专题资料 | [JQ_场内基金数据.md](joinquant-api/JQ_场内基金数据.md) <!-- pathref: docs/joinquant-api/JQ_场内基金数据.md --> |
-| [openspec/specs](../openspec/specs) <!-- pathref: openspec/specs --> | 系统能力规格 | 12 个 capability spec |
-| [openspec/changes/archive](../openspec/changes/archive) <!-- pathref: openspec/changes/archive --> | 历史决策与设计归档 | ADR、设计文档、架构决策 |
+| [joinquant-api](../../../../docs/joinquant-api) <!-- pathref: docs/joinquant-api --> | 聚宽数据专题资料 | [JQ_场内基金数据.md](../../../../docs/joinquant-api/JQ_场内基金数据.md) <!-- pathref: docs/joinquant-api/JQ_场内基金数据.md --> |
+| [openspec/specs(../../../specs) <!-- pathref: openspec/specs --> | 系统能力规格 | 12 个 capability spec |
+| [openspec/changes/archive(..) <!-- pathref: openspec/changes/archive --> | 历史决策与设计归档 | ADR、设计文档、架构决策 |
 ```
 
 - [ ] **Step 4: 修复 docs/agents/domain.md**
@@ -833,13 +833,13 @@ git commit --allow-empty -m "迁移 Phase 5: 治理扫描完成 — 记录所有
 检查 `docs/agents/domain.md` 中是否有 `adr/` 的引用。典型引用模式：
 
 ```markdown
-[ADR 索引](../adr/index.md) <!-- pathref: docs/adr/index.md -->
+[ADR 索引](../adr/index.md) 
 ```
 
 如有此类引用，改为：
 
 ```markdown
-[ADR 归档](../../openspec/changes/archive/) <!-- pathref: openspec/changes/archive -->
+[ADR 归档(..) <!-- pathref: openspec/changes/archive -->
 ```
 
 - [ ] **Step 5: 修复 Phase 5 发现的其他断裂引用**

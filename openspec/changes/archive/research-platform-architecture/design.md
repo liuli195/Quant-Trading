@@ -4,12 +4,12 @@
 
 ## 核心入口
 
-- 研究流程 CLI：[cli.py](../../scripts/research/cli.py) <!-- pathref: scripts/research/cli.py -->
-- 数据中心 CLI：[datasets.py](../../scripts/research/datasets.py) <!-- pathref: scripts/research/datasets.py -->
-- 策略变体 CLI：[variants.py](../../scripts/research/variants.py) <!-- pathref: scripts/research/variants.py -->
-- 文档索引 CLI：[docs.py](../../scripts/research/docs.py) <!-- pathref: scripts/research/docs.py -->
-- 工具注册表：[tool_registry.py](../../scripts/research/registry/tool_registry.py) <!-- pathref: scripts/research/registry/tool_registry.py -->
-- 治理审计：[audit.py](../../scripts/research/governance/audit.py) <!-- pathref: scripts/research/governance/audit.py -->
+- 研究流程 CLI：[cli.py](../../../../scripts/research/cli.py) <!-- pathref: scripts/research/cli.py -->
+- 数据中心 CLI：[datasets.py](../../../../scripts/research/datasets.py) <!-- pathref: scripts/research/datasets.py -->
+- 策略变体 CLI：[variants.py](../../../../scripts/research/variants.py) <!-- pathref: scripts/research/variants.py -->
+- 文档索引 CLI：[docs.py](../../../../scripts/research/docs.py) <!-- pathref: scripts/research/docs.py -->
+- 工具注册表：[tool_registry.py](../../../../scripts/research/registry/tool_registry.py) <!-- pathref: scripts/research/registry/tool_registry.py -->
+- 治理审计：[audit.py](../../../../scripts/research/governance/audit.py) <!-- pathref: scripts/research/governance/audit.py -->
 
 ## 策略库
 
@@ -26,7 +26,7 @@ strategies/<strategy>/
   test_batches/
 ```
 
-实现入口：[strategy_variants.py](../../scripts/research/platform/strategy_variants.py) <!-- pathref: scripts/research/platform/strategy_variants.py -->
+实现入口：[strategy_variants.py](../../../../scripts/research/platform/strategy_variants.py) <!-- pathref: scripts/research/platform/strategy_variants.py -->
 
 - `VariantRegistry` 登记参数变体和结构变体。
 - 结构变体注册必须提供 `code_source`；参数变体默认不需要 Git 分支。
@@ -43,7 +43,7 @@ candidate -> in_research -> cloud_confirmed -> merge_ready -> merged_pending_val
 
 ## 数据中心
 
-数据中心目录为 [research_datasets](../../research_datasets) <!-- pathref: research_datasets -->。
+数据中心目录为 [research_datasets](../../../../research_datasets) <!-- pathref: research_datasets -->。
 
 新增能力：
 
@@ -66,13 +66,13 @@ init -> run --mode fast -> promote -> full review -> handoff-cloud -> cloud conf
 
 候选漏斗产物继续使用 `candidate_ranking.csv`、`discarded_candidates.csv`、`shortlist.csv`、`cloud_candidates.csv`。
 
-正式流程模板位于 [workflows/templates](../../scripts/research/workflows/templates) <!-- pathref: scripts/research/workflows/templates -->，由 [workflows.py](../../scripts/research/platform/workflows.py) <!-- pathref: scripts/research/platform/workflows.py --> 校验 schema。
+正式流程模板位于 [workflows/templates](../../../../scripts/research/workflows/templates) <!-- pathref: scripts/research/workflows/templates -->，由 [workflows.py](../../../../scripts/research/platform/workflows.py) <!-- pathref: scripts/research/platform/workflows.py --> 校验 schema。
 
-研究工具库位于 [research_core](../../scripts/research/research_core) <!-- pathref: scripts/research/research_core -->，包含 `MetricToolkit`、`RobustnessToolkit`、`ReplayAdapter` 和 `ReportPrimitives`。
+研究工具库位于 [research_core](../../../../scripts/research/research_core) <!-- pathref: scripts/research/research_core -->，包含 `MetricToolkit`、`RobustnessToolkit`、`ReplayAdapter` 和 `ReportPrimitives`。
 
 ## 文档报告库
 
-报告仍贴近产物保存，但由 [docs_index.py](../../scripts/research/platform/docs_index.py) <!-- pathref: scripts/research/platform/docs_index.py --> 生成统一索引：
+报告仍贴近产物保存，但由 [docs_index.py](../../../../scripts/research/platform/docs_index.py) <!-- pathref: scripts/research/platform/docs_index.py --> 生成统一索引：
 
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.research.docs index
@@ -80,12 +80,12 @@ init -> run --mode fast -> promote -> full review -> handoff-cloud -> cloud conf
 
 索引输出：
 
-- [docs_catalog.json](../indexes/docs_catalog.json) <!-- pathref: docs/indexes/docs_catalog.json -->
-- [reports_catalog.json](../indexes/reports_catalog.json) <!-- pathref: docs/indexes/reports_catalog.json -->
-- [datasets_catalog.json](../indexes/datasets_catalog.json) <!-- pathref: docs/indexes/datasets_catalog.json -->
-- [variants_catalog.json](../indexes/variants_catalog.json) <!-- pathref: docs/indexes/variants_catalog.json -->
+- [docs_catalog.json](../../../../docs/indexes/docs_catalog.json) <!-- pathref: docs/indexes/docs_catalog.json -->
+- [reports_catalog.json](../../../../docs/indexes/reports_catalog.json) <!-- pathref: docs/indexes/reports_catalog.json -->
+- [datasets_catalog.json](../../../../docs/indexes/datasets_catalog.json) <!-- pathref: docs/indexes/datasets_catalog.json -->
+- [variants_catalog.json](../../../../docs/indexes/variants_catalog.json) <!-- pathref: docs/indexes/variants_catalog.json -->
 
-兼容旧入口仍会写出 [reports.json](../indexes/reports.json) <!-- pathref: docs/indexes/reports.json --> 和 [reports.md](../indexes/reports.md) <!-- pathref: docs/indexes/reports.md -->。
+兼容旧入口仍会写出 [reports.json](../../../../docs/indexes/reports.json) <!-- pathref: docs/indexes/reports.json --> 和 [reports.md](../../../../docs/indexes/reports.md) <!-- pathref: docs/indexes/reports.md -->。
 
 ## 治理审计
 
@@ -104,7 +104,7 @@ init -> run --mode fast -> promote -> full review -> handoff-cloud -> cloud conf
 
 登记项包含 `tool_id`、`library`、`layer`、`kind`、`entry_module`、`cli`、`cli_windows`、`cli_posix`、README、文档、测试锚点、输入和输出。CLI 元数据必须同时生成 Windows `.venv\Scripts\python.exe` 命令和 POSIX `.venv/bin/python` 命令。
 
-[layers](../../scripts/research/layers) <!-- pathref: scripts/research/layers --> 是按5层生成的工具索引目录，来源仍是同一份 registry；源码继续按库维护，避免为了分层视图重复搬迁实现。
+[layers](../../../../scripts/research/layers) <!-- pathref: scripts/research/layers --> 是按5层生成的工具索引目录，来源仍是同一份 registry；源码继续按库维护，避免为了分层视图重复搬迁实现。
 
 刷新命令：
 

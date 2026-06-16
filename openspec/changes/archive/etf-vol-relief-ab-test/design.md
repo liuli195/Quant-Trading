@@ -12,9 +12,9 @@
 
 ## Related Files
 
-- Strategy: [etf_factor_rotation.py](../../../strategies/etf_factor_rotation/etf_factor_rotation.py) <!-- pathref: strategies/etf_factor_rotation/etf_factor_rotation.py -->
-- Tests: [test_etf_factor_rotation.py](../../../strategies/etf_factor_rotation/tests/test_etf_factor_rotation.py) <!-- pathref: strategies/etf_factor_rotation/tests/test_etf_factor_rotation.py -->
-- A/B tool docs: [README.md](../../../scripts/tools/jq_automation/README.md) <!-- pathref: scripts/tools/jq_automation/README.md -->
+- Strategy: [etf_factor_rotation.py](../../../../strategies/etf_factor_rotation/etf_factor_rotation.py) <!-- pathref: strategies/etf_factor_rotation/etf_factor_rotation.py -->
+- Tests: [test_etf_factor_rotation.py](../../../../strategies/etf_factor_rotation/tests/test_etf_factor_rotation.py) <!-- pathref: strategies/etf_factor_rotation/tests/test_etf_factor_rotation.py -->
+- A/B tool docs: [README.md](../../../../scripts/tools/jq_automation/README.md) <!-- pathref: scripts/tools/jq_automation/README.md -->
 
 ## Design Decision
 

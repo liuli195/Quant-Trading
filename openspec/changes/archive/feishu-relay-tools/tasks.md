@@ -12,11 +12,11 @@
 
 ## 依据
 
-- 方案文档：[2026-05-20-feishu-relay-tools-design.md](../specs/2026-05-20-feishu-relay-tools-design.md) <!-- pathref: docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md -->
-- 参考模板：[RelayTools.py](../../../scripts/archive/RelayTools.py) <!-- pathref: repo/scripts/archive/RelayTools.py -->
-- 命令规则：[commands.md](../../rules/commands.md) <!-- pathref: docs/rules/commands.md -->
-- 代码规则：[code-style.md](../../rules/code-style.md) <!-- pathref: docs/rules/code-style.md -->
-- 密钥忽略规则：[.gitignore](../../../.gitignore) <!-- pathref: repo/.gitignore -->
+- 方案文档：[2026-05-20-feishu-relay-tools-design.md](../specs/2026-05-20-feishu-relay-tools-design.md) 
+- 参考模板：[RelayTools.py](../../../../scripts/archive/RelayTools.py) <!-- pathref: repo/scripts/archive/RelayTools.py -->
+- 命令规则：[commands.md](../../../../docs/rules/commands.md) <!-- pathref: docs/rules/commands.md -->
+- 代码规则：[code-style.md](../../../../docs/rules/code-style.md) <!-- pathref: docs/rules/code-style.md -->
+- 密钥忽略规则：[.gitignore](../../../../.gitignore) <!-- pathref: repo/.gitignore -->
 
 ## 文件结构
 

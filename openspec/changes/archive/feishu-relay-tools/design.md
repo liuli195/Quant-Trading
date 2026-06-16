@@ -2,7 +2,7 @@
 
 ## 目标
 
-为聚宽模拟交易提供一个飞书通知工具，行为参考 [RelayTools.py](../../../scripts/archive/RelayTools.py) <!-- pathref: repo/scripts/archive/RelayTools.py -->。策略只需要导入工具文件，不关心消息发送、订单合并、签名和失败处理。
+为聚宽模拟交易提供一个飞书通知工具，行为参考 [RelayTools.py](../../../../scripts/archive/RelayTools.py) <!-- pathref: repo/scripts/archive/RelayTools.py -->。策略只需要导入工具文件，不关心消息发送、订单合并、签名和失败处理。
 
 ## 已确认决策
 
@@ -228,7 +228,7 @@
 
 实现阶段需要检查 `.gitignore` 是否覆盖私有上传产物。如果需要新增生成脚本，输出目录应放在 `.local/` 或其他未跟踪目录。
 
-密钥泄露属于仓库 P0/P1 级风险，评审规则见 [review-guidelines.md](../../rules/review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md -->。
+密钥泄露属于仓库 P0/P1 级风险，评审规则见 [review-guidelines.md](../../../../docs/rules/review-guidelines.md) <!-- pathref: docs/rules/review-guidelines.md -->。
 
 ## 测试设计
 
