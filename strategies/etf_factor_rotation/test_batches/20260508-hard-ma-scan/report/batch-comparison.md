@@ -7,7 +7,7 @@
 **初始资金**: 100,000  
 **扫描参数**: `MA_long` = 20 / 40 / 60 / 80 / 100 / 120 / 140 / 160，其中 120 日均线为对照组。  
 **数据来源**: [manifest.json](../manifest.json) <!-- pathref: test_batch(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan)/manifest.json -->、[scenario.json](../scenarios/s01-ma-long-scan/scenario.json) <!-- pathref: test_scenario(strategy=etf_factor_rotation, batch_id=20260508-hard-ma-scan, scenario_id=s01-ma-long-scan)/scenario.json -->、各 run 的 `summary_metrics.json` / `all_data.json`。  
-**云端耗时**: 实际合计 12.13 分钟。额度账本见 [20260508.json](../../../../../docs/joinquant-data/quota_ledger/20260508.json) <!-- pathref: joinquant_quota_ledger/20260508.json -->。
+**云端耗时**: 实际合计 12.13 分钟。额度账本见 [20260508.json](../../../../../.local/governance/quota-ledger/20260508.json) <!-- pathref: joinquant_quota_ledger/20260508.json -->。
 
 ## 1. 扫描目的
 

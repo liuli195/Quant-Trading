@@ -1,6 +1,6 @@
 # 仓库规则总索引
 
-本目录是仓库级规则正文。通用入口见 [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->；Claude 侧入口见 [CLAUDE.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->；规则来源见 [ADR 索引](../adr/index.md) <!-- pathref: docs/adr/index.md -->。
+本目录是仓库级规则正文。通用入口见 [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->；Claude 侧入口见 [CLAUDE.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->；规则来源见 [openspec/changes/archive](../../openspec/changes/archive) <!-- pathref: openspec/changes/archive -->（ADR 已归档）。
 
 ## 分级
 
@@ -28,4 +28,4 @@
 
 ## 变更
 
-MUST 规则变更必须同步规则文档、依赖脚本、测试、索引；影响协作模型、目录结构、门禁或策略流程时，同步 [ADR 索引](../adr/index.md) <!-- pathref: docs/adr/index.md --> 并经过显式 owner 授权或远端实际要求的 review。任何与规则冲突的改动、对规则本身的改动都必须显式获得授权（见 AGENTS.md 核心规则「规则优先」）。
+MUST 规则变更必须同步规则文档、依赖脚本、测试、索引；影响协作模型、目录结构、门禁或策略流程时，同步 [openspec/changes/archive](../../openspec/changes/archive) <!-- pathref: openspec/changes/archive -->（ADR 已归档）并经过显式 owner 授权或远端实际要求的 review。任何与规则冲突的改动、对规则本身的改动都必须显式获得授权（见 AGENTS.md 核心规则「规则优先」）。

@@ -1,0 +1,1345 @@
+# 本地研究平台重构技术实施方案
+
+日期：2026-05-19
+
+## 1. 背景与目标
+
+本仓库是基于 Python 的 A 股/场内基金量化策略仓库，策略正式运行和回测依赖聚宽云端。本地环境负责策略编写、静态检查、单元测试、本地研究、数据整理、报告分析和流程沉淀。
+
+当前仓库已经有本地优先研究平台雏形：
+
+- 研究流程 CLI：[cli.py](../../../../scripts/research/cli.py) <!-- pathref: scripts/research/cli.py -->
+- 数据集 CLI：[datasets.py](../../../../scripts/research/datasets.py) <!-- pathref: scripts/research/datasets.py -->
+- 平台核心：[platform](../../../../scripts/research/platform) <!-- pathref: scripts/research/platform -->
+- 研究流程说明：[research-workflow.md](../../../../docs/guides/research-workflow.md) <!-- pathref: docs/guides/research-workflow.md -->
+- 旧项目迁移说明：[research-workflow-migration.md](../../../../docs/guides/research-workflow-migration.md) <!-- pathref: docs/guides/research-workflow-migration.md -->
+- 仓库总规则：[CLAUDE.md](../../../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->
+
+本次重构目标不是推翻现有平台，而是把零散研究脚本、回测数据、A/B 实验、策略变体、报告文档和 Skill 工作流统一到一套长期可维护的架构中。
+
+最终目标：
+
+1. 所有研究工具和脚本纳入统一架构。
+2. 建立项目级数据中心，集中管理所有可复用回测数据。
+3. 流程编排轻量化，能和 Skill 协同，支持流程模板复用。
+4. 研究工具函数化、库化，避免专题脚本重复造轮子。
+5. 文档和报告仍贴近产物保存，但必须能集中索引和查询。
+6. 策略库管理策略本体、参数变体、结构变体、专题研究和合并状态。
+7. 通过治理审计和测试体系防止平台长期漂移。
+
+## 2. 总体架构
+
+采用“5 层架构 + 中央工具注册 + Git 受控自动化 + 治理审计防漂移 + 完整测试体系”。
+
+5 层分别是：
+
+1. 策略库
+2. 数据中心
+3. 流程编排层
+4. 研究工具库
+5. 文档报告库
+
+横向治理能力：
+
+- 中央工具注册：统一登记工具、入口、文档、schema、测试状态。
+- Git 受控自动化：结构变体使用 Git，但创建分支、切换分支、合并、写回默认参数都必须用户显式授权。
+- 治理审计：用机器检查工具登记、文档、Skill、catalog、schema、pathref 和测试是否同步。
+- 测试体系：用单元、集成、回归、数据一致性、Git 授权、文档 Skill 六类测试保障长期稳定。
+
+核心原则：
+
+- 参数变体默认不依赖 Git 分支。
+- 结构变体必须有代码来源，通常使用 Git branch 或 commit。
+- 历史数据和历史报告不强制物理搬迁。
+- 新数据默认登记进数据中心。
+- 新报告默认进入文档报告索引。
+- 新工具必须有 README、CLI 示例、输入输出说明和测试。
+- `CLAUDE.md` 和相关 Skill 必须同步最新工作流。
+
+## 3. 目录总览
+
+目标结构如下。规划中的新路径先作为实施目标，不要求一次性全部落地。
+
+```text
+repo/
+  CLAUDE.md
+  path_aliases.json
+
+  docs/
+    README.md
+    architecture/
+      research-platform-architecture.md
+    guides/
+      research-workflow.md
+      research-workflow-migration.md
+    design/
+      本地研究平台重构技术实施方案.md
+    indexes/
+      docs_catalog.json
+      reports_catalog.json
+      datasets_catalog.json
+      variants_catalog.json
+
+  research_datasets/
+    catalog.json
+    catalog.md
+    <dataset_id>/
+      <snapshot_id>/
+        dataset.json
+        raw/
+        data/
+        views/
+
+  scripts/research/
+    cli.py
+    datasets.py
+    variants.py
+    docs.py
+
+    registry/
+      tool_registry.py
+      schemas.py
+      README.md
+
+    governance/
+      audit.py
+      rules.py
+      schemas.py
+      README.md
+
+    platform/
+      contracts.py
+      engine.py
+      plugins.py
+      features.py
+      funnel.py
+      datasets.py
+      strategy_variants.py
+      docs_index.py
+
+    workflows/
+      templates/
+        factor_scan.json
+        parameter_followup.json
+        robustness_check.json
+        generic.json
+        cloud_confirmation.json
+
+    research_core/
+      metrics.py
+      robustness.py
+      replay.py
+      reporting.py
+
+  strategies/
+    <strategy>/
+      strategy.json
+      variants/
+        variants.json
+        <variant_id>.json
+      reports/
+        design/
+        research/
+      backtest_runs/
+      test_batches/
+
+  .claude/skills/
+    jq-research/
+    jq-ab-test/
+```
+
+## 4. 第一层：策略库
+
+### 4.1 目标
+
+策略库负责管理：
+
+- 策略本体。
+- 默认参数。
+- 参数变体。
+- 结构变体。
+- 变体研究状态。
+- 云端确认状态。
+- 合并状态。
+- 策略专题研究和设计报告。
+
+核心变化是把“策略变体”从散落在 Git 分支、A/B 配置、临时上传文件里的隐式状态，变成可登记、可追溯、可研究、可合并的正式对象。
+
+### 4.2 目标结构
+
+```text
+strategies/<strategy>/
+  strategy.json
+  variants/
+    variants.json
+    <variant_id>.json
+  reports/
+    design/
+    research/
+  backtest_runs/
+  test_batches/
+```
+
+`strategy.json` 是策略元数据，不替代策略 `.py`，只记录平台需要的结构信息：
+
+```json
+{
+  "schema_version": 1,
+  "strategy": "etf_factor_rotation",
+  "strategy_file": "strategies/etf_factor_rotation/etf_factor_rotation.py",
+  "default_branch": "main",
+  "default_params_source": "set_parameter",
+  "cloud_runtime": "joinquant",
+  "variant_registry": "strategies/etf_factor_rotation/variants/variants.json"
+}
+```
+
+`variants/<variant_id>.json` 示例：
+
+```json
+{
+  "schema_version": 1,
+  "variant_id": "rsrs-v2-structure",
+  "strategy": "etf_factor_rotation",
+  "variant_type": "structural",
+  "parent": "main",
+  "status": "in_research",
+  "merge_status": "not_merged",
+  "code_source": {
+    "type": "git",
+    "ref": "feature/etf-factor-rotation/rsrs-v2",
+    "commit": "",
+    "path": "strategies/etf_factor_rotation/etf_factor_rotation.py"
+  },
+  "params_diff": {},
+  "research_refs": [],
+  "backtest_refs": [],
+  "report_refs": [],
+  "created_at": "2026-05-19T00:00:00",
+  "updated_at": "2026-05-19T00:00:00"
+}
+```
+
+### 4.3 变体类型
+
+参数变体：
+
+- `variant_type=parameter`
+- 同一份策略代码，只改参数。
+- 默认不需要 Git 分支。
+- 通过 `params_diff` 和 `variant_id` 管理。
+- 适合 MA 窗口、阈值、权重、风险参数等研究。
+
+结构变体：
+
+- `variant_type=structural`
+- 改了策略逻辑、信号、权重计算、风控模块、调仓机制等。
+- 必须记录 `code_source`。
+- 通常使用 Git branch 或 commit 管理代码变化。
+- 可以独立做完整回测、参数研究和 A/B。
+
+### 4.4 抽象工具
+
+`VariantRegistry`
+
+- 负责注册、读取、更新参数变体和结构变体。
+- 校验 `variant_id` 唯一。
+- 校验状态流转合法。
+- 校验结构变体必须有 `code_source`。
+- 维护 `variants.json` 汇总索引。
+
+`StrategyMaterializer`
+
+- 输入策略文件、`params_diff`、可选 Git commit。
+- 输出 JoinQuant 可上传的完整 `.py` 快照。
+- 计算 `uploaded_code_sha256`。
+- 拒绝不存在的参数名。
+- 对参数变体直接 materialize；对结构变体先读取冻结 commit 或当前分支代码，再应用参数。
+
+`StructuralBranchManager`
+
+- 生成结构变体分支计划。
+- 检查工作区是否干净。
+- 检查 base ref 是否存在。
+- 生成建议分支名。
+- 只有用户授权后才创建和切换分支。
+
+`VariantMergeManager`
+
+- 生成合并计划。
+- 冻结变体 commit。
+- 生成差异摘要。
+- 检查研究和云端确认状态。
+- 只有用户授权后才执行 merge 或 cherry-pick。
+- 冲突时停止，不自动解决。
+
+`StrategyManifestReader`
+
+- 读取 `strategy.json`。
+- 缺失时从策略目录保守推断策略文件。
+- 提供统一策略元信息给其他工具。
+
+### 4.5 状态流转
+
+结构变体状态：
+
+```text
+candidate
+→ in_research
+→ cloud_confirmed
+→ merge_ready
+→ merged_pending_validation
+→ merged_confirmed
+```
+
+状态含义：
+
+- `candidate`：刚注册，尚未完成研究。
+- `in_research`：正在本地研究或云端确认。
+- `cloud_confirmed`：变体自身云端结果可用。
+- `merge_ready`：证据足够，允许生成合并计划。
+- `merged_pending_validation`：已合并到主策略，但主策略合并后云端回归未确认。
+- `merged_confirmed`：合并后主策略也通过确认。
+
+禁止行为：
+
+- 未经云端确认直接 `merge_ready`。
+- `merge-apply` 后直接标记 `merged_confirmed`。
+- Git 冲突时自动提交。
+
+## 5. 第二层：数据中心
+
+### 5.1 目标
+
+数据中心负责项目级集中管理所有可复用回测数据。这里的“集中管理”不是把所有历史目录强行搬走，而是统一登记、快照化、索引和规范化读取。
+
+### 5.2 目标结构
+
+```text
+research_datasets/
+  catalog.json
+  catalog.md
+  <dataset_id>/
+    <snapshot_id>/
+      dataset.json
+      raw/
+      data/
+      views/
+```
+
+快照内部：
+
+```text
+raw/
+  source.json.gz
+  audit_log.jsonl.gz
+  summary_metrics.json
+  daily_returns.md
+
+data/
+  data.parquet
+  daily_returns.parquet
+  audit_events.parquet
+
+views/
+  profile.md
+  schema.md
+  sample.csv
+  profile.json
+```
+
+### 5.3 历史数据处理
+
+历史 `backtest_runs/` 不移动，原因：
+
+- 保留云端抓取后的原始证据链。
+- 不破坏已有报告相对链接和 `pathref`。
+- 避免一次性大迁移。
+- 旧脚本和旧报告继续可读。
+
+缺点：
+
+- 短期存在 `backtest_runs/` 和 `research_datasets/` 两个入口。
+- 部分数据会有轻度重复存储。
+- 如果没有治理审计，旧数据可能继续散落。
+
+处理规则：
+
+- 需要复用的历史 run 导入数据中心。
+- 新云端回测抓取后仍先落到 `backtest_runs/<run_id>/`。
+- 新 run 抓取完成后默认登记到 `research_datasets/`。
+- 后续本地研究默认引用数据快照，不直接散读 run 目录。
+
+### 5.4 抽象工具
+
+`DatasetRegistry`
+
+- 读取和维护 `catalog.json`、`catalog.md`。
+- 校验 `dataset.json` schema。
+- 根据 `dataset_id`、`snapshot_id` 查找快照。
+- 检查 catalog 与实际目录是否一致。
+
+`BacktestRunImporter`
+
+- 输入 `strategy`、`run_id` 或 run 目录。
+- 读取 `summary_metrics.json`、`daily_returns.md`、`tabs_raw/audit_log.jsonl`、`detail_api_export.json` 等文件。
+- 生成 gzip 原始件、Parquet 主存储、AI 友好的 views。
+- 缺少关键文件时给出明确错误。
+
+`DatasetProfileBuilder`
+
+- 生成 `profile.md`、`schema.md`、`sample.csv`、`profile.json`。
+- 记录行数、日期范围、字段类型、缺失值、事件类型分布。
+
+`DataViewLoader`
+
+- 统一读取收益、价格、审计日志、指标、信号、权重。
+- 为研究工具库屏蔽底层文件格式差异。
+
+### 5.5 数据一致性规则
+
+- 快照不可变：同一 `dataset_id/snapshot_id` 已存在时拒绝覆盖。
+- fingerprint 稳定：同一源文件生成同一内容哈希。
+- 原始件、Parquet 主存储、views 摘要必须能追溯到同一源。
+- catalog 必须和实际目录一致。
+- 从快照读取的收益序列必须和原始 `daily_returns.md` 一致。
+- 审计日志导入后的日期范围、事件数量、ETF 池必须和原始 `audit_log.jsonl` 一致。
+
+## 6. 第三层：流程编排层
+
+### 6.1 目标
+
+流程编排层负责把研究生命周期标准化，但保持轻量，不引入重型工作流框架。现有入口继续以 `scripts.research.cli` 为准。
+
+### 6.2 目标结构
+
+```text
+scripts/research/
+  cli.py
+  platform/
+    contracts.py
+    engine.py
+    plugins.py
+    features.py
+    funnel.py
+  workflows/
+    templates/
+      factor_scan.json
+      parameter_followup.json
+      robustness_check.json
+      generic.json
+      cloud_confirmation.json
+```
+
+### 6.3 标准生命周期
+
+```text
+init
+→ run --mode fast
+→ promote
+→ full review
+→ handoff-cloud
+→ cloud confirmation
+→ report + decision
+```
+
+fast 阶段：
+
+- 快速粗筛。
+- 目标是低成本排序和淘汰。
+- 默认不跑高成本 bootstrap。
+- 输出 `candidate_ranking.csv`、`discarded_candidates.csv`、`shortlist.csv`。
+
+full 阶段：
+
+- 只对 shortlist 精筛。
+- 包含样本外、分段、滚动、bootstrap、年度拆分等检查。
+- 输出 `full_candidate_review.csv`、`cloud_candidates.csv`。
+
+handoff-cloud 阶段：
+
+- 只为通过本地门槛的候选生成云端交接材料。
+- 输出 `cloud_handoff.json`。
+
+### 6.4 抽象工具
+
+`WorkflowTemplate`
+
+- 声明输入、步骤、门槛、产物。
+- 示例字段：
+
+```json
+{
+  "schema_version": 1,
+  "template": "parameter_followup",
+  "inputs": ["dataset", "baseline_returns", "variants"],
+  "stages": ["fast", "full", "handoff"],
+  "outputs": ["shortlist", "cloud_candidates", "cloud_handoff"],
+  "gates": ["local_replay_calibrated", "bootstrap_ci_non_negative"]
+}
+```
+
+`ResearchEngine`
+
+- 执行 `init/run/promote/resume/handoff-cloud/status`。
+- 负责创建运行目录、调用插件、写入状态文件和 manifest。
+
+`CandidateFunnel`
+
+- 统一候选排序、淘汰、入围、云端候选。
+- 标准产物：
+  - `candidate_ranking.csv`
+  - `discarded_candidates.csv`
+  - `shortlist.csv`
+  - `cloud_candidates.csv`
+
+`RunStateStore`
+
+- 管理运行状态：
+  - `request.json`
+  - `status.json`
+  - `manifest.json`
+  - `benchmark.json`
+- 支持中断后 resume。
+
+## 7. 第四层：研究工具库
+
+### 7.1 目标
+
+研究工具库负责把常用能力函数化、库化。专题研究只保留 adapter 和少量领域逻辑，不重复实现基础指标、稳健性检查、报告格式和数据读取。
+
+### 7.2 目标结构
+
+```text
+scripts/research/
+  research_core/
+    metrics.py
+    calendar.py
+    layout.py
+    reporting.py
+    robustness.py
+    replay.py
+
+  <topic>_research/
+    analysis.py
+    cli.py
+    spec.py
+```
+
+### 7.3 抽象工具
+
+`MetricToolkit`
+
+- 年化收益。
+- 最大回撤。
+- 夏普率。
+- 波动率。
+- 年度指标。
+- rolling 指标。
+
+`RobustnessToolkit`
+
+- bootstrap。
+- 滚动窗口。
+- 分年拆分。
+- 样本外验证。
+- 置信区间。
+- 胜率统计。
+
+`ReplayAdapter`
+
+- 用云端 baseline 审计日志做本地 counterfactual。
+- 适用于 `local_replayable` 类研究。
+- replay 校准失败时允许输出诊断，但不得生成云端候选。
+
+`FeatureStore`
+
+- 缓存价格矩阵、forward return、因子序列、权重序列等高成本特征。
+- 缓存命中信息写入 `manifest.json` 和 `benchmark.json`。
+
+`ReportPrimitives`
+
+- 统一 Markdown 表格。
+- 统一结论块。
+- 统一证据引用。
+- 统一指标摘要。
+
+### 7.4 工具边界
+
+研究工具库不负责：
+
+- 创建 Git 分支。
+- 上传云端回测。
+- 修改主策略默认参数。
+- 判断是否最终写回主策略。
+
+研究工具库负责：
+
+- 提供可复用计算。
+- 给流程编排层提供插件能力。
+- 给报告文档提供标准化表格和证据片段。
+
+## 8. 第五层：文档报告库
+
+### 8.1 目标
+
+报告物理位置继续贴近产物，但必须能被集中索引和查询。这样既保留证据上下文，又解决报告分散难找的问题。
+
+### 8.2 保存规则
+
+```text
+backtest_runs/<run_id>/report/                       # 单次回测报告
+test_batches/<batch_id>/report/                      # 批量测试 / A-B 报告
+reports/research/<project>/runs/<run_id>/reports/    # 专题研究报告
+reports/design/                                      # 策略设计和决策文档
+docs/indexes/                                        # 总索引
+```
+
+### 8.3 索引结构
+
+```text
+docs/indexes/
+  docs_catalog.json
+  reports_catalog.json
+  datasets_catalog.json
+  variants_catalog.json
+```
+
+### 8.4 抽象工具
+
+`DocsIndexer`
+
+- 扫描 Markdown。
+- 提取标题、日期、标签、路径、pathref。
+- 识别报告类型。
+- 识别所属策略、run、batch、research project。
+
+`ReportRegistry`
+
+- 登记研究报告、回测报告、批量测试报告、决策报告。
+- 生成 `reports_catalog.json`。
+
+`EvidenceLinker`
+
+- 把报告结论连接到：
+  - 数据快照。
+  - run manifest。
+  - 表格。
+  - 回测 run。
+  - 变体 ID。
+
+`PathrefValidator`
+
+- 继续复用现有 pathref 机制。
+- 确保重要 Markdown 内部引用可机器校验。
+
+### 8.5 报告原则
+
+- 不为了整齐强行搬迁历史报告。
+- 新报告必须进入索引。
+- 重要结论必须可追溯到数据、表格、manifest 或回测 run。
+- 报告中区分“方向性支持”和“准备写回默认参数”。
+
+## 9. 中央工具注册
+
+### 9.1 目标
+
+中央工具注册表只做“登记、发现、校验”，不承载业务逻辑。
+
+### 9.2 目标结构
+
+```text
+scripts/research/
+  registry/
+    tool_registry.py
+    schemas.py
+    README.md
+```
+
+### 9.3 工具登记项
+
+示例：
+
+```json
+{
+  "tool_id": "dataset.import_backtest_run",
+  "layer": "data_center",
+  "module": "scripts.research.platform.datasets",
+  "entrypoint": "import_backtest_run",
+  "cli": ".\\.venv\\Scripts\\python.exe -m scripts.research.datasets import-backtest-run",
+  "inputs": ["strategy", "run_id"],
+  "outputs": ["dataset_snapshot", "catalog_entry"],
+  "docs": "research_datasets/README.md",
+  "tests": ["scripts/research/platform/tests/test_platform.py"],
+  "status": "stable"
+}
+```
+
+### 9.4 管理规则
+
+- 新工具必须登记。
+- 未登记工具视为非正式工具，不进入标准工作流。
+- 每个正式工具必须有 README。
+- 每个正式工具必须有 CLI 示例。
+- 每个正式工具必须说明输入、输出、边界。
+- 每个正式工具必须有测试锚点。
+
+不做大而全 `ToolManager`，避免把策略、数据、文档、流程逻辑耦合在一起。
+
+## 10. Git 受控自动化
+
+### 10.1 原则
+
+结构变体需要 Git 管代码变化，但所有影响分支、主策略代码和默认参数的动作都必须用户显式授权。
+
+### 10.2 可以自动准备
+
+- 生成结构变体分支名。
+- 检查工作区是否干净。
+- 检查 base ref 是否存在。
+- 生成变体注册文件。
+- 冻结 commit SHA。
+- 生成合并计划。
+- 生成差异摘要。
+- 生成合并后验证清单。
+
+### 10.3 必须授权后才执行
+
+- 创建分支。
+- 切换分支。
+- merge。
+- cherry-pick。
+- 修改主策略默认参数。
+- 删除旧逻辑。
+- 标记 `merged_confirmed`。
+
+### 10.4 命令设计
+
+只生成分支计划：
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.research.variants branch-plan `
+  --strategy etf_factor_rotation `
+  --variant-id rsrs-v2-structure `
+  --base-ref main
+```
+
+授权后创建分支：
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.research.variants branch-create `
+  --strategy etf_factor_rotation `
+  --variant-id rsrs-v2-structure `
+  --base-ref main `
+  --branch feature/etf-factor-rotation/rsrs-v2 `
+  --yes
+```
+
+只生成合并计划：
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.research.variants merge-plan `
+  --strategy etf_factor_rotation `
+  --variant-id rsrs-v2-structure
+```
+
+授权后执行合并：
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.research.variants merge-apply `
+  --strategy etf_factor_rotation `
+  --variant-id rsrs-v2-structure `
+  --yes
+```
+
+### 10.5 冲突处理
+
+- 工具停止。
+- 输出冲突文件。
+- 输出差异摘要。
+- 输出建议处理路径。
+- 不自动解决冲突。
+- 不自动提交。
+
+## 11. 治理审计防漂移
+
+### 11.1 目标
+
+长期不漂移不能只靠“记得更新文档”。必须用制度、固定入口和机器校验保证。
+
+### 11.2 目标结构
+
+```text
+scripts/research/
+  governance/
+    audit.py
+    rules.py
+    schemas.py
+    README.md
+```
+
+### 11.3 审计命令
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.research.governance audit
+```
+
+### 11.4 审计内容
+
+工具登记：
+
+- registry 中的工具能解析。
+- 每个工具有合法 `tool_id`。
+- 工具所属层合法。
+- 工具文档路径存在。
+- 工具测试锚点存在。
+
+CLI：
+
+- 正式 CLI 支持 `--help`。
+- CLI 文档中的命令和 registry 一致。
+
+schema：
+
+- `project.json` schema 合法。
+- `dataset.json` schema 合法。
+- `variant.json` schema 合法。
+- workflow template schema 合法。
+- tool registry schema 合法。
+
+文档：
+
+- `CLAUDE.md` 包含当前正式入口。
+- `docs/guides/research-workflow.md` 包含当前标准流程。
+- README 包含用途、命令示例、输入、输出、边界。
+
+Skill：
+
+- `jq-research` 覆盖本地优先研究、数据中心、变体、云端交接。
+- `jq-ab-test` 覆盖 `variant_id`、参数变体、结构变体边界。
+
+索引：
+
+- `research_datasets/catalog.*` 与实际目录一致。
+- `docs/indexes/*.json` 与实际报告一致。
+
+路径：
+
+- pathref 校验通过。
+
+测试：
+
+- 新工具有最小测试。
+- 新流程有集成测试或审计测试。
+
+### 11.5 长期约束
+
+- 新工具必须登记。
+- 新流程必须有 schema 和 README。
+- 新数据必须进入 catalog。
+- 新报告必须进入报告索引。
+- 新入口必须同步 `CLAUDE.md` 和 Skill。
+- 不通过治理审计，不视为完成。
+
+## 12. 典型工作流
+
+### 12.1 参数变体研究
+
+```text
+注册参数变体
+→ 本地 fast/full 研究
+→ 通过后生成 cloud_handoff
+→ JoinQuant 云端 A/B
+→ 回测数据进数据中心
+→ 报告进索引
+→ 决定是否写回默认参数
+→ governance audit
+```
+
+详细步骤：
+
+1. 用 `VariantRegistry` 注册参数变体。
+2. 变体记录 `variant_id`、`params_diff`、来源研究。
+3. 创建研究项目并绑定数据快照。
+4. fast 阶段粗筛。
+5. full 阶段稳健性复核。
+6. 只有通过本地门槛的候选进入 `cloud_candidates.csv`。
+7. A/B 工具按 `variant_id` materialize 上传快照。
+8. 云端结果抓取到 `backtest_runs/`。
+9. run 导入数据中心。
+10. 报告进入文档索引。
+11. 如果要写回默认参数，必须有合并后或默认参数变更后的云端确认。
+
+### 12.2 结构变体研究
+
+```text
+branch-plan
+→ 用户授权 branch-create
+→ 在结构分支实现逻辑变化
+→ 注册 structural variant
+→ 对该变体做完整回测
+→ 导入数据中心
+→ 对该变体做参数研究
+→ 和主策略做云端 A/B
+→ 通过后 merge-plan
+→ 用户授权 merge-apply
+→ 合并后主策略重新云端确认
+→ 通过后标记 merged_confirmed
+→ governance audit
+```
+
+详细步骤：
+
+1. 生成分支计划。
+2. 用户授权后创建结构分支。
+3. 在分支上实现结构变化。
+4. 注册结构变体。
+5. 冻结候选 commit。
+6. 对结构变体做云端 baseline 回测。
+7. 把 run 导入数据中心。
+8. 对该结构变体继续做参数研究。
+9. 用云端 A/B 和主策略对比。
+10. 通过本地和云端门槛后生成合并计划。
+11. 用户授权后合并。
+12. 合并后的主策略重新云端确认。
+13. 通过后标记 `merged_confirmed`。
+
+## 13. 测试计划
+
+### 13.1 测试分层
+
+测试分 6 类：
+
+1. 单元测试：验证每个工具函数和 schema。
+2. 集成测试：验证跨层工作流能串起来。
+3. 回归测试：确保旧 CLI、旧项目、旧报告不被破坏。
+4. 数据一致性测试：验证数据中心快照可追溯、可复用。
+5. Git 受控自动化测试：验证分支和合并必须授权。
+6. 治理审计测试：验证防漂移机制有效。
+
+### 13.2 单元测试
+
+`VariantRegistry`
+
+- 参数变体注册成功。
+- 结构变体注册成功。
+- 重复 `variant_id` 拒绝。
+- 状态流转合法性校验。
+- 缺少 `code_source` 的结构变体失败。
+
+`StrategyMaterializer`
+
+- `params_diff` 正确注入策略快照。
+- 同一输入生成稳定 `uploaded_code_sha256`。
+- 非法参数名拒绝。
+- 不支持的参数类型拒绝。
+
+`DatasetRegistry`
+
+- `dataset.json` schema 校验。
+- fingerprint 稳定。
+- 重复导入同一源文件可识别。
+- catalog 与目录一致。
+
+`BacktestRunImporter`
+
+- 能导入 `summary_metrics.json`。
+- 能导入 `daily_returns.md`。
+- 能导入 `audit_log.jsonl`。
+- 缺少关键文件时给出明确错误。
+- 生成 `profile.md`、`schema.md`、`sample.csv`。
+
+`WorkflowTemplate`
+
+- 模板 schema 校验。
+- 缺少输入定义失败。
+- 缺少步骤定义失败。
+- 缺少输出定义失败。
+- fast/full/handoff 阶段声明可解析。
+
+`DocsIndexer`
+
+- 能扫描报告标题。
+- 能扫描日期。
+- 能扫描标签。
+- 能扫描 pathref。
+- 删除文件后索引能识别过期项。
+
+`governance audit`
+
+- 未登记工具失败。
+- 缺 README 失败。
+- 缺 CLI 示例失败。
+- Skill 漂移能识别。
+- `CLAUDE.md` 漂移能识别。
+
+### 13.3 集成测试
+
+最小闭环：
+
+```text
+导入一个历史 backtest run
+→ 生成 dataset snapshot
+→ 注册一个参数变体
+→ 创建 research project
+→ run --mode fast
+→ promote full
+→ handoff-cloud
+→ 生成报告索引
+→ governance audit
+```
+
+结构变体闭环：
+
+```text
+branch-plan
+→ branch-create --yes（测试仓库或临时分支）
+→ 注册 structural variant
+→ materialize 策略快照
+→ merge-plan
+→ merge-apply --yes（无冲突测试）
+→ 状态进入 merged_pending_validation
+```
+
+冲突场景：
+
+- 构造主分支和结构分支同一行冲突。
+- `merge-apply` 必须停止。
+- 输出冲突文件列表。
+- 不自动解决。
+- 不自动提交。
+
+### 13.4 回归测试
+
+必须保证：
+
+- 现有 `scripts.research.cli init/run/promote/resume/handoff-cloud/status` 不变。
+- 现有 `scripts.research.datasets import-price-json/import-audit-log/inspect` 不变。
+- 旧 `project.json` schema v1 可读取。
+- 旧 `backtest_runs/` 和 `test_batches/` 报告链接不被移动或破坏。
+- 现有 pathref 校验继续通过。
+
+建议命令：
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest scripts\research -q
+.\.venv\Scripts\python.exe -m pytest scripts\tools\jq_automation\tests -q
+.\.venv\Scripts\python.exe -m scripts.tools.path_tools.refactor check
+```
+
+### 13.5 数据一致性测试
+
+检查项：
+
+- 数据中心快照不可变，已生成 snapshot 不允许覆盖。
+- catalog 与实际目录一致。
+- 原始 gzip 文件、Parquet 主存储、views 摘要能互相追溯。
+- 从数据中心读取的收益序列与原始 run 中 `daily_returns.md` 一致。
+- 审计日志导入后的日期范围与原始 `audit_log.jsonl` 一致。
+- 审计日志导入后的事件数量与原始 `audit_log.jsonl` 一致。
+- 审计日志导入后的 ETF 池与原始 `audit_log.jsonl` 一致。
+
+### 13.6 Git 授权测试
+
+必须验证：
+
+- `branch-plan` 不创建分支。
+- `branch-create` 没有 `--yes` 不执行。
+- 工作区不干净时拒绝创建分支。
+- `merge-plan` 不修改主策略。
+- `merge-apply` 没有 `--yes` 不执行。
+- 冲突时停止。
+- 冲突时不自动提交。
+- 合并后状态只能到 `merged_pending_validation`，不能直接到 `merged_confirmed`。
+
+### 13.7 文档和 Skill 测试
+
+检查项：
+
+- 每个 registry 工具都有 README。
+- 每个 README 至少包含用途、命令示例、输入、输出、边界。
+- `CLAUDE.md` 包含正式入口。
+- `jq-research` 覆盖新研究流程。
+- `jq-ab-test` 覆盖 `variant_id` 和结构变体边界。
+- 新增 Markdown 内部链接都有 pathref。
+
+### 13.8 最终验收命令
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest scripts\research -q
+.\.venv\Scripts\python.exe -m pytest scripts\tools\jq_automation\tests -q
+.\.venv\Scripts\python.exe -m scripts.research.governance audit
+.\.venv\Scripts\python.exe -m scripts.tools.path_tools.refactor check
+```
+
+如果涉及策略代码变更，再补：
+
+```powershell
+.\.venv\Scripts\python.exe -m py_compile strategies\etf_factor_rotation\etf_factor_rotation.py
+.\.venv\Scripts\python.exe -m pytest strategies\etf_factor_rotation\tests -q
+```
+
+## 14. 分阶段实施计划
+
+### Phase 1：架构和治理入口
+
+目标：
+
+- 建立正式架构文档。
+- 建立中央工具注册骨架。
+- 建立治理审计骨架。
+- 更新仓库总入口。
+
+产物：
+
+- `docs/architecture/research-platform-architecture.md`
+- `scripts/research/registry/`
+- `scripts/research/governance/`
+- 更新 `CLAUDE.md`
+- 更新 `docs/guides/research-workflow.md`
+
+验收：
+
+- registry 有最小工具登记。
+- governance audit 能运行。
+- `CLAUDE.md` 包含新入口。
+
+### Phase 2：数据中心
+
+目标：
+
+- 新回测默认可登记到数据中心。
+- 历史 run 可按需导入。
+
+产物：
+
+- `import-backtest-run`
+- `DatasetRegistry`
+- `BacktestRunImporter`
+- `DataViewLoader`
+- catalog/profile 生成逻辑
+
+验收：
+
+- 能导入一个历史 run。
+- 生成 `dataset.json`、raw、data、views。
+- catalog 可查询。
+- 数据一致性测试通过。
+
+### Phase 3：策略变体库
+
+目标：
+
+- 参数变体和结构变体都可登记。
+- 参数变体可 materialize。
+- 结构变体可生成分支计划。
+
+产物：
+
+- `VariantRegistry`
+- `StrategyMaterializer`
+- `StructuralBranchManager`
+- `strategy.json`
+- `variants/`
+
+验收：
+
+- 参数变体注册测试通过。
+- 结构变体注册测试通过。
+- 非法状态流转被拒绝。
+- `branch-plan` 不产生副作用。
+
+### Phase 4：结构变体合并流程
+
+目标：
+
+- 结构变体研究通过后可生成合并计划。
+- 用户授权后可执行合并。
+- 合并后必须进入待验证状态。
+
+产物：
+
+- `merge-plan`
+- `merge-apply`
+- `VariantMergeManager`
+- 合并后验证清单
+
+验收：
+
+- `merge-plan` 不修改文件。
+- `merge-apply` 无 `--yes` 不执行。
+- 无冲突合并进入 `merged_pending_validation`。
+- 冲突安全停止。
+
+### Phase 5：流程和工具库
+
+目标：
+
+- 把重复研究流程模板化。
+- 把通用指标、稳健性、回放、报告片段沉淀到 `research_core`。
+
+产物：
+
+- workflow templates
+- `MetricToolkit`
+- `RobustnessToolkit`
+- `ReplayAdapter` 标准接口
+- `ReportPrimitives`
+
+验收：
+
+- 旧 CLI 不破坏。
+- 新模板 schema 校验通过。
+- fast/full/handoff 流程能跑通最小闭环。
+
+### Phase 6：文档报告索引
+
+目标：
+
+- 报告仍分散保存，但可以集中查询。
+- 报告结论能追溯证据。
+
+产物：
+
+- `DocsIndexer`
+- `ReportRegistry`
+- `EvidenceLinker`
+- `docs/indexes/*.json`
+
+验收：
+
+- 能扫描现有报告。
+- 能生成报告索引。
+- 删除文件后能识别过期索引。
+- pathref 校验通过。
+
+### Phase 7：测试和审计强化
+
+目标：
+
+- 把测试和治理审计纳入固定验收。
+- 防止长期漂移。
+
+产物：
+
+- 完整测试集。
+- `governance audit` 强化规则。
+- Skill 同步校验。
+
+验收：
+
+- `pytest scripts\research -q` 通过。
+- `pytest scripts\tools\jq_automation\tests -q` 通过。
+- `governance audit` 通过。
+- pathref 校验通过。
+
+## 15. 文档和 Skill 同步要求
+
+必须维护：
+
+- `scripts/research/README.md`
+- `scripts/research/platform/README.md`
+- `research_datasets/README.md`
+- `scripts/research/registry/README.md`
+- `scripts/research/governance/README.md`
+- `scripts/research/variants/README.md`
+- `docs/architecture/research-platform-architecture.md`
+- `docs/guides/research-workflow.md`
+- `docs/guides/research-workflow-migration.md`
+- `CLAUDE.md`
+- `.claude/skills/jq-research/SKILL.md`
+- `.claude/skills/jq-ab-test/SKILL.md`
+
+每个新增或重构工具的 README 至少包含：
+
+- 用途。
+- 命令示例。
+- 输入。
+- 输出。
+- 适用场景。
+- 不适用边界。
+- 关联测试。
+
+## 16. 最终验收标准
+
+功能验收：
+
+- 新数据默认可进入数据中心，并能通过 catalog 查询。
+- 新研究项目默认走 `init/run/promote/handoff-cloud`。
+- 参数 A/B 可基于 `variant_id`，不依赖 Git 分支。
+- 结构变体可注册、建分支、独立研究、独立回测、生成合并计划。
+- 分支创建和合并必须显式授权。
+- 报告仍可分散保存，但必须能被总索引找到。
+
+质量验收：
+
+- 每个工具都有 README、CLI 示例、输入输出说明和测试。
+- `CLAUDE.md` 和相关 Skill 已同步最新流程。
+- 所有 schema 校验通过。
+- 数据 catalog 和报告索引无过期项。
+- `governance audit` 通过。
+- pathref 校验通过。
+- 相关 pytest 通过。
+
+决策验收：
+
+- 报告明确区分“方向性支持”和“准备写回默认参数”。
+- 本地 replay 或本地 exact 的边界写清楚。
+- 只有通过本地门槛的候选进入云端确认。
+- 只有合并后主策略云端确认通过，结构变体才能标记为 `merged_confirmed`。
+
+## 17. 实施风险与控制
+
+风险 1：一次性迁移范围过大。
+
+控制：
+
+- 旧数据和旧报告不强搬。
+- 新流程优先服务新研究。
+- 只迁移高复用旧研究。
+
+风险 2：工具注册和真实实现漂移。
+
+控制：
+
+- governance audit 检查 registry、README、CLI、测试。
+- 未登记工具不进入标准流程。
+
+风险 3：结构变体合并误伤主策略。
+
+控制：
+
+- Git 操作必须显式授权。
+- merge-plan 和 merge-apply 分离。
+- 冲突停止，不自动解决。
+- 合并后只进入 `merged_pending_validation`。
+
+风险 4：数据中心和原始 run 口径不一致。
+
+控制：
+
+- 保留原始件。
+- fingerprint 和数据一致性测试。
+- 收益、审计日志、指标做回读校验。
+
+风险 5：报告索引过期。
+
+控制：
+
+- docs index 由工具生成。
+- governance audit 检查索引和实际文件一致。
+
+## 18. 推荐落地顺序
+
+最小可交付优先级：
+
+1. registry 骨架。
+2. governance audit 骨架。
+3. 数据中心 `import-backtest-run`。
+4. `VariantRegistry` 和参数变体 materialize。
+5. docs index。
+6. 结构变体 branch-plan/branch-create。
+7. merge-plan/merge-apply。
+8. 流程模板和工具库深化。
+
+这样可以先把“不会再漂移”的底座立起来，再逐步扩展研究能力。

@@ -6,7 +6,7 @@
 ## 1. 评审依据
 
 - [JoinQuant API 离线文档](../../../../docs/reference/joinquant-api.md) <!-- pathref: docs/reference/joinquant-api.md -->
-- [JoinQuant 场内基金数据文档](../../../../docs/joinquant-data/JQ_场内基金数据.md) <!-- pathref: joinquant_data/JQ_场内基金数据.md -->
+- [JoinQuant 场内基金数据文档](../../../../docs/joinquant-api/JQ_场内基金数据.md) <!-- pathref: joinquant_data/JQ_场内基金数据.md -->
 - [项目开发规范 CLAUDE.md](../../../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->
 - 本地可执行校验：`py_compile`、`pathref check`
 

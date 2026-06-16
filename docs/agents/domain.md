@@ -7,7 +7,8 @@
 - [AGENTS.md](../../AGENTS.md) <!-- pathref: repo/AGENTS.md -->：共享 AI 规则。
 - [docs/README.md](../README.md) <!-- pathref: docs/README.md -->：docs 入口。
 - [docs/rules/index.md](../rules/index.md) <!-- pathref: docs/rules/index.md -->：受治理约束的流程和编码规则。
-- [docs/adr/index.md](../adr/index.md) <!-- pathref: docs/adr/index.md -->：与任务相关的架构决策记录。
+- [openspec/changes/archive](../../openspec/changes/archive) <!-- pathref: openspec/changes/archive -->：历史架构决策记录已归档。
+- [openspec/specs](../../openspec/specs) <!-- pathref: openspec/specs -->：当前系统能力规格。
 
 如果后续新增根目录 `CONTEXT.md`，优先读取它。如果后续新增 `CONTEXT-MAP.md`，按它切换为 multi-context 路由。
 

@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "catalog_type": "docs",
-  "generated_at": "2026-06-04T16:58:08+00:00",
-  "count": 59,
+  "generated_at": "2026-06-16T17:54:56+00:00",
+  "count": 37,
   "reports": [
     {
       "path": "docs/README.md",
@@ -15,168 +15,20 @@
         "repo/AGENTS.md",
         "docs/rules",
         "docs/rules/index.md",
-        "docs/adr/index.md",
-        "docs/adr/0001-rule-source-and-governance-model.md",
         "docs/guides",
         "docs/guides/research-workflow.md",
-        "docs/architecture",
-        "docs/architecture/research-platform-architecture.md",
-        "docs/design",
-        "docs/design/本地研究平台重构技术实施方案.md",
+        "docs/joinquant-api",
+        "docs/joinquant-api/JQ_场内基金数据.md",
         "docs/reference",
         "docs/reference/joinquant-api.md",
-        "docs/joinquant-data",
-        "docs/joinquant-data/JQ_场内基金数据.md",
         "docs/indexes",
         "docs/indexes/docs_catalog.json",
         "docs/guides/feishu-relay-tools.md",
         "docs/rules/pr-workflow.md",
         "docs/rules/governance.md",
-        "docs/adr/0007-pr-flow-closed-loop-review-evidence.md"
+        "openspec/changes/archive/adr-0007-pr-flow-closed-loop-review-evidence"
       ],
-      "updated_at": "2026-06-04T12:27:11+00:00"
-    },
-    {
-      "path": "docs/adr/0001-rule-source-and-governance-model.md",
-      "title": "ADR 0001: 规则来源和治理模型",
-      "category": "docs",
-      "strategy": null,
-      "date": null,
-      "tags": [],
-      "pathrefs": [
-        "docs/adr/0005-ai-entry-progressive-disclosure.md",
-        "repo/AGENTS.md",
-        "docs/adr/0005-ai-entry-progressive-disclosure.md",
-        "repo/AGENTS.md",
-        "docs/rules",
-        "docs/adr/index.md"
-      ],
-      "updated_at": "2026-06-04T16:23:10+00:00"
-    },
-    {
-      "path": "docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md",
-      "title": "ADR 0002: 多 AI Agent 并行工作使用 Git 分支",
-      "category": "docs",
-      "strategy": null,
-      "date": null,
-      "tags": [],
-      "pathrefs": [],
-      "updated_at": "2026-05-28T07:57:23+00:00"
-    },
-    {
-      "path": "docs/adr/0003-governance-gate-and-main-branch-protection.md",
-      "title": "ADR 0003: Governance Gate 和主干保护",
-      "category": "docs",
-      "strategy": null,
-      "date": null,
-      "tags": [],
-      "pathrefs": [],
-      "updated_at": "2026-05-29T19:12:32+00:00"
-    },
-    {
-      "path": "docs/adr/0004-codex-code-review-governance.md",
-      "title": "ADR 0004: 使用官方 Codex Code Review 作为 PR 评审门禁",
-      "category": "docs",
-      "strategy": null,
-      "date": null,
-      "tags": [],
-      "pathrefs": [
-        "docs/adr/0005-ai-entry-progressive-disclosure.md",
-        "repo/AGENTS.md",
-        "docs/rules/review-guidelines.md",
-        "docs/adr/0005-ai-entry-progressive-disclosure.md",
-        "docs/rules/index.md",
-        "docs/adr/index.md",
-        "repo/AGENTS.md",
-        "docs/adr/0005-ai-entry-progressive-disclosure.md"
-      ],
-      "updated_at": "2026-06-04T16:23:10+00:00"
-    },
-    {
-      "path": "docs/adr/0005-ai-entry-progressive-disclosure.md",
-      "title": "ADR 0005: AI 入口采用渐进式披露",
-      "category": "docs",
-      "strategy": null,
-      "date": null,
-      "tags": [],
-      "pathrefs": [
-        "repo/AGENTS.md",
-        "docs/rules/index.md",
-        "docs/adr/index.md",
-        "repo/AGENTS.md",
-        "repo/AGENTS.md",
-        "docs/rules",
-        "docs/rules/commands.md",
-        "repo/AGENTS.md",
-        "docs/rules/commands.md",
-        "docs/rules/index.md"
-      ],
-      "updated_at": "2026-06-04T16:23:10+00:00"
-    },
-    {
-      "path": "docs/adr/0006-risk-tiered-pr-review.md",
-      "title": "ADR 0006: PR 风险分级评审流程",
-      "category": "docs",
-      "strategy": null,
-      "date": null,
-      "tags": [],
-      "pathrefs": [],
-      "updated_at": "2026-06-02T10:50:43+00:00"
-    },
-    {
-      "path": "docs/adr/0007-pr-flow-closed-loop-review-evidence.md",
-      "title": "ADR 0007: PR 强闭环状态机与 Review Evidence 边界",
-      "category": "docs",
-      "strategy": null,
-      "date": null,
-      "tags": [],
-      "pathrefs": [
-        "docs/adr/0006-risk-tiered-pr-review.md"
-      ],
-      "updated_at": "2026-06-04T14:59:35+00:00"
-    },
-    {
-      "path": "docs/adr/0008-skill-single-source-agents.md",
-      "title": "ADR 0008: Skill 使用 `.agents/skills/` 单一来源",
-      "category": "docs",
-      "strategy": null,
-      "date": null,
-      "tags": [],
-      "pathrefs": [],
-      "updated_at": "2026-06-04T14:59:25+00:00"
-    },
-    {
-      "path": "docs/adr/0009-subagent-delegation-continuous-authorization.md",
-      "title": "ADR 0009: 子 agent 派发使用持续显式授权",
-      "category": "docs",
-      "strategy": null,
-      "date": null,
-      "tags": [],
-      "pathrefs": [
-        "docs/rules/review-guidelines.md",
-        "docs/rules/collaboration.md"
-      ],
-      "updated_at": "2026-06-02T04:01:57+00:00"
-    },
-    {
-      "path": "docs/adr/index.md",
-      "title": "ADR 索引",
-      "category": "docs",
-      "strategy": null,
-      "date": null,
-      "tags": [],
-      "pathrefs": [
-        "docs/adr/0001-rule-source-and-governance-model.md",
-        "docs/adr/0002-ai-agent-parallel-work-uses-git-branches.md",
-        "docs/adr/0003-governance-gate-and-main-branch-protection.md",
-        "docs/adr/0004-codex-code-review-governance.md",
-        "docs/adr/0005-ai-entry-progressive-disclosure.md",
-        "docs/adr/0006-risk-tiered-pr-review.md",
-        "docs/adr/0007-pr-flow-closed-loop-review-evidence.md",
-        "docs/adr/0008-skill-single-source-agents.md",
-        "docs/adr/0009-subagent-delegation-continuous-authorization.md"
-      ],
-      "updated_at": "2026-06-04T16:58:07+00:00"
+      "updated_at": "2026-06-16T17:46:03+00:00"
     },
     {
       "path": "docs/agents/domain.md",
@@ -189,9 +41,10 @@
         "repo/AGENTS.md",
         "docs/README.md",
         "docs/rules/index.md",
-        "docs/adr/index.md"
+        "openspec/changes/archive",
+        "openspec/specs"
       ],
-      "updated_at": "2026-05-31T20:57:02+00:00"
+      "updated_at": "2026-06-16T17:49:38+00:00"
     },
     {
       "path": "docs/agents/issue-tracker.md",
@@ -214,156 +67,17 @@
       "updated_at": "2026-05-30T12:19:01+00:00"
     },
     {
-      "path": "docs/architecture/research-platform-architecture.md",
-      "title": "本地研究平台架构",
-      "category": "docs",
-      "strategy": null,
-      "date": null,
-      "tags": [],
-      "pathrefs": [
-        "scripts/research/cli.py",
-        "scripts/research/datasets.py",
-        "scripts/research/variants.py",
-        "scripts/research/docs.py",
-        "scripts/research/registry/tool_registry.py",
-        "scripts/research/governance/audit.py",
-        "scripts/research/platform/strategy_variants.py",
-        "research_datasets",
-        "scripts/research/workflows/templates",
-        "scripts/research/platform/workflows.py",
-        "scripts/research/research_core",
-        "scripts/research/platform/docs_index.py",
-        "docs/indexes/docs_catalog.json",
-        "docs/indexes/reports_catalog.json",
-        "docs/indexes/datasets_catalog.json",
-        "docs/indexes/variants_catalog.json",
-        "docs/indexes/reports.json",
-        "docs/indexes/reports.md",
-        "scripts/research/layers"
-      ],
-      "updated_at": "2026-06-04T15:03:47+00:00"
-    },
-    {
-      "path": "docs/design/cc-switch-cli.md",
-      "title": "CC-Switch CLI",
-      "category": "docs",
-      "strategy": null,
-      "date": null,
-      "tags": [],
-      "pathrefs": [],
-      "updated_at": "2026-05-28T07:57:23+00:00"
-    },
-    {
-      "path": "docs/design/cross-ai-skill-management.md",
-      "title": "跨 AI 工具 Skill 管理实施计划",
-      "category": "docs",
-      "strategy": null,
-      "date": null,
-      "tags": [],
-      "pathrefs": [
-        "docs/design/cc-switch-cli.md",
-        "repo/AGENTS.md",
-        "repo/AGENTS.md",
-        "docs/adr/0005-ai-entry-progressive-disclosure.md",
-        "docs/rules/governance.md",
-        "docs/rules/docs-and-pathref.md",
-        "repo/.agents/skills",
-        "repo/AGENTS.md",
-        "repo/AGENTS.md",
-        "repo/.agents/skills",
-        "repo/AGENTS.md",
-        "repo/AGENTS.md"
-      ],
-      "updated_at": "2026-06-04T16:23:10+00:00"
-    },
-    {
-      "path": "docs/design/skill-system-migration-review.md",
-      "title": "Skill 系统迁移审查",
-      "category": "docs",
-      "strategy": null,
-      "date": null,
-      "tags": [],
-      "pathrefs": [],
-      "updated_at": "2026-05-29T08:03:45+00:00"
-    },
-    {
-      "path": "docs/design/skill-system-refactor.md",
-      "title": "Skill 系统精简重构方案",
-      "category": "docs",
-      "strategy": null,
-      "date": null,
-      "tags": [],
-      "pathrefs": [],
-      "updated_at": "2026-06-02T20:03:29+00:00"
-    },
-    {
-      "path": "docs/design/日常增量验证提速方案设计.md",
-      "title": "日常增量验证提速方案设计",
-      "category": "docs",
-      "strategy": null,
-      "date": "2026-05-29",
-      "tags": [],
-      "pathrefs": [],
-      "updated_at": "2026-06-04T12:27:11+00:00"
-    },
-    {
-      "path": "docs/design/本地研究平台重构.md",
-      "title": "本地研究平台重构",
-      "category": "docs",
-      "strategy": null,
-      "date": null,
-      "tags": [],
-      "pathrefs": [],
-      "updated_at": "2026-05-28T07:57:23+00:00"
-    },
-    {
-      "path": "docs/design/本地研究平台重构技术实施方案.md",
-      "title": "本地研究平台重构技术实施方案",
-      "category": "docs",
-      "strategy": null,
-      "date": "2026-05-19",
-      "tags": [],
-      "pathrefs": [
-        "scripts/research/cli.py",
-        "scripts/research/datasets.py",
-        "scripts/research/platform",
-        "docs/guides/research-workflow.md",
-        "docs/guides/research-workflow-migration.md",
-        "repo/AGENTS.md"
-      ],
-      "updated_at": "2026-06-04T16:23:10+00:00"
-    },
-    {
-      "path": "docs/design/长期项目防止开发规则漂移方案.md",
-      "title": "长期项目防止开发规则漂移方案",
-      "category": "docs",
-      "strategy": null,
-      "date": "2026-08-31",
-      "tags": [],
-      "pathrefs": [
-        "repo/AGENTS.md",
-        "docs/rules/index.md",
-        "docs/adr/index.md",
-        "repo/CODEOWNERS",
-        "repo/.github/pull_request_template.md",
-        "repo/.githooks/pre-push",
-        "docs/exceptions/active-waivers.yaml",
-        "scripts/research/governance"
-      ],
-      "updated_at": "2026-06-04T16:24:50+00:00"
-    },
-    {
       "path": "docs/guides/feishu-relay-tools.md",
       "title": "飞书交易通知工具使用说明",
       "category": "docs",
       "strategy": null,
-      "date": "2026-05-20",
+      "date": null,
       "tags": [],
       "pathrefs": [
         "scripts/joinquant_tools/FeishuRelayTools.py",
-        "docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md"
+        "openspec/changes/archive/feishu-relay-tools/design.md"
       ],
-      "updated_at": "2026-05-28T07:57:23+00:00"
+      "updated_at": "2026-06-16T17:45:16+00:00"
     },
     {
       "path": "docs/guides/local-python-env.md",
@@ -404,12 +118,12 @@
         "scripts/research/docs.py",
         "scripts/research/governance",
         "scripts/research/platform",
-        "docs/architecture/research-platform-architecture.md"
+        "openspec/changes/archive/research-platform-architecture/design.md"
       ],
-      "updated_at": "2026-05-29T08:03:45+00:00"
+      "updated_at": "2026-06-16T17:45:26+00:00"
     },
     {
-      "path": "docs/joinquant-data/JQ_Alpha101.md",
+      "path": "docs/joinquant-api/JQ_Alpha101.md",
       "title": "导入 Alpha101 库",
       "category": "docs",
       "strategy": null,
@@ -419,7 +133,7 @@
       "updated_at": "2026-05-02T13:51:54+00:00"
     },
     {
-      "path": "docs/joinquant-data/JQ_Alpha191.md",
+      "path": "docs/joinquant-api/JQ_Alpha191.md",
       "title": "导入 Alpha191 库",
       "category": "docs",
       "strategy": null,
@@ -429,7 +143,7 @@
       "updated_at": "2026-05-02T13:51:54+00:00"
     },
     {
-      "path": "docs/joinquant-data/JQ_债券数据.md",
+      "path": "docs/joinquant-api/JQ_债券数据.md",
       "title": "查询交易市场为上交所的债券基本信息数据",
       "category": "docs",
       "strategy": null,
@@ -439,7 +153,7 @@
       "updated_at": "2026-05-02T13:51:54+00:00"
     },
     {
-      "path": "docs/joinquant-data/JQ_场内基金数据.md",
+      "path": "docs/joinquant-api/JQ_场内基金数据.md",
       "title": "查询510190追踪的指数信息",
       "category": "docs",
       "strategy": null,
@@ -449,7 +163,7 @@
       "updated_at": "2026-05-02T13:51:54+00:00"
     },
     {
-      "path": "docs/joinquant-data/JQ_场外基金.md",
+      "path": "docs/joinquant-api/JQ_场外基金.md",
       "title": "JQ_场外基金",
       "category": "docs",
       "strategy": null,
@@ -459,7 +173,7 @@
       "updated_at": "2026-05-02T13:51:57+00:00"
     },
     {
-      "path": "docs/joinquant-data/JQ_宏观经济数据.md",
+      "path": "docs/joinquant-api/JQ_宏观经济数据.md",
       "title": "查询分地区农林牧渔业总产值表(季度累计) 的前10条数据",
       "category": "docs",
       "strategy": null,
@@ -469,7 +183,7 @@
       "updated_at": "2026-05-02T13:51:58+00:00"
     },
     {
-      "path": "docs/joinquant-data/JQ_常见问题.md",
+      "path": "docs/joinquant-api/JQ_常见问题.md",
       "title": "常见问题",
       "category": "docs",
       "strategy": null,
@@ -479,7 +193,7 @@
       "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
-      "path": "docs/joinquant-data/JQ_技术分析指标.md",
+      "path": "docs/joinquant-api/JQ_技术分析指标.md",
       "title": "(官网)导入 technical_analysis 库",
       "category": "docs",
       "strategy": null,
@@ -489,7 +203,7 @@
       "updated_at": "2026-05-02T13:51:59+00:00"
     },
     {
-      "path": "docs/joinquant-data/JQ_指数数据.md",
+      "path": "docs/joinquant-api/JQ_指数数据.md",
       "title": "输出沪深300指数信息",
       "category": "docs",
       "strategy": null,
@@ -499,7 +213,7 @@
       "updated_at": "2026-05-02T13:51:59+00:00"
     },
     {
-      "path": "docs/joinquant-data/JQ_期权数据.md",
+      "path": "docs/joinquant-api/JQ_期权数据.md",
       "title": "查询当前可交易的50ETF期权合约信息",
       "category": "docs",
       "strategy": null,
@@ -509,7 +223,7 @@
       "updated_at": "2026-05-02T13:51:59+00:00"
     },
     {
-      "path": "docs/joinquant-data/JQ_期货数据.md",
+      "path": "docs/joinquant-api/JQ_期货数据.md",
       "title": "输出沪深300股指期货信息",
       "category": "docs",
       "strategy": null,
@@ -519,7 +233,7 @@
       "updated_at": "2026-05-02T13:52:00+00:00"
     },
     {
-      "path": "docs/joinquant-data/JQ_聚宽因子库.md",
+      "path": "docs/joinquant-api/JQ_聚宽因子库.md",
       "title": "导入函数库",
       "category": "docs",
       "strategy": null,
@@ -529,7 +243,7 @@
       "updated_at": "2026-05-02T13:52:00+00:00"
     },
     {
-      "path": "docs/joinquant-data/JQ_股票数据.md",
+      "path": "docs/joinquant-api/JQ_股票数据.md",
       "title": "输出平安银行信息的中文名称",
       "category": "docs",
       "strategy": null,
@@ -539,7 +253,7 @@
       "updated_at": "2026-05-02T13:52:01+00:00"
     },
     {
-      "path": "docs/joinquant-data/JQ_舆情数据.md",
+      "path": "docs/joinquant-api/JQ_舆情数据.md",
       "title": "JQ_舆情数据",
       "category": "docs",
       "strategy": null,
@@ -549,7 +263,7 @@
       "updated_at": "2026-05-02T13:52:01+00:00"
     },
     {
-      "path": "docs/joinquant-data/JQ_行业概念数据.md",
+      "path": "docs/joinquant-api/JQ_行业概念数据.md",
       "title": "JQ_行业概念数据",
       "category": "docs",
       "strategy": null,
@@ -557,6 +271,16 @@
       "tags": [],
       "pathrefs": [],
       "updated_at": "2026-05-02T13:52:02+00:00"
+    },
+    {
+      "path": "docs/reference/cc-switch-cli.md",
+      "title": "CC-Switch CLI",
+      "category": "docs",
+      "strategy": null,
+      "date": null,
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-05-28T07:57:23+00:00"
     },
     {
       "path": "docs/reference/joinquant-api.md",
@@ -646,7 +370,7 @@
         "scripts/tools/jq_automation/README.md",
         "scripts/tools/path_tools/README.md"
       ],
-      "updated_at": "2026-06-02T20:03:29+00:00"
+      "updated_at": "2026-06-11T14:30:54+00:00"
     },
     {
       "path": "docs/rules/docs-and-pathref.md",
@@ -656,7 +380,7 @@
       "date": null,
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-05-31T20:57:02+00:00"
+      "updated_at": "2026-06-16T17:45:07+00:00"
     },
     {
       "path": "docs/rules/environments.md",
@@ -678,9 +402,10 @@
       "pathrefs": [
         "repo/AGENTS.md",
         "docs/rules/pr-workflow.md",
-        "docs/rules/pr-flow-interface-contract.yaml"
+        "docs/rules/pr-flow-interface-contract.yaml",
+        "openspec/changes/archive/adr-0010-local-branch-history-rewrite-gate"
       ],
-      "updated_at": "2026-06-04T16:56:46+00:00"
+      "updated_at": "2026-06-16T17:44:58+00:00"
     },
     {
       "path": "docs/rules/index.md",
@@ -692,7 +417,7 @@
       "pathrefs": [
         "repo/AGENTS.md",
         "repo/AGENTS.md",
-        "docs/adr/index.md",
+        "openspec/changes/archive",
         "docs/rules/commands.md",
         "docs/rules/skills.md",
         "docs/rules/environments.md",
@@ -704,9 +429,9 @@
         "docs/rules/pr-flow-interface-contract.yaml",
         "docs/rules/review-guidelines.md",
         "docs/rules/governance.md",
-        "docs/adr/index.md"
+        "openspec/changes/archive"
       ],
-      "updated_at": "2026-06-04T16:23:10+00:00"
+      "updated_at": "2026-06-16T17:49:50+00:00"
     },
     {
       "path": "docs/rules/pr-workflow.md",
@@ -721,7 +446,7 @@
         "docs/rules/pr-flow-interface-contract.yaml",
         "docs/rules/pr-flow-interface-contract.yaml"
       ],
-      "updated_at": "2026-06-02T20:03:29+00:00"
+      "updated_at": "2026-06-11T17:52:11+00:00"
     },
     {
       "path": "docs/rules/research-workflow.md",
@@ -754,7 +479,7 @@
         "docs/rules/review-guidelines.md",
         "docs/rules/pr-flow-interface-contract.yaml"
       ],
-      "updated_at": "2026-06-04T12:27:11+00:00"
+      "updated_at": "2026-06-11T17:52:11+00:00"
     },
     {
       "path": "docs/rules/skills.md",
@@ -767,68 +492,7 @@
         "repo/AGENTS.md",
         "docs/rules/index.md"
       ],
-      "updated_at": "2026-06-04T14:59:46+00:00"
-    },
-    {
-      "path": "docs/superpowers/plans/2026-05-20-backtest-data-redundancy-compaction.md",
-      "title": "回测数据冗余压缩实施计划",
-      "category": "docs",
-      "strategy": null,
-      "date": "2026-05-20",
-      "tags": [],
-      "pathrefs": [
-        "scripts/research/platform/datasets.py",
-        "scripts/research/datasets.py",
-        "scripts/research/research_core/metrics.py",
-        "scripts/research/research_core/audit.py",
-        "scripts/research/platform/tests/test_platform.py",
-        "scripts/tools/jq_automation/tests/test_core.py",
-        "repo/.gitignore"
-      ],
-      "updated_at": "2026-05-28T07:57:23+00:00"
-    },
-    {
-      "path": "docs/superpowers/plans/2026-05-20-feishu-relay-tools-implementation.md",
-      "title": "Feishu Relay Tools Implementation Plan",
-      "category": "docs",
-      "strategy": null,
-      "date": "2026-05-20",
-      "tags": [],
-      "pathrefs": [
-        "docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md",
-        "repo/scripts/archive/RelayTools.py",
-        "docs/rules/commands.md",
-        "docs/rules/code-style.md",
-        "repo/.gitignore"
-      ],
-      "updated_at": "2026-05-28T07:57:23+00:00"
-    },
-    {
-      "path": "docs/superpowers/plans/2026-05-26-etf-vol-relief-ab-test.md",
-      "title": "ETF Vol Relief A/B Test Implementation Plan",
-      "category": "docs",
-      "strategy": null,
-      "date": "2026-05-26",
-      "tags": [],
-      "pathrefs": [
-        "strategies/etf_factor_rotation/etf_factor_rotation.py",
-        "strategies/etf_factor_rotation/tests/test_etf_factor_rotation.py",
-        "scripts/tools/jq_automation/README.md"
-      ],
-      "updated_at": "2026-05-28T07:57:23+00:00"
-    },
-    {
-      "path": "docs/superpowers/specs/2026-05-20-feishu-relay-tools-design.md",
-      "title": "飞书交易通知工具设计",
-      "category": "docs",
-      "strategy": null,
-      "date": "2026-05-20",
-      "tags": [],
-      "pathrefs": [
-        "repo/scripts/archive/RelayTools.py",
-        "docs/rules/review-guidelines.md"
-      ],
-      "updated_at": "2026-05-28T07:57:23+00:00"
+      "updated_at": "2026-06-04T17:14:06+00:00"
     }
   ]
 }

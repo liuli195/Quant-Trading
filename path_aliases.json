@@ -8,7 +8,8 @@
     "strategies": "strategies",
     "skills": ".claude/skills",
     "scripts": "scripts",
-    "research_datasets": "research_datasets"
+    "research_datasets": "research_datasets",
+    "openspec": "openspec"
   },
   "aliases": {
     "strategy_dir": "{strategies}/{strategy}",
@@ -42,8 +43,8 @@
     "test_batch_abtest": "{test_batch_abtests}/{experiment_id}",
     "docs_images": "{docs}/images",
     "cash_decomposition_scripts": "{scripts}/research/cash_decomposition",
-    "joinquant_data": "{docs}/joinquant-data",
-    "joinquant_quota_ledger": "{joinquant_data}/quota_ledger",
+    "joinquant_data": "{docs}/joinquant-api",
+    "joinquant_quota_ledger": ".local/governance/quota-ledger",
     "ab_experiments": "{strategy_dir}/ab_experiments",
     "ab_experiment": "{ab_experiments}/{experiment_id}",
     "ab_experiment_report": "{ab_experiment}/report"

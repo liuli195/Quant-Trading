@@ -18,7 +18,7 @@ from scripts.research.governance.skill_ownership import validate_ownerships
 from scripts.research.governance import pr_flow_contract
 from scripts.research.governance.schemas import AuditFinding, AuditReport
 from scripts.research.platform.datasets import DatasetRegistry
-from scripts.research.platform.docs_index import DocsIndexer, render_adr_index
+from scripts.research.platform.docs_index import DocsIndexer
 from scripts.research.platform.engine import DEFAULT_TEMPLATES
 from scripts.research.platform.engine import validate_project_config
 from scripts.research.platform.strategy_variants import (
@@ -53,7 +53,6 @@ REQUIRED_CODEOWNER_PATTERNS = (
     "AGENTS.md",
     "docs/agents/**",
     "docs/rules/**",
-    "docs/adr/**",
     ".agents/skills/**",
     ".claude/skills",
     ".codex/environments/**",
@@ -1307,39 +1306,28 @@ def _audit_rule_sources(root: Path) -> list[AuditFinding]:
                 AuditFinding("rule_source", "error", f"rule doc missing: {rel_path}")
             )
 
-    adr_root = root / "docs" / "adr"
-    if not adr_root.is_dir():
-        findings.append(AuditFinding("adr", "error", "docs/adr missing"))
+    # ADR 已归档到 openspec/changes/archive/，检查归档目录是否存在
+    openspec_archive = root / "openspec" / "changes" / "archive"
+    if not openspec_archive.is_dir():
+        findings.append(AuditFinding("adr", "warning", "openspec/changes/archive/ not found"))
     else:
-        adr_index = adr_root / "index.md"
-        if not adr_index.is_file():
-            findings.append(AuditFinding("adr", "error", "docs/adr/index.md missing"))
-        elif adr_index.read_text(encoding="utf-8", errors="ignore") != render_adr_index(
-            root
-        ):
-            findings.append(
-                AuditFinding(
-                    "adr",
-                    "error",
-                    "docs/adr/index.md stale; regenerate with scripts.research.docs index",
-                )
-            )
-        adr_files = sorted(
-            path for path in adr_root.glob("*.md") if re.match(r"^\d{4}-", path.name)
+        adr_dirs = sorted(
+            path for path in openspec_archive.iterdir()
+            if path.is_dir() and re.match(r"^adr-\d{4}-", path.name)
         )
-        if not adr_files:
+        if not adr_dirs:
             findings.append(
-                AuditFinding("adr", "error", "docs/adr has no numbered ADR files")
+                AuditFinding("adr", "warning", "openspec/changes/archive/ has no ADR directories")
             )
         else:
-            numbers = [int(path.name[:4]) for path in adr_files]
+            numbers = [int(path.name[4:8]) for path in adr_dirs]
             expected = list(range(1, max(numbers) + 1))
             if numbers != expected:
                 findings.append(
                     AuditFinding(
                         "adr",
                         "error",
-                        f"ADR numbers must be continuous from 0001: found {numbers}",
+                        f"ADR archive numbers must be continuous from 0001: found {numbers}",
                     )
                 )
 
@@ -1361,7 +1349,7 @@ def _audit_rule_sources(root: Path) -> list[AuditFinding]:
         text = governance_readme.read_text(encoding="utf-8", errors="ignore")
         for token in (
             "docs/rules/index.md",
-            "docs/adr/index.md",
+            "openspec/changes/archive",
             "PR Flow / review-status",
         ):
             if token not in text:
@@ -1421,11 +1409,11 @@ def _audit_pr_template(root: Path) -> list[AuditFinding]:
 
 
 def _audit_waivers(root: Path) -> list[AuditFinding]:
-    path = root / "docs" / "exceptions" / "active-waivers.yaml"
+    path = root / ".local" / "governance" / "exceptions" / "active-waivers.yaml"
     if not path.is_file():
         return [
             AuditFinding(
-                "waiver", "error", "docs/exceptions/active-waivers.yaml missing"
+                "waiver", "error", ".local/governance/exceptions/active-waivers.yaml missing"
             )
         ]
     try:

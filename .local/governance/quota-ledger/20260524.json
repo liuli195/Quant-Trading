@@ -1,0 +1,54 @@
+{
+  "date": "20260524",
+  "budget_minutes": 60.0,
+  "runs": [
+    {
+      "scenario_id": "feishu-smoke-success",
+      "run_id": "feishu-smoke-success-20260524-204724",
+      "estimated_minutes": 1.0,
+      "status": "completed",
+      "updated_at": "2026-05-24T21:03:34",
+      "actual_minutes": 0.05566666666666666
+    },
+    {
+      "scenario_id": "feishu-smoke-failure",
+      "run_id": "feishu-smoke-failure-20260524-204724",
+      "estimated_minutes": 1.0,
+      "status": "completed",
+      "updated_at": "2026-05-24T21:04:32",
+      "actual_minutes": 0.058333333333333334
+    },
+    {
+      "scenario_id": "feishu-smoke-replay",
+      "run_id": "feishu-smoke-replay-20260524-204724",
+      "estimated_minutes": 1.0,
+      "status": "completed",
+      "updated_at": "2026-05-24T21:11:32",
+      "actual_minutes": 0.054000000000000006
+    },
+    {
+      "scenario_id": "feishu-smoke-dual-alpha",
+      "run_id": "feishu-smoke-dual-alpha-20260524-dual-2",
+      "estimated_minutes": 1.0,
+      "status": "completed",
+      "updated_at": "2026-05-24T21:26:59",
+      "actual_minutes": 0.05583333333333333
+    },
+    {
+      "scenario_id": "feishu-smoke-dual-alpha",
+      "run_id": "feishu-smoke-dual-alpha-20260524-dual-3",
+      "estimated_minutes": 1.0,
+      "status": "completed",
+      "updated_at": "2026-05-24T21:29:06",
+      "actual_minutes": 0.05633333333333333
+    },
+    {
+      "scenario_id": "feishu-smoke-dual-beta",
+      "run_id": "feishu-smoke-dual-beta-20260524-dual-3",
+      "estimated_minutes": 1.0,
+      "status": "completed",
+      "updated_at": "2026-05-24T21:30:15",
+      "actual_minutes": 0.065
+    }
+  ]
+}
