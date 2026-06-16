@@ -8,7 +8,8 @@
     "strategies": "strategies",
     "skills": ".claude/skills",
     "scripts": "scripts",
-    "research_datasets": "research_datasets"
+    "research_datasets": "research_datasets",
+    "openspec": "openspec"
   },
   "aliases": {
     "strategy_dir": "{strategies}/{strategy}",
