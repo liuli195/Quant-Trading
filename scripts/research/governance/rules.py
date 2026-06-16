@@ -1409,11 +1409,11 @@ def _audit_pr_template(root: Path) -> list[AuditFinding]:
 
 
 def _audit_waivers(root: Path) -> list[AuditFinding]:
-    path = root / "docs" / "exceptions" / "active-waivers.yaml"
+    path = root / ".local" / "governance" / "exceptions" / "active-waivers.yaml"
     if not path.is_file():
         return [
             AuditFinding(
-                "waiver", "error", "docs/exceptions/active-waivers.yaml missing"
+                "waiver", "error", ".local/governance/exceptions/active-waivers.yaml missing"
             )
         ]
     try:

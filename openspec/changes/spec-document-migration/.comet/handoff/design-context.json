@@ -1,0 +1,25 @@
+{
+  "change": "spec-document-migration",
+  "phase": "design",
+  "mode": "compact",
+  "canonical_spec": "openspec",
+  "generated_by": "comet-handoff.sh",
+  "context_hash": "6bb5d0dff7ee24952707350ddfb2b6e9d32b5623d9c9efaa2104c03d5297008b",
+  "files": [
+    { "path": "openspec/changes/spec-document-migration/proposal.md", "sha256": "0a5fa9468b9dc97e39474f2e1f410e92f0681a142b7fe1855cc0993bdff7a342" },
+    { "path": "openspec/changes/spec-document-migration/design.md", "sha256": "01cc0653fe86bfa59a55b792ed615a134700805f036fa9577cf1de3148eb841d" },
+    { "path": "openspec/changes/spec-document-migration/tasks.md", "sha256": "cc0183c46347279bdf9c35673ccb0c47c1140bb9f7ec7d8e9c31c76168a77ab9" },
+    { "path": "openspec/changes/spec-document-migration/specs/agent-collaboration/spec.md", "sha256": "95fe84f3c5134f603934209a2c9c802872337ace7d2d153cbdc431b2a33b1403" },
+    { "path": "openspec/changes/spec-document-migration/specs/backtest-automation/spec.md", "sha256": "85ffd95b9a8286c8ef96d5d993e224f9f6c490a8fb3fe317e1369a40c2cb5660" },
+    { "path": "openspec/changes/spec-document-migration/specs/code-standards/spec.md", "sha256": "c428e12b52f7537884321c0ecfef86a5186b98bc735612a63f4dd6b5affc43f3" },
+    { "path": "openspec/changes/spec-document-migration/specs/data-center/spec.md", "sha256": "9261194759a12b02cc66a8a80274a6e5bd2efc2124b41a5461c1d4df86700acb" },
+    { "path": "openspec/changes/spec-document-migration/specs/documentation-system/spec.md", "sha256": "311bdda7459ad969665c02d71a8854fd2bb39dc8528e3e5f37a6b951a33da400" },
+    { "path": "openspec/changes/spec-document-migration/specs/environment-management/spec.md", "sha256": "55afd1056c08d2cf43f70cd452490a3777d6bad4fd0e6dc656e7b4c081a4a676" },
+    { "path": "openspec/changes/spec-document-migration/specs/governance-gate/spec.md", "sha256": "fa5f7f58ddb71ab9e88ebbe73f249d067a3e9563af20457d23df3b58db6391ff" },
+    { "path": "openspec/changes/spec-document-migration/specs/pr-automation/spec.md", "sha256": "18e960c03091564a154f2a09eef308ddb36f25b5fbb73a7fe2cdd7889ac0040c" },
+    { "path": "openspec/changes/spec-document-migration/specs/research-platform/spec.md", "sha256": "ebab494540e8c7b070e3c418fab3f84f28468903b40f0e081fc498d25dcca338" },
+    { "path": "openspec/changes/spec-document-migration/specs/review-system/spec.md", "sha256": "a17198a863d575f2608abd685c08e930c24e82b67ada78adce164200b9029001" },
+    { "path": "openspec/changes/spec-document-migration/specs/skill-management/spec.md", "sha256": "4cc2a6ec9a466cbff1f5fbbcd87b086bb047e260c0ad184df98e9befe0955f48" },
+    { "path": "openspec/changes/spec-document-migration/specs/strategy-variant/spec.md", "sha256": "a716988f8584b79dc042cbeb7ccdc49fe61644a5db18589bcc2548e0d1d3879b" }
+  ]
+}

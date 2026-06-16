@@ -1370,9 +1370,8 @@ def _write_minimal_repo(root: Path) -> None:
         "scripts/tools/jq_automation/tests",
         "scripts/tools/path_tools",
         "docs/rules",
-        "docs/adr",
-        "docs/exceptions",
         "docs/indexes",
+        ".local/governance/exceptions",
         "research_datasets/demo/snap",
         "research_datasets",
         ".github/workflows",
@@ -1819,7 +1818,7 @@ def _write_minimal_repo(root: Path) -> None:
         ),
         encoding="utf-8",
     )
-    (root / "docs/exceptions/active-waivers.yaml").write_text(
+    (root / ".local/governance/exceptions/active-waivers.yaml").write_text(
         "schema_version: 1\nwaivers: []\n",
         encoding="utf-8",
     )
