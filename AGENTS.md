@@ -4,7 +4,7 @@
 
 ## 通用入口
 
-本仓库按 single-context 处理：[规则文档](docs/rules/index.md) <!-- pathref: docs/rules/index.md --> 和 [openspec/specs](openspec/specs/) <!-- pathref: openspec/specs --> 共同作为领域上下文。ADR 已归档到 openspec。详见 [domain.md](docs/agents/domain.md) <!-- pathref: docs/agents/domain.md -->。
+本仓库按 single-context 处理：[规则文档](docs/rules/index.md) <!-- pathref: docs/rules/index.md --> 和 [openspec/specs](openspec/specs) <!-- pathref: openspec/specs --> 共同作为领域上下文。ADR 已归档到 openspec。详见 [domain.md](docs/agents/domain.md) <!-- pathref: docs/agents/domain.md -->。
 
 ## 核心规则
 - **规则优先**：仓库规则最优先是元规则。任何与规则冲突的改动、对规则本身的改动都必须显式获得授权，否则不得执行。

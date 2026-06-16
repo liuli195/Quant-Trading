@@ -1,6 +1,6 @@
 # 治理审计
 
-`governance/` 用来防止本地研究平台继续扩展后发生入口漂移、文档漂移和目录漂移。规则入口见 [docs/rules/index.md](../../../docs/rules/index.md) <!-- pathref: docs/rules/index.md -->，ADR 入口见 [docs/adr/index.md](../../../docs/adr/index.md) <!-- pathref: docs/adr/index.md -->。
+`governance/` 用来防止本地研究平台继续扩展后发生入口漂移、文档漂移和目录漂移。规则入口见 [docs/rules/index.md](../../../docs/rules/index.md) <!-- pathref: docs/rules/index.md -->，ADR 入口见 [openspec/changes/archive](../../../../openspec/changes/archive) <!-- pathref: openspec/changes/archive -->。
 
 ## 验证命令
 
