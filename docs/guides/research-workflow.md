@@ -109,4 +109,4 @@
 - 文档索引 CLI：[docs.py](../../scripts/research/docs.py) <!-- pathref: scripts/research/docs.py -->
 - 治理审计：[governance/](../../scripts/research/governance) <!-- pathref: scripts/research/governance -->
 - 平台核心实现：[platform/](../../scripts/research/platform) <!-- pathref: scripts/research/platform -->
-- 平台架构说明：[research-platform-architecture.md](../architecture/research-platform-architecture.md) <!-- pathref: docs/architecture/research-platform-architecture.md -->
+- 平台架构说明：[research-platform-architecture](../../openspec/changes/archive/research-platform-architecture/design.md) <!-- pathref: openspec/changes/archive/research-platform-architecture/design.md -->
