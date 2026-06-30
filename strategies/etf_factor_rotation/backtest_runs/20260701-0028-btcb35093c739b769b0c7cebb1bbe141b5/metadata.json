@@ -1,5 +1,6 @@
 {
   "strategy_name": "etf_factor_rotation",
+  "run_id": "20260701-0028-btcb35093c739b769b0c7cebb1bbe141b5",
   "strategy_file": "",
   "strategy_dir": "",
   "start_date_requested": "",
@@ -8,6 +9,7 @@
   "end_date_effective": "2026-04-30",
   "capital": 100000,
   "backtest_id": "cb35093c739b769b0c7cebb1bbe141b5",
+  "joinquant_backtest_id": "cb35093c739b769b0c7cebb1bbe141b5",
   "backtest_url": "",
   "generated_at": "2026-07-01T00:29:10",
   "extraction_method": "joinquant_research_get_backtest",

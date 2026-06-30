@@ -1,5 +1,5 @@
 {
-  "strategy_file": "d:/My Project/Quant Trading/strategies/etf_factor_rotation/etf_factor_rotation.py",
+  "strategy_file": "strategies/etf_factor_rotation/etf_factor_rotation.py",
   "strategy": "etf_factor_rotation",
   "strategy_name": "etf_factor_rotation",
   "scenario_id": "s05-official-current-baseline",

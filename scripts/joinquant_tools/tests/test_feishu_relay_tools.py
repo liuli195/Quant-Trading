@@ -243,7 +243,7 @@ def test_report_signal_plan_sends_signal_notice_with_existing_sender(monkeypatch
     assert orders[0]["trade_value"] == 247600.0
 
 
-def test_report_signal_plan_treats_outbox_pending_as_notice_accepted(monkeypatch):
+def test_report_signal_plan_returns_false_when_notice_not_sent(monkeypatch):
     module = load_module(monkeypatch)
     monkeypatch.setattr(module._sender, "send", lambda message, batch_id=None, orders=None: False)
 
@@ -254,7 +254,7 @@ def test_report_signal_plan_treats_outbox_pending_as_notice_accepted(monkeypatch
         "target_weights": [0.2476],
     })
 
-    assert result is True
+    assert result is False
 
 
 def test_suppressed_execution_notice_skips_order_buffer(monkeypatch):

@@ -391,8 +391,7 @@ def report_signal_plan(plan):
     message = _build_message(CURRENT_STRATEGY_NAME, lines, SECURITY_KEYWORD, run_type=run_type)
     batch_id = plan.get("batch_id") or _make_batch_id(CURRENT_STRATEGY_NAME, signal_date, lines)
     try:
-        _sender.send(message, batch_id=batch_id, orders=orders)
-        return True
+        return bool(_sender.send(message, batch_id=batch_id, orders=orders))
     except Exception as exc:
         _log("信号通知发送异常: %s" % _safe_error_text(exc))
         return False
