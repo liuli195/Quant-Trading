@@ -47,6 +47,7 @@ RUN_TYPE_LABELS = {
 }
 
 _print = print
+_execution_notice_suppression = None
 
 
 def _log(message):
@@ -316,6 +317,97 @@ def _format_order_summary(summary):
         _format_decimal(summary.get("trade_value"), 2),
         _format_percent(summary.get("target_weight")),
     )
+
+
+def _as_list(value):
+    if value is None:
+        return []
+    try:
+        if hasattr(value, "tolist"):
+            value = value.tolist()
+    except Exception:
+        pass
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    return [value]
+
+
+def _plan_order_summaries(plan):
+    pool_source = plan.get("pool")
+    if pool_source is None:
+        pool_source = plan.get("etf_pool")
+    weights_source = plan.get("target_weights")
+    if weights_source is None:
+        weights_source = plan.get("final_weights")
+    pool = _as_list(pool_source)
+    weights = _as_list(weights_source)
+    values = _as_list(plan.get("target_values"))
+    params = plan.get("params") if isinstance(plan.get("params"), dict) else {}
+    names = _as_list(plan.get("etf_names") or params.get("etf_names"))
+    total_value = _to_float(plan.get("portfolio_total_value"))
+    signal_time = str(plan.get("signal_date") or plan.get("asof_date") or _format_time(None))
+    run_type = plan.get("run_type") or params.get("run_type")
+    summaries = []
+    for index, security in enumerate(pool):
+        target_weight = weights[index] if index < len(weights) else None
+        target_value = values[index] if index < len(values) else None
+        if target_value in (None, "") and total_value is not None:
+            weight_float = _to_float(target_weight)
+            if weight_float is not None:
+                target_value = total_value * weight_float
+        name = names[index] if index < len(names) else _get_security_name(security)
+        summaries.append({
+            "time": signal_time,
+            "action": "信号",
+            "name": name,
+            "security": str(security),
+            "amount": "--",
+            "price": "--",
+            "signed_amount": "--",
+            "trade_value": target_value,
+            "target_weight": target_weight,
+            "run_type": run_type,
+            "strategy": CURRENT_STRATEGY_NAME,
+        })
+    return summaries
+
+
+def report_signal_plan(plan):
+    if not isinstance(plan, dict):
+        _log("信号通知失败: plan 不是 dict")
+        return False
+    orders = _plan_order_summaries(plan)
+    if not orders:
+        _log("信号通知失败: plan 无标的")
+        return False
+    signal_date = plan.get("signal_date") or plan.get("asof_date") or "--"
+    trade_date = plan.get("trade_date") or "next_open"
+    lines = [
+        "信号日期：%s" % signal_date,
+        "计划交易日：%s" % trade_date,
+    ]
+    lines.extend(_format_order_summary(item) for item in orders)
+    run_type = _resolve_items_run_type(orders)
+    message = _build_message(CURRENT_STRATEGY_NAME, lines, SECURITY_KEYWORD, run_type=run_type)
+    batch_id = plan.get("batch_id") or _make_batch_id(CURRENT_STRATEGY_NAME, signal_date, lines)
+    try:
+        return bool(_sender.send(message, batch_id=batch_id, orders=orders))
+    except Exception as exc:
+        _log("信号通知发送异常: %s" % _safe_error_text(exc))
+        return False
+
+
+def suppress_execution_notice(batch_id=None, reason="signal_notice_already_sent"):
+    global _execution_notice_suppression
+    _execution_notice_suppression = {
+        "batch_id": batch_id,
+        "reason": reason,
+    }
+
+
+def resume_execution_notice():
+    global _execution_notice_suppression
+    _execution_notice_suppression = None
 
 
 def _build_message(strategy_name, lines, security_keyword="", run_type=None):
@@ -678,6 +770,8 @@ def _install_wrappers(report_func):
 
 
 def _report_order(order_obj, call_context=None):
+    if _execution_notice_suppression is not None:
+        return
     try:
         summary = _summarize_order(order_obj, CURRENT_STRATEGY_NAME, call_context=call_context)
         _buffer.add(summary)

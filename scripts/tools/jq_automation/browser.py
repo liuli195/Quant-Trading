@@ -166,7 +166,7 @@ class JoinQuantBrowser:
                 continue
         raise AutomationError("Could not find the JoinQuant compile button")
 
-    async def wait_compile_complete(self, timeout_ms: int = 120_000, poll_ms: int = 500) -> dict[str, Any]:
+    async def wait_compile_complete(self, timeout_ms: int = 300_000, poll_ms: int = 500) -> dict[str, Any]:
         return await wait_for_compile_completion(
             self._require_page(),
             lambda name: self.snippet_reader(name),
@@ -485,7 +485,7 @@ async def wait_for_compile_completion(
     page: Any,
     snippet_reader: Callable[[str], str],
     *,
-    timeout_ms: int = 120_000,
+    timeout_ms: int = 300_000,
     poll_ms: int = 500,
 ) -> dict[str, Any]:
     source = snippet_reader("compile.js")

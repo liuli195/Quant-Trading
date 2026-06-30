@@ -1,6 +1,37 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-16T17:54:56+00:00",
-  "count": 0,
-  "variants": []
+  "generated_at": "2026-06-30T21:29:19+00:00",
+  "count": 3,
+  "variants": [
+    {
+      "strategy": "etf_factor_rotation",
+      "variant_id": "baseline_original",
+      "variant_type": "structural",
+      "status": "candidate",
+      "merge_status": "not_merged",
+      "description": "原始正式基线代码：本次实验对照组，来源为本分支起点 origin/main 的正式策略脚本。",
+      "updated_at": "2026-06-30T20:21:17+00:00",
+      "detail": "baseline_original.json"
+    },
+    {
+      "strategy": "etf_factor_rotation",
+      "variant_id": "logic3_code_variant",
+      "variant_type": "structural",
+      "status": "candidate",
+      "merge_status": "not_merged",
+      "description": "旧实盘近似代码变体：周一标记信号，下一交易日开盘生成并执行。",
+      "updated_at": "2026-06-30T16:23:28+00:00",
+      "detail": "logic3_code_variant.json"
+    },
+    {
+      "strategy": "etf_factor_rotation",
+      "variant_id": "weekend_close_signal_next_open_variant",
+      "variant_type": "structural",
+      "status": "candidate",
+      "merge_status": "not_merged",
+      "description": "新实盘对齐代码变体：本周最后交易日收盘生成信号，次交易日开盘执行缓存计划。",
+      "updated_at": "2026-06-30T16:23:28+00:00",
+      "detail": "weekend_close_signal_next_open_variant.json"
+    }
+  ]
 }

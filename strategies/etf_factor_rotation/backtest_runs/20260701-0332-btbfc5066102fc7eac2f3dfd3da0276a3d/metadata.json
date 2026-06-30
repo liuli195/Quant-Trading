@@ -1,0 +1,44 @@
+{
+
+  "strategy_name": "etf_factor_rotation",
+  "run_id": "20260701-0332-btbfc5066102fc7eac2f3dfd3da0276a3d",
+  "strategy_file": "",
+  "strategy_dir": "",
+
+  "start_date_requested": "",
+
+  "start_date_effective": "2021-01-01",
+
+  "end_date_requested": "",
+
+  "end_date_effective": "2026-04-30",
+
+  "capital": 100000,
+  "backtest_id": "bfc5066102fc7eac2f3dfd3da0276a3d",
+  "joinquant_backtest_id": "bfc5066102fc7eac2f3dfd3da0276a3d",
+  "backtest_url": "",
+  "generated_at": "2026-07-01T03:36:53",
+
+  "extraction_method": "joinquant_research_get_backtest",
+
+  "primary_extraction_method": "joinquant_research_get_backtest",
+
+  "fallback_extraction_method": "",
+
+  "research_export_path": "jq_auto_exports/research_backtest_bfc5066102fc7eac2f3dfd3da0276a3d.json",
+
+  "research_downloaded": true,
+
+  "detail_api_used": true,
+
+  "frequency": "1d",
+
+  "py_version": "Python3",
+
+  "internal_backtest_id": "9f29ab61c433f227af01e2ed1cdcff85",
+
+  "audit_token": "etf_factor_rotation-s05-official-current-baseline-20260701033128-41374eef",
+
+  "audit_path": "jq_auto_audit/etf_factor_rotation-s05-official-current-baseline-20260701033128-41374eef.jsonl"
+
+}

@@ -1,0 +1,15 @@
+{
+  "strategy_file": "../../../../variants/code/weekend_close_signal_next_open_variant.py",
+  "strategy": "etf_factor_rotation",
+  "strategy_name": "etf_factor_rotation",
+  "scenario_id": "s04-weekend-close-signal-next-open-variant-v2",
+  "start_date": "2021-01-01",
+  "end_date": "2026-04-30",
+  "capital": 100000,
+  "frequency": "1d",
+  "py_version": "Python3",
+  "batch_id": "20260701-live-aligned-execution-gate",
+  "estimated_minutes": 6,
+  "result_source": "auto",
+  "allow_partial": false
+}

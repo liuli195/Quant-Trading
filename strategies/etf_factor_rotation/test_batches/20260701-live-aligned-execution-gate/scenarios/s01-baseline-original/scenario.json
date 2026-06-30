@@ -1,0 +1,17 @@
+{
+  "strategy_file": "../../../../etf_factor_rotation.py",
+  "strategy": "etf_factor_rotation",
+  "scenario_id": "s01-baseline-original",
+  "start_date": "2021-01-01",
+  "end_date": "2026-04-30",
+  "capital": 100000,
+  "frequency": "1d",
+  "py_version": "Python3",
+  "batch_id": "20260701-live-aligned-execution-gate",
+  "estimated_minutes": 6,
+  "result_source": "auto",
+  "allow_partial": false,
+  "params_diff": {
+    "ExecutionTimingMode": "baseline"
+  }
+}

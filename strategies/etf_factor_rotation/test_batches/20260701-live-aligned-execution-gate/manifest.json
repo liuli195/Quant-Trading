@@ -1,0 +1,68 @@
+{
+  "batch_id": "20260701-live-aligned-execution-gate",
+  "strategy": "etf_factor_rotation",
+  "created": "2026-07-01T00:00:00+08:00",
+  "status": "pending",
+  "scenarios": {
+    "s01-baseline-original": {
+      "status": "completed",
+      "runs": [
+        {
+          "run_id": "20260701-0012-bt8d074a3098c6308f791ea33d8806d6f0",
+          "label": "default",
+          "params_diff": {
+            "ExecutionTimingMode": "baseline"
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    "s02-logic3-code-variant": {
+      "status": "completed",
+      "runs": [
+        {
+          "run_id": "20260701-0025-bt0d4e21c752867aa36b89ee13d7540352",
+          "label": "default",
+          "params_diff": {},
+          "status": "completed"
+        }
+      ]
+    },
+    "s03-weekend-close-signal-next-open-variant": {
+      "status": "superseded",
+      "superseded_by": "s04-weekend-close-signal-next-open-variant-v2",
+      "superseded_reason": "initial no-trade run; s04 is the active reproducible weekend-close variant evidence",
+      "runs": [
+        {
+          "run_id": "20260701-0028-btcb35093c739b769b0c7cebb1bbe141b5",
+          "label": "default",
+          "params_diff": {},
+          "status": "superseded"
+        }
+      ]
+    },
+    "s04-weekend-close-signal-next-open-variant-v2": {
+      "status": "completed",
+      "runs": [
+        {
+          "run_id": "20260701-0246-bt526c312fb836d6e07826ce170809486a",
+          "label": "default",
+          "params_diff": {},
+          "status": "completed"
+        }
+      ]
+    },
+    "s05-official-current-baseline": {
+      "runs": [
+        {
+          "run_id": "20260701-0332-btbfc5066102fc7eac2f3dfd3da0276a3d",
+          "label": "default",
+          "params_diff": {},
+          "status": "completed"
+        }
+      ],
+      "status": "completed"
+    }
+  },
+  "updated": "2026-07-01T03:37:13"
+}

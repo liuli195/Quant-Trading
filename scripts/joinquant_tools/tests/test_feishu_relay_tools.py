@@ -213,6 +213,64 @@ def test_wrapped_order_target_value_infers_target_weight_from_caller_context(mon
     assert reported[0]["target_weight"] == 0.2476
 
 
+def test_report_signal_plan_sends_signal_notice_with_existing_sender(monkeypatch):
+    module = load_module(monkeypatch)
+    sent = []
+    monkeypatch.setattr(
+        module._sender,
+        "send",
+        lambda message, batch_id=None, orders=None: sent.append((message, batch_id, orders)) or True,
+    )
+
+    result = module.report_signal_plan({
+        "batch_id": "signal-batch-1",
+        "signal_date": "2026-05-15",
+        "trade_date": "next_open",
+        "pool": ["513100.XSHG", "518880.XSHG"],
+        "target_weights": [0.2476, 0.0],
+        "target_values": [247600.0, 0.0],
+        "params": {"ExecutionTimingMode": "weekend-close-signal-next-open"},
+    })
+
+    assert result is True
+    message, batch_id, orders = sent[0]
+    assert batch_id == "signal-batch-1"
+    assert "信号日期：2026-05-15" in message
+    assert "计划交易日：next_open" in message
+    assert "513100.XSHG" in message
+    assert orders[0]["action"] == "信号"
+    assert orders[0]["target_weight"] == 0.2476
+    assert orders[0]["trade_value"] == 247600.0
+
+
+def test_report_signal_plan_returns_false_when_notice_not_sent(monkeypatch):
+    module = load_module(monkeypatch)
+    monkeypatch.setattr(module._sender, "send", lambda message, batch_id=None, orders=None: False)
+
+    result = module.report_signal_plan({
+        "batch_id": "signal-batch-1",
+        "signal_date": "2026-05-15",
+        "pool": ["513100.XSHG"],
+        "target_weights": [0.2476],
+    })
+
+    assert result is False
+
+
+def test_suppressed_execution_notice_skips_order_buffer(monkeypatch):
+    module = load_module(monkeypatch)
+    buffered = []
+    monkeypatch.setattr(module._buffer, "add", lambda summary: buffered.append(summary))
+
+    module.suppress_execution_notice(batch_id="signal-batch-1", reason="signal_notice_already_sent")
+    module._report_order(FakeOrder())
+    module.resume_execution_notice()
+    module._report_order(FakeOrder())
+
+    assert len(buffered) == 1
+    assert buffered[0]["security"] == "513100.XSHG"
+
+
 def test_wrapped_order_captures_run_type_from_caller_context(monkeypatch):
     module = load_module(monkeypatch)
     reported = []

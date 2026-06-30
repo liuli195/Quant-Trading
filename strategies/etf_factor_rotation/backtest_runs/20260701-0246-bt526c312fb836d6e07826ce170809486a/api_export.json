@@ -1,0 +1,11 @@
+{
+  "kind": "data_center_pointer",
+  "dataset_id": "etf_factor_rotation_backtest_runs",
+  "snapshot_id": "20260701-0246-bt526c312fb836d6e07826ce170809486a",
+  "dataset_snapshot": "research_datasets/etf_factor_rotation_backtest_runs/20260701-0246-bt526c312fb836d6e07826ce170809486a",
+  "dataset_file": "raw/api_export.json.gz",
+  "original_path": "api_export.json",
+  "original_sha256": "5ca0d57eddc4d68c0666a648fa8ae947e7e245376b79a0bbe27889859a46166b",
+  "compressed_sha256": "0f220177b98c9168e238171dcd67d2fa097cf0246d03b49f5c890e88bc261704",
+  "original_bytes": 3827821
+}
