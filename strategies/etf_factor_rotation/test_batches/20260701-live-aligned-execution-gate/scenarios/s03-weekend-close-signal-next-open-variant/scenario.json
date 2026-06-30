@@ -1,5 +1,5 @@
 {
-  "strategy_file": "strategies/etf_factor_rotation/variants/code/weekend_close_signal_next_open_variant.py",
+  "strategy_file": "../../../../variants/code/weekend_close_signal_next_open_variant.py",
   "strategy": "etf_factor_rotation",
   "strategy_name": "etf_factor_rotation",
   "scenario_id": "s03-weekend-close-signal-next-open-variant",

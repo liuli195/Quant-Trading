@@ -1,5 +1,5 @@
 {
-  "strategy_file": "strategies/etf_factor_rotation/etf_factor_rotation.py",
+  "strategy_file": "../../../../etf_factor_rotation.py",
   "strategy": "etf_factor_rotation",
   "scenario_id": "s01-baseline-original",
   "start_date": "2021-01-01",

@@ -1,5 +1,5 @@
 {
-  "strategy_file": "strategies/etf_factor_rotation/variants/code/logic3_code_variant.py",
+  "strategy_file": "../../../../variants/code/logic3_code_variant.py",
   "strategy": "etf_factor_rotation",
   "strategy_name": "etf_factor_rotation",
   "scenario_id": "s02-logic3-code-variant",
