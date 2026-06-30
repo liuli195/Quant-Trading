@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-30T20:21:24+00:00",
+  "generated_at": "2026-06-30T21:29:19+00:00",
   "count": 110,
   "datasets": [
     {
@@ -1353,7 +1353,9 @@
       ],
       "source_kind": "joinquant_backtest_run",
       "owner": "research-platform",
-      "lifecycle": "active"
+      "lifecycle": "superseded",
+      "superseded_by": "20260701-0246-bt526c312fb836d6e07826ce170809486a",
+      "superseded_reason": "initial no-trade run; s04 is the active reproducible weekend-close variant evidence"
     },
     {
       "dataset_id": "etf_factor_rotation_backtest_runs",
@@ -1383,7 +1385,7 @@
     },
     {
       "dataset_id": "etf_factor_rotation_backtest_runs",
-      "snapshot_id": "20260701-0332-bted14e73abe11aa0026c3a1d0c55865d6",
+      "snapshot_id": "20260701-0332-btbfc5066102fc7eac2f3dfd3da0276a3d",
       "fingerprint": "sha256:a3006b9f096754d0b2876f2138ccba09d0a23e63cffc91a6c3214b73361e0bbb",
       "row_count": 1289,
       "date_range": [

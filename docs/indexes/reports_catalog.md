@@ -271,8 +271,8 @@
 | backtest_run | etf_factor_rotation | 数据完整性报告 | `strategies/etf_factor_rotation/backtest_runs/20260701-0032-btdcc6252aadef8bb09592538da4dde54c/report/data-integrity.md` | 0 |
 | backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260701-0246-bt526c312fb836d6e07826ce170809486a/report/backtest_report.md` | 0 |
 | backtest_run | etf_factor_rotation | 数据完整性报告 | `strategies/etf_factor_rotation/backtest_runs/20260701-0246-bt526c312fb836d6e07826ce170809486a/report/data-integrity.md` | 0 |
-| backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260701-0332-bted14e73abe11aa0026c3a1d0c55865d6/report/backtest_report.md` | 0 |
-| backtest_run | etf_factor_rotation | 数据完整性报告 | `strategies/etf_factor_rotation/backtest_runs/20260701-0332-bted14e73abe11aa0026c3a1d0c55865d6/report/data-integrity.md` | 0 |
+| backtest_run | etf_factor_rotation | 回测数据汇总 | `strategies/etf_factor_rotation/backtest_runs/20260701-0332-btbfc5066102fc7eac2f3dfd3da0276a3d/report/backtest_report.md` | 0 |
+| backtest_run | etf_factor_rotation | 数据完整性报告 | `strategies/etf_factor_rotation/backtest_runs/20260701-0332-btbfc5066102fc7eac2f3dfd3da0276a3d/report/data-integrity.md` | 0 |
 | report | etf_factor_rotation | ETF 因子轮动 vs 动态再平衡深度归因报告 | `strategies/etf_factor_rotation/reports/2026-05-07-factor-vs-dynamic-rebalance-attribution.md` | 16 |
 | report | etf_factor_rotation | 深度归因分析报告 | `strategies/etf_factor_rotation/reports/2026-05-14-deep-attribution.md` | 7 |
 | report | etf_factor_rotation | 拥挤度惩罚 AB 验证 — 最终决策 | `strategies/etf_factor_rotation/reports/2026-05-15-crowd-penalty-ab-decision.md` | 8 |

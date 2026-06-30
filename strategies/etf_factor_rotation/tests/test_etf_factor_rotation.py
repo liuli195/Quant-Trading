@@ -286,7 +286,6 @@ class TestInitialize:
             strategy.prepare_weekend_close_rebalance,
             weekday=-1,
             time='15:30',
-            reference_security='000300.XSHG',
             force=False,
         )
         strategy.run_daily.assert_called_once_with(
@@ -351,7 +350,6 @@ class TestInitialize:
             strategy.prepare_weekend_close_rebalance,
             weekday=-1,
             time='15:30',
-            reference_security='000300.XSHG',
             force=False,
         )
         strategy.run_daily.assert_called_once_with(
@@ -378,13 +376,15 @@ class TestInitialize:
         kwargs = strategy.set_slippage.call_args[1]
         assert kwargs['type'] == 'fund'
 
-    def test_initialize_registers_reference_security(self, strategy):
-        """验证 run_weekly 注册了 reference_security='000300.XSHG'。"""
+    def test_initialize_keeps_reference_security_on_open_execution_only(self, strategy):
+        """固定时间收盘信号不传 reference_security，开盘执行保留参照标的。"""
         context = SimpleNamespace()
         context.portfolio = strategy._mock_portfolio
         strategy.initialize(context)
-        kwargs = strategy.run_weekly.call_args[1]
-        assert kwargs['reference_security'] == '000300.XSHG'
+        weekly_kwargs = strategy.run_weekly.call_args[1]
+        daily_kwargs = strategy.run_daily.call_args[1]
+        assert 'reference_security' not in weekly_kwargs
+        assert daily_kwargs['reference_security'] == '000300.XSHG'
 
     def test_initialize_calls_set_parameter(self, strategy):
         """验证 initialize 后 g 对象包含了 set_parameter 写入的关键参数。"""

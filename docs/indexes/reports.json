@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "catalog_type": "documents",
-  "generated_at": "2026-06-30T20:21:24+00:00",
+  "generated_at": "2026-06-30T21:29:19+00:00",
   "count": 430,
   "reports": [
     {
@@ -3352,7 +3352,7 @@
       "updated_at": "2026-06-30T18:50:06+00:00"
     },
     {
-      "path": "strategies/etf_factor_rotation/backtest_runs/20260701-0332-bted14e73abe11aa0026c3a1d0c55865d6/report/backtest_report.md",
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260701-0332-btbfc5066102fc7eac2f3dfd3da0276a3d/report/backtest_report.md",
       "title": "回测数据汇总",
       "category": "backtest_run",
       "strategy": "etf_factor_rotation",
@@ -3362,7 +3362,7 @@
       "updated_at": "2026-06-30T19:37:11+00:00"
     },
     {
-      "path": "strategies/etf_factor_rotation/backtest_runs/20260701-0332-bted14e73abe11aa0026c3a1d0c55865d6/report/data-integrity.md",
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260701-0332-btbfc5066102fc7eac2f3dfd3da0276a3d/report/data-integrity.md",
       "title": "数据完整性报告",
       "category": "backtest_run",
       "strategy": "etf_factor_rotation",

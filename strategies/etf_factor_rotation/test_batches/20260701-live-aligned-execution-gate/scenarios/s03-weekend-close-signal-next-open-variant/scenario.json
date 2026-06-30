@@ -11,5 +11,8 @@
   "batch_id": "20260701-live-aligned-execution-gate",
   "estimated_minutes": 6,
   "result_source": "auto",
-  "allow_partial": false
+  "allow_partial": false,
+  "status": "superseded",
+  "superseded_by": "s04-weekend-close-signal-next-open-variant-v2",
+  "superseded_reason": "initial no-trade run; s04 is the active reproducible weekend-close variant evidence"
 }

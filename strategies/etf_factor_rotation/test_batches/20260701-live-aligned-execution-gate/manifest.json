@@ -29,13 +29,15 @@
       ]
     },
     "s03-weekend-close-signal-next-open-variant": {
-      "status": "completed",
+      "status": "superseded",
+      "superseded_by": "s04-weekend-close-signal-next-open-variant-v2",
+      "superseded_reason": "initial no-trade run; s04 is the active reproducible weekend-close variant evidence",
       "runs": [
         {
           "run_id": "20260701-0028-btcb35093c739b769b0c7cebb1bbe141b5",
           "label": "default",
           "params_diff": {},
-          "status": "completed"
+          "status": "superseded"
         }
       ]
     },
@@ -53,7 +55,7 @@
     "s05-official-current-baseline": {
       "runs": [
         {
-          "run_id": "20260701-0332-bted14e73abe11aa0026c3a1d0c55865d6",
+          "run_id": "20260701-0332-btbfc5066102fc7eac2f3dfd3da0276a3d",
           "label": "default",
           "params_diff": {},
           "status": "completed"
