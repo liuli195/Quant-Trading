@@ -1,11 +1,21 @@
-{
-  "kind": "data_center_pointer",
-  "dataset_id": "etf_factor_rotation_backtest_runs",
-  "snapshot_id": "20260701-0332-btbfc5066102fc7eac2f3dfd3da0276a3d",
-  "dataset_snapshot": "research_datasets/etf_factor_rotation_backtest_runs/20260701-0332-btbfc5066102fc7eac2f3dfd3da0276a3d",
-  "dataset_file": "raw/api_export.json.gz",
-  "original_path": "api_export.json",
-  "original_sha256": "7c347eb465d800422c4f50a761c401156985f1330b3cb90d585b1bd697a89221",
-  "compressed_sha256": "ed009f3dcbe7d329e092fa016fe83dc64c3754d1331fc399e6424e059c1f9726",
-  "original_bytes": 3784618
-}
+{
+
+  "kind": "data_center_pointer",
+
+  "dataset_id": "etf_factor_rotation_backtest_runs",
+
+  "snapshot_id": "20260701-0332-btbfc5066102fc7eac2f3dfd3da0276a3d",
+
+  "dataset_snapshot": "research_datasets/etf_factor_rotation_backtest_runs/20260701-0332-btbfc5066102fc7eac2f3dfd3da0276a3d",
+
+  "dataset_file": "raw/api_export.json.gz",
+
+  "original_path": "api_export.json",
+
+  "original_sha256": "7c347eb465d800422c4f50a761c401156985f1330b3cb90d585b1bd697a89221",
+
+  "compressed_sha256": "ed009f3dcbe7d329e092fa016fe83dc64c3754d1331fc399e6424e059c1f9726",
+
+  "original_bytes": 3784618
+
+}

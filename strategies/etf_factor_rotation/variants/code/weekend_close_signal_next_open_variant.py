@@ -578,7 +578,6 @@ def initialize(context):
             prepare_weekend_close_rebalance,
             weekday=-1,
             time='15:30',
-            reference_security='000300.XSHG',
             force=False,
         )
         run_daily(

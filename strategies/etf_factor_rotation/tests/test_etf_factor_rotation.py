@@ -12,6 +12,7 @@ import ast
 import inspect
 import json
 import math
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch, call
 
@@ -35,6 +36,28 @@ def test_strategy_loads_without_feishu_relay_tools(monkeypatch):
     spec.loader.exec_module(module)
 
     assert module.FeishuRelayTools is None
+
+
+def test_fixed_time_weekly_schedules_do_not_pass_reference_security():
+    strategy_root = Path(__file__).resolve().parent.parent
+    strategy_files = [
+        strategy_root / "etf_factor_rotation.py",
+        strategy_root / "variants" / "code" / "weekend_close_signal_next_open_variant.py",
+    ]
+
+    for strategy_file in strategy_files:
+        tree = ast.parse(strategy_file.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if getattr(node.func, "id", "") != "run_weekly":
+                continue
+            kwargs = {keyword.arg: keyword.value for keyword in node.keywords if keyword.arg}
+            time_node = kwargs.get("time")
+            is_fixed_time = isinstance(time_node, ast.Constant) and time_node.value != "open"
+            assert not (is_fixed_time and "reference_security" in kwargs), (
+                "%s has fixed-time run_weekly with reference_security" % strategy_file
+            )
 
 
 # ============================================================
