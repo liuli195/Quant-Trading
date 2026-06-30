@@ -14,7 +14,7 @@
   "storage": {
     "canonical": "parquet",
     "compression": "zstd",
-    "raw": "json.gz/jsonl.gz"
+    "raw": "json.gz/jsonl.gz/md.gz"
   },
   "row_count": 1289,
   "date_range": [
@@ -112,61 +112,61 @@
     "api_export.json": {
       "dataset_file": "raw/api_export.json.gz",
       "original_sha256": "5ca0d57eddc4d68c0666a648fa8ae947e7e245376b79a0bbe27889859a46166b",
-      "compressed_sha256": "b5d48cd95e123c32db1a5496986b4f2033262af3dd303f3fbaf8f3988379017d",
+      "compressed_sha256": "0f220177b98c9168e238171dcd67d2fa097cf0246d03b49f5c890e88bc261704",
       "original_bytes": 3827821
     },
     "detail_api_export.json": {
       "dataset_file": "raw/detail_api_export.json.gz",
       "original_sha256": "12c70ee14b6d0ae1b37613abb337844620a44a3ca3261e301f7f2de6a54b1eff",
-      "compressed_sha256": "c6e95be433c32feb8eabde21b696f0526bbff30be4cc560b9ba79eec83348d18",
+      "compressed_sha256": "7fc77f963819736f60d350045885ab71908ed41be5a0a9c44e00ef4be7d74905",
       "original_bytes": 4370080
     },
     "summary_metrics.json": {
       "dataset_file": "raw/summary_metrics.json.gz",
       "original_sha256": "317b30d9a2b2f3f72bb2dc7210bde94ef9e389e7939d8423c2b1f5ee5df3e21b",
-      "compressed_sha256": "5df8e4464f0856394a8cbd389900f11a878d58f36ca30ed472db825f3a9fd072",
+      "compressed_sha256": "135fb1ab5e2fa8cf0bcebadf03780f0ed8d55c488b02372a3b7ccbd393629cc0",
       "original_bytes": 520
     },
     "tabs_raw/audit_log.jsonl": {
       "dataset_file": "raw/audit_log.jsonl.gz",
       "original_sha256": "b673ad3c49c5782fee85e5d062b55ff081a029eb3f58dda4d87ac2dc2b28525b",
-      "compressed_sha256": "17eaa7a479e4b64138d15bad1e474c4e0831a98ad4b47cefbf56c375dfec2e21",
+      "compressed_sha256": "2dd4f6c4a4b5c439e14dd8d30560557c2788de087cd8b7864ad0f22b03b9210c",
       "original_bytes": 1742407
     },
     "tabs_raw/daily_returns.md": {
       "dataset_file": "raw/daily_returns.md.gz",
       "original_sha256": "fae7f563d4decde5e0f5e2708b6502e4e712b42cb2ce35e8817779cc40060a50",
-      "compressed_sha256": "d39104746634b7e18b7bbc52b2d97d01aef3f26e13ab9334979e9efe5ef909f9",
+      "compressed_sha256": "8e31e63bf90b2d042d4f045a290db99eb6f3a0892a34462ee3caea975395f468",
       "original_bytes": 92691
     },
     "tabs_raw/positioninfo.md": {
       "dataset_file": "raw/positioninfo.md.gz",
       "original_sha256": "b66559bf2f878363ba35fa31fa8fcb6e0ad2f6c7249c723448db04164ba99e6b",
-      "compressed_sha256": "6d7747df83c27776d1ecf85199a8210ba0077b37be2802a8bc480e6e41c0db4a",
+      "compressed_sha256": "2e8ffe3c2f7a5df3669a203e25084a9e1974f5a5c0a4e6ba18fc817b35ee87da",
       "original_bytes": 378767
     },
     "tabs_raw/transactioninfo.md": {
       "dataset_file": "raw/transactioninfo.md.gz",
       "original_sha256": "9231003f977b453cf45f5064d02865af7d04a533f92034c9407db117c9e27c8d",
-      "compressed_sha256": "c653d5b43d32cd3d2947dbc5f17d749b2360bdc932843906b5cecf0451a60cde",
+      "compressed_sha256": "453d227ceed56221df0fdae0b17a53ebd4ddfd766a6f42cac90eb4d2f46cd011",
       "original_bytes": 31888
     },
     "tabs_raw/balances.md": {
       "dataset_file": "raw/balances.md.gz",
       "original_sha256": "7f0d0c1bee6b6572516b623634b2a9d2169fea08f48e8a6aa033984cc1b09872",
-      "compressed_sha256": "59c5bd7b7c052e2fda9bb4a369f505a8189aeb9fce17ff70cce4a24ef0dabdb6",
+      "compressed_sha256": "aff79e04917b5b162bf6cd1545dbda15100863f97ce46b5a647459a33804fa59",
       "original_bytes": 90521
     },
     "tabs_raw/period_risks.md": {
       "dataset_file": "raw/period_risks.md.gz",
       "original_sha256": "661b2d392c210b2a0a17c1b5c5bfdf78e23dd67d577f87e008166997053e106c",
-      "compressed_sha256": "48c96ca40b0af4edf39b777470f0d6b094ab19f64b45eb07075fa422b5383c32",
+      "compressed_sha256": "cb4afc7f1a21bf684ce07caa9ddb45476fe0733f6e048c4a5be76cc3fdb923a2",
       "original_bytes": 62872
     },
     "tabs_raw/logs.md": {
       "dataset_file": "raw/logs.md.gz",
       "original_sha256": "d811c3e0aa782563080368e27c8bd9f2aa226afd30972ddc3c7cba7ca0fa2af3",
-      "compressed_sha256": "0ac080f2fb78f82f11b0492a3bd20b36d3bcbbe5aadd5f0c926ba861e8d6eaed",
+      "compressed_sha256": "da2d0526c6e8ab4e76a9654f7b2dbb3cb3dea37e4f30cedb17eac65b7e92368c",
       "original_bytes": 290
     }
   }

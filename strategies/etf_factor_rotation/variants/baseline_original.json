@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "variant_id": "baseline_original",
+  "variant_type": "structural",
+  "status": "candidate",
+  "merge_status": "not_merged",
+  "description": "原始正式基线代码：本次实验对照组，来源为本分支起点 origin/main 的正式策略脚本。",
+  "code_source": {
+    "type": "git",
+    "path": "strategies/etf_factor_rotation/etf_factor_rotation.py",
+    "commit": "a2119d8e8a841e35af915abff625ce93e905e24a"
+  },
+  "params_diff": {},
+  "research_refs": [],
+  "backtest_refs": [
+    "20260701-0012-bt8d074a3098c6308f791ea33d8806d6f0"
+  ],
+  "report_refs": [
+    "strategies/etf_factor_rotation/backtest_runs/20260701-0012-bt8d074a3098c6308f791ea33d8806d6f0/report/backtest_report.md"
+  ],
+  "created_at": "2026-06-30T20:21:17+00:00",
+  "updated_at": "2026-06-30T20:21:17+00:00",
+  "owner": "research-platform",
+  "created_by": "research-platform",
+  "updated_by": "research-platform",
+  "lifecycle": "active",
+  "payload": {
+    "code_source": {
+      "type": "git",
+      "path": "strategies/etf_factor_rotation/etf_factor_rotation.py",
+      "commit": "a2119d8e8a841e35af915abff625ce93e905e24a"
+    },
+    "owner": "research-platform",
+    "research_refs": [],
+    "backtest_refs": [
+      "20260701-0012-bt8d074a3098c6308f791ea33d8806d6f0"
+    ],
+    "report_refs": [
+      "strategies/etf_factor_rotation/backtest_runs/20260701-0012-bt8d074a3098c6308f791ea33d8806d6f0/report/backtest_report.md"
+    ]
+  }
+}

@@ -2,6 +2,15 @@
   "schema_version": 1,
   "variants": [
     {
+      "variant_id": "baseline_original",
+      "variant_type": "structural",
+      "status": "candidate",
+      "merge_status": "not_merged",
+      "description": "原始正式基线代码：本次实验对照组，来源为本分支起点 origin/main 的正式策略脚本。",
+      "updated_at": "2026-06-30T20:21:17+00:00",
+      "detail": "baseline_original.json"
+    },
+    {
       "variant_id": "logic3_code_variant",
       "variant_type": "structural",
       "status": "candidate",
