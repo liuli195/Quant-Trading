@@ -1,0 +1,50 @@
+{
+  "row_count": 1289,
+  "date_range": [
+    "2021-01-04",
+    "2026-04-30"
+  ],
+  "audit_line_count": 1903,
+  "audit_date_range": [
+    "2021-01-01",
+    "2026-04-30"
+  ],
+  "audit_event_counts": {
+    "live_like_rebalance_execute": 272,
+    "live_like_signal_marked": 272,
+    "live_like_wait": 269,
+    "rebalance_order": 816,
+    "rebalance_signals": 272,
+    "run_end": 1,
+    "run_start": 1
+  },
+  "etf_pool": [
+    "159819.XSHE",
+    "513100.XSHG",
+    "518880.XSHG"
+  ],
+  "summary_metric_keys": [
+    "亏损次数",
+    "信息比率",
+    "基准收益",
+    "基准波动率",
+    "夏普比率",
+    "日胜率",
+    "最大回撤",
+    "最大回撤区间",
+    "盈亏比",
+    "盈利次数",
+    "策略年化收益",
+    "策略收益",
+    "策略波动率",
+    "索提诺比率",
+    "胜率",
+    "贝塔",
+    "超额收益",
+    "阿尔法"
+  ],
+  "report_files": [
+    "backtest_report.md",
+    "data-integrity.md"
+  ]
+}

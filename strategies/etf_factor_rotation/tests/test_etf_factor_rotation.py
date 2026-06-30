@@ -122,7 +122,8 @@ class TestModuleLoading:
             'initialize', 'set_parameter', 'weekly_check',
             'build_rebalance_plan', 'prepare_delay_only_rebalance',
             'execute_pending_rebalance', 'mark_live_like_signal_day',
-            'execute_live_like_rebalance',
+            'execute_live_like_rebalance', 'prepare_weekend_close_rebalance',
+            'execute_weekend_close_rebalance',
             'get_history_data', 'compute_trend_gates', 'compute_momentum_scores',
             'select_topk', 'compute_rp_weights', 'compute_rsrs_multipliers',
             'compute_rsrs_adjusted_scores',
@@ -191,6 +192,17 @@ class TestSetParameter:
         assert g.DynamicVolReliefMaxRatio == 1.5
         assert g.DynamicVolReliefMomentumWindow == 20
         assert g.DynamicVolReliefCovWindow == 40
+
+    def test_set_parameter_preserves_pending_rebalance_state(self, strategy):
+        pending = [{"signal_date": "2026-05-15", "pool": ["159819.XSHE"]}]
+        live_like = ["2026-05-18"]
+        strategy.g.pending_rebalances = pending
+        strategy.g.pending_live_like_signal_days = live_like
+
+        strategy.set_parameter(strategy)
+
+        assert strategy.g.pending_rebalances is pending
+        assert strategy.g.pending_live_like_signal_days is live_like
 
 
 class TestEtfDisplayNames:
@@ -266,15 +278,22 @@ class TestInitialize:
         strategy.set_option.assert_any_call('use_real_price', False)
         strategy.set_option.assert_any_call('avoid_future_data', True)
 
-    def test_initialize_registers_weekly_task(self, strategy):
+    def test_initialize_registers_default_weekend_close_task(self, strategy):
         context = SimpleNamespace()
         context.portfolio = strategy._mock_portfolio
         strategy.initialize(context)
-        strategy.run_weekly.assert_called_once()
-        args, kwargs = strategy.run_weekly.call_args
-        assert kwargs['weekday'] == 1
-        assert kwargs['time'] == 'open'
-        strategy.run_daily.assert_not_called()
+        strategy.run_weekly.assert_called_once_with(
+            strategy.prepare_weekend_close_rebalance,
+            weekday=-1,
+            time='15:30',
+            reference_security='000300.XSHG',
+            force=False,
+        )
+        strategy.run_daily.assert_called_once_with(
+            strategy.execute_weekend_close_rebalance,
+            time='open',
+            reference_security='000300.XSHG',
+        )
 
     def test_initialize_registers_delay_only_tasks(self, strategy):
         original_set_parameter = strategy.set_parameter
@@ -315,6 +334,31 @@ class TestInitialize:
         strategy.run_daily.assert_called_once()
         _, daily_kwargs = strategy.run_daily.call_args
         assert daily_kwargs['time'] == 'open'
+
+    def test_initialize_registers_weekend_close_task(self, strategy):
+        original_set_parameter = strategy.set_parameter
+
+        def set_weekend_close(context):
+            original_set_parameter(context)
+            strategy.g.ExecutionTimingMode = "weekend-close-signal-next-open"
+
+        context = SimpleNamespace()
+        context.portfolio = strategy._mock_portfolio
+        with patch.object(strategy, 'set_parameter', side_effect=set_weekend_close):
+            strategy.initialize(context)
+
+        strategy.run_weekly.assert_called_once_with(
+            strategy.prepare_weekend_close_rebalance,
+            weekday=-1,
+            time='15:30',
+            reference_security='000300.XSHG',
+            force=False,
+        )
+        strategy.run_daily.assert_called_once_with(
+            strategy.execute_weekend_close_rebalance,
+            time='open',
+            reference_security='000300.XSHG',
+        )
 
     def test_initialize_calls_set_order_cost(self, strategy):
         """验证 initialize 调用了 set_order_cost 并传递正确的费率参数。"""
@@ -2184,6 +2228,118 @@ class TestExecutionTimingModes:
             pd.Timestamp("2021-10-11").date()
         ]
 
+    def test_weekend_close_prepares_last_trade_day_and_executes_cached_plan_next_open(self, strategy, mock_g):
+        mock_g.ExecutionTimingMode = "weekend-close-signal-next-open"
+        friday_date = pd.Timestamp("2026-05-15").date()
+        monday_date = pd.Timestamp("2026-05-18").date()
+        plan = {
+            "pool": list(mock_g.etf_pool),
+            "final_weights": np.array([0.4, 0.3, 0.0]),
+            "params": strategy.snapshot_params(),
+            "signal_date": friday_date,
+            "asof_date": friday_date,
+            "prepared_date": friday_date,
+        }
+        friday_close = SimpleNamespace(
+            current_dt=pd.Timestamp("2026-05-15 15:30:00").to_pydatetime(),
+            previous_date=pd.Timestamp("2026-05-14").date(),
+            portfolio=strategy._mock_portfolio,
+        )
+        monday_open = SimpleNamespace(
+            current_dt=pd.Timestamp("2026-05-18 09:30:00").to_pydatetime(),
+            previous_date=friday_date,
+            portfolio=strategy._mock_portfolio,
+        )
+
+        with patch.object(strategy, 'build_rebalance_plan', return_value=plan) as build:
+            strategy.prepare_weekend_close_rebalance(friday_close)
+
+        build.assert_called_once_with(friday_close, asof_date=friday_date)
+        assert strategy.g.pending_rebalances == [plan]
+
+        with patch.object(strategy, 'build_rebalance_plan') as build_again:
+            with patch.object(strategy, 'execute_rebalance') as execute:
+                strategy.execute_weekend_close_rebalance(monday_open)
+
+        build_again.assert_not_called()
+        execute.assert_called_once_with(
+            monday_open,
+            plan["pool"],
+            plan["final_weights"],
+            plan["params"],
+        )
+        assert strategy.g.pending_rebalances == []
+
+    def test_weekend_close_reports_signal_plan_and_suppresses_execution_notice(self, strategy, mock_g):
+        mock_g.ExecutionTimingMode = "weekend-close-signal-next-open"
+        friday_date = pd.Timestamp("2026-05-15").date()
+        monday_date = pd.Timestamp("2026-05-18").date()
+        params = strategy.snapshot_params()
+        plan = {
+            "pool": list(mock_g.etf_pool),
+            "final_weights": np.array([0.4, 0.3, 0.0]),
+            "params": params,
+            "signal_date": friday_date,
+            "asof_date": friday_date,
+            "prepared_date": friday_date,
+        }
+        feishu = SimpleNamespace(
+            report_signal_plan=Mock(return_value=True),
+            suppress_execution_notice=Mock(),
+            resume_execution_notice=Mock(),
+        )
+        friday_close = SimpleNamespace(
+            current_dt=pd.Timestamp("2026-05-15 15:30:00").to_pydatetime(),
+            previous_date=pd.Timestamp("2026-05-14").date(),
+            portfolio=strategy._mock_portfolio,
+        )
+        monday_open = SimpleNamespace(
+            current_dt=pd.Timestamp("2026-05-18 09:30:00").to_pydatetime(),
+            previous_date=friday_date,
+            portfolio=strategy._mock_portfolio,
+        )
+
+        with patch.object(strategy, "FeishuRelayTools", feishu):
+            with patch.object(strategy, "build_rebalance_plan", return_value=plan):
+                strategy.prepare_weekend_close_rebalance(friday_close)
+
+            cached = strategy.g.pending_rebalances[0]
+            feishu.report_signal_plan.assert_called_once_with(cached)
+            assert cached["signal_notice_sent"] is True
+            assert cached["plan_cached"] is True
+            assert cached["batch_id"]
+            assert cached["target_weights"] == [0.4, 0.3, 0.0]
+            assert cached["target_values"] == [40000.0, 30000.0, 0.0]
+
+            with patch.object(strategy, "execute_rebalance") as execute:
+                strategy.execute_weekend_close_rebalance(monday_open)
+
+        feishu.suppress_execution_notice.assert_called_once_with(
+            batch_id=cached["batch_id"],
+            reason="signal_notice_already_sent",
+        )
+        feishu.resume_execution_notice.assert_called_once_with()
+        execute.assert_called_once_with(
+            monday_open,
+            cached["pool"],
+            cached["final_weights"],
+            cached["params"],
+        )
+        events = [
+            json.loads(call_args[0][1])
+            for call_args in strategy.write_file.call_args_list
+        ]
+        cached_event = next(event for event in events if event["event"] == "weekend_close_plan_cached")
+        execute_event = next(event for event in events if event["event"] == "weekend_close_execute")
+        assert cached_event["batch_id"] == cached["batch_id"]
+        assert cached_event["signal_notice_sent"] is True
+        assert cached_event["plan_cached"] is True
+        assert execute_event["batch_id"] == cached["batch_id"]
+        assert execute_event["trade_date"] == monday_date.isoformat()
+        assert execute_event["execution_order_called"] is True
+        assert execute_event["execution_notice_suppressed"] is True
+        assert execute_event["suppress_reason"] == "signal_notice_already_sent"
+
 
 # ============================================================
 # 10. R3 修复验证 — get_history_data 显式 end_date=context.previous_date
@@ -2774,8 +2930,8 @@ class TestSnapshotParams:
 
         params = strategy.snapshot_params()
 
-        assert params["ExecutionTimingMode"] == "baseline"
-        assert mock_g.ExecutionTimingMode == "baseline"
+        assert params["ExecutionTimingMode"] == "weekend-close-signal-next-open"
+        assert mock_g.ExecutionTimingMode == "weekend-close-signal-next-open"
 
     def test_snapshot_backfills_all_missing_runtime_params(self, strategy, mock_g):
         """新增策略参数必须能兼容模拟盘保留的旧 g。"""

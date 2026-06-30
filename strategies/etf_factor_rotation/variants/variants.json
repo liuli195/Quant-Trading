@@ -1,4 +1,23 @@
 {
   "schema_version": 1,
-  "variants": []
+  "variants": [
+    {
+      "variant_id": "logic3_code_variant",
+      "variant_type": "structural",
+      "status": "candidate",
+      "merge_status": "not_merged",
+      "description": "旧实盘近似代码变体：周一标记信号，下一交易日开盘生成并执行。",
+      "updated_at": "2026-06-30T16:23:28+00:00",
+      "detail": "logic3_code_variant.json"
+    },
+    {
+      "variant_id": "weekend_close_signal_next_open_variant",
+      "variant_type": "structural",
+      "status": "candidate",
+      "merge_status": "not_merged",
+      "description": "新实盘对齐代码变体：本周最后交易日收盘生成信号，次交易日开盘执行缓存计划。",
+      "updated_at": "2026-06-30T16:23:28+00:00",
+      "detail": "weekend_close_signal_next_open_variant.json"
+    }
+  ]
 }

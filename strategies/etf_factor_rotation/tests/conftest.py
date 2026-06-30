@@ -24,7 +24,7 @@ import pytest
 
 # 策略文件第 1 行调用 enable_profile()，必须提前注入
 builtins.enable_profile = Mock()
-sys.modules['FeishuRelayTools'] = MagicMock()
+sys.modules['FeishuRelayTools'] = SimpleNamespace()
 
 
 # ============================================================
@@ -206,7 +206,7 @@ def mock_g(strategy):
         MinWeight=0.05,
         RebalanceThreshold=0.03,
         MaxTotalWeight=1.0,
-        ExecutionTimingMode='baseline',
+        ExecutionTimingMode='weekend-close-signal-next-open',
         live_days=1250,
         history_buffer=100,
         benchmark='000300.XSHG',
@@ -255,3 +255,5 @@ def _auto_reset_mocks(strategy):
     strategy.set_slippage.reset_mock()
     strategy.run_weekly.reset_mock()
     strategy.run_daily.reset_mock()
+    strategy._mock_portfolio.total_value = 100000.0
+    strategy._mock_portfolio.positions = {}

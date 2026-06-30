@@ -113,7 +113,7 @@ PARAM_DEFAULTS = {
     "MinWeight": 0.05,
     "RebalanceThreshold": 0.03,
     "MaxTotalWeight": 1.0,
-    "ExecutionTimingMode": "baseline",
+    "ExecutionTimingMode": "weekend-close-signal-next-open",
     "use_real_price": False,
     "fq_mode": None,
     "history_buffer": 100,
@@ -123,6 +123,7 @@ EXECUTION_TIMING_MODES = (
     "baseline",
     "logic-2-delay-only",
     "logic-3-live-like",
+    "weekend-close-signal-next-open",
 )
 DEFAULT_EXECUTION_TIMING_MODE = PARAM_DEFAULTS["ExecutionTimingMode"]
 PORTFOLIO_VOL_RELIEF_MODES = (
@@ -560,7 +561,7 @@ def initialize(context):
             time='open',
             reference_security='000300.XSHG'
         )
-    else:
+    elif g.ExecutionTimingMode == "logic-3-live-like":
         run_weekly(
             mark_live_like_signal_day,
             weekday=1,
@@ -569,6 +570,19 @@ def initialize(context):
         )
         run_daily(
             execute_live_like_rebalance,
+            time='open',
+            reference_security='000300.XSHG'
+        )
+    else:
+        run_weekly(
+            prepare_weekend_close_rebalance,
+            weekday=-1,
+            time='15:30',
+            reference_security='000300.XSHG',
+            force=False,
+        )
+        run_daily(
+            execute_weekend_close_rebalance,
             time='open',
             reference_security='000300.XSHG'
         )
@@ -686,8 +700,10 @@ def set_parameter(context):
     g.audit_token = JQ_AUTO_AUDIT_TOKEN
     g.audit_path = "%s/%s.jsonl" % (JQ_AUTO_AUDIT_DIR, g.audit_token)
     g.audit_seq = 0
-    g.pending_rebalances = []
-    g.pending_live_like_signal_days = []
+    if not hasattr(g, "pending_rebalances"):
+        g.pending_rebalances = []
+    if not hasattr(g, "pending_live_like_signal_days"):
+        g.pending_live_like_signal_days = []
 
 
 # ============================================================
@@ -730,15 +746,105 @@ def compose_raw_weights(tilted_weights, trend_gates, crowd_penalties):
 # ============================================================
 # weekly_check — 周频调仓主函数
 # ============================================================
+def _as_date(value):
+    """把聚宽日期、pandas 日期或字符串统一成 date。"""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return pd.Timestamp(value).date()
+    except Exception:
+        return value
+
+
 def _context_trade_date(context):
     """返回当前任务对应的自然日。"""
-    current_dt = getattr(context, "current_dt", None)
-    if current_dt is not None and hasattr(current_dt, "date"):
-        return current_dt.date()
-    return current_dt
+    return _as_date(getattr(context, "current_dt", None))
 
 
-def build_rebalance_plan(context):
+def _same_iso_week(left, right):
+    left = _as_date(left)
+    right = _as_date(right)
+    if left is None or right is None:
+        return False
+    return left.isocalendar()[:2] == right.isocalendar()[:2]
+
+
+def _float_list(values):
+    try:
+        if hasattr(values, "tolist"):
+            values = values.tolist()
+    except Exception:
+        pass
+    return [float(value) for value in list(values or [])]
+
+
+def _weekend_close_batch_id(signal_date):
+    token = str(getattr(g, "audit_token", "manual")).replace("/", "_").replace("\\", "_")
+    return "%s-weekend-close-%s" % (token, signal_date)
+
+
+def _enrich_weekend_close_plan(context, plan, signal_date):
+    weights = _float_list(plan.get("final_weights"))
+    portfolio = getattr(context, "portfolio", None)
+    total_value = getattr(portfolio, "total_value", None)
+    plan["final_weights"] = weights
+    plan["target_weights"] = weights
+    plan["target_values"] = [total_value * weight for weight in weights] if total_value is not None else []
+    plan["portfolio_total_value"] = total_value
+    plan["signal_date"] = signal_date
+    plan["asof_date"] = signal_date
+    plan["prepared_date"] = signal_date
+    plan["trade_date"] = plan.get("trade_date")
+    plan["batch_id"] = plan.get("batch_id") or _weekend_close_batch_id(signal_date)
+    plan["plan_cached"] = True
+    plan["signal_notice_sent"] = False
+    return plan
+
+
+def _report_signal_plan(plan):
+    if FeishuRelayTools is None:
+        return False
+    reporter = getattr(FeishuRelayTools, "report_signal_plan", None)
+    if not callable(reporter):
+        return False
+    try:
+        return bool(reporter(plan))
+    except Exception as exc:
+        log.warning("feishu signal notice failed: %s", exc)
+        return False
+
+
+def _suppress_execution_notice(batch_id):
+    if FeishuRelayTools is None:
+        return False
+    suppress = getattr(FeishuRelayTools, "suppress_execution_notice", None)
+    if not callable(suppress):
+        return False
+    try:
+        suppress(batch_id=batch_id, reason="signal_notice_already_sent")
+        return True
+    except Exception as exc:
+        log.warning("feishu execution notice suppress failed: %s", exc)
+        return False
+
+
+def _resume_execution_notice():
+    if FeishuRelayTools is None:
+        return
+    resume = getattr(FeishuRelayTools, "resume_execution_notice", None)
+    if not callable(resume):
+        return
+    try:
+        resume()
+    except Exception as exc:
+        log.warning("feishu execution notice resume failed: %s", exc)
+
+
+def build_rebalance_plan(context, asof_date=None):
     """生成一次调仓所需的完整信号快照，但不直接下单。
 
     流程：TrendGate → RPWeight → MomentumScore → MomentumTilt
@@ -750,7 +856,11 @@ def build_rebalance_plan(context):
     etf_names = params["etf_names"]
 
     # 1. 拉取历史数据
-    prices = get_history_data(context, pool, params)
+    if asof_date is not None:
+        asof_date = _as_date(asof_date)
+    else:
+        asof_date = getattr(context, "previous_date", None)
+    prices = get_history_data(context, pool, params, asof_date=asof_date)
 
     # 2. 计算趋势门槛
     trend_gates = compute_trend_gates(prices, pool, params)
@@ -823,7 +933,7 @@ def build_rebalance_plan(context):
         final_weights_before_constraints=final_weights_before_constraints,
         final_weights=final_weights,
         execution_timing_mode=params["ExecutionTimingMode"],
-        asof_date=getattr(context, "previous_date", None),
+        asof_date=asof_date,
         trade_date=_context_trade_date(context),
     )
 
@@ -831,7 +941,7 @@ def build_rebalance_plan(context):
         "pool": pool,
         "final_weights": final_weights,
         "params": params,
-        "asof_date": getattr(context, "previous_date", None),
+        "asof_date": asof_date,
         "prepared_date": _context_trade_date(context),
     }
 
@@ -945,6 +1055,95 @@ def execute_live_like_rebalance(context):
     queue.pop(0)
 
 
+def prepare_weekend_close_rebalance(context):
+    """收盘后生成候选信号 plan，次开盘跨周时执行。"""
+    signal_date = _context_trade_date(context)
+    params = snapshot_params()
+    if signal_date is None:
+        audit_event(
+            "weekend_close_signal_skip",
+            context,
+            execution_timing_mode=params["ExecutionTimingMode"],
+            signal_date=signal_date,
+            reason="signal_date_unavailable",
+        )
+        return
+
+    plan = build_rebalance_plan(context, asof_date=signal_date)
+    plan = _enrich_weekend_close_plan(context, plan, signal_date)
+    plan["signal_notice_sent"] = _report_signal_plan(plan)
+    g.pending_rebalances = [plan]
+    audit_event(
+        "weekend_close_plan_cached",
+        context,
+        execution_timing_mode=plan["params"]["ExecutionTimingMode"],
+        signal_date=signal_date,
+        asof_date=signal_date,
+        batch_id=plan["batch_id"],
+        target_weights=plan["target_weights"],
+        target_values=plan["target_values"],
+        signal_notice_sent=plan["signal_notice_sent"],
+        plan_cached=True,
+        final_weights=plan["final_weights"],
+    )
+
+
+def execute_weekend_close_rebalance(context):
+    """次交易日开盘执行已缓存的收盘信号 plan，不重新计算信号。"""
+    queue = getattr(g, "pending_rebalances", [])
+    if not queue:
+        return
+
+    pending = queue[0]
+    trade_date = _context_trade_date(context)
+    signal_date = pending.get("signal_date")
+    if trade_date is None or signal_date is None:
+        audit_event(
+            "weekend_close_execute_wait",
+            context,
+            execution_timing_mode=pending["params"]["ExecutionTimingMode"],
+            signal_date=signal_date,
+            asof_date=pending.get("asof_date"),
+            trade_date=trade_date,
+        )
+        return
+    if _same_iso_week(signal_date, trade_date):
+        audit_event(
+            "weekend_close_plan_discarded",
+            context,
+            execution_timing_mode=pending["params"]["ExecutionTimingMode"],
+            signal_date=signal_date,
+            asof_date=pending.get("asof_date"),
+            trade_date=trade_date,
+            reason="not_last_trade_day_of_week",
+        )
+        g.pending_rebalances.pop(0)
+        return
+
+    pending["trade_date"] = trade_date
+    suppress_reason = "signal_notice_already_sent" if pending.get("signal_notice_sent") else ""
+    notice_suppressed = _suppress_execution_notice(pending.get("batch_id")) if suppress_reason else False
+    audit_event(
+        "weekend_close_execute",
+        context,
+        execution_timing_mode=pending["params"]["ExecutionTimingMode"],
+        signal_date=signal_date,
+        asof_date=pending.get("asof_date"),
+        batch_id=pending.get("batch_id"),
+        trade_date=trade_date,
+        execution_order_called=True,
+        execution_notice_suppressed=notice_suppressed,
+        suppress_reason=suppress_reason if notice_suppressed else "",
+        final_weights=pending["final_weights"],
+    )
+    try:
+        execute_rebalance(context, pending["pool"], pending["final_weights"], pending["params"])
+    finally:
+        if notice_suppressed:
+            _resume_execution_notice()
+    g.pending_rebalances.pop(0)
+
+
 # ============================================================
 # normalize_field_frame — 数据返回结构归一化
 # ============================================================
@@ -1026,7 +1225,7 @@ def fetch_field(pool, field, count, params, end_date=None):
     return result.dropna(how='all')
 
 
-def get_history_data(context, pool, params):
+def get_history_data(context, pool, params, asof_date=None):
     """
     拉取足够长的历史 OHLC + 成交额数据，并预计算日收益率。
 
@@ -1035,12 +1234,13 @@ def get_history_data(context, pool, params):
       close_ret: DataFrame（index=日期, columns=ETF代码），close 的 pct_change()
     """
     needed = compute_history_count(params)
+    history_end_date = asof_date if asof_date is not None else getattr(context, "previous_date", None)
 
     prices = {}
-    prices['close'] = fetch_field(pool, 'close', needed, params, end_date=context.previous_date)
-    prices['high'] = fetch_field(pool, 'high', needed, params, end_date=context.previous_date)
-    prices['low'] = fetch_field(pool, 'low', needed, params, end_date=context.previous_date)
-    prices['amount'] = fetch_field(pool, 'money', needed, params, end_date=context.previous_date)
+    prices['close'] = fetch_field(pool, 'close', needed, params, end_date=history_end_date)
+    prices['high'] = fetch_field(pool, 'high', needed, params, end_date=history_end_date)
+    prices['low'] = fetch_field(pool, 'low', needed, params, end_date=history_end_date)
+    prices['amount'] = fetch_field(pool, 'money', needed, params, end_date=history_end_date)
 
     # 预计算日收益率，下游风险平价和组合波动率复用同一份
     prices['close_ret'] = prices['close'].pct_change()
@@ -1048,7 +1248,7 @@ def get_history_data(context, pool, params):
     # 数据新鲜度日志：确保历史数据不晚于 context.previous_date
     close_df = prices['close']
     last_dt = close_df.index[-1] if len(close_df) else None
-    log.info("history end_date=%s, context.previous_date=%s", last_dt, context.previous_date)
+    log.info("history end_date=%s, asof_date=%s", last_dt, history_end_date)
 
     return prices
 
