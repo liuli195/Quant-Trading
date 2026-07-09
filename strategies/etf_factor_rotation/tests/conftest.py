@@ -60,6 +60,7 @@ def strategy():
     module.set_slippage = Mock()
     module.run_weekly = Mock()
     module.run_daily = Mock()
+    module.unschedule_all = Mock()
     module.set_benchmark = Mock()
     module.log = MagicMock()
     module.OrderCost = Mock()
@@ -255,5 +256,6 @@ def _auto_reset_mocks(strategy):
     strategy.set_slippage.reset_mock()
     strategy.run_weekly.reset_mock()
     strategy.run_daily.reset_mock()
+    strategy.unschedule_all.reset_mock()
     strategy._mock_portfolio.total_value = 100000.0
     strategy._mock_portfolio.positions = {}

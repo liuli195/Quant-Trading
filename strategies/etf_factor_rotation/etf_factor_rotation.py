@@ -512,36 +512,8 @@ def resolve_crowd_ret_windows(params):
 # ============================================================
 # initialize — 策略初始化
 # ============================================================
-def initialize(context):
-    """
-    由聚宽框架在回测/模拟启动时自动调用一次。
-
-    作用：
-    - 向 g 对象写入全部策略参数
-    - 设置交易费用（场内基金免印花税，佣金万分之一）
-    - 设置固定滑点 0
-    - 注册每周开盘调仓任务
-    """
-    set_parameter(context)
-    validate_params(snapshot_params())
-    write_file(g.audit_path, "", append=False)
-    audit_event("run_start", context, params=snapshot_params())
-    set_option('use_real_price', g.use_real_price)
-    set_option("avoid_future_data", True)
-
-    set_order_cost(
-        OrderCost(
-            open_tax=0,
-            close_tax=0,
-            open_commission=0.0001,
-            close_commission=0.0001,
-            min_commission=0
-        ),
-        type='fund'
-    )
-
-    set_slippage(FixedSlippage(0.0), type='fund')
-
+def _register_execution_schedule():
+    """Register the strategy schedule for the active execution timing mode."""
     if g.ExecutionTimingMode == "baseline":
         run_weekly(
             weekly_check,
@@ -585,6 +557,52 @@ def initialize(context):
             time='open',
             reference_security='000300.XSHG'
         )
+
+
+def initialize(context):
+    """
+    由聚宽框架在回测/模拟启动时自动调用一次。
+
+    作用：
+    - 向 g 对象写入全部策略参数
+    - 设置交易费用（场内基金免印花税，佣金万分之一）
+    - 设置固定滑点 0
+    - 注册调仓任务
+    """
+    set_parameter(context)
+    validate_params(snapshot_params())
+    write_file(g.audit_path, "", append=False)
+    audit_event("run_start", context, params=snapshot_params())
+    set_option('use_real_price', g.use_real_price)
+    set_option("avoid_future_data", True)
+
+    set_order_cost(
+        OrderCost(
+            open_tax=0,
+            close_tax=0,
+            open_commission=0.0001,
+            close_commission=0.0001,
+            min_commission=0
+        ),
+        type='fund'
+    )
+
+    set_slippage(FixedSlippage(0.0), type='fund')
+    _register_execution_schedule()
+
+
+def after_code_changed(context):
+    """Migrate existing live simulations to the current execution schedule."""
+    g.ExecutionTimingMode = DEFAULT_EXECUTION_TIMING_MODE
+    params = snapshot_params()
+    validate_params(params)
+    unschedule_all()
+    _register_execution_schedule()
+    audit_event(
+        "schedule_reset_after_code_changed",
+        context,
+        execution_timing_mode=params["ExecutionTimingMode"],
+    )
 
 
 def on_strategy_end(context):

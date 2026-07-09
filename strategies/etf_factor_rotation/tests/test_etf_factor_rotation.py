@@ -409,6 +409,29 @@ class TestInitialize:
         assert 'reference_security' not in weekly_kwargs
         assert daily_kwargs['reference_security'] == '000300.XSHG'
 
+    def test_after_code_changed_resets_live_schedule_to_weekend_close(self, strategy, mock_g):
+        context = SimpleNamespace(portfolio=strategy._mock_portfolio)
+        mock_g.ExecutionTimingMode = "baseline"
+
+        strategy.after_code_changed(context)
+
+        assert mock_g.ExecutionTimingMode == "weekend-close-signal-next-open"
+        strategy.unschedule_all.assert_called_once_with()
+        strategy.run_weekly.assert_called_once_with(
+            strategy.prepare_weekend_close_rebalance,
+            weekday=-1,
+            time='15:30',
+            force=False,
+        )
+        strategy.run_daily.assert_called_once_with(
+            strategy.execute_weekend_close_rebalance,
+            time='open',
+            reference_security='000300.XSHG',
+        )
+        event = json.loads(strategy.write_file.call_args[0][1])
+        assert event["event"] == "schedule_reset_after_code_changed"
+        assert event["execution_timing_mode"] == "weekend-close-signal-next-open"
+
     def test_initialize_calls_set_parameter(self, strategy):
         """验证 initialize 后 g 对象包含了 set_parameter 写入的关键参数。"""
         context = SimpleNamespace()
