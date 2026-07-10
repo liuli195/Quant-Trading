@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "catalog_type": "documents",
-  "generated_at": "2026-06-30T21:29:19+00:00",
-  "count": 430,
+  "generated_at": "2026-07-10T09:45:58+00:00",
+  "count": 432,
   "reports": [
     {
       "path": "docs/README.md",
@@ -3259,7 +3259,7 @@
       "date": "2021-01-01",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-06-30T16:14:45+00:00"
+      "updated_at": "2026-06-30T22:12:16+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/backtest_runs/20260701-0012-bt8d074a3098c6308f791ea33d8806d6f0/report/data-integrity.md",
@@ -3269,7 +3269,7 @@
       "date": "2026-06-30",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-06-30T16:14:45+00:00"
+      "updated_at": "2026-06-30T22:12:16+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/backtest_runs/20260701-0025-bt0d4e21c752867aa36b89ee13d7540352/report/backtest_report.md",
@@ -3279,7 +3279,7 @@
       "date": "2021-01-01",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-06-30T16:27:44+00:00"
+      "updated_at": "2026-06-30T22:12:16+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/backtest_runs/20260701-0025-bt0d4e21c752867aa36b89ee13d7540352/report/data-integrity.md",
@@ -3289,7 +3289,7 @@
       "date": "2026-06-30",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-06-30T16:27:44+00:00"
+      "updated_at": "2026-06-30T22:12:16+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/backtest_runs/20260701-0028-btcb35093c739b769b0c7cebb1bbe141b5/report/backtest_report.md",
@@ -3299,7 +3299,7 @@
       "date": "2021-01-01",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-06-30T16:29:20+00:00"
+      "updated_at": "2026-06-30T22:12:16+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/backtest_runs/20260701-0028-btcb35093c739b769b0c7cebb1bbe141b5/report/data-integrity.md",
@@ -3309,7 +3309,7 @@
       "date": "2026-06-30",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-06-30T16:29:20+00:00"
+      "updated_at": "2026-06-30T22:12:16+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/backtest_runs/20260701-0032-btdcc6252aadef8bb09592538da4dde54c/report/backtest_report.md",
@@ -3319,7 +3319,7 @@
       "date": "2021-01-01",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-06-30T16:38:34+00:00"
+      "updated_at": "2026-06-30T22:12:16+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/backtest_runs/20260701-0032-btdcc6252aadef8bb09592538da4dde54c/report/data-integrity.md",
@@ -3329,7 +3329,7 @@
       "date": "2026-06-30",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-06-30T16:38:34+00:00"
+      "updated_at": "2026-06-30T22:12:16+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/backtest_runs/20260701-0246-bt526c312fb836d6e07826ce170809486a/report/backtest_report.md",
@@ -3339,7 +3339,7 @@
       "date": "2021-01-01",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-06-30T18:50:06+00:00"
+      "updated_at": "2026-06-30T22:12:16+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/backtest_runs/20260701-0246-bt526c312fb836d6e07826ce170809486a/report/data-integrity.md",
@@ -3349,7 +3349,7 @@
       "date": "2026-06-30",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-06-30T18:50:06+00:00"
+      "updated_at": "2026-06-30T22:12:16+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/backtest_runs/20260701-0332-btbfc5066102fc7eac2f3dfd3da0276a3d/report/backtest_report.md",
@@ -3359,7 +3359,7 @@
       "date": "2021-01-01",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-06-30T19:37:11+00:00"
+      "updated_at": "2026-06-30T22:12:16+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/backtest_runs/20260701-0332-btbfc5066102fc7eac2f3dfd3da0276a3d/report/data-integrity.md",
@@ -3369,7 +3369,27 @@
       "date": "2026-06-30",
       "tags": [],
       "pathrefs": [],
-      "updated_at": "2026-06-30T19:37:11+00:00"
+      "updated_at": "2026-06-30T22:12:16+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260709-1736-bt121b439805c89d76b93c5ce520310c2d/report/backtest_report.md",
+      "title": "回测数据汇总",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2021-01-01",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-07-09T09:40:41+00:00"
+    },
+    {
+      "path": "strategies/etf_factor_rotation/backtest_runs/20260709-1736-bt121b439805c89d76b93c5ce520310c2d/report/data-integrity.md",
+      "title": "数据完整性报告",
+      "category": "backtest_run",
+      "strategy": "etf_factor_rotation",
+      "date": "2026-07-09",
+      "tags": [],
+      "pathrefs": [],
+      "updated_at": "2026-07-09T09:40:41+00:00"
     },
     {
       "path": "strategies/etf_factor_rotation/reports/2026-05-07-factor-vs-dynamic-rebalance-attribution.md",
